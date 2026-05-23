@@ -13,10 +13,10 @@ xml = """
 
             <geom name="car_body" type="box" size="1 .5 .2"/>
 
-            <geom name="front_left_wheel"  type="cylinder" pos=".7 .55 -.2" size=".18 .08" euler="90 0 0"/>
-            <geom name="front_right_wheel" type="cylinder" pos=".7 -.55 -.2" size=".18 .08" euler="90 0 0"/>
-            <geom name="back_left_wheel"   type="cylinder" pos="-.7 .55 -.2" size=".18 .08" euler="90 0 0"/>
-            <geom name="back_right_wheel"  type="cylinder" pos="-.7 -.55 -.2" size=".18 .08" euler="90 0 0"/>
+            <geom type="cylinder" pos=".7 .55 -.2" size=".18 .08" euler="90 0 0"/>
+            <geom type="cylinder" pos=".7 -.55 -.2" size=".18 .08" euler="90 0 0"/>
+            <geom type="cylinder" pos="-.7 .55 -.2" size=".18 .08" euler="90 0 0"/>
+            <geom type="cylinder" pos="-.7 -.55 -.2" size=".18 .08" euler="90 0 0"/>
         </body>
     </worldbody>
 </mujoco>
@@ -28,7 +28,6 @@ data = mujoco.MjData(model)
 with mujoco.viewer.launch_passive(model, data) as viewer:
     while viewer.is_running():
         data.qvel[0] = 0.2
-
         mujoco.mj_step(model, data)
         viewer.sync()
-        time.sleep(0.01)
+        time.sleep(.01)
