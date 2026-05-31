@@ -1,0 +1,12 @@
+import mujoco
+import mujoco.viewer
+import time
+import utils
+
+model, data = utils.load_car('xml_assets/simple_car.xml')
+
+with mujoco.viewer.launch_passive(model, data) as viewer:
+    while viewer.is_running():
+        mujoco.mj_step(model, data)
+        viewer.sync()
+        time.sleep(0.01)
