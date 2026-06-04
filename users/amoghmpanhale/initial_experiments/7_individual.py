@@ -2,8 +2,8 @@ import mujoco
 import mujoco.viewer
 import time
 
-from mjspec_assets.plane import Plane
-from mjspec_assets.car import Car
+from users.amoghmpanhale.initial_experiments.mjspec_assets.plane import Plane
+from users.amoghmpanhale.initial_experiments.mjspec_assets.car import Car
 
 spec = mujoco.MjSpec()
 Plane(spec)

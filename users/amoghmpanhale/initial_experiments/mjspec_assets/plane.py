@@ -1,5 +1,5 @@
 import mujoco
-from utils import DEFAULT_PHYSICS
+from users.amoghmpanhale.initial_experiments.utils import DEFAULT_PHYSICS
 
 
 class Plane:
