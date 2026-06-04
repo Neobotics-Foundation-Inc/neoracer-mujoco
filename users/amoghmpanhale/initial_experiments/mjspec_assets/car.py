@@ -1,5 +1,5 @@
 import mujoco
-from utils import DEFAULT_PHYSICS
+from users.amoghmpanhale.initial_experiments.utils import DEFAULT_PHYSICS
 
 WHEEL_POSITIONS = [
     ("fl_wheel", [0.8,  0.6, -0.2]),   # front-left

@@ -2,7 +2,7 @@ import mujoco
 import mujoco.viewer
 import time
 
-from mjspec_assets.car_plane import CarPlane
+from users.amoghmpanhale.initial_experiments.mjspec_assets.car_plane import CarPlane
 
 car = CarPlane()
 pushed = False

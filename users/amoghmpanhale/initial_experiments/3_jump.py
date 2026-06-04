@@ -1,7 +1,7 @@
 import mujoco
 import mujoco.viewer
 import time
-import utils
+import users.amoghmpanhale.initial_experiments.utils as utils
 
 model, data = utils.load_car('xml_assets/simple_car_ramp.xml')
 
