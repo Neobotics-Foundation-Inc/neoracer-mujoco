@@ -3,7 +3,7 @@ import time
 import mujoco
 import mujoco.viewer
 
-from users.amoghmpanhale.mjspec_assets.tracks.l_track import add_l_track
+from assets.tracks.l_track import add_l_track
 
 
 def main():

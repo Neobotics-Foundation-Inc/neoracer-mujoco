@@ -3,7 +3,7 @@ import time
 import mujoco
 import mujoco.viewer
 
-from users.amoghmpanhale.mjspec_assets.tracks.oval_track import add_oval_track
+from assets.tracks.oval_track import add_oval_track
 
 
 def main():
