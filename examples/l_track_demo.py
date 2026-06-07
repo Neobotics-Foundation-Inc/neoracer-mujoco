@@ -1,0 +1,34 @@
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import mujoco
+import mujoco.viewer
+
+from assets.spec_assets.tracks.l_track import add_l_track
+
+
+def main():
+    spec = mujoco.MjSpec()
+
+    spec.option.timestep = 0.005
+    spec.option.gravity = [0, 0, -9.81]
+
+    spec.worldbody.add_light(pos=[0, 0, 8])
+
+    add_l_track(spec)
+
+    model = spec.compile()
+    data = mujoco.MjData(model)
+
+    with mujoco.viewer.launch_passive(model, data) as viewer:
+        while viewer.is_running():
+            mujoco.mj_step(model, data)
+            viewer.sync()
+            time.sleep(0.005)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,12 @@
+# Local-only / reference assets, not part of the project
+scratch/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# MuJoCo
+MUJOCO_LOG.TXT
