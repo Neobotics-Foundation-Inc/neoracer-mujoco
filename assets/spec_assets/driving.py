@@ -1,16 +1,17 @@
 """Keyboard tele-operation for the car model.
 
-The MuJoCo passive viewer reports key *presses* (not holds or releases), so the
-controller keeps a persistent throttle (cruise until you brake) and a steering
-command that auto-centers each step. Holding a key repeats the press and sustains
-the turn; a single tap gives a brief nudge that fades back to straight.
+The MuJoCo passive viewer only reports key *presses* (no releases), so throttle is
+*persistent and incremental*: each press nudges it and it holds until you change it,
+like an RC car's speed control. Steering, by contrast, bleeds back toward center every
+step, so tapping left/right turns the car and it straightens out on its own when you
+stop -- this gives arrow-key driving the "hold to turn, let go to straighten" feel.
 
 Controls:
-    arrow up    / W : drive forward
-    arrow down  / S : drive backward
-    arrow left  / A : steer left
-    arrow right / D : steer right
-    space           : brake (throttle to zero)
+    arrow up    / W : accelerate (more forward throttle)
+    arrow down  / S : decelerate / reverse
+    arrow left  / A : steer left   (hold/tap to turn; auto-centers)
+    arrow right / D : steer right  (hold/tap to turn; auto-centers)
+    space           : stop and straighten (throttle and steering to zero)
 """
 
 import math
@@ -54,14 +55,18 @@ class KeyboardController:
         model: mujoco.MjModel,
         data: mujoco.MjData,
         *,
-        drive: float = 0.7,
-        max_steer: float = 0.4,
-        steer_decay: float = 0.85,
+        max_throttle: float = 1.0,
+        throttle_step: float = 0.25,
+        max_steer: float = 0.6,
+        steer_step: float = 0.2,
+        steer_decay: float = 0.9,  # Target retention rate per ~33ms (keyboard repeat floor)
     ):
         self.model = model
         self.data = data
-        self.drive = drive
+        self.max_throttle = max_throttle
+        self.throttle_step = throttle_step
         self.max_steer = max_steer
+        self.steer_step = steer_step
         self.steer_decay = steer_decay
 
         self.throttle = 0.0
@@ -71,36 +76,60 @@ class KeyboardController:
         self._steer_id = model.actuator(STEER_ACTUATOR).id
 
     def on_key(self, keycode: int) -> None:
-        """Viewer key_callback: update the persistent throttle / steer command."""
+        """Viewer key_callback: nudge the persistent throttle / steer command."""
         if keycode in _FORWARD_KEYS:
-            self.throttle = self.drive
+            self.throttle = min(self.throttle + self.throttle_step, self.max_throttle)
         elif keycode in _BACKWARD_KEYS:
-            self.throttle = -self.drive
+            self.throttle = max(self.throttle - self.throttle_step, -self.max_throttle)
         elif keycode in _LEFT_KEYS:
-            self.steer = self.max_steer
+            self.steer = min(self.steer + self.steer_step, self.max_steer)
         elif keycode in _RIGHT_KEYS:
-            self.steer = -self.max_steer
+            self.steer = max(self.steer - self.steer_step, -self.max_steer)
         elif keycode == KEY_SPACE:
             self.throttle = 0.0
             self.steer = 0.0
 
     def apply(self) -> None:
-        """Write the current command to ctrl, then decay steering toward center."""
+        """Write the current command to the actuators."""
+        dt = self.model.opt.timestep
+        
+        # Scale the decay factor by time (dt) relative to a standard 30Hz repeat rate.
+        time_scaled_decay = self.steer_decay ** (dt / 0.033)
+        self.steer *= time_scaled_decay
+
+        if abs(self.steer) < 1e-3:
+            self.steer = 0.0
+            
         for actuator_id in self._drive_ids:
             self.data.ctrl[actuator_id] = self.throttle
         self.data.ctrl[self._steer_id] = self.steer
-        self.steer *= self.steer_decay
 
 
-def run_keyboard_demo(spec: mujoco.MjSpec, spawn: dict = None, *, drive: float = 0.7) -> None:
+def boost_drive(spec: mujoco.MjSpec, gear: float = 4.0, force: float = 12.0) -> None:
+    """Scale up the drive motors so the car reaches a fun top speed."""
+    for actuator in spec.actuators:
+        if actuator.name in DRIVE_ACTUATORS:
+            gears = list(actuator.gear)
+            gears[0] = gear
+            actuator.gear = gears
+    for joint in spec.joints:
+        if joint.name in DRIVE_ACTUATORS:
+            joint.actfrcrange = [-force, force]
+            joint.actfrclimited = 1
+
+
+def run_keyboard_demo(spec: mujoco.MjSpec, spawn: dict = None, *, fast: bool = True) -> None:
     """Compile ``spec``, optionally place the car at ``spawn``, and drive it by keyboard."""
+    if fast:
+        boost_drive(spec)
+
     model = spec.compile()
     data = mujoco.MjData(model)
 
     if spawn is not None:
         set_spawn(model, data, spawn["position"], spawn.get("heading", 0.0))
 
-    controller = KeyboardController(model, data, drive=drive)
+    controller = KeyboardController(model, data)
 
     print(__doc__.split("Controls:")[1].rstrip())
 
@@ -112,3 +141,9 @@ def run_keyboard_demo(spec: mujoco.MjSpec, spawn: dict = None, *, drive: float =
             mujoco.mj_step(model, data)
             viewer.sync()
             time.sleep(model.opt.timestep)
+
+
+if __name__ == "__main__":
+    # Load directly from the external car.xml file
+    spec = mujoco.MjSpec.from_file("car.xml")
+    run_keyboard_demo(spec, spawn={"position": [0, 0, 0.15], "heading": 0.0})

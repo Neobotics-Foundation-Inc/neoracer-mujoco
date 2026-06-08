@@ -47,10 +47,13 @@ mjpython examples/l_drive_demo.py      # drive the L track by keyboard
 
 ### Drive controls
 
-| Key       | Action         |
-| --------- | -------------- |
-| up / W    | drive forward  |
-| down / S  | drive backward |
-| left / A  | steer left     |
-| right / D | steer right    |
-| space     | brake          |
+Throttle and steering are persistent: each press nudges the command and it holds
+until you change it (like an RC car). Tap repeatedly to build up throttle / steering.
+
+| Key       | Action                        |
+| --------- | ----------------------------- |
+| up / W    | accelerate (more throttle)    |
+| down / S  | decelerate / reverse          |
+| left / A  | steer more left               |
+| right / D | steer more right              |
+| space     | stop and straighten (reset)   |
