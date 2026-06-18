@@ -2,6 +2,25 @@
 
 Clean, team-facing MuJoCo baseline for the NeoRacer 1/8-scale RC car.
 
+## Setup
+
+Dependencies are pinned in `requirements.txt` (mujoco, numpy, pytest). Pick one:
+
+### conda
+
+```sh
+conda env create -f environment.yml   # creates the "neoracer-mujoco" env
+conda activate neoracer-mujoco
+```
+
+### uv
+
+```sh
+uv venv --python 3.13
+uv pip install -r requirements.txt
+source .venv/bin/activate
+```
+
 ## Quick start
 
 ```sh
