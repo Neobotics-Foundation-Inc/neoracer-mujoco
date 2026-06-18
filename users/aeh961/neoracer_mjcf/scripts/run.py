@@ -4,20 +4,13 @@ Run neoracer.xml in the MuJoCo viewer.
 Usage:
     mjpython users/aeh961/neoracer_mjcf/scripts/run.py
 
-Controls (demo loop — constant throttle + sinusoidal steering):
-  - All four wheels driven at constant torque.
-  - Steering oscillates sinusoidally to verify Ackermann behaviour visually:
-    the inner front wheel should always turn more than the outer.
-  - Sensor readings are printed to stdout at PRINT_HZ rate.
+SAFE_MODE = True   → gentle inputs, speed-capped, rollover warnings printed
+SAFE_MODE = False  → original aggressive inputs (will flip at high speed)
 
 Actuator mapping (from models/neoracer.xml):
-  ctrl[0] = fl_motor  — front-left  wheel torque (N·m)
-  ctrl[1] = fr_motor  — front-right wheel torque (N·m)
-  ctrl[2] = rl_motor  — rear-left   wheel torque (N·m)
-  ctrl[3] = rr_motor  — rear-right  wheel torque (N·m)
-  ctrl[4] = steer_servo — virtual steering wheel angle (rad)
-              Ackermann equality constraints in the XML automatically split this
-              into the correct fl_steer / fr_steer angles — no Python maths needed.
+  ctrl[0..3] = fl/fr/rl/rr wheel torque (N·m), positive = forward
+  ctrl[4]    = steer_servo target angle (rad), positive = left
+               Ackermann equality constraints split this into correct fl/fr angles.
 """
 
 import math
@@ -25,45 +18,118 @@ import sys
 import time
 from pathlib import Path
 
-# Resolve paths relative to this file so the script works from any cwd.
 _SCRIPTS_DIR = Path(__file__).resolve().parent
 _PROJECT_DIR = _SCRIPTS_DIR.parent
-sys.path.insert(0, str(_SCRIPTS_DIR))   # makes sensor_logger importable
+sys.path.insert(0, str(_SCRIPTS_DIR))
 
 import mujoco
 import mujoco.viewer
 
 import sensor_logger as sl
 
-# ── physics tunables ──────────────────────────────────────────────────────────
-THROTTLE   = 0.35   # N·m applied to all four wheels
-STEER_AMP  = 0.35   # rad, peak virtual steering angle for the demo sine sweep
-STEER_FREQ = 0.4    # Hz, steering oscillation frequency
-PRINT_HZ   = 10     # sensor print rate (every N physics steps)
+# ── mode switch ───────────────────────────────────────────────────────────────
+# Set to False to restore original aggressive inputs (expect rollover at speed).
+SAFE_MODE = True
+
+# ── SAFE_MODE parameters (gentle, speed-limited) ──────────────────────────────
+_SAFE_THROTTLE    = 0.08   # N·m  — low enough that top speed stays ≈ 1.5 m/s
+_SAFE_STEER_AMP   = 0.15   # rad  — modest sweep; inner wheel ≈ 0.16 rad
+_SAFE_STEER_FREQ  = 0.30   # Hz
+_SAFE_SPEED_LIMIT = 1.5    # m/s  — throttle cuts when avg speed exceeds this
+
+# ── FULL parameters (original values — reproduce the flip) ────────────────────
+_FULL_THROTTLE    = 0.35
+_FULL_STEER_AMP   = 0.35
+_FULL_STEER_FREQ  = 0.40
+_FULL_SPEED_LIMIT = None   # unlimited → car accelerates forever → flips
+
+# ── select active set ─────────────────────────────────────────────────────────
+THROTTLE    = _SAFE_THROTTLE    if SAFE_MODE else _FULL_THROTTLE
+STEER_AMP   = _SAFE_STEER_AMP   if SAFE_MODE else _FULL_STEER_AMP
+STEER_FREQ  = _SAFE_STEER_FREQ  if SAFE_MODE else _FULL_STEER_FREQ
+SPEED_LIMIT = _SAFE_SPEED_LIMIT if SAFE_MODE else _FULL_SPEED_LIMIT
+
+PRINT_HZ = 20   # log every N physics steps
 
 _XML = _PROJECT_DIR / "models" / "neoracer.xml"
 
-
-def _build():
-    model = mujoco.MjModel.from_xml_path(str(_XML))
-    data  = mujoco.MjData(model)
-    return model, data
+# Rollover warning threshold — print a warning line when |roll| exceeds this.
+_ROLL_WARN_DEG = 25.0
 
 
-def _control(data: mujoco.MjData, t: float) -> None:
-    """Demo controller: constant throttle + sinusoidal steering."""
-    steer = STEER_AMP * math.sin(2 * math.pi * STEER_FREQ * t)
+def _quat_to_euler(q):
+    """MuJoCo quaternion [w,x,y,z] → (roll, pitch, yaw) in degrees."""
+    w, x, y, z = q[0], q[1], q[2], q[3]
+    roll  = math.degrees(math.atan2(2*(w*x + y*z), 1 - 2*(x*x + y*y)))
+    # clamp asin argument to [-1,1] to guard against floating-point drift
+    sp    = max(-1.0, min(1.0, 2*(w*y - z*x)))
+    pitch = math.degrees(math.asin(sp))
+    yaw   = math.degrees(math.atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z)))
+    return roll, pitch, yaw
 
-    data.ctrl[0] = THROTTLE   # fl
-    data.ctrl[1] = THROTTLE   # fr
-    data.ctrl[2] = THROTTLE   # rl
-    data.ctrl[3] = THROTTLE   # rr
+
+def _control(data: mujoco.MjData, t: float, avg_speed_ms: float) -> tuple[float, float]:
+    """
+    Apply throttle and sinusoidal steering.
+    When SAFE_MODE speed limit is active, throttle is cut to zero above the limit.
+    Returns (throttle_applied, steer_applied).
+    """
+    steer    = STEER_AMP * math.sin(2 * math.pi * STEER_FREQ * t)
+    throttle = THROTTLE
+
+    if SPEED_LIMIT is not None and avg_speed_ms >= SPEED_LIMIT:
+        throttle = 0.0   # coast — no braking, just cut drive torque
+
+    data.ctrl[0] = throttle
+    data.ctrl[1] = throttle
+    data.ctrl[2] = throttle
+    data.ctrl[3] = throttle
     data.ctrl[4] = steer
+    return throttle, steer
+
+
+def _log(data: mujoco.MjData, model: mujoco.MjModel,
+         car_id: int, throttle: float, steer: float,
+         sensors: dict) -> None:
+    """Print one diagnostic line per PRINT_HZ steps."""
+    speeds   = sl.wheel_speed_ms(sensors)
+    avg_spd  = sum(speeds.values()) / max(len(speeds), 1)
+    car_z    = data.xpos[car_id][2]
+    q        = data.xquat[car_id]
+    roll, pitch, yaw = _quat_to_euler(q)
+    yaw_rate = math.degrees(sensors.get("imu_gyro", [0, 0, 0])[2])  # deg/s
+
+    fl_s = sensors["fl_steer_pos"][0]
+    fr_s = sensors["fr_steer_pos"][0]
+    susp = [sensors[f"{w}_susp_pos"][0] for w in ("fl", "fr", "rl", "rr")]
+
+    flag = ""
+    if abs(roll) > _ROLL_WARN_DEG:
+        flag = f"  *** ROLL WARNING: {roll:+.1f}° ***"
+
+    print(
+        f"t={data.time:6.2f}s "
+        f"thr={throttle:+.2f} steer={steer:+.3f}(fl={fl_s:+.3f}/fr={fr_s:+.3f}) "
+        f"spd={avg_spd:+5.2f}m/s "
+        f"z={car_z:.3f}m "
+        f"roll={roll:+5.1f}° pitch={pitch:+5.1f}° yaw_rate={yaw_rate:+6.1f}°/s "
+        f"susp=[{susp[0]:+.3f} {susp[1]:+.3f} {susp[2]:+.3f} {susp[3]:+.3f}]"
+        f"{flag}"
+    )
 
 
 def main() -> None:
-    model, data = _build()
+    model, data = mujoco.MjModel.from_xml_path(str(_XML)), mujoco.MjData(
+        mujoco.MjModel.from_xml_path(str(_XML))
+    )
+    model = mujoco.MjModel.from_xml_path(str(_XML))
+    data  = mujoco.MjData(model)
     car_id = model.body("car").id
+
+    print(f"NeoRacer viewer — SAFE_MODE={SAFE_MODE}")
+    print(f"  throttle={THROTTLE} N·m  steer_amp={STEER_AMP} rad  "
+          f"speed_limit={SPEED_LIMIT} m/s")
+    print()
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.cam.type        = mujoco.mjtCamera.mjCAMERA_TRACKING
@@ -73,14 +139,20 @@ def main() -> None:
         viewer.cam.elevation   = -30
 
         step = 0
+        avg_speed = 0.0
+
         while viewer.is_running():
-            _control(data, data.time)
+            sensors  = sl.read(model, data)
+            speeds   = sl.wheel_speed_ms(sensors)
+            avg_speed = sum(speeds.values()) / max(len(speeds), 1)
+
+            throttle, steer = _control(data, data.time, avg_speed)
             mujoco.mj_step(model, data)
             viewer.sync()
 
             step += 1
             if step % PRINT_HZ == 0:
-                sl.print_sensors(sl.read(model, data))
+                _log(data, model, car_id, throttle, steer, sensors)
 
             time.sleep(model.opt.timestep)
 

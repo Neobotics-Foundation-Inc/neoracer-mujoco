@@ -16,7 +16,7 @@ Sensor map (matches neoracer_car.xml):
 import numpy as np
 import mujoco
 
-WHEEL_RADIUS = 0.069  # EXTRACTED from URDF joint geometry (axle height / ground clearance)
+WHEEL_RADIUS = 0.050  # ESTIMATED: 50 mm radius consistent with STL bbox and URDF CoM
 
 
 def read(model: mujoco.MjModel, data: mujoco.MjData) -> dict:

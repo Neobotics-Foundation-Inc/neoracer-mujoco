@@ -32,6 +32,17 @@
                  rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
         <material name="grid" texture="grid" texrepeat="1 1" texuniform="true"
                   reflectance=".2"/>
+
+        <!-- Visual meshes from osracer-description/meshes/ (meters, x=fwd y=left z=up).
+             Placement: chassis pos derived from URDF joint offsets (base_link origin is
+             +33mm forward, +22mm above the MuJoCo car-body centre). Wheel meshes are
+             already centred on their link frame (= our wheel body origin). -->
+        <mesh name="vis_chassis"  file="../assets/chassis.STL"/>
+        <mesh name="vis_fl_wheel" file="../assets/fl_wheel.STL"/>
+        <mesh name="vis_fr_wheel" file="../assets/fr_wheel.STL"/>
+        <mesh name="vis_rl_wheel" file="../assets/rl_wheel.STL"/>
+        <mesh name="vis_rr_wheel" file="../assets/rr_wheel.STL"/>
+        <mesh name="vis_lidar"    file="../assets/lidar.STL"/>
     </asset>
 
     <default>
@@ -52,7 +63,7 @@
             adds torsional/rolling contact which chatters on small cylinders).
             mass NOT set here — override per-geom instance.
             -->
-            <geom type="cylinder" size=".069 .02" zaxis="0 1 0"
+            <geom type="cylinder" size=".050 .02" zaxis="0 1 0"
                   friction="1.5 0.1 0.1" condim="3"/>
         </default>
 
@@ -91,11 +102,13 @@
 
         <!--
         Car body.
-        CALCULATED: spawn_z = chassis_half_z + wheel_radius = 0.0806 + 0.069 = 0.1496 m
-        EXTRACTED: wheel_radius=0.069 m from URDF joint geometry (axle height above ground).
+        CALCULATED: spawn_z = chassis_half_z + wheel_radius = 0.0806 + 0.050 = 0.1306 m
+        ESTIMATED: wheel_radius=0.050 m. The 0.069 m URDF inference was wrong — the STL
+        bounding box (191 mm total height) and URDF CoM (~113 mm above ground) both match
+        0.050 m, not 0.069 m. 0.069 m placed CoM 18 mm too high and caused rollover.
         The car settles ~8-10 mm lower as suspension compresses under gravity.
         -->
-        <body name="car" pos="0 0 .1496">
+        <body name="car" pos="0 0 .1306">
             <freejoint/>
             <light name="top_light" pos="0 0 2" mode="trackcom" diffuse=".4 .4 .4"/>
 
@@ -106,7 +119,13 @@
             MISSING: actual weighed mass + CoM offset from 2× LiPo + Jetson + motor + ESC.
             -->
             <geom name="chassis" type="box" size=".223 .134 .0806"
-                  rgba=".3 .6 .3 1" mass="2.0"/>
+                  rgba=".3 .6 .3 0.1" mass="2.0"/>
+            <!-- Visual chassis — contype/conaffinity=0 → zero physics interaction.
+                 pos: base_link origin is +33mm fwd, +22mm above car-body centre (URDF joints). -->
+            <geom name="vis_chassis" type="mesh" mesh="vis_chassis"
+                  pos="0.033 0 0.022"
+                  contype="0" conaffinity="0"
+                  rgba=".75 .75 .75 1"/>
 
             <!--
             IMU site at chassis geometric centre.
@@ -136,6 +155,10 @@
             <site name="lidar_225" pos="0 0 .15" euler="0 90 225" size=".005"/>
             <site name="lidar_270" pos="0 0 .15" euler="0 90 270" size=".005"/>
             <site name="lidar_315" pos="0 0 .15" euler="0 90 315" size=".005"/>
+            <!-- Visual lidar sensor at mount site. -->
+            <geom name="vis_lidar" type="mesh" mesh="vis_lidar"
+                  pos="0 0 0.15"
+                  contype="0" conaffinity="0" rgba=".2 .2 .2 1"/>
 
             <!--
             Virtual steering input — not a physical part.
@@ -170,7 +193,9 @@
                 <joint name="fl_susp"  class="susp"/>
                 <joint name="fl_steer" class="steer"/>
                 <joint name="fl_drive" class="wheel"/>
-                <geom class="wheel" mass=".15" rgba=".2 .4 1 1"/>
+                <geom class="wheel" mass=".15" rgba=".2 .4 1 0.1"/>
+                <geom name="vis_fl_wheel" type="mesh" mesh="vis_fl_wheel"
+                      contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
 
             <!-- FRONT RIGHT WHEEL — steerable + driven -->
@@ -178,21 +203,27 @@
                 <joint name="fr_susp"  class="susp"/>
                 <joint name="fr_steer" class="steer"/>
                 <joint name="fr_drive" class="wheel"/>
-                <geom class="wheel" mass=".15" rgba=".2 .4 1 1"/>
+                <geom class="wheel" mass=".15" rgba=".2 .4 1 0.1"/>
+                <geom name="vis_fr_wheel" type="mesh" mesh="vis_fr_wheel"
+                      contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
 
             <!-- REAR LEFT WHEEL — driven only (no steer joint) -->
             <body name="rl_wheel_body" pos="-.1439 .1175 -.0806">
                 <joint name="rl_susp"  class="susp"/>
                 <joint name="rl_drive" class="wheel"/>
-                <geom class="wheel" mass=".15" rgba=".3 .3 .3 1"/>
+                <geom class="wheel" mass=".15" rgba=".3 .3 .3 0.1"/>
+                <geom name="vis_rl_wheel" type="mesh" mesh="vis_rl_wheel"
+                      contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
 
             <!-- REAR RIGHT WHEEL — driven only -->
             <body name="rr_wheel_body" pos="-.1439 -.1175 -.0806">
                 <joint name="rr_susp"  class="susp"/>
                 <joint name="rr_drive" class="wheel"/>
-                <geom class="wheel" mass=".15" rgba=".3 .3 .3 1"/>
+                <geom class="wheel" mass=".15" rgba=".3 .3 .3 0.1"/>
+                <geom name="vis_rr_wheel" type="mesh" mesh="vis_rr_wheel"
+                      contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
 
         </body>
@@ -267,7 +298,7 @@
         <jointpos name="fr_steer_pos"  joint="fr_steer"/>
 
         <!--
-        Wheel angular velocity (rad/s). Multiply by 0.069 m (wheel_radius) for surface speed in m/s.
+        Wheel angular velocity (rad/s). Multiply by 0.050 m (wheel_radius) for surface speed in m/s.
         Positive = forward rotation.
         -->
         <jointvel name="fl_wheel_vel" joint="fl_drive"/>
