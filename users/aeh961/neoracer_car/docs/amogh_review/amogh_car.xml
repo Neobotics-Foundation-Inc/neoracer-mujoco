@@ -1,0 +1,89 @@
+<mujoco>
+    <compiler angle="radian" autolimits="true"/>
+
+    <asset>
+        <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+        <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2"/>
+    </asset>
+
+    <default>
+        <joint damping=".03" actuatorfrcrange="-3 3"/>
+
+        <default class="wheel">
+            <!-- letting the steer (z) and drive (y) joints share the same body -->
+            <joint type="hinge" axis="0 1 0"/>
+            <geom type="cylinder" size=".05 .02" rgba=".5 .5 1 1" zaxis="0 1 0"/>
+        </default>
+
+        <default class="steer">
+            <!-- vertical steering axis. armature/frictionloss condition the otherwise near-zero
+                 inertia about z so the ackermann equality constraint transmits cleanly. -->
+            <joint type="hinge" axis="0 0 1" limited="true" range="-.4 .4"
+                   damping=".001" armature=".0002" frictionloss=".01" actuatorfrcrange="-100 100"/>
+        </default>
+    </default>
+
+    <worldbody>
+        <geom type="plane" size="3 3 .01" material="grid"/>
+        <body name="car" pos="0 0 .1306">
+            <freejoint/>
+            <light name="top light" pos="0 0 2" mode="trackcom" diffuse=".4 .4 .4"/>
+            <geom name="chasis" type="box" size=".223 .134 .0806" rgba=".3 .6 .3 1"/>
+
+            <!-- virtual "steering wheel": not a real part of the car, it just provides a single
+                 steering input that the two front wheels track via the ackermann constraints below -->
+            <body name="steering wheel" pos=".156 0 .05">
+                <joint name="steering wheel" class="steer"/>
+                <geom type="cylinder" size=".02 .005" contype="0" conaffinity="0" mass=".01" rgba="1 0 0 .3"/>
+            </body>
+
+            <body name="front left wheel" pos=".156 .13 -.0806">
+                <joint name="front left steer" class="steer"/>
+                <joint name="front left" class="wheel"/>
+                <geom class="wheel"/>
+            </body>
+            <body name="front right wheel" pos=".156 -.13 -.0806">
+                <joint name="front right steer" class="steer"/>
+                <joint name="front right" class="wheel"/>
+                <geom class="wheel"/>
+            </body>
+            <body name="back left wheel" pos="-.156 .13 -.0806">
+                <joint name="back left" class="wheel"/>
+                <geom class="wheel"/>
+            </body>
+            <body name="back right wheel" pos="-.156 -.13 -.0806">
+                <joint name="back right" class="wheel"/>
+                <geom class="wheel"/>
+            </body>
+        </body>
+    </worldbody>
+
+    <actuator>
+        <motor name="front left" joint="front left" ctrlrange="-1 1"/>
+        <motor name="front right" joint="front right" ctrlrange="-1 1"/>
+        <motor name="back left" joint="back left" ctrlrange="-1 1"/>
+        <motor name="back right" joint="back right" ctrlrange="-1 1"/>
+        <position name="steering" joint="steering wheel" kp="25" ctrlrange="-.4 .4"/>
+    </actuator>
+
+    <!--
+        Ackermann steering: each front wheel is coupled to the virtual "steering wheel"
+        joint via a 4th-order taylor expansion (about delta=0):
+
+            delta_l = arctan(L / (L/tan(delta) - W/2))
+            delta_r = arctan(L / (L/tan(delta) + W/2))
+
+        with L = wheelbase = .312 and W = front track width = .26 for this car's geometry.
+        The inner wheel therefore turns through a larger angle than the outer wheel.
+
+        polycoef: a0 a1 a2 a3 a4, where
+            y - y0 = a0 + a1*(x-x0) + a2*(x-x0)^2 + a3*(x-x0)^3 + a4*(x-x0)^4
+    -->
+    <equality>
+        <joint name="ackermann left"  joint1="front left steer"  joint2="steering wheel"
+               polycoef="0 1 0.41666667 0.17361111 -0.06655093"/>
+        <joint name="ackermann right" joint1="front right steer" joint2="steering wheel"
+               polycoef="0 1 -0.41666667 0.17361111 0.06655093"/>
+    </equality>
+
+</mujoco>
