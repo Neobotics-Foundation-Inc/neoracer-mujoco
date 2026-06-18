@@ -41,6 +41,7 @@ python3 -m pytest validation/ -v
 │   └── meshes/            — visual STL meshes (cosmetic; mass="0")
 ├── scripts/
 │   ├── run.py             — viewer launch script (mjpython entry point)
+│   ├── manual_drive.py    — arrow-key teleop (game-style, python3 entry point)
 │   └── sensor_logger.py   — sensor read/print helpers
 ├── validation/            — pytest physics + logic conformance suite
 └── docs/                  — design notes and parameter log
@@ -86,6 +87,13 @@ stable API.
   demo controller (constant throttle + sinusoidal steering) so you can watch it
   move. Flip `SAFE_MODE` at the top: `True` caps speed and warns on rollover,
   `False` uses aggressive inputs. Run with `mjpython scripts/run.py`.
+- **`manual_drive.py`** — drive the car yourself with the arrow keys, video-game
+  style: it owns a glfw window and polls held keys each frame, so you hold to build
+  speed, release to coast down, and let the wheel re-center. A back-top chase camera
+  follows the car's heading. Use this to *feel* the physics — grip, rollover,
+  suspension, wall contacts. Run with plain `python3 scripts/manual_drive.py` (NOT
+  mjpython — the glfw window must be created on the main thread). Camera and control
+  feel are tunable via the constants at the top of the file.
 - **`sensor_logger.py`** — helpers to read every named sensor off a compiled model
   into a dict and pretty-print them (`read`, `wheel_speed_ms`, `print_sensors`).
   Import it from your own script to log IMU / wheel / steer / suspension / LiDAR.

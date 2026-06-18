@@ -1,0 +1,52 @@
+<mujoco model="ramp_course">
+    <!--
+    Minimal driving scene (feel-test, not for RL yet): the car spawns at the
+    origin facing +X, a ramp sits right in front of it, then a couple of turns.
+    Includes the car as the single source of truth; this file only adds scenery.
+
+    Layout (top-down, +X = forward, +Y = left). Car spawns at START facing +X:
+
+        +Y                  ███████████      <- wall: turn right (east)
+            START → ▟ramp▙ →
+         0                   █
+                             █              <- wall: turn left (north)
+        -Y                   █
+
+    Walls are thin boxes 0.30 m tall. The ramp is a thin box pitched ~11° about
+    Y, low edge near the floor (a small entry lip — fine for a feel-test).
+
+    Run it:  python3 scripts/manual_drive.py
+    -->
+
+    <include file="../neoracer.xml"/>
+
+    <!-- This scene lives one dir below the car; point meshdir back at assets/
+         so the car's "meshes/*.STL" paths resolve. -->
+    <compiler meshdir=".."/>
+
+    <asset>
+        <material name="wall" rgba=".55 .57 .60 1"/>
+        <material name="ramp" rgba=".85 .45 .15 1"/>
+    </asset>
+
+    <default>
+        <!-- All scenery is static; condim 3 = plain sliding contact. -->
+        <default class="scenery">
+            <geom type="box" material="wall" condim="3" friction="1.0 0.1 0.1"/>
+        </default>
+    </default>
+
+    <worldbody>
+        <!-- ── ramp straight ahead of the start ──────────────────────────── -->
+        <!-- pitch is NEGATIVE so the near edge is low and the far edge high:
+             the car drives UP the slope (+.2 faces the tall edge at you). -->
+        <geom name="ramp" type="box" material="ramp" condim="3"
+              pos="1.2 0 .13" euler="0 -.2 0" size=".5 .6 .02"/>
+
+        <!-- ── turn 1: wall after the ramp on the right → sweep left (north) ─ -->
+        <geom class="scenery" name="turn1" pos="3.5 -1.2 .15" size=".05 2.0 .15"/>
+
+        <!-- ── turn 2: wall to the north → turn back right (east) ──────────── -->
+        <geom class="scenery" name="turn2" pos="2.5 2.5 .15" size="2.0 .05 .15"/>
+    </worldbody>
+</mujoco>

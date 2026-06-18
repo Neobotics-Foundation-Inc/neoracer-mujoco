@@ -1,7 +1,7 @@
 """
 Reads all named sensors from a compiled NeoRacer model and returns a structured dict.
 
-Sensor map (matches neoracer_car.xml):
+Sensor map (matches neoracer.xml):
   imu_accel     — 3-axis linear acceleration (m/s²)
   imu_gyro      — 3-axis angular velocity (rad/s)
   imu_quat      — orientation quaternion (w, x, y, z)
@@ -16,6 +16,7 @@ Sensor map (matches neoracer_car.xml):
 import numpy as np
 import mujoco
 
+# Shadows the wheel geom size in assets/neoracer.xml — keep in sync if the XML changes.
 WHEEL_RADIUS = 0.050  # ESTIMATED: 50 mm radius consistent with STL bbox and URDF CoM
 
 

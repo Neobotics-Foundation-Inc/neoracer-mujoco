@@ -90,12 +90,10 @@ def _control(data: mujoco.MjData, t: float, avg_speed_ms: float) -> tuple[float,
 
 def _log(data: mujoco.MjData, model: mujoco.MjModel,
          car_id: int, throttle: float, steer: float,
-         sensors: dict) -> None:
+         sensors: dict, avg_spd: float) -> None:
     """Print one diagnostic line per PRINT_HZ steps."""
-    speeds   = sl.wheel_speed_ms(sensors)
-    avg_spd  = sum(speeds.values()) / max(len(speeds), 1)
     car_z    = data.xpos[car_id][2]
-    q        = data.xquat[car_id]
+    q        = sensors.get("imu_quat", data.xquat[car_id])  # prefer the sensor the RL agent sees
     roll, pitch, yaw = _quat_to_euler(q)
     yaw_rate = math.degrees(sensors.get("imu_gyro", [0, 0, 0])[2])  # deg/s
 
@@ -149,7 +147,7 @@ def main() -> None:
 
             step += 1
             if step % PRINT_HZ == 0:
-                _log(data, model, car_id, throttle, steer, sensors)
+                _log(data, model, car_id, throttle, steer, sensors, avg_speed)
 
             time.sleep(model.opt.timestep)
 
