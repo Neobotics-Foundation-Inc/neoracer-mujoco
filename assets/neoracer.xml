@@ -89,12 +89,23 @@
             <light name="top_light" pos="0 0 2" mode="trackcom" diffuse=".4 .4 .4"/>
 
             <!--
-            Chassis collision box: 446×268×161 mm (half-sizes below), mass 2.0 kg.
-            Replace mass with the real weighed value once the battery, compute, and
-            drivetrain are accounted for.
+            Mass/inertia for the chassis come straight from the CAD-derived URDF
+            (osracer base_link): mass 1.6211 kg, diagonal inertia tensor below. This
+            explicit <inertial> overrides geom-derived inertia, so the box's mass is ignored.
+            CoM is re-anchored to the axle plane: the URDF axles are NOT centered on
+            base_link (wheelbase center sits at x=-0.0368, z=-0.1004 in URDF), but this
+            model places the wheels symmetrically about the body origin. So the raw URDF
+            CoM (-0.0278 -0.0143 -0.0816) is shifted by the URDF axle-center offset to keep
+            the CoM in the same place relative to the wheels → (+0.0090 +0.0029 -0.0617).
+            ponytail: laser/imu/camera mass not lumped in — revisit only if rollover looks wrong.
             -->
+            <inertial pos=".0090 .0029 -.0617" mass="1.6211"
+                      diaginertia=".002377 .0058394 .0070057"/>
+
+            <!-- Chassis collision box: 446×268×161 mm (half-sizes below). Collision only;
+                 mass set via <inertial> above. -->
             <geom name="chassis" type="box" size=".223 .134 .0806"
-                  rgba=".3 .6 .3 0.1" mass="2.0"/>
+                  rgba=".3 .6 .3 0.1" mass="0"/>
             <!-- Cosmetic chassis mesh (contype/conaffinity=0 → no physics), offset
                  +33mm fwd, +22mm up from the box centre. -->
             <geom name="vis_chassis" type="mesh" mass="0" mesh="vis_chassis"
@@ -150,13 +161,14 @@
             All three must stay on the SAME body (see <default class="susp">).
 
             Position: x=0.1439 (half wheelbase), y=0.1175 (half track),
-            z=-0.0806 (axle at chassis floor). Wheel mass 0.15 kg each.
+            z=-0.0806 (axle at chassis floor). Wheel masses from URDF (~0.058 kg each);
+            inertia is left to MuJoCo's cylinder geom (the URDF's 0.00005 is a placeholder).
             -->
             <body name="fl_wheel_body" pos=".1439 .1175 -.0806">
                 <joint name="fl_susp"  class="susp"/>
                 <joint name="fl_steer" class="steer"/>
                 <joint name="fl_drive" class="wheel"/>
-                <geom class="wheel" mass=".15" rgba=".2 .4 1 0.1"/>
+                <geom class="wheel" mass=".0573" rgba=".2 .4 1 0.1"/>
                 <geom name="vis_fl_wheel" type="mesh" mass="0" mesh="vis_fl_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
@@ -166,7 +178,7 @@
                 <joint name="fr_susp"  class="susp"/>
                 <joint name="fr_steer" class="steer"/>
                 <joint name="fr_drive" class="wheel"/>
-                <geom class="wheel" mass=".15" rgba=".2 .4 1 0.1"/>
+                <geom class="wheel" mass=".0587" rgba=".2 .4 1 0.1"/>
                 <geom name="vis_fr_wheel" type="mesh" mass="0" mesh="vis_fr_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
@@ -175,7 +187,7 @@
             <body name="rl_wheel_body" pos="-.1439 .1175 -.0806">
                 <joint name="rl_susp"  class="susp"/>
                 <joint name="rl_drive" class="wheel"/>
-                <geom class="wheel" mass=".15" rgba=".3 .3 .3 0.1"/>
+                <geom class="wheel" mass=".0587" rgba=".3 .3 .3 0.1"/>
                 <geom name="vis_rl_wheel" type="mesh" mass="0" mesh="vis_rl_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
@@ -184,7 +196,7 @@
             <body name="rr_wheel_body" pos="-.1439 -.1175 -.0806">
                 <joint name="rr_susp"  class="susp"/>
                 <joint name="rr_drive" class="wheel"/>
-                <geom class="wheel" mass=".15" rgba=".3 .3 .3 0.1"/>
+                <geom class="wheel" mass=".0587" rgba=".3 .3 .3 0.1"/>
                 <geom name="vis_rr_wheel" type="mesh" mass="0" mesh="vis_rr_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
