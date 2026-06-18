@@ -50,12 +50,14 @@ python3 -m pytest validation/ -v
 
 | Property | Value | Source |
 |---|---|---|
-| Wheelbase | 288 mm | EXTRACTED |
-| Track width | 235 mm | EXTRACTED |
+| Wheelbase | 288 mm | URDF (joint origins) |
+| Track width | 235 mm | URDF (joint origins) |
 | Wheel radius | 50 mm | ESTIMATED — STL bbox |
-| Chassis mass | 2.0 kg | ESTIMATED |
-| Wheel mass | 0.15 kg each | ESTIMATED |
-| Total mass | 2.61 kg | ESTIMATED |
+| Chassis mass | 1.62 kg | URDF (base_link) |
+| Chassis CoM | ~9 mm ahead of axle center, z≈0.067 m | URDF, re-anchored to axle plane |
+| Chassis inertia | diag (0.00238, 0.00584, 0.00701) kg·m² | URDF (base_link) |
+| Wheel mass | ~0.058 kg each | URDF — verify vs real wheel+tyre |
+| Total mass | 1.86 kg | URDF |
 | Steering | Ackermann (4th-order polynomial equality constraints) | |
 | Drive | AWD — 4 independent torque motors | |
 | Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m) | ESTIMATED |
