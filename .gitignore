@@ -10,3 +10,5 @@ venv/
 
 # MuJoCo
 MUJOCO_LOG.TXT
+
+CLAUDE.md
