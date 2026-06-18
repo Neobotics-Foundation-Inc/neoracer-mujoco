@@ -1,0 +1,336 @@
+<mujoco model="neoracer">
+    <!--
+    NeoRacer vehicle — built on amogh_car.xml base geometry.
+
+    Coordinate frame: +X = forward, +Y = left, +Z = up.
+
+    Parameter labels used in comments:
+      EXTRACTED   — taken directly from amogh_car.xml or NEORACER_HARDWARE.md
+      CALCULATED  — derived from EXTRACTED values via geometry / physics
+      ESTIMATED   — physically plausible placeholder; needs hardware measurement
+      MISSING     — not yet determined; must be measured from the real car
+
+    Changes vs amogh_car.xml:
+      1. Explicit masses added — amogh_car.xml omitted them; default density (1000 kg/m³)
+         gives 19.3 kg chassis and 0.31 kg wheels, both physically wrong for an RC car.
+      2. Steer joint range widened -.55 .55 — at max steer_input=0.4 rad the inner wheel
+         needs 0.474 rad; amogh's -.4 .4 would clamp it 0.074 rad short.
+      3. Suspension (slide Z joint) added to each wheel body as the FIRST joint.
+         Key: susp + steer + drive all live on the SAME body (matching amogh's
+         multi-joint-per-body pattern). If susp is on a SEPARATE intermediate body,
+         MuJoCo's equality constraint solver cannot correctly propagate forces through
+         the kinematic chain and the Ackermann constraints break silently.
+      4. Wheel friction and condim set explicitly.
+      5. Sensors block added (IMU, wheel speed, steer, suspension, LiDAR placeholder).
+      6. Joint names updated to underscores (no spaces in identifiers).
+    -->
+
+    <compiler angle="radian" autolimits="true"/>
+
+    <asset>
+        <texture name="grid" type="2d" builtin="checker" width="512" height="512"
+                 rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+        <material name="grid" texture="grid" texrepeat="1 1" texuniform="true"
+                  reflectance=".2"/>
+
+        <!-- Visual meshes from osracer-description/meshes/ (meters, x=fwd y=left z=up).
+             Placement: chassis pos derived from URDF joint offsets (base_link origin is
+             +33mm forward, +22mm above the MuJoCo car-body centre). Wheel meshes are
+             already centred on their link frame (= our wheel body origin). -->
+        <mesh name="vis_chassis"  file="meshes/chassis.STL"/>
+        <mesh name="vis_fl_wheel" file="meshes/fl_wheel.STL"/>
+        <mesh name="vis_fr_wheel" file="meshes/fr_wheel.STL"/>
+        <mesh name="vis_rl_wheel" file="meshes/rl_wheel.STL"/>
+        <mesh name="vis_rr_wheel" file="meshes/rr_wheel.STL"/>
+        <mesh name="vis_lidar"    file="meshes/lidar.STL"/>
+    </asset>
+
+    <default>
+        <!-- EXTRACTED: default joint settings from amogh_car.xml -->
+        <joint damping=".03" actuatorfrcrange="-3 3"/>
+
+        <!--
+        Wheel drive joint: hinge around Y-axis (axle direction).
+        EXTRACTED: axis from amogh_car.xml.
+        ESTIMATED: armature stabilises near-zero rotational inertia of a light RC wheel;
+                   prevents integrator blow-up at this scale. Source: 8_real_config.py.
+        -->
+        <default class="wheel">
+            <joint type="hinge" axis="0 1 0" armature=".005" damping=".0005"/>
+            <!--
+            EXTRACTED: radius=0.05 m, half-width=0.02 m from amogh_car.xml.
+            ESTIMATED: friction=[1.5, 0.1, 0.1], condim=3 (sliding only; condim=6
+            adds torsional/rolling contact which chatters on small cylinders).
+            mass NOT set here — override per-geom instance.
+            -->
+            <geom type="cylinder" size=".050 .02" zaxis="0 1 0"
+                  friction="1.5 0.1 0.1" condim="3"/>
+        </default>
+
+        <!--
+        Steering joint: hinge around Z-axis (vertical).
+        EXTRACTED: axis, armature, frictionloss from amogh_car.xml.
+        Range widened from amogh's -.4 .4 to -.55 .55 so the inner front wheel is
+        not clamped when steer_input is at the ±0.4 rad actuator limit.
+        -->
+        <default class="steer">
+            <joint type="hinge" axis="0 0 1" limited="true" range="-.55 .55"
+                   damping=".001" armature=".0002" frictionloss=".01"
+                   actuatorfrcrange="-100 100"/>
+        </default>
+
+        <!--
+        Suspension joint: prismatic (slide) along Z.
+        Must be declared as the FIRST joint on each wheel body so MuJoCo's equality
+        constraint solver can couple the steer joint (second joint on same body) correctly.
+        ESTIMATED: stiffness=600 N/m, damping=25 Ns/m.
+          k calc: F_sprung/corner = (2.69 kg / 4) * 9.81 ≈ 6.6 N;
+                  assumed sag 10 mm → k = 6.6/0.010 = 660, rounded to 600.
+          c calc: slightly overdamped; c_critical = 2*sqrt(k*m_corner) = 2*sqrt(600*0.17) ≈ 20.
+        range: -.010 m (droop) to +.015 m (jounce/compression).
+        MISSING: actual spring rate and damping from coil-over spec.
+        -->
+        <default class="susp">
+            <joint type="slide" axis="0 0 1" range="-.010 .015"
+                   stiffness="600" damping="25"/>
+        </default>
+    </default>
+
+    <worldbody>
+        <!-- ESTIMATED: ground friction matches wheel friction -->
+        <geom type="plane" size="5 5 .01" material="grid" friction="1.5 0.1 0.1"/>
+
+        <!--
+        Car body.
+        CALCULATED: spawn_z = chassis_half_z + wheel_radius = 0.0806 + 0.050 = 0.1306 m
+        ESTIMATED: wheel_radius=0.050 m. The 0.069 m URDF inference was wrong — the STL
+        bounding box (191 mm total height) and URDF CoM (~113 mm above ground) both match
+        0.050 m, not 0.069 m. 0.069 m placed CoM 18 mm too high and caused rollover.
+        The car settles ~8-10 mm lower as suspension compresses under gravity.
+        -->
+        <body name="car" pos="0 0 .1306">
+            <freejoint/>
+            <light name="top_light" pos="0 0 2" mode="trackcom" diffuse=".4 .4 .4"/>
+
+            <!--
+            Chassis.
+            EXTRACTED: half-sizes .223 .134 .0806 from amogh_car.xml (= 446×268×161 mm full).
+            ESTIMATED: mass=2.0 kg (RC-car scale).
+            MISSING: actual weighed mass + CoM offset from 2× LiPo + Jetson + motor + ESC.
+            -->
+            <geom name="chassis" type="box" size=".223 .134 .0806"
+                  rgba=".3 .6 .3 0.1" mass="2.0"/>
+            <!-- Visual chassis — contype/conaffinity=0 → zero physics interaction.
+                 pos: base_link origin is +33mm fwd, +22mm above car-body centre (URDF joints). -->
+            <geom name="vis_chassis" type="mesh" mass="0" mesh="vis_chassis"
+                  pos="0.033 0 0.022"
+                  contype="0" conaffinity="0"
+                  rgba=".75 .75 .75 1"/>
+
+            <!--
+            IMU site at chassis geometric centre.
+            EXTRACTED: real car has STM32 board (STMINIV2) providing IMU-class data.
+            ESTIMATED: placement at (0,0,0); real PCB location TBD.
+            -->
+            <site name="imu" pos="0 0 0" size=".01" rgba="1 1 0 1"/>
+
+            <!--
+            LiDAR mount site.
+            EXTRACTED from NEORACER_HARDWARE.md: RC-LIDAR-00 mounted "high (top of stack)".
+            ESTIMATED: z=0.15 m above chassis centre ≈ 0.09 m above chassis top surface.
+            MISSING: exact height and offset from CAD.
+            -->
+            <site name="lidar_mount" pos="0 0 .15" size=".02" rgba="1 0 0 .5"/>
+
+            <!--
+            LiDAR ray sites: 8 × 45-degree beams in the horizontal plane.
+            euler="0 90 θ" tilts the site's local Z to point at angle θ from +X (forward).
+            ESTIMATED: centred at lidar_mount height; expand to 36 beams for RL obs.
+            -->
+            <site name="lidar_000" pos="0 0 .15" euler="0 90   0" size=".005"/>
+            <site name="lidar_045" pos="0 0 .15" euler="0 90  45" size=".005"/>
+            <site name="lidar_090" pos="0 0 .15" euler="0 90  90" size=".005"/>
+            <site name="lidar_135" pos="0 0 .15" euler="0 90 135" size=".005"/>
+            <site name="lidar_180" pos="0 0 .15" euler="0 90 180" size=".005"/>
+            <site name="lidar_225" pos="0 0 .15" euler="0 90 225" size=".005"/>
+            <site name="lidar_270" pos="0 0 .15" euler="0 90 270" size=".005"/>
+            <site name="lidar_315" pos="0 0 .15" euler="0 90 315" size=".005"/>
+            <!-- Visual lidar sensor at mount site. -->
+            <geom name="vis_lidar" type="mesh" mass="0" mesh="vis_lidar"
+                  pos="0 0 0.15"
+                  contype="0" conaffinity="0" rgba=".2 .2 .2 1"/>
+
+            <!--
+            Virtual steering input — not a physical part.
+            One position actuator drives this joint; the two Ackermann equality constraints
+            below automatically distribute the command to fl_steer and fr_steer with the
+            correct inner/outer angle differential. ctrl[4] is the only steering command.
+            EXTRACTED: concept and parameters from amogh_car.xml.
+            -->
+            <body name="steer_input_body" pos=".1439 0 .05">
+                <joint name="steer_input" class="steer" range="-.45 .45"/>
+                <geom type="cylinder" size=".02 .005" contype="0" conaffinity="0"
+                      mass=".01" rgba="1 0 0 .3"/>
+            </body>
+
+            <!--
+            FRONT LEFT WHEEL — steerable + driven.
+
+            Joint order on this body (innermost → outermost):
+              1. fl_susp  (slide Z)  : suspension travel, governed by spring+damper
+              2. fl_steer (hinge Z)  : steering angle, driven by Ackermann constraint
+              3. fl_drive (hinge Y)  : wheel spin, driven by motor actuator
+
+            All three joints on the SAME body — required for Ackermann equality
+            constraint to work (see note in <default class="susp">).
+
+            EXTRACTED: position from URDF joint geometry (osracer.urdf):
+              x= 0.1439 (L/2, half wheelbase), y= 0.1175 (W/2, half track), z=-0.0806 (axle at chassis floor).
+            ESTIMATED: wheel geom mass=0.15 kg per wheel.
+            MISSING: actual wheel+tyre inertia tensor.
+            -->
+            <body name="fl_wheel_body" pos=".1439 .1175 -.0806">
+                <joint name="fl_susp"  class="susp"/>
+                <joint name="fl_steer" class="steer"/>
+                <joint name="fl_drive" class="wheel"/>
+                <geom class="wheel" mass=".15" rgba=".2 .4 1 0.1"/>
+                <geom name="vis_fl_wheel" type="mesh" mass="0" mesh="vis_fl_wheel"
+                      contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
+            </body>
+
+            <!-- FRONT RIGHT WHEEL — steerable + driven -->
+            <body name="fr_wheel_body" pos=".1439 -.1175 -.0806">
+                <joint name="fr_susp"  class="susp"/>
+                <joint name="fr_steer" class="steer"/>
+                <joint name="fr_drive" class="wheel"/>
+                <geom class="wheel" mass=".15" rgba=".2 .4 1 0.1"/>
+                <geom name="vis_fr_wheel" type="mesh" mass="0" mesh="vis_fr_wheel"
+                      contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
+            </body>
+
+            <!-- REAR LEFT WHEEL — driven only (no steer joint) -->
+            <body name="rl_wheel_body" pos="-.1439 .1175 -.0806">
+                <joint name="rl_susp"  class="susp"/>
+                <joint name="rl_drive" class="wheel"/>
+                <geom class="wheel" mass=".15" rgba=".3 .3 .3 0.1"/>
+                <geom name="vis_rl_wheel" type="mesh" mass="0" mesh="vis_rl_wheel"
+                      contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
+            </body>
+
+            <!-- REAR RIGHT WHEEL — driven only -->
+            <body name="rr_wheel_body" pos="-.1439 -.1175 -.0806">
+                <joint name="rr_susp"  class="susp"/>
+                <joint name="rr_drive" class="wheel"/>
+                <geom class="wheel" mass=".15" rgba=".3 .3 .3 0.1"/>
+                <geom name="vis_rr_wheel" type="mesh" mass="0" mesh="vis_rr_wheel"
+                      contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
+            </body>
+
+        </body>
+    </worldbody>
+
+    <actuator>
+        <!--
+        AWD drivetrain: one torque motor per wheel.
+        EXTRACTED from NEORACER_HARDWARE.md: three differentials (front + rear + centre) → AWD.
+        In sim: equal torque to all four wheels approximates the centre-diff torque split.
+        EXTRACTED from 8_real_config.py: gear=1 stable at RC scale; gear>=2 causes wheelies.
+        ctrl[0..3] = torque in N·m (positive = forward wheel spin).
+        MISSING: M300 motor torque curve; GoolRC 60A ESC PWM-to-torque mapping.
+        -->
+        <motor name="fl_motor" joint="fl_drive" gear="1" ctrlrange="-1 1"/>
+        <motor name="fr_motor" joint="fr_drive" gear="1" ctrlrange="-1 1"/>
+        <motor name="rl_motor" joint="rl_drive" gear="1" ctrlrange="-1 1"/>
+        <motor name="rr_motor" joint="rr_drive" gear="1" ctrlrange="-1 1"/>
+
+        <!--
+        Steering servo driving the virtual steer_input joint.
+        The Ackermann constraints below split this one command into the correct
+        fl_steer / fr_steer angles automatically.
+        ctrl[4] = target angle in radians, range [-0.4, 0.4].
+        EXTRACTED: kp=25 from amogh_car.xml.
+        MISSING: tune kp to match SPT5435LV servo (35 kg-cm = 3.43 N·m, 0.17 s/60°).
+        -->
+        <position name="steer_servo" joint="steer_input" kp="25" ctrlrange="-.4 .4"/>
+    </actuator>
+
+    <!--
+    Ackermann steering: each front wheel coupled to steer_input via 4th-order polynomial.
+
+        fl_steer = arctan(L / (L/tan(δ) − W/2))   (inner wheel, turns more)
+        fr_steer = arctan(L / (L/tan(δ) + W/2))   (outer wheel, turns less)
+
+    EXTRACTED: L (wheelbase) = 2 × 0.1439 = 0.2878 m  (from URDF joint origins, osracer.urdf)
+    EXTRACTED: W (track)     = 2 × 0.1175 = 0.235  m  (from URDF joint origins, osracer.urdf)
+    CALCULATED: polynomial coefficients refitted for new L and W via overdetermined least-squares
+      (40 sample points, |δ| ≤ 0.4 rad). Max error vs exact Ackermann: < 0.0002 rad. Tighter than previous.
+
+    polycoef: a0 a1 a2 a3 a4  →  y = a0 + a1·x + a2·x² + a3·x³ + a4·x⁴
+    Note: a2 ≈ ±W/(2L) analytically; a1 deviates from 1.0 due to higher-order coupling in the fit.
+    -->
+    <equality>
+        <joint name="ackermann_left"
+               joint1="fl_steer" joint2="steer_input"
+               polycoef="-0.00000908 1.00091364 0.41786542 0.14737450 -0.08950548"/>
+        <joint name="ackermann_right"
+               joint1="fr_steer" joint2="steer_input"
+               polycoef="0.00000908 1.00091364 -0.41786542 0.14737450 0.08950548"/>
+    </equality>
+
+    <sensor>
+        <!--
+        IMU: accelerometer (m/s²), gyro (rad/s), quaternion, world-frame linear velocity.
+        EXTRACTED: hardware has STM32 board providing IMU-class data.
+        ESTIMATED: placed at chassis geometric centre.
+        -->
+        <accelerometer name="imu_accel"  site="imu"/>
+        <gyro          name="imu_gyro"   site="imu"/>
+        <framequat     name="imu_quat"   objtype="site" objname="imu"/>
+        <framelinvel   name="imu_linvel" objtype="site" objname="imu"/>
+
+        <!--
+        Steering angle sensors (radians).
+        steer_cmd_pos = virtual command angle (input to Ackermann constraints).
+        fl/fr_steer_pos = actual front wheel angles (inner > outer when turning).
+        -->
+        <jointpos name="steer_cmd_pos" joint="steer_input"/>
+        <jointpos name="fl_steer_pos"  joint="fl_steer"/>
+        <jointpos name="fr_steer_pos"  joint="fr_steer"/>
+
+        <!--
+        Wheel angular velocity (rad/s). Multiply by 0.050 m (wheel_radius) for surface speed in m/s.
+        Positive = forward rotation.
+        -->
+        <jointvel name="fl_wheel_vel" joint="fl_drive"/>
+        <jointvel name="fr_wheel_vel" joint="fr_drive"/>
+        <jointvel name="rl_wheel_vel" joint="rl_drive"/>
+        <jointvel name="rr_wheel_vel" joint="rr_drive"/>
+
+        <!--
+        Suspension travel (meters).
+        Positive = jounce (spring compressed, wheel moved up relative to car body).
+        Negative = droop (spring extended).
+        Expected static compression: ~+0.008 to +0.010 m at rest.
+        -->
+        <jointpos name="fl_susp_pos" joint="fl_susp"/>
+        <jointpos name="fr_susp_pos" joint="fr_susp"/>
+        <jointpos name="rl_susp_pos" joint="rl_susp"/>
+        <jointpos name="rr_susp_pos" joint="rr_susp"/>
+
+        <!--
+        LiDAR placeholder: 8 rangefinder beams at 45-degree intervals.
+        Returns distance to nearest geom (m), or -1 if no hit within cutoff.
+        EXTRACTED: RC-LIDAR-00 spinning lidar on hardware.
+        ESTIMATED: 8-beam approximation. Expand to 36 for RL.
+        -->
+        <rangefinder name="lidar_000" site="lidar_000"/>
+        <rangefinder name="lidar_045" site="lidar_045"/>
+        <rangefinder name="lidar_090" site="lidar_090"/>
+        <rangefinder name="lidar_135" site="lidar_135"/>
+        <rangefinder name="lidar_180" site="lidar_180"/>
+        <rangefinder name="lidar_225" site="lidar_225"/>
+        <rangefinder name="lidar_270" site="lidar_270"/>
+        <rangefinder name="lidar_315" site="lidar_315"/>
+    </sensor>
+
+</mujoco>

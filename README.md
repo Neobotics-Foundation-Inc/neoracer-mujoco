@@ -1,59 +1,94 @@
-# mujoco
+# NeoRacer MuJoCo Simulator
 
-## Setup
+Clean, team-facing MuJoCo baseline for the NeoRacer 1/8-scale RC car.
 
-Dependencies are listed in `requirements.txt` and can be installed with either conda or uv.
-
-### conda
+## Quick start
 
 ```sh
-conda env create -f environment.yml
-conda activate neoracer-mujoco
+# Run the model in the viewer (macOS needs mjpython for the passive viewer):
+mjpython scripts/run.py
+
+# Run the validation suite (any Python with mujoco + pytest installed):
+python3 -m pytest validation/ -v
 ```
 
-### uv
+## Directory layout
+
+```
+.
+├── README.md              — this file
+├── assets/
+│   ├── neoracer.xml       — MuJoCo MJCF model (the source of truth)
+│   └── meshes/            — visual STL meshes (cosmetic; mass="0")
+├── scripts/
+│   ├── run.py             — viewer launch script (mjpython entry point)
+│   └── sensor_logger.py   — sensor read/print helpers
+├── validation/            — pytest physics + logic conformance suite
+└── docs/                  — design notes and parameter log
+```
+
+## Model summary (`assets/neoracer.xml`)
+
+| Property | Value | Source |
+|---|---|---|
+| Wheelbase | 288 mm | EXTRACTED |
+| Track width | 235 mm | EXTRACTED |
+| Wheel radius | 50 mm | ESTIMATED — STL bbox |
+| Chassis mass | 2.0 kg | ESTIMATED |
+| Wheel mass | 0.15 kg each | ESTIMATED |
+| Total mass | 2.61 kg | ESTIMATED |
+| Steering | Ackermann (4th-order polynomial equality constraints) | |
+| Drive | AWD — 4 independent torque motors | |
+| Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m) | ESTIMATED |
+| Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · susp pos · 8-beam LiDAR | |
+
+### Actuator interface (`ctrl[0:4]` drive + `ctrl[4]` steer)
+
+| Index | Name | Unit | Direction |
+|---|---|---|---|
+| ctrl[0] | fl_motor | N·m | + = forward |
+| ctrl[1] | fr_motor | N·m | + = forward |
+| ctrl[2] | rl_motor | N·m | + = forward |
+| ctrl[3] | rr_motor | N·m | + = forward |
+| ctrl[4] | steer_servo | rad | + = left turn |
+
+Steering command range is ±0.4 rad; the two Ackermann equality constraints split
+it into the correct inner/outer front-wheel angles automatically.
+
+## Usage / demo scripts (`scripts/`)
+
+`scripts/` holds runnable, hackable demos — start here to drive the car yourself
+or to read sensors. They are meant to be copied and modified, not imported as a
+stable API.
+
+- **`run.py`** — launches the MuJoCo viewer and drives the car with a built-in
+  demo controller (constant throttle + sinusoidal steering) so you can watch it
+  move. Flip `SAFE_MODE` at the top: `True` caps speed and warns on rollover,
+  `False` uses aggressive inputs. Run with `mjpython scripts/run.py`.
+- **`sensor_logger.py`** — helpers to read every named sensor off a compiled model
+  into a dict and pretty-print them (`read`, `wheel_speed_ms`, `print_sensors`).
+  Import it from your own script to log IMU / wheel / steer / suspension / LiDAR.
+
+Add your own demos here — a pure-pursuit follower, a keyboard teleop, a data
+recorder, etc. — using `run.py` as the template for the load → step → control loop.
+
+## Validation suite (`validation/`)
+
+A standardized gate every car model must clear before it's trained on. The suite
+globs `assets/*.xml`, so a new car is tested automatically the moment its XML lands
+in `assets/` — no edits needed.
 
 ```sh
-uv venv
-uv pip install -r requirements.txt
+python3 -m pytest validation/ -v
 ```
 
-## Layout
+- **`test_conformance.py`** — physics checks, one per failure mode: actuator/sensor
+  contract, won't-explode-at-rest (no NaN, rests on ground, stays upright), correct
+  control response (throttle drives forward, steer yaws the right way, Ackermann
+  inner > outer), and RL-exploit guards (no free energy, bounded top speed, finite
+  sensors under load, determinism).
+- **`test_logic.py`** — pure-logic checks: wheel-speed unit conversion, sensor read,
+  and the Ackermann polyfit validated against exact arctan geometry.
 
-```
-assets/
-  xml_assets/        # MuJoCo XML models
-    car.xml          # the Ackermann-steered car
-  spec_assets/       # Python helpers that build scenes via MjSpec
-    car.py           # load/compile the car model
-    scene.py         # drop the car onto a procedural track
-    driving.py       # keyboard tele-operation
-    tracks/          # procedural track builders (oval, L, checkpoints)
-examples/            # runnable demos (run from the repo root)
-scratch/             # local-only reference models, gitignored
-```
-
-## Examples
-
-Run from the repository root. On macOS the MuJoCo viewer must be launched with
-`mjpython` (use `python` on Linux/Windows):
-
-```sh
-mjpython examples/oval_track_demo.py   # view the oval track
-mjpython examples/l_track_demo.py      # view the L-shaped track
-mjpython examples/oval_drive_demo.py   # drive the oval track by keyboard
-mjpython examples/l_drive_demo.py      # drive the L track by keyboard
-```
-
-### Drive controls
-
-Throttle and steering are persistent: each press nudges the command and it holds
-until you change it (like an RC car). Tap repeatedly to build up throttle / steering.
-
-| Key       | Action                        |
-| --------- | ----------------------------- |
-| up / W    | accelerate (more throttle)    |
-| down / S  | decelerate / reverse          |
-| left / A  | steer more left               |
-| right / D | steer more right              |
-| space     | stop and straighten (reset)   |
+The car contract (expected actuators, required sensors, mass band, ctrl layout)
+lives in `validation/_sim.py` — update it there if the contract changes.
