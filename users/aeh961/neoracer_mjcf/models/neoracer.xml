@@ -144,7 +144,7 @@
             correct inner/outer angle differential. ctrl[4] is the only steering command.
             EXTRACTED: concept and parameters from amogh_car.xml.
             -->
-            <body name="steer_input_body" pos=".156 0 .05">
+            <body name="steer_input_body" pos=".1439 0 .05">
                 <joint name="steer_input" class="steer" range="-.45 .45"/>
                 <geom type="cylinder" size=".02 .005" contype="0" conaffinity="0"
                       mass=".01" rgba="1 0 0 .3"/>
@@ -161,12 +161,12 @@
             All three joints on the SAME body — required for Ackermann equality
             constraint to work (see note in <default class="susp">).
 
-            EXTRACTED: nominal position from amogh_car.xml:
-              x= 0.156 (half wheelbase), y= 0.13 (half track), z=-0.0806 (axle at chassis floor).
+            EXTRACTED: position from URDF joint geometry (osracer.urdf):
+              x= 0.1439 (L/2, half wheelbase), y= 0.1175 (W/2, half track), z=-0.0806 (axle at chassis floor).
             ESTIMATED: wheel geom mass=0.15 kg per wheel.
             MISSING: actual wheel+tyre inertia tensor.
             -->
-            <body name="fl_wheel_body" pos=".156 .13 -.0806">
+            <body name="fl_wheel_body" pos=".1439 .1175 -.0806">
                 <joint name="fl_susp"  class="susp"/>
                 <joint name="fl_steer" class="steer"/>
                 <joint name="fl_drive" class="wheel"/>
@@ -174,7 +174,7 @@
             </body>
 
             <!-- FRONT RIGHT WHEEL — steerable + driven -->
-            <body name="fr_wheel_body" pos=".156 -.13 -.0806">
+            <body name="fr_wheel_body" pos=".1439 -.1175 -.0806">
                 <joint name="fr_susp"  class="susp"/>
                 <joint name="fr_steer" class="steer"/>
                 <joint name="fr_drive" class="wheel"/>
@@ -182,14 +182,14 @@
             </body>
 
             <!-- REAR LEFT WHEEL — driven only (no steer joint) -->
-            <body name="rl_wheel_body" pos="-.156 .13 -.0806">
+            <body name="rl_wheel_body" pos="-.1439 .1175 -.0806">
                 <joint name="rl_susp"  class="susp"/>
                 <joint name="rl_drive" class="wheel"/>
                 <geom class="wheel" mass=".15" rgba=".3 .3 .3 1"/>
             </body>
 
             <!-- REAR RIGHT WHEEL — driven only -->
-            <body name="rr_wheel_body" pos="-.156 -.13 -.0806">
+            <body name="rr_wheel_body" pos="-.1439 -.1175 -.0806">
                 <joint name="rr_susp"  class="susp"/>
                 <joint name="rr_drive" class="wheel"/>
                 <geom class="wheel" mass=".15" rgba=".3 .3 .3 1"/>
@@ -229,20 +229,21 @@
         fl_steer = arctan(L / (L/tan(δ) − W/2))   (inner wheel, turns more)
         fr_steer = arctan(L / (L/tan(δ) + W/2))   (outer wheel, turns less)
 
-    EXTRACTED: L (wheelbase) = 2 × 0.156 = 0.312 m  (from amogh_car.xml body positions)
-    EXTRACTED: W (track)     = 2 × 0.13  = 0.26  m
-    EXTRACTED: polynomial coefficients from amogh_car.xml (numerically verified).
-      Max error vs exact Ackermann: < 0.002 rad at |δ| = 0.4 rad. Acceptable.
+    EXTRACTED: L (wheelbase) = 2 × 0.1439 = 0.2878 m  (from URDF joint origins, osracer.urdf)
+    EXTRACTED: W (track)     = 2 × 0.1175 = 0.235  m  (from URDF joint origins, osracer.urdf)
+    CALCULATED: polynomial coefficients refitted for new L and W via overdetermined least-squares
+      (40 sample points, |δ| ≤ 0.4 rad). Max error vs exact Ackermann: < 0.0002 rad. Tighter than previous.
 
     polycoef: a0 a1 a2 a3 a4  →  y = a0 + a1·x + a2·x² + a3·x³ + a4·x⁴
+    Note: a2 ≈ ±W/(2L) analytically; a1 deviates from 1.0 due to higher-order coupling in the fit.
     -->
     <equality>
         <joint name="ackermann_left"
                joint1="fl_steer" joint2="steer_input"
-               polycoef="0 1 0.41666667 0.17361111 -0.06655093"/>
+               polycoef="0 1.00094002 0.40919761 0.14051837 -0.08873218"/>
         <joint name="ackermann_right"
                joint1="fr_steer" joint2="steer_input"
-               polycoef="0 1 -0.41666667 0.17361111 0.06655093"/>
+               polycoef="0 1.00094002 -0.40919761 0.14051837 0.08873218"/>
     </equality>
 
     <sensor>
@@ -266,7 +267,7 @@
         <jointpos name="fr_steer_pos"  joint="fr_steer"/>
 
         <!--
-        Wheel angular velocity (rad/s). Multiply by 0.05 m for surface speed in m/s.
+        Wheel angular velocity (rad/s). Multiply by 0.069 m (wheel_radius) for surface speed in m/s.
         Positive = forward rotation.
         -->
         <jointvel name="fl_wheel_vel" joint="fl_drive"/>
