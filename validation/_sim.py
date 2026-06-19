@@ -29,10 +29,12 @@ REQUIRED_SENSORS = [
     "steer_cmd_pos", "fl_steer_pos", "fr_steer_pos",
     "fl_wheel_vel", "fr_wheel_vel", "rl_wheel_vel", "rr_wheel_vel",
     "fl_susp_pos", "fr_susp_pos", "rl_susp_pos", "rr_susp_pos",
+    "lidar_000", "lidar_045", "lidar_090", "lidar_135",
+    "lidar_180", "lidar_225", "lidar_270", "lidar_315",
 ]
 
-# Total car mass sanity band. Real NeoRacer is ~2.08 kg (CAD/STEP, see aeh961
-# neoracer_mjcf/README.md) / 2.6 kg estimated. Band is checked on TOTAL mass, not
+# Total car mass sanity band. Real NeoRacer is ~2.08 kg per CAD/STEP hardware files;
+# estimated at 2.6 kg before URDF data was applied. Band is checked on TOTAL mass, not
 # per-geom: a mesh is allowed to carry mass (dense battery/motor), it just has to
 # add up to something physical. The upper bound still trips the classic "default
 # 1000 kg/m³ density" bug — e.g. the chassis bbox as solid water = 19.2 kg.

@@ -116,3 +116,48 @@ def test_deterministic(car):
         ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0; ctrl[STEER] = 0.2
         return _sim.run(car, d, ctrl, 300).qpos.copy()
     assert np.array_equal(rollout(), rollout()), "trajectory not reproducible"
+
+
+# --- sensor and physical realism checks -------------------------------------
+
+def test_suspension_sag_at_rest(car):
+    """Each corner compresses 1–13 mm at rest. < 1 mm = spring too stiff (suspension
+    is decorative). >= 14 mm = hitting the jounce limit (range ceiling is +15 mm).
+    Catches mass-removal bugs that under-load the springs and spring-constant regressions."""
+    d = _sim.settle(car)
+    s = _sim.sensors(car, d)
+    for corner in ("fl", "fr", "rl", "rr"):
+        sag_mm = float(s[f"{corner}_susp_pos"][0]) * 1000
+        assert 1.0 <= sag_mm < 14.0, (
+            f"{corner} sag = {sag_mm:.1f} mm — expected 1–13 mm "
+            f"(< 1 mm: spring too stiff; >= 14 mm: hitting jounce limit)"
+        )
+
+
+def test_visual_geoms_carry_no_mass(car):
+    """Cosmetic mesh geoms must declare mass='0'. Without it MuJoCo assigns
+    density × volume — a wheel shell at 1000 kg/m³ adds ~0.5 kg per wheel.
+    Check each wheel body stays below 0.3 kg (URDF ground truth is 0.057–0.059 kg)."""
+    for name in ("fl_wheel_body", "fr_wheel_body", "rl_wheel_body", "rr_wheel_body"):
+        body_id = car.body(name).id
+        mass = float(car.body_mass[body_id])
+        assert mass < 0.3, (
+            f"{name} mass = {mass:.4f} kg — expected < 0.3 kg "
+            f"(a visual geom is likely missing mass='0')"
+        )
+
+
+def test_lidar_sane_at_rest(car):
+    """At rest, each LiDAR beam returns a positive finite distance (> 5 cm) or -1
+    (no hit). A reading of 0.0 means the beam origin is inside a collision geom.
+    Catches wrong site height or orientation that fires the beam into the car's own body."""
+    d = _sim.settle(car)
+    s = _sim.sensors(car, d)
+    lidar_names = [name for name in _sim.REQUIRED_SENSORS if name.startswith("lidar_")]
+    for name in lidar_names:
+        v = float(s[name][0])
+        assert np.isfinite(v), f"{name} = NaN at rest"
+        assert v > 0.05 or v == -1.0, (
+            f"{name} = {v:.3f} m — expected > 0.05 m or -1 (no hit); "
+            f"a near-zero reading means the beam fires into the car's own geometry"
+        )
