@@ -115,13 +115,30 @@ def _selftest() -> None:
     print("selftest OK")
 
 
+def load_model(xml: str | None):
+    """
+    No arg -> compose the ramp course + car at runtime, so the track XML never
+    names (or depends on) the car file. A path -> load it as-is (e.g. the bare
+    car on a plane). The car is its own spec, so it carries its own meshdir;
+    no path juggling needed.
+    """
+    import mujoco
+
+    if xml:
+        return mujoco.MjModel.from_xml_path(xml)
+
+    scene = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "tracks" / "ramp_course.xml"))
+    car   = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "neoracer.xml"))
+    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
+    return scene.compile()
+
+
 def main(xml: str | None = None) -> None:
     import glfw
     import mujoco
     import sensor_logger as sl
 
-    xml = xml or str(_PROJECT_DIR / "assets" / "tracks" / "ramp_course.xml")
-    model = mujoco.MjModel.from_xml_path(xml)
+    model = load_model(xml)
     data  = mujoco.MjData(model)
     car_id = model.body("car").id
 

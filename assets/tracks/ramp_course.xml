@@ -2,7 +2,9 @@
     <!--
     Minimal driving scene (feel-test, not for RL yet): the car spawns at the
     origin facing +X, a ramp sits right in front of it, then a couple of turns.
-    Includes the car as the single source of truth; this file only adds scenery.
+    This file is scenery ONLY — it does not name the car. The driver script
+    attaches neoracer.xml at runtime (see examples/manual_drive.py), so this
+    scene stays independent of the car model.
 
     Layout (top-down, +X = forward, +Y = left). Car spawns at START facing +X:
 
@@ -17,12 +19,6 @@
 
     Run it:  python3 scripts/manual_drive.py
     -->
-
-    <include file="../neoracer.xml"/>
-
-    <!-- This scene lives one dir below the car; point meshdir back at assets/
-         so the car's "meshes/*.STL" paths resolve. -->
-    <compiler meshdir=".."/>
 
     <asset>
         <material name="wall" rgba=".55 .57 .60 1"/>

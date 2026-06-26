@@ -1,6 +1,6 @@
 # NeoRacer MuJoCo Simulator
 
-Clean, team-facing MuJoCo baseline for the NeoRacer 1/8-scale RC car.
+Clean, team-facing MuJoCo baseline for the NeoRacer 1/12-scale RC car.
 
 ## Setup
 
