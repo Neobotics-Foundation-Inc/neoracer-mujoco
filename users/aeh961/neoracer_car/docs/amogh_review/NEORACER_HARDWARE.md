@@ -23,6 +23,8 @@ export — decode table at the bottom).
   - The mesh origin is **not** centered: Z spans −367.5 to +78.8, so re-center before
     use in MuJoCo (the body origin should sit at the CoM/wheelbase center).
 - Mesh density: ~2.08 M triangles — visual only, never use raw for collision.
+  Consider decimating the mesh for real-time visualization; simple primitive geoms
+  (box + cylinders) are sufficient for physics and far cheaper to simulate.
 
 > ⚠️ Component placements in the FreeCAD file are **local assembly coordinates** (relative
 > to each sub-assembly's parent), not world coordinates. Treat them as relative hints, not
@@ -139,8 +141,7 @@ Large counts of standard screws/nuts; ignore for simulation but noted for comple
    experiments drive via `qvel`/rear motors only — to match hardware, add motor actuators
    to all four wheel hinge joints, or model one motor + a torque-split.
 3. **Steering → front Ackermann**: servo + tie-rods + knuckles ⇒ steer the **front two
-   wheels** via steer bodies (hinge `axis=[0,0,1]`) + position actuators (the `aeh961`
-   `10_mjspec_car_with_joints.py` pattern is the right template; servo is ~35 kg-class).
+   wheels** via steer bodies (hinge `axis=[0,0,1]`) + position actuators; servo is ~35 kg-class.
 4. **Suspension**: coil-overs + control arms + anti-roll bars at all 4 corners. A faithful
    model uses prismatic/hinge suspension joints with `<spring>`/damping per corner, rather
    than rigidly mounting wheels to the body (current experiments mount wheels rigidly).
