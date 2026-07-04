@@ -1,0 +1,245 @@
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:8:# Creates a motor actuator that applies torque to a wheel joint.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:9:# Used for the rear drive wheels.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:20:# Creates a position actuator that tries to move a steering joint
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:37:# Creates a wheel assembly.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:39:# Rear wheel:
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:41:#    └── wheel
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:43:# Front wheel:
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:45:#    └── steering body
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:46:#          └── wheel
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:49:#   wheel_joint  -> wheel rotation
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:50:#   steer_joint  -> steering rotation (None for rear wheels)
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:51:def add_wheel(parent, name, pos, steerable=False):
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:53:    # Front wheels need a steering mount.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:54:    if steerable:
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:56:        steer_body = parent.add_body(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:57:            name=f"{name}_steer",
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:61:        # Steering rotates around vertical (Z) axis.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:62:        steer_joint = steer_body.add_joint(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:63:            name=f"{name}_steer_joint",
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:70:        steer_body.add_geom(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:77:        wheel_body = steer_body.add_body(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:78:            name=f"{name}_wheel",
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:83:        steer_joint = None
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:85:        wheel_body = parent.add_body(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:86:            name=f"{name}_wheel",
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:90:    # Wheel rotation around axle.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:91:    wheel_joint = wheel_body.add_joint(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:92:        name=f"{name}_wheel_joint",
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:97:    # Physical wheel geometry.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:98:    wheel_body.add_geom(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:104:        rgba=[0, 0, 1, 1] if steerable else [0.2, 0.2, 0.2, 1],
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:107:    return wheel_joint, steer_joint
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:110:# Builds the entire simulation world.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:115:# ├── Front Left Steering Assembly
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:116:# ├── Front Right Steering Assembly
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:117:# ├── Rear Left Wheel
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:118:# ├── Rear Right Wheel
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:119:# ├── Rear Wheel Motors
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:120:# └── Front Steering Controllers
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:125:    # Global simulation settings.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:159:    # Front steering assemblies.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:160:    front_left_wheel_joint, front_left_steer_joint = add_wheel(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:164:        steerable=True,
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:167:    front_right_wheel_joint, front_right_steer_joint = add_wheel(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:171:        steerable=True,
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:174:    # Rear drive wheels.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:175:    rear_left_wheel_joint, _ = add_wheel(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:179:        steerable=False,
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:182:    rear_right_wheel_joint, _ = add_wheel(
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:186:        steerable=False,
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:189:    # Rear wheel motors.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:193:        joint=rear_left_wheel_joint,
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:200:        joint=rear_right_wheel_joint,
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:204:    # Front wheel steering controllers.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:207:        name="front_left_steer_position",
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:208:        joint=front_left_steer_joint,
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:214:        name="front_right_steer_position",
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:215:        joint=front_right_steer_joint,
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:232:# Main simulation loop.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:239:        # Rear-wheel drive.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:243:        # Automatic steering oscillation.
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:244:        steering = 0.35 * math.sin(t)
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:246:        data.ctrl[2] = steering
+users/aeh961/neoracer_car/docs/amogh_review/10_mjspec_car_with_joints.py:247:        data.ctrl[3] = steering
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:2:A box car with four cylinder wheels. Rear wheels spin (driven by motors), front
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:3:wheels also steer. ctrl is [rear_left, rear_right, front_left_steer, front_right_steer].
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:18:    x, y, z = c.WHEEL_X, c.WHEEL_Y, c.WHEEL_Z
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:19:    add_wheel(car, "rear_left",   [-x,  y, z])
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:20:    add_wheel(car, "rear_right",  [-x, -y, z])
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:21:    steered_wheel(car, "front_left",  [x,  y, z])
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:22:    steered_wheel(car, "front_right", [x, -y, z])
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:26:    steer_motor(spec, "front_left")
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:27:    steer_motor(spec, "front_right")
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:30:def add_wheel(parent, name, pos):
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:31:    """A wheel that spins."""
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:32:    wheel = parent.add_body(name=name, pos=pos)
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:33:    wheel.add_joint(name=name + "_spin", type=HINGE, axis=[0, 1, 0])
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:34:    wheel.add_geom(type=mujoco.mjtGeom.mjGEOM_CYLINDER, size=[c.WHEEL_RADIUS, c.WHEEL_WIDTH],
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:35:                   euler=[90, 0, 0], mass=c.WHEEL_MASS, friction=c.WHEEL_FRICTION)
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:38:def steered_wheel(parent, name, pos):
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:39:    """A wheel that turns about Z (steers), with a spinning wheel hung off it."""
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:40:    steer = parent.add_body(name=name, pos=pos)
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:41:    steer.add_joint(name=name + "_steer", type=HINGE, axis=[0, 0, 1],
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:42:                    range=[-c.STEER_LIMIT, c.STEER_LIMIT])
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:43:    steer.add_geom(type=mujoco.mjtGeom.mjGEOM_SPHERE, size=[0.04], mass=0.2)
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:44:    add_wheel(steer, name + "_wheel", [0, 0, 0])
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:48:    """Torque motor on a wheel's spin joint."""
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:57:def steer_motor(spec, name):
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:58:    """Position servo on a wheel's steer joint."""
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:60:    a.name = name + "_steer_motor"
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:62:    a.target = name + "_steer"
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:65:    a.gainprm[0] = c.STEER_KP
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_car.py:66:    a.biasprm[1] = -c.STEER_KP
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:11:It carries a real autonomy stack (Jetson compute + LIDAR + stereo cameras) on an RC-car
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:12:mechanical platform with full independent suspension, steering, and an all-wheel-drive
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:24:    use in MuJoCo (the body origin should sit at the CoM/wheelbase center).
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:37:| `DIFI_*` + `DIFI_TENGELY_FRONT_REAR_CENTRAL` | differenciálmű (differential) | **Three differentials: front, rear, AND central** → full AWD with center diff |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:43:| `DIFI_H_X_E1Z` | **diffi ház** = differential housing | gearbox case |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:45:## Suspension (independent, coil-over + anti-roll)
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:51:| `LENG_X2_0151_X0_KAR`, `LENGG_..._KAR` | **kar** = control arm / wishbone | Suspension control arms (upper/lower wishbones) |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:54:| `CSAP_X_E1GY__Z14...` | **csapágy** = ball bearing | Many bearings throughout (hubs, diffs, steering) |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:56:## Steering (servo-driven Ackermann)
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:60:| `SERVO_SPT5435LV_ASM` | steering servo | **SPT5435LV** servo (35 kg-class, LV = low-voltage) |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:62:| `KORM_X_E1NY...` | **kormány** = steering (linkage family) | full steering linkage / bellcrank set |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:63:| `STEERING_KNUCKLE_JOINT` | steering knuckle | 2 (L/R) — front upright pivot |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:64:| `STEERING_OUTER_LINK` | outer tie-rod link | 2 (L/R) |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:65:| `STEERING_LINK_SHAFT` | steering link shaft / drag link | center link |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:66:| `IR_X_E1NY_X_EDT_X_F3KAR` | **irányító kar** = steering arm | tie-rod / steering arm to knuckle |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:68:→ This is a steerable front axle: **servo → arm → drag link → bellcrank → tie rods →
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:69:knuckles**, i.e. classic Ackermann front steering. Maps cleanly to MuJoCo's
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:70:"steer body + hinge (axis Z) + position actuator" pattern already used in the experiments.
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:72:## Wheels & tires
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:76:| `KER_X_E9KANYA_1` | **kerékanya** = wheel nut | 4 (1 + 1 + 2 mirrored) → confirms **4 wheels** |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:77:| `39500` | tire | likely a tire part/model number (sits at the wheel hubs) |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:78:| `A014-2024-05-11`, `A016-L-2024-05-11`, `A017-R-2024-05-11` | dated wheel/rim parts | left/right rim iterations dated May 2024 |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:81:## Compute, sensors & autonomy stack
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:86:| `RC-LIDAR-00` | **LIDAR** | spinning RC LIDAR, mounted high (top of stack) |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:88:| `STMINIV2`, `SSTMINI`, `MINISST`, `MINIV2-205` | **custom STM32 board** ("ST Mini V2") | low-level microcontroller (motor/servo/sensor I/O) |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:126:Large counts of standard screws/nuts; ignore for simulation but noted for completeness:
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:138:   4 wheels (or applies a single motor torque split via the center diff). The current
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:140:   to all four wheel hinge joints, or model one motor + a torque-split.
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:141:3. **Steering → front Ackermann**: servo + tie-rods + knuckles ⇒ steer the **front two
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:142:   wheels** via steer bodies (hinge `axis=[0,0,1]`) + position actuators (the `aeh961`
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:144:4. **Suspension**: coil-overs + control arms + anti-roll bars at all 4 corners. A faithful
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:145:   model uses prismatic/hinge suspension joints with `<spring>`/damping per corner, rather
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:146:   than rigidly mounting wheels to the body (current experiments mount wheels rigidly).
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:149:   assuming a uniform box. The LIPOs and Jetson sit low/mid; LIDAR sits high (raises CoM).
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:150:6. **Sensors for RL/perception**: LIDAR + 2 cameras + IMU-class data are available on the
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:151:   real platform — MuJoCo can emulate these (rangefinder sensors, camera renders) if the
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:161:| `KORM_X_E1NY` | kormány | steering |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:162:| `KER_X_E9K` | kerék | wheel/gear |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:163:| `KER_X_E9KANYA` | kerékanya | wheel nut |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:171:| `DIFI` | differenciálmű | differential |
+users/aeh961/neoracer_car/docs/amogh_review/NEORACER_HARDWARE.md:179:| `IR_X_E1NY_X_EDT_X_F3` | irányító | steering / guiding |
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:9:  2. AWD drivetrain — all 4 wheels are driven by motor actuators (the real car has
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:10:                      front + rear + center differentials, i.e. a single motor splits
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:11:                      torque to all four wheels; in sim we just torque all four).
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:12:  3. Front Ackermann steering — the front two wheels steer via servo-driven knuckles,
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:13:                      and the inner wheel turns MORE than the outer (true Ackermann
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:14:                      geometry), instead of both front wheels sharing one angle.
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:30:# smaller than the bbox (which includes wheels/wings sticking out).
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:31:WHEELBASE = 0.30          # front-axle to rear-axle distance
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:32:TRACK = 0.22              # left wheel to right wheel distance
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:33:WHEEL_RADIUS = 0.05       # ~0.10 m diameter wheels
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:34:WHEEL_WIDTH = 0.05        # full width (cylinder half-length = WHEEL_WIDTH / 2)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:39:WHEEL_MASS = 0.15                # kg per wheel
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:40:KNUCKLE_MASS = 0.05              # kg per steering knuckle
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:42:STEER_LIMIT = 0.6         # max steer angle of a front wheel (rad, ~34 deg)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:44:# Wheel mounting points relative to the car body origin.
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:46:HALF_WB = WHEELBASE / 2
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:48:WHEEL_Z = -(RIDE_HEIGHT - WHEEL_RADIUS)   # drop axles so wheels touch the ground
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:54:                          # steering stays gentle — a tight curve makes the driven front
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:55:                          # wheels scrub at full lock and the little car understeers wide.
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:68:    '''Torque actuator on a wheel's spin joint. ctrl value -> torque * gear.'''
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:79:    '''PD-style position actuator for a steering knuckle. ctrl value -> target angle.'''
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:91:def add_wheel(car, name, pos, steerable):
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:93:    Add a wheel to the car body. Returns (spin_joint, steer_joint).
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:95:    Non-steerable wheel: a body hung off the chassis with one hinge joint that lets
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:96:    it spin (axis = Y). steer_joint is None.
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:98:    Steerable wheel: an intermediate "knuckle" body with a vertical hinge (axis = Z)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:99:    that the steering servo turns, and the spinning wheel body hangs off that. This
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:102:    if steerable:
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:104:        steer_joint = knuckle.add_joint(
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:105:            name=f"{name}_steer_joint",
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:108:            range=[-STEER_LIMIT, STEER_LIMIT],
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:116:        wheel = knuckle.add_body(name=f"{name}_wheel")
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:118:        steer_joint = None
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:119:        wheel = car.add_body(name=f"{name}_wheel", pos=pos)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:121:    spin_joint = wheel.add_joint(
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:125:        # armature = reflected rotor inertia. At this small (RC) scale a light wheel
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:131:    wheel.add_geom(
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:133:        size=[WHEEL_RADIUS, WHEEL_WIDTH / 2],
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:135:        mass=WHEEL_MASS,
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:136:        friction=DEFAULT_PHYSICS["wheel_friction"],
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:140:        rgba=[0, 0, 1, 1] if steerable else [0.2, 0.2, 0.2, 1],
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:142:    return spin_joint, steer_joint
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:145:def ackermann_angles(steer):
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:147:    True Ackermann geometry. Given a "virtual center" steer angle, return the
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:148:    (left, right) front-wheel angles so both wheels trace circles about a common
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:149:    center -> the inner wheel turns more than the outer.
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:151:    steer > 0 means turning left (center of turn is to the left).
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:153:    if abs(steer) < 1e-4:
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:156:    R = WHEELBASE / math.tan(steer)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:157:    left = math.atan(WHEELBASE / (R - HALF_TRACK))
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:158:    right = math.atan(WHEELBASE / (R + HALF_TRACK))
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:274:    # Four corners. Front wheels (+x) steer; all four are driven (AWD).
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:275:    fl_spin, fl_steer = add_wheel(car, "fl", [HALF_WB,  HALF_TRACK, WHEEL_Z], steerable=True)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:276:    fr_spin, fr_steer = add_wheel(car, "fr", [HALF_WB, -HALF_TRACK, WHEEL_Z], steerable=True)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:277:    rl_spin, _ = add_wheel(car, "rl", [-HALF_WB,  HALF_TRACK, WHEEL_Z], steerable=False)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:278:    rr_spin, _ = add_wheel(car, "rr", [-HALF_WB, -HALF_TRACK, WHEEL_Z], steerable=False)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:280:    # AWD: a drive motor on every wheel. ctrl[0..3] = FL, FR, RL, RR torque.
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:281:    # gear=1 gives brisk-but-stable acceleration at this scale; gear>=2 wheelies/flips.
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:287:    # Front steering servos. ctrl[4..5] = FL, FR target steer angle.
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:288:    add_position_actuator(spec, "fl_steer", fl_steer, kp=20)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:289:    add_position_actuator(spec, "fr_steer", fr_steer, kp=20)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:305:STEER_GAIN = 0.9      # heading-error -> steering gain
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:307:MAX_THROTTLE = 0.4    # torque clamp (higher wheelies the car)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:313:    Returns (throttle, left_steer, right_steer) for the actuators.
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:323:    steer = max(-STEER_LIMIT, min(STEER_LIMIT, STEER_GAIN * heading_err))
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:324:    left, right = ackermann_angles(steer)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:345:        viewer.cam.azimuth = 90         # viewing angle around the car (degrees)
+users/aeh961/neoracer_car/docs/amogh_review/8_real_config.py:350:            data.ctrl[0:4] = throttle   # AWD: all four wheels
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:12:        <default class="wheel">
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:13:            <!-- letting the steer (z) and drive (y) joints share the same body -->
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:18:        <default class="steer">
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:19:            <!-- vertical steering axis. armature/frictionloss condition the otherwise near-zero
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:20:                 inertia about z so the ackermann equality constraint transmits cleanly. -->
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:33:            <!-- virtual "steering wheel": not a real part of the car, it just provides a single
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:34:                 steering input that the two front wheels track via the ackermann constraints below -->
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:35:            <body name="steering wheel" pos=".156 0 .05">
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:36:                <joint name="steering wheel" class="steer"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:40:            <body name="front left wheel" pos=".156 .13 -.0806">
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:41:                <joint name="front left steer" class="steer"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:42:                <joint name="front left" class="wheel"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:43:                <geom class="wheel"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:45:            <body name="front right wheel" pos=".156 -.13 -.0806">
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:46:                <joint name="front right steer" class="steer"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:47:                <joint name="front right" class="wheel"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:48:                <geom class="wheel"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:50:            <body name="back left wheel" pos="-.156 .13 -.0806">
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:51:                <joint name="back left" class="wheel"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:52:                <geom class="wheel"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:54:            <body name="back right wheel" pos="-.156 -.13 -.0806">
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:55:                <joint name="back right" class="wheel"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:56:                <geom class="wheel"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:66:        <position name="steering" joint="steering wheel" kp="25" ctrlrange="-.4 .4"/>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:70:        Ackermann steering: each front wheel is coupled to the virtual "steering wheel"
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:76:        with L = wheelbase = .312 and W = front track width = .26 for this car's geometry.
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:77:        The inner wheel therefore turns through a larger angle than the outer wheel.
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:82:    <equality>
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:83:        <joint name="ackermann left"  joint1="front left steer"  joint2="steering wheel"
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:85:        <joint name="ackermann right" joint1="front right steer" joint2="steering wheel"
+users/aeh961/neoracer_car/docs/amogh_review/amogh_car.xml:87:    </equality>
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:10:WHEEL_FRICTION = [1.5, 0.1, 0.1]
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:17:# wheels
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:18:WHEEL_RADIUS = 0.22
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:19:WHEEL_WIDTH = 0.08                  # cylinder half-length
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:20:WHEEL_MASS = 1
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:21:WHEEL_X = 0.8                       # front/back offset from center
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:22:WHEEL_Y = 0.45                      # left/right offset from center
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:23:WHEEL_Z = -0.22                     # how far the axles drop below the chassis
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:25:# drive + steering
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:26:MOTOR_GEAR = 8                      # ctrl value -> wheel torque
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:27:STEER_LIMIT = 0.6                   # max front wheel angle (rad)
+users/aeh961/neoracer_car/docs/amogh_review/neoracer_sim_config.py:28:STEER_KP = 40                       # steering servo stiffness
