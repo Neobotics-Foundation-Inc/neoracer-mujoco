@@ -26,6 +26,7 @@ Actuator mapping (from assets/neoracer.xml):
 """
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -34,19 +35,33 @@ sys.path.insert(0, str(_SCRIPTS_DIR))
 
 # ── tuning knobs (feel is physical — turn these while driving) ─────────────────
 # Rates are per second, so the feel is the same regardless of frame rate.
-THROTTLE_ACCEL = 0.8     # N·m/s added while a throttle key is held
-THROTTLE_COAST = 0.6     # N·m/s bled off when no throttle key is held
-THROTTLE_MAX   = 0.35    # N·m cap per wheel (matches run.py FULL throttle)
 
-STEER_RATE     = 1.5     # rad/s toward the limit while a steer key is held
-STEER_RETURN   = 2.5     # rad/s back to center when no steer key is held
-STEER_MAX      = 0.40    # rad — the model's Ackermann command limit
 
-# ── chase camera (back-top, follows the car's heading) ─────────────────────────
-CAM_DISTANCE   = 1.6     # m behind/above the car
-CAM_ELEVATION  = -35.0   # deg looking down (more negative = more top-down)
-CAM_AZIMUTH    = 0.0   # deg offset added to car yaw. 0 = directly behind
-                         # (camera at -X, looking +X). 180 = in front; ±90 = side.
+@dataclass(frozen=True)
+class ThrottleParams:
+    accel: float = 0.8     # N·m/s added while a throttle key is held
+    coast: float = 0.6     # N·m/s bled off when no throttle key is held
+    max:   float = 0.35    # N·m cap per wheel (matches run.py FULL throttle)
+
+
+@dataclass(frozen=True)
+class SteeringParams:
+    rate:   float = 1.5    # rad/s toward the limit while a steer key is held
+    return_: float = 2.5   # rad/s back to center when no steer key is held
+    max:    float = 0.40   # rad — the model's Ackermann command limit
+
+
+@dataclass(frozen=True)
+class CamParams:
+    distance:  float = 1.6     # m behind/above the car
+    elevation: float = -35.0   # deg looking down (more negative = more top-down)
+    azimuth:   float = 0.0     # deg offset added to car yaw. 0 = directly behind
+                               # (camera at -X, looking +X). 180 = front; ±90 = side.
+
+
+THROTTLE = ThrottleParams()
+STEER    = SteeringParams()
+CAM      = CamParams()
 
 
 def _yaw_deg(quat) -> float:
@@ -71,21 +86,21 @@ def update(throttle: float, steer: float, dt: float,
     center when released. Returns clamped (throttle, steer).
     """
     if fwd:
-        throttle += THROTTLE_ACCEL * dt
+        throttle += THROTTLE.accel * dt
     elif rev:
-        throttle -= THROTTLE_ACCEL * dt
+        throttle -= THROTTLE.accel * dt
     else:
-        throttle = _toward(throttle, THROTTLE_COAST * dt)
+        throttle = _toward(throttle, THROTTLE.coast * dt)
 
     if left:
-        steer += STEER_RATE * dt
+        steer += STEER.rate * dt
     elif right:
-        steer -= STEER_RATE * dt
+        steer -= STEER.rate * dt
     else:
-        steer = _toward(steer, STEER_RETURN * dt)
+        steer = _toward(steer, STEER.return_ * dt)
 
-    throttle = max(-THROTTLE_MAX, min(THROTTLE_MAX, throttle))
-    steer    = max(-STEER_MAX,    min(STEER_MAX,    steer))
+    throttle = max(-THROTTLE.max, min(THROTTLE.max, throttle))
+    steer    = max(-STEER.max,    min(STEER.max,    steer))
     return throttle, steer
 
 
@@ -96,7 +111,7 @@ def _selftest() -> None:
     t = 0.0
     for _ in range(1000):
         t, _ = update(t, 0.0, dt, fwd=True, rev=False, left=False, right=False)
-    assert t == THROTTLE_MAX, t
+    assert t == THROTTLE.max, t
     # releasing coasts back to a full stop (not instant, not stuck)
     half = t
     t, _ = update(t, 0.0, dt, fwd=False, rev=False, left=False, right=False)
@@ -108,7 +123,7 @@ def _selftest() -> None:
     s = 0.0
     for _ in range(1000):
         _, s = update(0.0, s, dt, fwd=False, rev=False, left=True, right=False)
-    assert s == STEER_MAX, s
+    assert s == STEER.max, s
     while s > 0:
         _, s = update(0.0, s, dt, fwd=False, rev=False, left=False, right=False)
     assert s == 0.0
@@ -151,8 +166,8 @@ def main(xml: str | None = None) -> None:
     cam = mujoco.MjvCamera()
     cam.type        = mujoco.mjtCamera.mjCAMERA_TRACKING
     cam.trackbodyid = car_id
-    cam.distance    = CAM_DISTANCE
-    cam.elevation   = CAM_ELEVATION
+    cam.distance    = CAM.distance
+    cam.elevation   = CAM.elevation
     # azimuth is updated every frame from the car's yaw (see loop below)
 
     opt   = mujoco.MjvOption()
@@ -198,7 +213,7 @@ def main(xml: str | None = None) -> None:
         while data.time < target:
             mujoco.mj_step(model, data)
 
-        cam.azimuth = CAM_AZIMUTH + _yaw_deg(data.xquat[car_id])
+        cam.azimuth = CAM.azimuth + _yaw_deg(data.xquat[car_id])
 
         w, h = glfw.get_framebuffer_size(window)
         viewport = mujoco.MjrRect(0, 0, w, h)

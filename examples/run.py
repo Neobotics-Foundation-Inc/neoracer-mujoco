@@ -137,6 +137,8 @@ def main() -> None:
         avg_speed = 0.0
 
         while viewer.is_running():
+            loop_start = time.time()
+
             sensors  = sl.read(model, data)
             speeds   = sl.wheel_speed_ms(sensors)
             avg_speed = sum(speeds.values()) / max(len(speeds), 1)
@@ -149,7 +151,11 @@ def main() -> None:
             if step % PRINT_HZ == 0:
                 _log(data, model, car_id, throttle, steer, sensors, avg_speed)
 
-            time.sleep(model.opt.timestep)
+            # sleep only the time left in this timestep, so the sim tracks
+            # real time instead of running slower by the compute cost.
+            remaining = model.opt.timestep - (time.time() - loop_start)
+            if remaining > 0:
+                time.sleep(remaining)
 
 
 if __name__ == "__main__":

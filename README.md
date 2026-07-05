@@ -25,7 +25,7 @@ source .venv/bin/activate
 
 ```sh
 # Run the model in the viewer (macOS needs mjpython for the passive viewer):
-mjpython scripts/run.py
+mjpython -m examples.run
 
 # Run the validation suite (any Python with mujoco + pytest installed):
 python3 -m pytest validation/ -v
@@ -39,7 +39,7 @@ python3 -m pytest validation/ -v
 ├── assets/
 │   ├── neoracer.xml       — MuJoCo MJCF model (the source of truth)
 │   └── meshes/            — visual STL meshes (cosmetic; mass="0")
-├── scripts/
+├── examples/
 │   ├── run.py             — viewer launch script (mjpython entry point)
 │   ├── manual_drive.py    — arrow-key teleop (game-style, python3 entry point)
 │   └── sensor_logger.py   — sensor read/print helpers
@@ -77,21 +77,21 @@ python3 -m pytest validation/ -v
 Steering command range is ±0.4 rad; the two Ackermann equality constraints split
 it into the correct inner/outer front-wheel angles automatically.
 
-## Usage / demo scripts (`scripts/`)
+## Usage / demo scripts (`examples/`)
 
-`scripts/` holds runnable, hackable demos — start here to drive the car yourself
+`examples/` holds runnable, hackable demos — start here to drive the car yourself
 or to read sensors. They are meant to be copied and modified, not imported as a
 stable API.
 
 - **`run.py`** — launches the MuJoCo viewer and drives the car with a built-in
   demo controller (constant throttle + sinusoidal steering) so you can watch it
   move. Flip `SAFE_MODE` at the top: `True` caps speed and warns on rollover,
-  `False` uses aggressive inputs. Run with `mjpython scripts/run.py`.
+  `False` uses aggressive inputs. Run with `mjpython -m examples.run`.
 - **`manual_drive.py`** — drive the car yourself with the arrow keys, video-game
   style: it owns a glfw window and polls held keys each frame, so you hold to build
   speed, release to coast down, and let the wheel re-center. A back-top chase camera
   follows the car's heading. Use this to *feel* the physics — grip, rollover,
-  suspension, wall contacts. Run with plain `python3 scripts/manual_drive.py` (NOT
+  suspension, wall contacts. Run with plain `python3 -m examples.manual_drive` (NOT
   mjpython — the glfw window must be created on the main thread). Camera and control
   feel are tunable via the constants at the top of the file.
 - **`sensor_logger.py`** — helpers to read every named sensor off a compiled model
