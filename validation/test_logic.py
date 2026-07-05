@@ -4,6 +4,8 @@ These catch silent numerical bugs (wrong unit conversion, a polyfit that's the
 right shape but a few percent off) that the behavioral conformance tests miss.
 """
 
+from dataclasses import fields
+
 import mujoco
 import numpy as np
 import pytest
@@ -14,8 +16,8 @@ import _sim
 
 def test_wheel_speed_conversion():
     """rad/s -> m/s is angular velocity x wheel radius, per wheel."""
-    fake = {n: np.array([2.0]) for n in
-            ("fl_wheel_vel", "fr_wheel_vel", "rl_wheel_vel", "rr_wheel_vel")}
+    fake = sl.SensorReadings(**{n: np.array([2.0]) for n in
+            ("fl_wheel_vel", "fr_wheel_vel", "rl_wheel_vel", "rr_wheel_vel")})
     out = sl.wheel_speed_ms(fake)
     assert out["fl_wheel_speed_ms"] == pytest.approx(2.0 * sl.WHEEL_RADIUS)
     assert set(out) == {"fl_wheel_speed_ms", "fr_wheel_speed_ms",
@@ -27,8 +29,8 @@ def test_read_returns_every_sensor(car):
     d = mujoco.MjData(car)
     mujoco.mj_step(car, d)
     out = sl.read(car, d)
-    assert len(out) == car.nsensor
-    assert out["imu_accel"].shape == (3,) and out["imu_quat"].shape == (4,)
+    assert len(fields(sl.SensorReadings)) == car.nsensor
+    assert out.imu_accel.shape == (3,) and out.imu_quat.shape == (4,)
 
 
 def test_ackermann_polycoef_matches_exact_geometry(car):

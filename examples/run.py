@@ -90,16 +90,16 @@ def _control(data: mujoco.MjData, t: float, avg_speed_ms: float) -> tuple[float,
 
 def _log(data: mujoco.MjData, model: mujoco.MjModel,
          car_id: int, throttle: float, steer: float,
-         sensors: dict, avg_spd: float) -> None:
+         sensors: "sl.SensorReadings", avg_spd: float) -> None:
     """Print one diagnostic line per PRINT_HZ steps."""
     car_z    = data.xpos[car_id][2]
-    q        = sensors.get("imu_quat", data.xquat[car_id])  # prefer the sensor the RL agent sees
+    q        = sensors.imu_quat  # the orientation the RL agent sees
     roll, pitch, yaw = _quat_to_euler(q)
-    yaw_rate = math.degrees(sensors.get("imu_gyro", [0, 0, 0])[2])  # deg/s
+    yaw_rate = math.degrees(sensors.imu_gyro[2])  # deg/s
 
-    fl_s = sensors["fl_steer_pos"][0]
-    fr_s = sensors["fr_steer_pos"][0]
-    susp = [sensors[f"{w}_susp_pos"][0] for w in ("fl", "fr", "rl", "rr")]
+    fl_s = sensors.fl_steer_pos[0]
+    fr_s = sensors.fr_steer_pos[0]
+    susp = [getattr(sensors, f"{w}_susp_pos")[0] for w in ("fl", "fr", "rl", "rr")]
 
     flag = ""
     if abs(roll) > _ROLL_WARN_DEG:

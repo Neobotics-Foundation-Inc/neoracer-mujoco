@@ -1,4 +1,4 @@
-"""Put scripts/ on the path so tests can import sensor_logger, and parametrize
+"""Put examples/ on the path so tests can import sensor_logger, and parametrize
 every conformance test over each car XML found in assets/."""
 
 import os
@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples"))
 
 from _sim import CARS, compile  # noqa: E402
 
