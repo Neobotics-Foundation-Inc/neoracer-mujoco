@@ -4,6 +4,8 @@ Clean, team-facing MuJoCo baseline for the NeoRacer 1/12-scale RC car.
 
 ## Setup
 
+The mesh STLs in `assets/meshes/` are stored with [Git LFS](https://git-lfs.com). Run `git lfs install` once before cloning, or you'll get 132-byte pointer files instead of the real meshes.
+
 Dependencies are pinned in `requirements.txt` (mujoco, numpy, pytest). Pick one:
 
 ### conda
