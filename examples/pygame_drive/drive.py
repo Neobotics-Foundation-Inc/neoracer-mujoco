@@ -31,7 +31,7 @@ RESET_BUTTON = 7   # Start
 DEADZONE = 0.1
 
 
-LIDAR_MAX = 1.0   # m — beams past this read as "clear" (rangefinder returns -1 too)
+LIDAR_MAX = 3.0   # m — beams past this read as "clear" (rangefinder returns -1 too)
 RADAR_R = 90      # px radius of the radar disc
 RADAR_PAD = 12    # px from the top-right corner
 
@@ -51,8 +51,9 @@ def draw_lidar(screen, beams: dict[str, float]) -> None:
         r = rng if rng >= 0 else LIDAR_MAX          # -1 = no hit -> edge of disc
         r = min(r, LIDAR_MAX)
         near = 1.0 - r / LIDAR_MAX                   # 0 far, 1 point-blank
-        px = RADAR_R + math.cos(angle) * near * RADAR_R
-        py = RADAR_R - math.sin(angle) * near * RADAR_R
+        # match the chase cam: car forward (+X) = screen up, car left (+Y) = screen left
+        px = RADAR_R - math.sin(angle) * near * RADAR_R
+        py = RADAR_R - math.cos(angle) * near * RADAR_R
         color = (255, int(255 * (1 - near)), 0)      # yellow far -> red close
         pygame.draw.circle(disc, color, (int(px), int(py)), 5)
 
