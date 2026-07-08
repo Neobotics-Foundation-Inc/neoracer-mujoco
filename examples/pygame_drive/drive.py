@@ -11,6 +11,8 @@ Keyboard:                          Gamepad (auto-detected, overrides keys):
     A / D      steer left / right      left trigger    reverse
     Space      hard stop               left stick X    steer
     Backspace  reset car (un-flip)     Start           reset car
+    T          start/stop timer
+    R          reset timer
     Esc        quit
 """
 
@@ -31,7 +33,7 @@ RESET_BUTTON = 7   # Start
 DEADZONE = 0.1
 
 
-LIDAR_MAX = 3.0   # m — beams past this read as "clear" (rangefinder returns -1 too)
+LIDAR_MAX = 2.0   # m — beams past this read as "clear" (rangefinder returns -1 too)
 RADAR_R = 90      # px radius of the radar disc
 RADAR_PAD = 12    # px from the top-right corner
 
@@ -50,10 +52,11 @@ def draw_lidar(screen, beams: dict[str, float]) -> None:
         angle = math.radians(int(name.split("_")[1]))
         r = rng if rng >= 0 else LIDAR_MAX          # -1 = no hit -> edge of disc
         r = min(r, LIDAR_MAX)
-        near = 1.0 - r / LIDAR_MAX                   # 0 far, 1 point-blank
+        near = 1.0 - r / LIDAR_MAX                   # 0 far, 1 point-blank (color only)
+        dist = r / LIDAR_MAX                         # 0 at car center, 1 at rim
         # match the chase cam: car forward (+X) = screen up, car left (+Y) = screen left
-        px = RADAR_R - math.sin(angle) * near * RADAR_R
-        py = RADAR_R - math.cos(angle) * near * RADAR_R
+        px = RADAR_R - math.sin(angle) * dist * RADAR_R
+        py = RADAR_R - math.cos(angle) * dist * RADAR_R
         color = (255, int(255 * (1 - near)), 0)      # yellow far -> red close
         pygame.draw.circle(disc, color, (int(px), int(py)), 5)
 
@@ -61,11 +64,41 @@ def draw_lidar(screen, beams: dict[str, float]) -> None:
     screen.blit(disc, (cx - RADAR_R, cy - RADAR_R))
 
 
+KEY_SZ = 34   # px per key cap
+KEY_GAP = 4
+KEY_PAD = 12  # px from the bottom-right corner
+
+
+def draw_wasd(screen, keys, font) -> None:
+    """Bottom-right WASD keycaps; a pressed key lights up green."""
+    # (label, key, col, row) — classic W over ASD layout
+    caps = [
+        ("W", pygame.K_w, 1, 0),
+        ("A", pygame.K_a, 0, 1),
+        ("S", pygame.K_s, 1, 1),
+        ("D", pygame.K_d, 2, 1),
+    ]
+    x0 = screen.get_width() - 3 * (KEY_SZ + KEY_GAP) - KEY_PAD
+    y0 = screen.get_height() - 2 * (KEY_SZ + KEY_GAP) - KEY_PAD
+    for label, key, col, row in caps:
+        rect = pygame.Rect(x0 + col * (KEY_SZ + KEY_GAP),
+                           y0 + row * (KEY_SZ + KEY_GAP), KEY_SZ, KEY_SZ)
+        pressed = keys[key]
+        pygame.draw.rect(screen, (0, 200, 60) if pressed else (40, 40, 40), rect, border_radius=6)
+        pygame.draw.rect(screen, (0, 255, 90) if pressed else (90, 90, 90), rect, 2, border_radius=6)
+        text = font.render(label, True, (0, 0, 0) if pressed else (220, 220, 220))
+        screen.blit(text, text.get_rect(center=rect.center))
+
+
 def main(xml: str | None = None) -> None:
     pygame.init()
     screen = pygame.display.set_mode((900, 600))
     pygame.display.set_caption("NeoRacer — pygame drive")
     clock = pygame.time.Clock()
+    key_font = pygame.font.SysFont(None, 26)
+    timer_font = pygame.font.SysFont(None, 48)
+    elapsed = 0.0       # seconds shown on the timer
+    timing = False      # T toggles this
 
     joystick = None
     if pygame.joystick.get_count() > 0:
@@ -85,6 +118,10 @@ def main(xml: str | None = None) -> None:
                 running = False
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_BACKSPACE:
                 sim.reset()
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_t:
+                timing = not timing
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                elapsed, timing = 0.0, False
             elif event.type == pygame.JOYBUTTONDOWN and event.button == RESET_BUTTON:
                 sim.reset()
 
@@ -107,7 +144,13 @@ def main(xml: str | None = None) -> None:
 
         frame = sim.render()  # (h, w, 3); pygame surfaces are (w, h), hence the swap
         screen.blit(pygame.surfarray.make_surface(frame.swapaxes(0, 1)), (0, 0))
+        if timing:
+            elapsed += dt
         draw_lidar(screen, sim.lidar())
+        draw_wasd(screen, keys, key_font)
+        color = (0, 255, 90) if timing else (220, 220, 220)
+        label = timer_font.render(f"{int(elapsed // 60):02d}:{elapsed % 60:05.2f}", True, color)
+        screen.blit(label, (14, 12))
         pygame.display.flip()
 
         dt = clock.tick(60) / 1000

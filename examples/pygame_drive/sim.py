@@ -60,7 +60,7 @@ def _load_model(xml: str | None):
     """
     if xml:
         return mujoco.MjModel.from_xml_path(xml)
-    scene = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "tracks" / "ramp_course.xml"))
+    scene = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "tracks" / "f1_track.xml"))
     car   = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "neoracer.xml"))
     # attach the whole car spec (not just the car body): the ground plane lives
     # in neoracer.xml's worldbody and must come along, or the scene has no floor
