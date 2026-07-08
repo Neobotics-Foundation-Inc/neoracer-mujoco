@@ -12,3 +12,4 @@ venv/
 MUJOCO_LOG.TXT
 
 CLAUDE.md
+.claude/
