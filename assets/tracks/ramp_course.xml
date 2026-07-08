@@ -36,8 +36,12 @@
         <!-- ── ramp straight ahead of the start ──────────────────────────── -->
         <!-- pitch is NEGATIVE so the near edge is low and the far edge high:
              the car drives UP the slope (+.2 faces the tall edge at you). -->
+        <!-- euler is in DEGREES here (this file has no compiler angle="radian").
+             z=.08 sinks the low edge into the floor so the driving surface meets
+             the ground flush — any higher and the entry edge is a curb taller
+             than the car's 5 cm wheel radius. -->
         <geom name="ramp" type="box" material="ramp" condim="3"
-              pos="1.2 0 .13" euler="0 -.2 0" size=".5 .6 .02"/>
+              pos="1.2 0 .08" euler="0 -15.5 0" size=".8 .6 .02"/>
 
         <!-- ── turn 1: wall after the ramp on the right → sweep left (north) ─ -->
         <geom class="scenery" name="turn1" pos="3.5 -1.2 .15" size=".05 2.0 .15"/>

@@ -76,8 +76,10 @@
     </default>
 
     <worldbody>
-        <!-- Ground plane; friction matches the wheels. -->
-        <geom type="plane" size="5 5 .01" material="grid" friction="1.5 0.1 0.1"/>
+        <!-- Ground plane; friction matches the wheels. size is render extent only
+             (collision plane is infinite) — 10 m half-extent so scenery like the
+             f1_track (reaches x~8, y~7) sits on grid with margin, not black void. -->
+        <geom type="plane" size="10 10 .01" material="grid" friction="1.5 0.1 0.1"/>
 
         <!--
         Car body. Spawn height = chassis half-height + wheel radius = 0.0806 + 0.050

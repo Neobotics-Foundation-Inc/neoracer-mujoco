@@ -1,0 +1,166 @@
+<mujoco model="f1_track">
+    <!--
+    Monaco-ish street circuit (feel-test, not for RL yet). Scenery ONLY:
+    this file does not name the car. The driver composes it with
+    neoracer.xml at runtime (MjSpec.attach), same as ramp_course.xml, so
+    the floor comes from the car model and the scene stays car-agnostic.
+
+    Closed loop, clockwise. The car spawns at the origin facing +X
+    on the start/finish straight (y=0) and drives into Turn 1. Signature
+    bits: long straight, a tight hairpin on the right, a left-right chicane
+    up top, sweepers linking them. Inner + outer walls are thin static
+    boxes 0.30 m tall (taller than the car, so it cannot hop them).
+
+    Track width 0.70 m. Footprint ~10 x 8 m.
+
+    GENERATED from a coarse centerline (Chaikin-smoothed, 2 iters). To
+    reshape, edit the waypoints and regenerate. Coarse centerline (x,y):
+    (-2.0,0.0), (5.5,0.0), (7.2,0.9), (7.6,2.2), (6.4,2.9), (6.6,3.9), (7.8,4.2), (7.3,5.6), (5.8,6.4), (3.6,6.2), (2.8,6.9), (1.6,6.2), (0.0,6.3), (-1.8,5.6), (-2.8,3.8), (-2.6,1.6), (-2.0,0.0)
+    -->
+
+    <asset>
+        <material name="wall_outer" rgba=".80 .20 .20 1"/>
+        <material name="wall_inner" rgba=".92 .92 .95 1"/>
+    </asset>
+
+    <default>
+        <!-- All scenery is static; condim 3 = plain sliding contact. -->
+        <default class="scenery">
+            <geom type="box" condim="3" friction="1.0 0.1 0.1"/>
+        </default>
+    </default>
+
+    <worldbody>
+        <!-- outer wall -->
+        <geom class="scenery" name="outer_00" material="wall_outer" pos="1.750 -0.350 0.150" euler="0 0 0.00" size="0.988 0.025 0.150"/>
+        <geom class="scenery" name="outer_01" material="wall_outer" pos="3.457 -0.322 0.150" euler="0 0 2.13" size="0.807 0.025 0.150"/>
+        <geom class="scenery" name="outer_02" material="wall_outer" pos="4.809 -0.236 0.150" euler="0 0 5.59" size="0.628 0.025 0.150"/>
+        <geom class="scenery" name="outer_03" material="wall_outer" pos="5.817 -0.089 0.150" euler="0 0 12.09" size="0.453 0.025 0.150"/>
+        <geom class="scenery" name="outer_04" material="wall_outer" pos="6.514 0.141 0.150" euler="0 0 27.90" size="0.290 0.025 0.150"/>
+        <geom class="scenery" name="outer_05" material="wall_outer" pos="6.940 0.404 0.150" euler="0 0 36.03" size="0.263 0.025 0.150"/>
+        <geom class="scenery" name="outer_06" material="wall_outer" pos="7.291 0.708 0.150" euler="0 0 46.33" size="0.240 0.025 0.150"/>
+        <geom class="scenery" name="outer_07" material="wall_outer" pos="7.559 1.057 0.150" euler="0 0 58.86" size="0.225 0.025 0.150"/>
+        <geom class="scenery" name="outer_08" material="wall_outer" pos="7.735 1.447 0.150" euler="0 0 72.90" size="0.220 0.025 0.150"/>
+        <geom class="scenery" name="outer_09" material="wall_outer" pos="7.800 1.856 0.150" euler="0 0 90.00" size="0.194 0.025 0.150"/>
+        <geom class="scenery" name="outer_10" material="wall_outer" pos="7.725 2.255 0.150" euler="0 0 111.80" size="0.185 0.025 0.150"/>
+        <geom class="scenery" name="outer_11" material="wall_outer" pos="7.505 2.596 0.150" euler="0 0 133.26" size="0.196 0.025 0.150"/>
+        <geom class="scenery" name="outer_12" material="wall_outer" pos="7.176 2.852 0.150" euler="0 0 149.74" size="0.224 0.025 0.150"/>
+        <geom class="scenery" name="outer_13" material="wall_outer" pos="6.980 2.993 0.150" euler="0 0 137.64" size="0.194 0.025 0.150"/>
+        <geom class="scenery" name="outer_14" material="wall_outer" pos="6.877 3.115 0.150" euler="0 0 120.47" size="0.173 0.025 0.150"/>
+        <geom class="scenery" name="outer_15" material="wall_outer" pos="6.839 3.215 0.150" euler="0 0 99.21" size="0.167 0.025 0.150"/>
+        <geom class="scenery" name="outer_16" material="wall_outer" pos="6.843 3.331 0.150" euler="0 0 78.69" size="0.177 0.025 0.150"/>
+        <geom class="scenery" name="outer_17" material="wall_outer" pos="6.889 3.461 0.150" euler="0 0 61.39" size="0.167 0.025 0.150"/>
+        <geom class="scenery" name="outer_18" material="wall_outer" pos="6.963 3.556 0.150" euler="0 0 42.88" size="0.169 0.025 0.150"/>
+        <geom class="scenery" name="outer_19" material="wall_outer" pos="7.088 3.640 0.150" euler="0 0 26.57" size="0.183 0.025 0.150"/>
+        <geom class="scenery" name="outer_20" material="wall_outer" pos="7.285 3.710 0.150" euler="0 0 14.04" size="0.205 0.025 0.150"/>
+        <geom class="scenery" name="outer_21" material="wall_outer" pos="7.655 3.878 0.150" euler="0 0 36.57" size="0.171 0.025 0.150"/>
+        <geom class="scenery" name="outer_22" material="wall_outer" pos="7.911 4.204 0.150" euler="0 0 67.62" size="0.165 0.025 0.150"/>
+        <geom class="scenery" name="outer_23" material="wall_outer" pos="7.971 4.608 0.150" euler="0 0 93.81" size="0.191 0.025 0.150"/>
+        <geom class="scenery" name="outer_24" material="wall_outer" pos="7.880 5.018 0.150" euler="0 0 109.65" size="0.236 0.025 0.150"/>
+        <geom class="scenery" name="outer_25" material="wall_outer" pos="7.694 5.411 0.150" euler="0 0 120.96" size="0.232 0.025 0.150"/>
+        <geom class="scenery" name="outer_26" material="wall_outer" pos="7.434 5.760 0.150" euler="0 0 132.27" size="0.236 0.025 0.150"/>
+        <geom class="scenery" name="outer_27" material="wall_outer" pos="7.106 6.060 0.150" euler="0 0 142.77" size="0.246 0.025 0.150"/>
+        <geom class="scenery" name="outer_28" material="wall_outer" pos="6.715 6.309 0.150" euler="0 0 151.93" size="0.262 0.025 0.150"/>
+        <geom class="scenery" name="outer_29" material="wall_outer" pos="6.262 6.501 0.150" euler="0 0 161.82" size="0.270 0.025 0.150"/>
+        <geom class="scenery" name="outer_30" material="wall_outer" pos="5.769 6.620 0.150" euler="0 0 170.79" size="0.284 0.025 0.150"/>
+        <geom class="scenery" name="outer_31" material="wall_outer" pos="5.237 6.669 0.150" euler="0 0 178.59" size="0.303 0.025 0.150"/>
+        <geom class="scenery" name="outer_32" material="wall_outer" pos="4.668 6.649 0.150" euler="0 0 -174.81" size="0.326 0.025 0.150"/>
+        <geom class="scenery" name="outer_33" material="wall_outer" pos="4.198 6.628 0.150" euler="0 0 179.23" size="0.281 0.025 0.150"/>
+        <geom class="scenery" name="outer_34" material="wall_outer" pos="3.833 6.658 0.150" euler="0 0 170.54" size="0.240 0.025 0.150"/>
+        <geom class="scenery" name="outer_35" material="wall_outer" pos="3.577 6.727 0.150" euler="0 0 157.56" size="0.206 0.025 0.150"/>
+        <geom class="scenery" name="outer_36" material="wall_outer" pos="3.430 6.813 0.150" euler="0 0 138.81" size="0.183 0.025 0.150"/>
+        <geom class="scenery" name="outer_37" material="wall_outer" pos="3.114 7.007 0.150" euler="0 0 158.75" size="0.171 0.025 0.150"/>
+        <geom class="scenery" name="outer_38" material="wall_outer" pos="2.750 7.075 0.150" euler="0 0 180.00" size="0.175 0.025 0.150"/>
+        <geom class="scenery" name="outer_39" material="wall_outer" pos="2.381 7.015 0.150" euler="0 0 -162.35" size="0.194 0.025 0.150"/>
+        <geom class="scenery" name="outer_40" material="wall_outer" pos="2.024 6.852 0.150" euler="0 0 -149.74" size="0.224 0.025 0.150"/>
+        <geom class="scenery" name="outer_41" material="wall_outer" pos="1.762 6.727 0.150" euler="0 0 -158.96" size="0.224 0.025 0.150"/>
+        <geom class="scenery" name="outer_42" material="wall_outer" pos="1.477 6.642 0.150" euler="0 0 -167.91" size="0.229 0.025 0.150"/>
+        <geom class="scenery" name="outer_43" material="wall_outer" pos="1.164 6.599 0.150" euler="0 0 -176.19" size="0.238 0.025 0.150"/>
+        <geom class="scenery" name="outer_44" material="wall_outer" pos="0.822 6.599 0.150" euler="0 0 176.42" size="0.250 0.025 0.150"/>
+        <geom class="scenery" name="outer_45" material="wall_outer" pos="0.373 6.599 0.150" euler="0 0 -176.53" size="0.257 0.025 0.150"/>
+        <geom class="scenery" name="outer_46" material="wall_outer" pos="-0.086 6.545 0.150" euler="0 0 -169.99" size="0.266 0.025 0.150"/>
+        <geom class="scenery" name="outer_47" material="wall_outer" pos="-0.552 6.437 0.150" euler="0 0 -164.05" size="0.278 0.025 0.150"/>
+        <geom class="scenery" name="outer_48" material="wall_outer" pos="-1.027 6.276 0.150" euler="0 0 -158.75" size="0.291 0.025 0.150"/>
+        <geom class="scenery" name="outer_49" material="wall_outer" pos="-1.507 6.040 0.150" euler="0 0 -148.64" size="0.284 0.025 0.150"/>
+        <geom class="scenery" name="outer_50" material="wall_outer" pos="-1.933 5.724 0.150" euler="0 0 -138.24" size="0.285 0.025 0.150"/>
+        <geom class="scenery" name="outer_51" material="wall_outer" pos="-2.300 5.332 0.150" euler="0 0 -128.20" size="0.293 0.025 0.150"/>
+        <geom class="scenery" name="outer_52" material="wall_outer" pos="-2.606 4.870 0.150" euler="0 0 -119.05" size="0.307 0.025 0.150"/>
+        <geom class="scenery" name="outer_53" material="wall_outer" pos="-2.841 4.358 0.150" euler="0 0 -110.22" size="0.303 0.025 0.150"/>
+        <geom class="scenery" name="outer_54" material="wall_outer" pos="-2.993 3.819 0.150" euler="0 0 -101.31" size="0.305 0.025 0.150"/>
+        <geom class="scenery" name="outer_55" material="wall_outer" pos="-3.062 3.254 0.150" euler="0 0 -92.73" size="0.313 0.025 0.150"/>
+        <geom class="scenery" name="outer_56" material="wall_outer" pos="-3.049 2.668 0.150" euler="0 0 -84.81" size="0.326 0.025 0.150"/>
+        <geom class="scenery" name="outer_57" material="wall_outer" pos="-2.984 2.118 0.150" euler="0 0 -81.67" size="0.309 0.025 0.150"/>
+        <geom class="scenery" name="outer_58" material="wall_outer" pos="-2.892 1.603 0.150" euler="0 0 -78.11" size="0.293 0.025 0.150"/>
+        <geom class="scenery" name="outer_59" material="wall_outer" pos="-2.774 1.123 0.150" euler="0 0 -74.05" size="0.278 0.025 0.150"/>
+        <geom class="scenery" name="outer_60" material="wall_outer" pos="-2.628 0.677 0.150" euler="0 0 -69.44" size="0.264 0.025 0.150"/>
+        <geom class="scenery" name="outer_61" material="wall_outer" pos="-2.095 0.139 0.150" euler="0 0 -27.30" size="0.377 0.025 0.150"/>
+        <geom class="scenery" name="outer_62" material="wall_outer" pos="-1.205 -0.143 0.150" euler="0 0 -11.17" size="0.566 0.025 0.150"/>
+        <geom class="scenery" name="outer_63" material="wall_outer" pos="0.066 -0.299 0.150" euler="0 0 -3.96" size="0.774 0.025 0.150"/>
+
+        <!-- inner wall -->
+        <geom class="scenery" name="inner_00" material="wall_inner" pos="1.750 0.350 0.150" euler="0 0 0.00" size="0.988 0.025 0.150"/>
+        <geom class="scenery" name="inner_01" material="wall_inner" pos="3.431 0.378 0.150" euler="0 0 2.13" size="0.807 0.025 0.150"/>
+        <geom class="scenery" name="inner_02" material="wall_inner" pos="4.741 0.461 0.150" euler="0 0 5.59" size="0.628 0.025 0.150"/>
+        <geom class="scenery" name="inner_03" material="wall_inner" pos="5.670 0.595 0.150" euler="0 0 12.09" size="0.453 0.025 0.150"/>
+        <geom class="scenery" name="inner_04" material="wall_inner" pos="6.186 0.759 0.150" euler="0 0 27.90" size="0.290 0.025 0.150"/>
+        <geom class="scenery" name="inner_05" material="wall_inner" pos="6.529 0.971 0.150" euler="0 0 36.03" size="0.263 0.025 0.150"/>
+        <geom class="scenery" name="inner_06" material="wall_inner" pos="6.784 1.192 0.150" euler="0 0 46.33" size="0.240 0.025 0.150"/>
+        <geom class="scenery" name="inner_07" material="wall_inner" pos="6.960 1.418 0.150" euler="0 0 58.86" size="0.225 0.025 0.150"/>
+        <geom class="scenery" name="inner_08" material="wall_inner" pos="7.065 1.653 0.150" euler="0 0 72.90" size="0.220 0.025 0.150"/>
+        <geom class="scenery" name="inner_09" material="wall_inner" pos="7.100 1.856 0.150" euler="0 0 90.00" size="0.194 0.025 0.150"/>
+        <geom class="scenery" name="inner_10" material="wall_inner" pos="7.075 1.995 0.150" euler="0 0 111.80" size="0.185 0.025 0.150"/>
+        <geom class="scenery" name="inner_11" material="wall_inner" pos="6.995 2.116 0.150" euler="0 0 133.26" size="0.196 0.025 0.150"/>
+        <geom class="scenery" name="inner_12" material="wall_inner" pos="6.824 2.248 0.150" euler="0 0 149.74" size="0.224 0.025 0.150"/>
+        <geom class="scenery" name="inner_13" material="wall_inner" pos="6.508 2.476 0.150" euler="0 0 137.64" size="0.194 0.025 0.150"/>
+        <geom class="scenery" name="inner_14" material="wall_inner" pos="6.273 2.760 0.150" euler="0 0 120.47" size="0.173 0.025 0.150"/>
+        <geom class="scenery" name="inner_15" material="wall_inner" pos="6.148 3.103 0.150" euler="0 0 99.21" size="0.167 0.025 0.150"/>
+        <geom class="scenery" name="inner_16" material="wall_inner" pos="6.157 3.469 0.150" euler="0 0 78.69" size="0.177 0.025 0.150"/>
+        <geom class="scenery" name="inner_17" material="wall_inner" pos="6.274 3.796 0.150" euler="0 0 61.39" size="0.167 0.025 0.150"/>
+        <geom class="scenery" name="inner_18" material="wall_inner" pos="6.487 4.069 0.150" euler="0 0 42.88" size="0.169 0.025 0.150"/>
+        <geom class="scenery" name="inner_19" material="wall_inner" pos="6.775 4.266 0.150" euler="0 0 26.57" size="0.183 0.025 0.150"/>
+        <geom class="scenery" name="inner_20" material="wall_inner" pos="7.115 4.390 0.150" euler="0 0 14.04" size="0.205 0.025 0.150"/>
+        <geom class="scenery" name="inner_21" material="wall_inner" pos="7.238 4.440 0.150" euler="0 0 36.57" size="0.171 0.025 0.150"/>
+        <geom class="scenery" name="inner_22" material="wall_inner" pos="7.264 4.471 0.150" euler="0 0 67.62" size="0.165 0.025 0.150"/>
+        <geom class="scenery" name="inner_23" material="wall_inner" pos="7.273 4.561 0.150" euler="0 0 93.81" size="0.191 0.025 0.150"/>
+        <geom class="scenery" name="inner_24" material="wall_inner" pos="7.220 4.782 0.150" euler="0 0 109.65" size="0.236 0.025 0.150"/>
+        <geom class="scenery" name="inner_25" material="wall_inner" pos="7.094 5.051 0.150" euler="0 0 120.96" size="0.232 0.025 0.150"/>
+        <geom class="scenery" name="inner_26" material="wall_inner" pos="6.916 5.290 0.150" euler="0 0 132.27" size="0.236 0.025 0.150"/>
+        <geom class="scenery" name="inner_27" material="wall_inner" pos="6.682 5.503 0.150" euler="0 0 142.77" size="0.246 0.025 0.150"/>
+        <geom class="scenery" name="inner_28" material="wall_inner" pos="6.385 5.691 0.150" euler="0 0 151.93" size="0.262 0.025 0.150"/>
+        <geom class="scenery" name="inner_29" material="wall_inner" pos="6.044 5.836 0.150" euler="0 0 161.82" size="0.270 0.025 0.150"/>
+        <geom class="scenery" name="inner_30" material="wall_inner" pos="5.656 5.930 0.150" euler="0 0 170.79" size="0.284 0.025 0.150"/>
+        <geom class="scenery" name="inner_31" material="wall_inner" pos="5.219 5.969 0.150" euler="0 0 178.59" size="0.303 0.025 0.150"/>
+        <geom class="scenery" name="inner_32" material="wall_inner" pos="4.732 5.951 0.150" euler="0 0 -174.81" size="0.326 0.025 0.150"/>
+        <geom class="scenery" name="inner_33" material="wall_inner" pos="4.189 5.928 0.150" euler="0 0 179.23" size="0.281 0.025 0.150"/>
+        <geom class="scenery" name="inner_34" material="wall_inner" pos="3.717 5.967 0.150" euler="0 0 170.54" size="0.240 0.025 0.150"/>
+        <geom class="scenery" name="inner_35" material="wall_inner" pos="3.310 6.080 0.150" euler="0 0 157.56" size="0.206 0.025 0.150"/>
+        <geom class="scenery" name="inner_36" material="wall_inner" pos="2.970 6.287 0.150" euler="0 0 138.81" size="0.183 0.025 0.150"/>
+        <geom class="scenery" name="inner_37" material="wall_inner" pos="2.861 6.355 0.150" euler="0 0 158.75" size="0.171 0.025 0.150"/>
+        <geom class="scenery" name="inner_38" material="wall_inner" pos="2.750 6.375 0.150" euler="0 0 180.00" size="0.175 0.025 0.150"/>
+        <geom class="scenery" name="inner_39" material="wall_inner" pos="2.594 6.348 0.150" euler="0 0 -162.35" size="0.194 0.025 0.150"/>
+        <geom class="scenery" name="inner_40" material="wall_inner" pos="2.376 6.248 0.150" euler="0 0 -149.74" size="0.224 0.025 0.150"/>
+        <geom class="scenery" name="inner_41" material="wall_inner" pos="2.013 6.073 0.150" euler="0 0 -158.96" size="0.224 0.025 0.150"/>
+        <geom class="scenery" name="inner_42" material="wall_inner" pos="1.623 5.958 0.150" euler="0 0 -167.91" size="0.229 0.025 0.150"/>
+        <geom class="scenery" name="inner_43" material="wall_inner" pos="1.211 5.901 0.150" euler="0 0 -176.19" size="0.238 0.025 0.150"/>
+        <geom class="scenery" name="inner_44" material="wall_inner" pos="0.778 5.901 0.150" euler="0 0 176.42" size="0.250 0.025 0.150"/>
+        <geom class="scenery" name="inner_45" material="wall_inner" pos="0.415 5.901 0.150" euler="0 0 -176.53" size="0.257 0.025 0.150"/>
+        <geom class="scenery" name="inner_46" material="wall_inner" pos="0.036 5.855 0.150" euler="0 0 -169.99" size="0.266 0.025 0.150"/>
+        <geom class="scenery" name="inner_47" material="wall_inner" pos="-0.360 5.763 0.150" euler="0 0 -164.05" size="0.278 0.025 0.150"/>
+        <geom class="scenery" name="inner_48" material="wall_inner" pos="-0.773 5.624 0.150" euler="0 0 -158.75" size="0.291 0.025 0.150"/>
+        <geom class="scenery" name="inner_49" material="wall_inner" pos="-1.143 5.442 0.150" euler="0 0 -148.64" size="0.284 0.025 0.150"/>
+        <geom class="scenery" name="inner_50" material="wall_inner" pos="-1.467 5.201 0.150" euler="0 0 -138.24" size="0.285 0.025 0.150"/>
+        <geom class="scenery" name="inner_51" material="wall_inner" pos="-1.750 4.899 0.150" euler="0 0 -128.20" size="0.293 0.025 0.150"/>
+        <geom class="scenery" name="inner_52" material="wall_inner" pos="-1.994 4.530 0.150" euler="0 0 -119.05" size="0.307 0.025 0.150"/>
+        <geom class="scenery" name="inner_53" material="wall_inner" pos="-2.184 4.117 0.150" euler="0 0 -110.22" size="0.303 0.025 0.150"/>
+        <geom class="scenery" name="inner_54" material="wall_inner" pos="-2.307 3.681 0.150" euler="0 0 -101.31" size="0.305 0.025 0.150"/>
+        <geom class="scenery" name="inner_55" material="wall_inner" pos="-2.363 3.221 0.150" euler="0 0 -92.73" size="0.313 0.025 0.150"/>
+        <geom class="scenery" name="inner_56" material="wall_inner" pos="-2.351 2.732 0.150" euler="0 0 -84.81" size="0.326 0.025 0.150"/>
+        <geom class="scenery" name="inner_57" material="wall_inner" pos="-2.291 2.219 0.150" euler="0 0 -81.67" size="0.309 0.025 0.150"/>
+        <geom class="scenery" name="inner_58" material="wall_inner" pos="-2.208 1.747 0.150" euler="0 0 -78.11" size="0.293 0.025 0.150"/>
+        <geom class="scenery" name="inner_59" material="wall_inner" pos="-2.101 1.315 0.150" euler="0 0 -74.05" size="0.278 0.025 0.150"/>
+        <geom class="scenery" name="inner_60" material="wall_inner" pos="-1.972 0.923 0.150" euler="0 0 -69.44" size="0.264 0.025 0.150"/>
+        <geom class="scenery" name="inner_61" material="wall_inner" pos="-1.774 0.761 0.150" euler="0 0 -27.30" size="0.377 0.025 0.150"/>
+        <geom class="scenery" name="inner_62" material="wall_inner" pos="-1.070 0.543 0.150" euler="0 0 -11.17" size="0.566 0.025 0.150"/>
+        <geom class="scenery" name="inner_63" material="wall_inner" pos="0.115 0.399 0.150" euler="0 0 -3.96" size="0.774 0.025 0.150"/>
+    </worldbody>
+</mujoco>
