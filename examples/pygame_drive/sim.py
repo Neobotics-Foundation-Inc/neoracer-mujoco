@@ -22,7 +22,7 @@ import numpy as np
 _PROJECT_DIR = Path(__file__).resolve().parents[2]
 
 # ── tuning knobs ────────────────────────────────────────────────────────────────
-MAX_TORQUE = 0.17      # N·m per wheel at full throttle (0.35 launches like a rocket;
+MAX_TORQUE = 0.15       # N·m per wheel at full throttle (0.35 launches like a rocket;
                         # below ~0.15 the car can't carry enough speed to clear the
                         # ramp jump even with a run-up)
 MOTOR_DAMPING = 0.0025  # N·m per rad/s of wheel spin — back-EMF of a DC motor.
