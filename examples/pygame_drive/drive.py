@@ -14,6 +14,7 @@ Keyboard:                          Gamepad (auto-detected, overrides keys):
     Esc        quit
 """
 
+import math
 import sys
 from pathlib import Path
 
@@ -28,6 +29,35 @@ ACCEL_AXIS = 5     # right trigger, rests at -1
 BRAKE_AXIS = 4     # left trigger, rests at -1
 RESET_BUTTON = 7   # Start
 DEADZONE = 0.1
+
+
+LIDAR_MAX = 1.0   # m — beams past this read as "clear" (rangefinder returns -1 too)
+RADAR_R = 90      # px radius of the radar disc
+RADAR_PAD = 12    # px from the top-right corner
+
+
+def draw_lidar(screen, beams: dict[str, float]) -> None:
+    """Top-right radar: each beam a dot at its angle, distance = range,
+    color hot->cold with proximity so nearby clutter reads as a dense blob."""
+    cx = screen.get_width() - RADAR_R - RADAR_PAD
+    cy = RADAR_R + RADAR_PAD
+
+    disc = pygame.Surface((2 * RADAR_R, 2 * RADAR_R), pygame.SRCALPHA)
+    pygame.draw.circle(disc, (10, 10, 10, 160), (RADAR_R, RADAR_R), RADAR_R)
+    pygame.draw.circle(disc, (0, 255, 0, 90), (RADAR_R, RADAR_R), RADAR_R, 1)
+
+    for name, rng in beams.items():
+        angle = math.radians(int(name.split("_")[1]))
+        r = rng if rng >= 0 else LIDAR_MAX          # -1 = no hit -> edge of disc
+        r = min(r, LIDAR_MAX)
+        near = 1.0 - r / LIDAR_MAX                   # 0 far, 1 point-blank
+        px = RADAR_R + math.cos(angle) * near * RADAR_R
+        py = RADAR_R - math.sin(angle) * near * RADAR_R
+        color = (255, int(255 * (1 - near)), 0)      # yellow far -> red close
+        pygame.draw.circle(disc, color, (int(px), int(py)), 5)
+
+    pygame.draw.circle(disc, (0, 200, 255), (RADAR_R, RADAR_R), 3)  # the car
+    screen.blit(disc, (cx - RADAR_R, cy - RADAR_R))
 
 
 def main(xml: str | None = None) -> None:
@@ -76,6 +106,7 @@ def main(xml: str | None = None) -> None:
 
         frame = sim.render()  # (h, w, 3); pygame surfaces are (w, h), hence the swap
         screen.blit(pygame.surfarray.make_surface(frame.swapaxes(0, 1)), (0, 0))
+        draw_lidar(screen, sim.lidar())
         pygame.display.flip()
 
         dt = clock.tick(60) / 1000

@@ -60,7 +60,7 @@ def _load_model(xml: str | None):
     """
     if xml:
         return mujoco.MjModel.from_xml_path(xml)
-    scene = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "tracks" / "f1_track.xml"))
+    scene = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "tracks" / "ramp_course.xml"))
     car   = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "neoracer.xml"))
     # attach the whole car spec (not just the car body): the ground plane lives
     # in neoracer.xml's worldbody and must come along, or the scene has no floor
@@ -117,6 +117,11 @@ class DriveSim:
         target = self.data.time + dt
         while self.data.time < target:
             mujoco.mj_step(self.model, self.data)
+
+    def lidar(self) -> dict[str, float]:
+        """Current range (m) for each of the 8 lidar beams; -1 = no hit."""
+        names = [f"lidar_{a:03d}" for a in range(0, 360, 45)]
+        return {n: float(self.data.sensor(n).data[0]) for n in names}
 
     def stop(self) -> None:
         """Hard stop: zero both commands immediately (no slew-down)."""
