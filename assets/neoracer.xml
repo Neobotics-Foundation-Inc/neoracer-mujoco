@@ -131,17 +131,18 @@
 
             <!--
             LiDAR ray sites: 8 beams at 45° intervals in the horizontal plane.
-            euler="0 90 θ" points the site's local Z at angle θ from +X (forward).
+            A rangefinder casts along the site's local +Z, so zaxis IS the beam
+            direction: [cos θ, sin θ, 0] aims beam θ° left of +X (forward).
             Add more beams here (and matching rangefinders below) for richer RL obs.
             -->
-            <site name="lidar_000" pos="0 0 .15" euler="0 90   0" size=".005"/>
-            <site name="lidar_045" pos="0 0 .15" euler="0 90  45" size=".005"/>
-            <site name="lidar_090" pos="0 0 .15" euler="0 90  90" size=".005"/>
-            <site name="lidar_135" pos="0 0 .15" euler="0 90 135" size=".005"/>
-            <site name="lidar_180" pos="0 0 .15" euler="0 90 180" size=".005"/>
-            <site name="lidar_225" pos="0 0 .15" euler="0 90 225" size=".005"/>
-            <site name="lidar_270" pos="0 0 .15" euler="0 90 270" size=".005"/>
-            <site name="lidar_315" pos="0 0 .15" euler="0 90 315" size=".005"/>
+            <site name="lidar_000" pos="0 0 .15" zaxis=" 1     0    0" size=".005"/>
+            <site name="lidar_045" pos="0 0 .15" zaxis=" 0.707 0.707 0" size=".005"/>
+            <site name="lidar_090" pos="0 0 .15" zaxis=" 0     1    0" size=".005"/>
+            <site name="lidar_135" pos="0 0 .15" zaxis="-0.707 0.707 0" size=".005"/>
+            <site name="lidar_180" pos="0 0 .15" zaxis="-1     0    0" size=".005"/>
+            <site name="lidar_225" pos="0 0 .15" zaxis="-0.707 -0.707 0" size=".005"/>
+            <site name="lidar_270" pos="0 0 .15" zaxis=" 0    -1    0" size=".005"/>
+            <site name="lidar_315" pos="0 0 .15" zaxis=" 0.707 -0.707 0" size=".005"/>
             <!-- Cosmetic lidar mesh at the mount site. -->
             <geom name="vis_lidar" type="mesh" mass="0" mesh="vis_lidar"
                   pos="0 0 0.15"
