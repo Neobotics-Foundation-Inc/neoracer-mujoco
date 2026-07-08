@@ -16,6 +16,11 @@
 
     <compiler angle="radian" autolimits="true"/>
 
+    <!-- Elliptic friction cone + high impratio: MuJoCo's recommended setting for
+         wheeled vehicles — stiffens tangential contact so the tires creep less
+         sideways (measured: full-lock radius 0.77 m → 0.74 m vs 0.68 m ideal). -->
+    <option cone="elliptic" impratio="10"/>
+
     <asset>
         <texture name="grid" type="2d" builtin="checker" width="512" height="512"
                  rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
