@@ -76,6 +76,65 @@ def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
     return SensorReadings(**raw)
 
 
+@dataclass(frozen=True)
+class IMUReading:
+    """
+    One IMU sample, packed from neoracer.xml's imu_accel/imu_gyro/imu_quat sensors.
+
+    Frame: the imu site has no rotation relative to its parent body (pos-only,
+    no euler/quat in the XML), so this IS the car body frame: +X forward,
+    +Y left, +Z up (per the coordinate frame documented in neoracer.xml's
+    header comment).
+
+    acceleration     — m/s^2, local (body) frame. GRAVITY IS INCLUDED: MuJoCo's
+                        accelerometer reports specific/proper force like a real
+                        accelerometer, so at rest this is NOT (0,0,0) — measured
+                        empirically at rest on this model as ~(0, 0, +9.81), norm
+                        equal to the model's configured gravity magnitude.
+    angular_velocity — rad/s, local (body) frame. Measured empirically as ~0
+                        (norm ~1e-9) at rest on this model.
+    orientation      — quaternion (w, x, y, z) of the IMU frame relative to the
+                        WORLD frame. Not body-relative and not zeroed to any
+                        hardware reference attitude.
+
+    These are MuJoCo's native readings with no axis/sign correction applied —
+    see imu_readings() (raw) vs calibrate_imu() (calibrated) below.
+    """
+    acceleration: np.ndarray
+    angular_velocity: np.ndarray
+    orientation: np.ndarray
+
+
+def imu_readings(sensors: SensorReadings) -> IMUReading:
+    """
+    Pack the raw imu_accel/imu_gyro/imu_quat sensors into a typed IMUReading.
+
+    This is the RAW simulator reading — uncalibrated. Pass it through
+    calibrate_imu() for the calibrated reading (currently a no-op; see that
+    function's docstring).
+    """
+    return IMUReading(
+        acceleration=sensors.imu_accel.copy(),
+        angular_velocity=sensors.imu_gyro.copy(),
+        orientation=sensors.imu_quat.copy(),
+    )
+
+
+# No hardware bench-calibration data (bias, scale-factor, axis misalignment)
+# exists yet for the physical NeoRacer IMU. Note this is distinct from the IMU
+# *mount position* offset in osracer.urdf's imu_joint, which is an XML-geometry
+# concern tracked separately, not a reading-calibration one.
+#
+# TODO(hardware-calibration): once bench-characterized bias/misalignment values
+# exist for the real IMU, apply them here. Until then this is an identity
+# pass-through, so downstream code can be written against the calibrated-reading
+# interface now instead of waiting on unmeasured correction values.
+def calibrate_imu(raw: IMUReading) -> IMUReading:
+    """Apply hardware IMU calibration to a raw IMUReading. Currently a no-op —
+    see the TODO above this function."""
+    return raw
+
+
 def wheel_speed_ms(sensors: SensorReadings) -> dict:
     """Convert each wheel's angular velocity (rad/s) to surface speed (m/s)."""
     return {
