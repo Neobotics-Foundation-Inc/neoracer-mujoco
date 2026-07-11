@@ -10,6 +10,7 @@ import mujoco
 import numpy as np
 
 import _sim
+import sensor_logger as sl
 from _sim import DRIVE, STEER
 
 
@@ -49,6 +50,27 @@ def test_rests_on_ground(car):
 
 def test_stays_upright_at_rest(car):
     assert _sim.car_upright_cos(_sim.settle(car)) > 0.95, "car tips over with no input"
+
+
+def test_imu_stationary_accel_matches_gravity(car):
+    """
+    A stationary accelerometer reads specific force, not zero: it must measure
+    ~g (the model's configured gravity magnitude), not (0,0,0). Catches a broken
+    or disconnected accelerometer as easily as a sign-flipped one.
+    """
+    d = _sim.settle(car)
+    imu = sl.imu_readings(sl.read(car, d))
+    g = float(np.linalg.norm(car.opt.gravity))
+    accel_mag = float(np.linalg.norm(imu.acceleration))
+    assert abs(accel_mag - g) < 0.5, f"stationary |accel|={accel_mag:.2f} m/s^2, expected ~{g:.2f}"
+
+
+def test_imu_stationary_gyro_near_zero(car):
+    """No rotation at rest -> gyro should read ~0 rad/s."""
+    d = _sim.settle(car)
+    imu = sl.imu_readings(sl.read(car, d))
+    gyro_mag = float(np.linalg.norm(imu.angular_velocity))
+    assert gyro_mag < 0.05, f"stationary |gyro|={gyro_mag:.4f} rad/s, expected ~0"
 
 
 # --- it responds to control correctly ---------------------------------------
@@ -107,6 +129,16 @@ def test_sensors_finite_under_load(car):
     s = _sim.sensors(car, _sim.run(car, d, ctrl, 500))
     bad = [k for k, v in s.items() if not np.all(np.isfinite(v))]
     assert not bad, f"non-finite sensors: {bad}"
+
+
+def test_imu_readings_finite_under_load(car):
+    """The typed IMUReading must stay finite while driving + steering hard."""
+    d = _sim.settle(car)
+    ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0; ctrl[STEER] = 0.4
+    imu = sl.imu_readings(sl.read(car, _sim.run(car, d, ctrl, 500)))
+    assert np.all(np.isfinite(imu.acceleration)), f"non-finite acceleration: {imu.acceleration}"
+    assert np.all(np.isfinite(imu.angular_velocity)), f"non-finite angular_velocity: {imu.angular_velocity}"
+    assert np.all(np.isfinite(imu.orientation)), f"non-finite orientation: {imu.orientation}"
 
 
 def test_deterministic(car):

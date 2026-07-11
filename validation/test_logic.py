@@ -33,6 +33,33 @@ def test_read_returns_every_sensor(car):
     assert out.imu_accel.shape == (3,) and out.imu_quat.shape == (4,)
 
 
+def test_imu_readings_shapes(car):
+    """imu_readings() must pack accel/gyro to 3-vectors and orientation to a quaternion."""
+    d = mujoco.MjData(car)
+    mujoco.mj_step(car, d)
+    imu = sl.imu_readings(sl.read(car, d))
+    assert imu.acceleration.shape == (3,)
+    assert imu.angular_velocity.shape == (3,)
+    assert imu.orientation.shape == (4,)
+
+
+def test_calibrate_imu_is_currently_identity():
+    """
+    calibrate_imu() has no hardware bias/misalignment data to apply yet (see its
+    TODO in sensor_logger.py), so it must be a pure pass-through. This test is meant
+    to start failing the moment real calibration values are added — update it then.
+    """
+    raw = sl.IMUReading(
+        acceleration=np.array([0.1, -0.2, 9.81]),
+        angular_velocity=np.array([0.01, -0.02, 0.03]),
+        orientation=np.array([1.0, 0.0, 0.0, 0.0]),
+    )
+    calibrated = sl.calibrate_imu(raw)
+    assert np.array_equal(calibrated.acceleration, raw.acceleration)
+    assert np.array_equal(calibrated.angular_velocity, raw.angular_velocity)
+    assert np.array_equal(calibrated.orientation, raw.orientation)
+
+
 def test_ackermann_polycoef_matches_exact_geometry(car):
     """
     The steering polycoef baked into the XML must reproduce exact Ackermann for
