@@ -86,6 +86,60 @@ def wheel_speed_ms(sensors: SensorReadings) -> dict:
     }
 
 
+@dataclass(frozen=True)
+class WheelAngularVelocityReading:
+    """
+    Wheel angular-velocity readings, packed from neoracer.xml's
+    fl/fr/rl/rr_wheel_vel sensors (a <jointvel> on each drive joint).
+
+    This is the sim's ground-truth wheel angular velocity, not encoder ticks
+    or shaft position: a real quadrature encoder reports incremental shaft
+    position, and an ECU normally derives velocity from consecutive tick
+    deltas. The drive joints (fl/fr/rl/rr_drive) have no <jointpos> sensor in
+    the XML — only <jointvel> — so no tick/position-equivalent signal is
+    available to expose here. This struct makes no encoder-fidelity claim; it
+    is simply the wheel angular velocity, with no quantization or sensor
+    noise applied.
+
+    angular_velocity — rad/s, shape (4,). Positive = forward rotation (same
+                        convention as the wheel_vel sensors in neoracer.xml).
+                        Order: (fl, fr, rl, rr) — matches ctrl[0:4] in the
+                        drive-torque contract and SensorReadings' wheel_vel
+                        fields.
+    """
+    angular_velocity: np.ndarray
+
+
+def motor_encoder_readings(sensors: SensorReadings) -> WheelAngularVelocityReading:
+    """
+    Pack the four wheel_vel jointvel sensors into a typed WheelAngularVelocityReading.
+    Raw simulator values — no calibration, filtering, or quantization applied.
+    """
+    angular_velocity = np.array([
+        sensors.fl_wheel_vel[0],
+        sensors.fr_wheel_vel[0],
+        sensors.rl_wheel_vel[0],
+        sensors.rr_wheel_vel[0],
+    ])
+    return WheelAngularVelocityReading(angular_velocity=angular_velocity)
+
+
+def average_wheel_angular_velocity(encoder: WheelAngularVelocityReading) -> float:
+    """Mean angular velocity across all four driven wheels (rad/s)."""
+    return float(np.mean(encoder.angular_velocity))
+
+
+def estimated_linear_speed_ms(encoder: WheelAngularVelocityReading) -> float:
+    """
+    ESTIMATE of vehicle speed from wheel rotation (m/s) — NOT ground truth.
+    average_wheel_angular_velocity() * WHEEL_RADIUS, i.e. it assumes zero
+    wheel slip. Will diverge from the true chassis speed (e.g. SensorReadings
+    .imu_linvel) under wheelspin or lockup, exactly like a real wheel-speed-
+    based speedometer would.
+    """
+    return average_wheel_angular_velocity(encoder) * WHEEL_RADIUS
+
+
 def print_sensors(sensors: SensorReadings) -> None:
     """Print a one-line summary of the most useful sensor values."""
     def f(name, idx=0):
