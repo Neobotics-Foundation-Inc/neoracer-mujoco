@@ -86,6 +86,29 @@ def wheel_speed_ms(sensors: SensorReadings) -> dict:
     }
 
 
+# Beam order matches the rangefinder sensors in neoracer.xml, ascending 0deg..315deg.
+LIDAR_BEAM_ORDER = (
+    "lidar_000", "lidar_045", "lidar_090", "lidar_135",
+    "lidar_180", "lidar_225", "lidar_270", "lidar_315",
+)
+LIDAR_ANGLES_DEG = (0, 45, 90, 135, 180, 225, 270, 315)
+
+
+@dataclass(frozen=True)
+class LidarScan:
+    """8-beam LiDAR ring as one ordered scan (see LIDAR_BEAM_ORDER).
+    angles[i] and ranges[i] refer to the same beam."""
+    angles: np.ndarray  # radians
+    ranges: np.ndarray  # meters; -1 = no hit within cutoff
+
+
+def lidar_scan(sensors: SensorReadings) -> LidarScan:
+    """Pack the 8 named lidar_* fields into one ordered LidarScan."""
+    ranges = np.array([getattr(sensors, name)[0] for name in LIDAR_BEAM_ORDER])
+    angles = np.deg2rad(LIDAR_ANGLES_DEG)
+    return LidarScan(angles=angles, ranges=ranges)
+
+
 def print_sensors(sensors: SensorReadings) -> None:
     """Print a one-line summary of the most useful sensor values."""
     def f(name, idx=0):
