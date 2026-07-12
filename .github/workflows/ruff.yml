@@ -1,2 +1,26 @@
-- name: ruff-action
-  uses: astral-sh/ruff-action@v4.1.0
+name: Ruff
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ruff (lint)
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          args: check --output-format=github .
+
+      - name: Ruff (format)
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          args: format --check .
