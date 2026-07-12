@@ -6,7 +6,6 @@ exploited by an RL agent. If one fails, the message tells you which failure mode
 Run:  pytest validation/ -v
 """
 
-import mujoco
 import numpy as np
 
 import _sim
@@ -14,6 +13,7 @@ from _sim import DRIVE, STEER
 
 
 # --- it exists and is wired the way the contract says ------------------------
+
 
 def test_actuator_contract(car):
     """5 actuators in the agreed ctrl order; agent code indexes ctrl[0:4]+ctrl[4]."""
@@ -35,9 +35,12 @@ def test_total_mass_plausible(car):
 
 # --- it won't explode or fall apart at rest ---------------------------------
 
+
 def test_settles_without_nan(car):
     d = _sim.settle(car)
-    assert np.all(np.isfinite(d.qpos)) and np.all(np.isfinite(d.qvel)), "NaN/Inf at rest"
+    assert np.all(np.isfinite(d.qpos)) and np.all(np.isfinite(d.qvel)), (
+        "NaN/Inf at rest"
+    )
 
 
 def test_rests_on_ground(car):
@@ -53,10 +56,12 @@ def test_stays_upright_at_rest(car):
 
 # --- it responds to control correctly ---------------------------------------
 
+
 def test_throttle_drives_forward(car):
     d = _sim.settle(car)
     x0 = d.body("car").xpos[0].copy()
-    ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0
+    ctrl = np.zeros(car.nu)
+    ctrl[DRIVE] = 1.0
     _sim.run(car, d, ctrl, 400)
     assert d.body("car").xpos[0] - x0 > 0.1, "full throttle produced no forward motion"
 
@@ -64,7 +69,9 @@ def test_throttle_drives_forward(car):
 def test_left_steer_yaws_left(car):
     """+steer must yaw +z (left); a sign flip silently inverts the agent's steering."""
     d = _sim.settle(car)
-    ctrl = np.zeros(car.nu); ctrl[DRIVE] = 0.5; ctrl[STEER] = 0.4
+    ctrl = np.zeros(car.nu)
+    ctrl[DRIVE] = 0.5
+    ctrl[STEER] = 0.4
     _sim.run(car, d, ctrl, 400)
     assert d.qvel[5] > 0.1, f"left steer gave yaw rate {d.qvel[5]:.3f} (expected > 0)"
 
@@ -72,12 +79,16 @@ def test_left_steer_yaws_left(car):
 def test_ackermann_inner_exceeds_outer(car):
     """Turning left, the inner (left) front wheel must steer more than the outer."""
     d = _sim.settle(car)
-    ctrl = np.zeros(car.nu); ctrl[STEER] = 0.4
+    ctrl = np.zeros(car.nu)
+    ctrl[STEER] = 0.4
     s = _sim.sensors(car, _sim.run(car, d, ctrl, 400))
-    assert s["fl_steer_pos"][0] > s["fr_steer_pos"][0], "Ackermann differential wrong/absent"
+    assert s["fl_steer_pos"][0] > s["fr_steer_pos"][0], (
+        "Ackermann differential wrong/absent"
+    )
 
 
 # --- it can't be exploited by an RL agent -----------------------------------
+
 
 def test_no_free_energy(car):
     """Zero control from rest must stay at rest. A self-propelling model is free reward."""
@@ -94,16 +105,21 @@ def test_top_speed_bounded(car):
     (velocity-limited actuator or drivetrain damping), not a job for this test.
     """
     d = _sim.settle(car)
-    ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0
+    ctrl = np.zeros(car.nu)
+    ctrl[DRIVE] = 1.0
     _sim.run(car, d, ctrl, 2000)
     v = np.linalg.norm(d.qvel[:3])
-    assert np.isfinite(v) and v < 40.0, f"top speed {v:.2f} m/s is a blow-up, not physics"
+    assert np.isfinite(v) and v < 40.0, (
+        f"top speed {v:.2f} m/s is a blow-up, not physics"
+    )
 
 
 def test_sensors_finite_under_load(car):
     """No NaN reaches the agent's observation while driving + steering hard."""
     d = _sim.settle(car)
-    ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0; ctrl[STEER] = 0.4
+    ctrl = np.zeros(car.nu)
+    ctrl[DRIVE] = 1.0
+    ctrl[STEER] = 0.4
     s = _sim.sensors(car, _sim.run(car, d, ctrl, 500))
     bad = [k for k, v in s.items() if not np.all(np.isfinite(v))]
     assert not bad, f"non-finite sensors: {bad}"
@@ -111,8 +127,12 @@ def test_sensors_finite_under_load(car):
 
 def test_deterministic(car):
     """Same start + same ctrl -> identical trajectory. RL breaks on hidden nondeterminism."""
+
     def rollout():
         d = _sim.settle(car)
-        ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0; ctrl[STEER] = 0.2
+        ctrl = np.zeros(car.nu)
+        ctrl[DRIVE] = 1.0
+        ctrl[STEER] = 0.2
         return _sim.run(car, d, ctrl, 300).qpos.copy()
+
     assert np.array_equal(rollout(), rollout()), "trajectory not reproducible"

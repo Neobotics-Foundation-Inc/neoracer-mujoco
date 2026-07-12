@@ -13,7 +13,6 @@ import glob
 import os
 
 import mujoco
-import numpy as np
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSET_DIR = os.path.join(REPO, "assets")
@@ -21,14 +20,25 @@ CARS = sorted(glob.glob(os.path.join(ASSET_DIR, "*.xml")))
 
 # --- the contract -----------------------------------------------------------
 EXPECTED_ACTUATORS = ["fl_motor", "fr_motor", "rl_motor", "rr_motor", "steer_servo"]
-DRIVE = slice(0, 4)   # ctrl indices for the four wheel motors
-STEER = 4             # ctrl index for the steering servo
+DRIVE = slice(0, 4)  # ctrl indices for the four wheel motors
+STEER = 4  # ctrl index for the steering servo
 
 REQUIRED_SENSORS = [
-    "imu_accel", "imu_gyro", "imu_quat", "imu_linvel",
-    "steer_cmd_pos", "fl_steer_pos", "fr_steer_pos",
-    "fl_wheel_vel", "fr_wheel_vel", "rl_wheel_vel", "rr_wheel_vel",
-    "fl_susp_pos", "fr_susp_pos", "rl_susp_pos", "rr_susp_pos",
+    "imu_accel",
+    "imu_gyro",
+    "imu_quat",
+    "imu_linvel",
+    "steer_cmd_pos",
+    "fl_steer_pos",
+    "fr_steer_pos",
+    "fl_wheel_vel",
+    "fr_wheel_vel",
+    "rl_wheel_vel",
+    "rr_wheel_vel",
+    "fl_susp_pos",
+    "fr_susp_pos",
+    "rl_susp_pos",
+    "rr_susp_pos",
 ]
 
 # Total car mass sanity band. Real NeoRacer is ~2.08 kg (CAD/STEP, see aeh961
@@ -38,9 +48,9 @@ REQUIRED_SENSORS = [
 # 1000 kg/m³ density" bug — e.g. the chassis bbox as solid water = 19.2 kg.
 # ponytail: widen per car family if a new vehicle is genuinely heavier; for an
 # exact check, assert against that car's documented spec mass instead of a band.
-MASS_MIN, MASS_MAX = 1.0, 8.0   # kg
+MASS_MIN, MASS_MAX = 1.0, 8.0  # kg
 
-SETTLE_STEPS = 400              # zero-ctrl steps to reach static equilibrium
+SETTLE_STEPS = 400  # zero-ctrl steps to reach static equilibrium
 
 
 def compile(path):
@@ -69,7 +79,7 @@ def sensors(model, data):
     out = {}
     for i in range(model.nsensor):
         adr, dim = model.sensor_adr[i], model.sensor_dim[i]
-        out[model.sensor(i).name] = data.sensordata[adr:adr + dim].copy()
+        out[model.sensor(i).name] = data.sensordata[adr : adr + dim].copy()
     return out
 
 

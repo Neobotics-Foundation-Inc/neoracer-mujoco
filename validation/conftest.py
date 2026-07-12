@@ -6,9 +6,9 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples"))
+from _sim import CARS, compile
 
-from _sim import CARS, compile  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples"))
 
 
 @pytest.fixture(params=CARS, ids=lambda p: os.path.basename(p))

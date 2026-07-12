@@ -18,38 +18,38 @@ import sys
 import time
 from pathlib import Path
 
+import mujoco
+import mujoco.viewer
+
 _SCRIPTS_DIR = Path(__file__).resolve().parent
 _PROJECT_DIR = _SCRIPTS_DIR.parent
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
-import mujoco
-import mujoco.viewer
-
-import sensor_logger as sl
+import sensor_logger as sl  # noqa: E402  # sibling module; requires sys.path insert above
 
 # ── mode switch ───────────────────────────────────────────────────────────────
 # Set to False to restore original aggressive inputs (expect rollover at speed).
 SAFE_MODE = True
 
 # ── SAFE_MODE parameters (gentle, speed-limited) ──────────────────────────────
-_SAFE_THROTTLE    = 0.08   # N·m  — low enough that top speed stays ≈ 1.5 m/s
-_SAFE_STEER_AMP   = 0.15   # rad  — modest sweep; inner wheel ≈ 0.16 rad
-_SAFE_STEER_FREQ  = 0.30   # Hz
-_SAFE_SPEED_LIMIT = 1.5    # m/s  — throttle cuts when avg speed exceeds this
+_SAFE_THROTTLE = 0.08  # N·m  — low enough that top speed stays ≈ 1.5 m/s
+_SAFE_STEER_AMP = 0.15  # rad  — modest sweep; inner wheel ≈ 0.16 rad
+_SAFE_STEER_FREQ = 0.30  # Hz
+_SAFE_SPEED_LIMIT = 1.5  # m/s  — throttle cuts when avg speed exceeds this
 
 # ── FULL parameters (original values — reproduce the flip) ────────────────────
-_FULL_THROTTLE    = 0.35
-_FULL_STEER_AMP   = 0.35
-_FULL_STEER_FREQ  = 0.40
-_FULL_SPEED_LIMIT = None   # unlimited → car accelerates forever → flips
+_FULL_THROTTLE = 0.35
+_FULL_STEER_AMP = 0.35
+_FULL_STEER_FREQ = 0.40
+_FULL_SPEED_LIMIT = None  # unlimited → car accelerates forever → flips
 
 # ── select active set ─────────────────────────────────────────────────────────
-THROTTLE    = _SAFE_THROTTLE    if SAFE_MODE else _FULL_THROTTLE
-STEER_AMP   = _SAFE_STEER_AMP   if SAFE_MODE else _FULL_STEER_AMP
-STEER_FREQ  = _SAFE_STEER_FREQ  if SAFE_MODE else _FULL_STEER_FREQ
+THROTTLE = _SAFE_THROTTLE if SAFE_MODE else _FULL_THROTTLE
+STEER_AMP = _SAFE_STEER_AMP if SAFE_MODE else _FULL_STEER_AMP
+STEER_FREQ = _SAFE_STEER_FREQ if SAFE_MODE else _FULL_STEER_FREQ
 SPEED_LIMIT = _SAFE_SPEED_LIMIT if SAFE_MODE else _FULL_SPEED_LIMIT
 
-PRINT_HZ = 20   # log every N physics steps
+PRINT_HZ = 20  # log every N physics steps
 
 _XML = _PROJECT_DIR / "assets" / "neoracer.xml"
 
@@ -60,11 +60,11 @@ _ROLL_WARN_DEG = 25.0
 def _quat_to_euler(q):
     """MuJoCo quaternion [w,x,y,z] → (roll, pitch, yaw) in degrees."""
     w, x, y, z = q[0], q[1], q[2], q[3]
-    roll  = math.degrees(math.atan2(2*(w*x + y*z), 1 - 2*(x*x + y*y)))
+    roll = math.degrees(math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y)))
     # clamp asin argument to [-1,1] to guard against floating-point drift
-    sp    = max(-1.0, min(1.0, 2*(w*y - z*x)))
+    sp = max(-1.0, min(1.0, 2 * (w * y - z * x)))
     pitch = math.degrees(math.asin(sp))
-    yaw   = math.degrees(math.atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z)))
+    yaw = math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
     return roll, pitch, yaw
 
 
@@ -74,11 +74,11 @@ def _control(data: mujoco.MjData, t: float, avg_speed_ms: float) -> tuple[float,
     When SAFE_MODE speed limit is active, throttle is cut to zero above the limit.
     Returns (throttle_applied, steer_applied).
     """
-    steer    = STEER_AMP * math.sin(2 * math.pi * STEER_FREQ * t)
+    steer = STEER_AMP * math.sin(2 * math.pi * STEER_FREQ * t)
     throttle = THROTTLE
 
     if SPEED_LIMIT is not None and avg_speed_ms >= SPEED_LIMIT:
-        throttle = 0.0   # coast — no braking, just cut drive torque
+        throttle = 0.0  # coast — no braking, just cut drive torque
 
     data.ctrl[0] = throttle
     data.ctrl[1] = throttle
@@ -88,12 +88,18 @@ def _control(data: mujoco.MjData, t: float, avg_speed_ms: float) -> tuple[float,
     return throttle, steer
 
 
-def _log(data: mujoco.MjData, model: mujoco.MjModel,
-         car_id: int, throttle: float, steer: float,
-         sensors: "sl.SensorReadings", avg_spd: float) -> None:
+def _log(
+    data: mujoco.MjData,
+    model: mujoco.MjModel,
+    car_id: int,
+    throttle: float,
+    steer: float,
+    sensors: "sl.SensorReadings",
+    avg_spd: float,
+) -> None:
     """Print one diagnostic line per PRINT_HZ steps."""
-    car_z    = data.xpos[car_id][2]
-    q        = sensors.imu_quat  # the orientation the RL agent sees
+    car_z = data.xpos[car_id][2]
+    q = sensors.imu_quat  # the orientation the RL agent sees
     roll, pitch, yaw = _quat_to_euler(q)
     yaw_rate = math.degrees(sensors.imu_gyro[2])  # deg/s
 
@@ -118,20 +124,22 @@ def _log(data: mujoco.MjData, model: mujoco.MjModel,
 
 def main() -> None:
     model = mujoco.MjModel.from_xml_path(str(_XML))
-    data  = mujoco.MjData(model)
+    data = mujoco.MjData(model)
     car_id = model.body("car").id
 
     print(f"NeoRacer viewer — SAFE_MODE={SAFE_MODE}")
-    print(f"  throttle={THROTTLE} N·m  steer_amp={STEER_AMP} rad  "
-          f"speed_limit={SPEED_LIMIT} m/s")
+    print(
+        f"  throttle={THROTTLE} N·m  steer_amp={STEER_AMP} rad  "
+        f"speed_limit={SPEED_LIMIT} m/s"
+    )
     print()
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
-        viewer.cam.type        = mujoco.mjtCamera.mjCAMERA_TRACKING
+        viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
         viewer.cam.trackbodyid = car_id
-        viewer.cam.distance    = 1.2
-        viewer.cam.azimuth     = 90
-        viewer.cam.elevation   = -30
+        viewer.cam.distance = 1.2
+        viewer.cam.azimuth = 90
+        viewer.cam.elevation = -30
 
         step = 0
         avg_speed = 0.0
@@ -139,8 +147,8 @@ def main() -> None:
         while viewer.is_running():
             loop_start = time.time()
 
-            sensors  = sl.read(model, data)
-            speeds   = sl.wheel_speed_ms(sensors)
+            sensors = sl.read(model, data)
+            speeds = sl.wheel_speed_ms(sensors)
             avg_speed = sum(speeds.values()) / max(len(speeds), 1)
 
             throttle, steer = _control(data, data.time, avg_speed)
