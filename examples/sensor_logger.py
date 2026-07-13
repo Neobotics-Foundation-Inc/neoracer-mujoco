@@ -33,15 +33,16 @@ class SensorReadings:
     slice (a numpy array), so scalars come back as length-1 arrays — read [0].
     Defaults let tests build partial instances; read() always fills them all.
     """
+
     # IMU at the chassis centre
-    imu_accel:  np.ndarray = field(default_factory=_empty)  # linear accel (m/s²)
-    imu_gyro:   np.ndarray = field(default_factory=_empty)  # angular vel (rad/s)
-    imu_quat:   np.ndarray = field(default_factory=_empty)  # orientation (w,x,y,z)
+    imu_accel: np.ndarray = field(default_factory=_empty)  # linear accel (m/s²)
+    imu_gyro: np.ndarray = field(default_factory=_empty)  # angular vel (rad/s)
+    imu_quat: np.ndarray = field(default_factory=_empty)  # orientation (w,x,y,z)
     imu_linvel: np.ndarray = field(default_factory=_empty)  # world linear vel (m/s)
     # steering angles (rad)
     steer_cmd_pos: np.ndarray = field(default_factory=_empty)  # virtual command
-    fl_steer_pos:  np.ndarray = field(default_factory=_empty)  # actual front-left
-    fr_steer_pos:  np.ndarray = field(default_factory=_empty)  # actual front-right
+    fl_steer_pos: np.ndarray = field(default_factory=_empty)  # actual front-left
+    fr_steer_pos: np.ndarray = field(default_factory=_empty)  # actual front-right
     # wheel angular velocity (rad/s)
     fl_wheel_vel: np.ndarray = field(default_factory=_empty)
     fr_wheel_vel: np.ndarray = field(default_factory=_empty)
@@ -107,6 +108,7 @@ class MotorEncoderReading:
                         drive-torque contract and SensorReadings' wheel_vel
                         fields.
     """
+
     angular_velocity: np.ndarray
 
 
@@ -115,12 +117,14 @@ def motor_encoder_readings(sensors: SensorReadings) -> MotorEncoderReading:
     Pack the four wheel_vel jointvel sensors into a typed MotorEncoderReading.
     Raw simulator values — no calibration, filtering, or quantization applied.
     """
-    angular_velocity = np.array([
-        sensors.fl_wheel_vel[0],
-        sensors.fr_wheel_vel[0],
-        sensors.rl_wheel_vel[0],
-        sensors.rr_wheel_vel[0],
-    ])
+    angular_velocity = np.array(
+        [
+            sensors.fl_wheel_vel[0],
+            sensors.fr_wheel_vel[0],
+            sensors.rl_wheel_vel[0],
+            sensors.rr_wheel_vel[0],
+        ]
+    )
     return MotorEncoderReading(angular_velocity=angular_velocity)
 
 
@@ -142,6 +146,7 @@ def estimated_linear_speed_ms(encoder: MotorEncoderReading) -> float:
 
 def print_sensors(sensors: SensorReadings) -> None:
     """Print a one-line summary of the most useful sensor values."""
+
     def f(name, idx=0):
         v = getattr(sensors, name)
         return float(v[idx]) if len(v) > idx else float("nan")
@@ -150,19 +155,19 @@ def print_sensors(sensors: SensorReadings) -> None:
     avg_speed = sum(speeds.values()) / max(len(speeds), 1)
 
     steer_cmd = f("steer_cmd_pos")
-    fl_steer  = f("fl_steer_pos")
-    fr_steer  = f("fr_steer_pos")
-    fl_susp   = f("fl_susp_pos")
-    fr_susp   = f("fr_susp_pos")
-    rl_susp   = f("rl_susp_pos")
-    rr_susp   = f("rr_susp_pos")
+    fl_steer = f("fl_steer_pos")
+    fr_steer = f("fr_steer_pos")
+    fl_susp = f("fl_susp_pos")
+    fr_susp = f("fr_susp_pos")
+    rl_susp = f("rl_susp_pos")
+    rr_susp = f("rr_susp_pos")
 
     accel_z = f("imu_accel", 2)
-    gyro_z  = f("imu_gyro",  2)
+    gyro_z = f("imu_gyro", 2)
 
     lidar_fwd = f("lidar_000")
-    lidar_l   = f("lidar_090")
-    lidar_r   = f("lidar_270")
+    lidar_l = f("lidar_090")
+    lidar_r = f("lidar_270")
 
     print(
         f"spd={avg_speed:+5.2f}m/s  "

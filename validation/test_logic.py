@@ -11,17 +11,24 @@ import numpy as np
 import pytest
 
 import sensor_logger as sl
-import _sim
 
 
 def test_wheel_speed_conversion():
     """rad/s -> m/s is angular velocity x wheel radius, per wheel."""
-    fake = sl.SensorReadings(**{n: np.array([2.0]) for n in
-            ("fl_wheel_vel", "fr_wheel_vel", "rl_wheel_vel", "rr_wheel_vel")})
+    fake = sl.SensorReadings(
+        **{
+            n: np.array([2.0])
+            for n in ("fl_wheel_vel", "fr_wheel_vel", "rl_wheel_vel", "rr_wheel_vel")
+        }
+    )
     out = sl.wheel_speed_ms(fake)
     assert out["fl_wheel_speed_ms"] == pytest.approx(2.0 * sl.WHEEL_RADIUS)
-    assert set(out) == {"fl_wheel_speed_ms", "fr_wheel_speed_ms",
-                        "rl_wheel_speed_ms", "rr_wheel_speed_ms"}
+    assert set(out) == {
+        "fl_wheel_speed_ms",
+        "fr_wheel_speed_ms",
+        "rl_wheel_speed_ms",
+        "rr_wheel_speed_ms",
+    }
 
 
 def test_read_returns_every_sensor(car):
@@ -64,13 +71,13 @@ def test_ackermann_polycoef_matches_exact_geometry(car):
     except KeyError:
         pytest.skip("car has no Ackermann steering")
 
-    L = 2 * abs(float(fl.pos[0]))   # wheelbase
-    W = 2 * abs(float(fl.pos[1]))   # track
-    coef = np.array(eq.data[:5])    # a0..a4
+    L = 2 * abs(float(fl.pos[0]))  # wheelbase
+    W = 2 * abs(float(fl.pos[1]))  # track
+    coef = np.array(eq.data[:5])  # a0..a4
 
     delta = np.linspace(-0.4, 0.4, 41)
     delta = delta[delta != 0]
-    exact = np.arctan(L / (L / np.tan(delta) - W / 2))   # inner (left) wheel
+    exact = np.arctan(L / (L / np.tan(delta) - W / 2))  # inner (left) wheel
     poly = np.polyval(coef[::-1], delta)
     err = float(np.max(np.abs(poly - exact)))
     assert err < 0.01, f"Ackermann polyfit off by {err:.4f} rad vs exact geometry"
