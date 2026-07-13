@@ -6,7 +6,6 @@ exploited by an RL agent. If one fails, the message tells you which failure mode
 Run:  pytest validation/ -v
 """
 
-import mujoco
 import numpy as np
 
 import _sim
@@ -15,6 +14,7 @@ from _sim import DRIVE, STEER
 
 
 # --- it exists and is wired the way the contract says ------------------------
+
 
 def test_actuator_contract(car):
     """5 actuators in the agreed ctrl order; agent code indexes ctrl[0:4]+ctrl[4]."""
@@ -36,9 +36,12 @@ def test_total_mass_plausible(car):
 
 # --- it won't explode or fall apart at rest ---------------------------------
 
+
 def test_settles_without_nan(car):
     d = _sim.settle(car)
-    assert np.all(np.isfinite(d.qpos)) and np.all(np.isfinite(d.qvel)), "NaN/Inf at rest"
+    assert np.all(np.isfinite(d.qpos)) and np.all(np.isfinite(d.qvel)), (
+        "NaN/Inf at rest"
+    )
 
 
 def test_rests_on_ground(car):
@@ -59,26 +62,40 @@ def test_imu_stationary_accel_matches_gravity(car):
     or disconnected accelerometer as easily as a sign-flipped one.
     """
     d = _sim.settle(car)
-    imu = sl.imu_readings(sl.read(car, d))
+    sensors = sl.read(car, d)
+    imu = sl.IMUReading(
+        acceleration=sensors.imu_accel,
+        angular_velocity=sensors.imu_gyro,
+        orientation=sensors.imu_quat,
+    )
     g = float(np.linalg.norm(car.opt.gravity))
     accel_mag = float(np.linalg.norm(imu.acceleration))
-    assert abs(accel_mag - g) < 0.5, f"stationary |accel|={accel_mag:.2f} m/s^2, expected ~{g:.2f}"
+    assert abs(accel_mag - g) < 0.5, (
+        f"stationary |accel|={accel_mag:.2f} m/s^2, expected ~{g:.2f}"
+    )
 
 
 def test_imu_stationary_gyro_near_zero(car):
     """No rotation at rest -> gyro should read ~0 rad/s."""
     d = _sim.settle(car)
-    imu = sl.imu_readings(sl.read(car, d))
+    sensors = sl.read(car, d)
+    imu = sl.IMUReading(
+        acceleration=sensors.imu_accel,
+        angular_velocity=sensors.imu_gyro,
+        orientation=sensors.imu_quat,
+    )
     gyro_mag = float(np.linalg.norm(imu.angular_velocity))
     assert gyro_mag < 0.05, f"stationary |gyro|={gyro_mag:.4f} rad/s, expected ~0"
 
 
 # --- it responds to control correctly ---------------------------------------
 
+
 def test_throttle_drives_forward(car):
     d = _sim.settle(car)
     x0 = d.body("car").xpos[0].copy()
-    ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0
+    ctrl = np.zeros(car.nu)
+    ctrl[DRIVE] = 1.0
     _sim.run(car, d, ctrl, 400)
     assert d.body("car").xpos[0] - x0 > 0.1, "full throttle produced no forward motion"
 
@@ -86,7 +103,9 @@ def test_throttle_drives_forward(car):
 def test_left_steer_yaws_left(car):
     """+steer must yaw +z (left); a sign flip silently inverts the agent's steering."""
     d = _sim.settle(car)
-    ctrl = np.zeros(car.nu); ctrl[DRIVE] = 0.5; ctrl[STEER] = 0.4
+    ctrl = np.zeros(car.nu)
+    ctrl[DRIVE] = 0.5
+    ctrl[STEER] = 0.4
     _sim.run(car, d, ctrl, 400)
     assert d.qvel[5] > 0.1, f"left steer gave yaw rate {d.qvel[5]:.3f} (expected > 0)"
 
@@ -94,12 +113,16 @@ def test_left_steer_yaws_left(car):
 def test_ackermann_inner_exceeds_outer(car):
     """Turning left, the inner (left) front wheel must steer more than the outer."""
     d = _sim.settle(car)
-    ctrl = np.zeros(car.nu); ctrl[STEER] = 0.4
+    ctrl = np.zeros(car.nu)
+    ctrl[STEER] = 0.4
     s = _sim.sensors(car, _sim.run(car, d, ctrl, 400))
-    assert s["fl_steer_pos"][0] > s["fr_steer_pos"][0], "Ackermann differential wrong/absent"
+    assert s["fl_steer_pos"][0] > s["fr_steer_pos"][0], (
+        "Ackermann differential wrong/absent"
+    )
 
 
 # --- it can't be exploited by an RL agent -----------------------------------
+
 
 def test_no_free_energy(car):
     """Zero control from rest must stay at rest. A self-propelling model is free reward."""
@@ -116,35 +139,57 @@ def test_top_speed_bounded(car):
     (velocity-limited actuator or drivetrain damping), not a job for this test.
     """
     d = _sim.settle(car)
-    ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0
+    ctrl = np.zeros(car.nu)
+    ctrl[DRIVE] = 1.0
     _sim.run(car, d, ctrl, 2000)
     v = np.linalg.norm(d.qvel[:3])
-    assert np.isfinite(v) and v < 40.0, f"top speed {v:.2f} m/s is a blow-up, not physics"
+    assert np.isfinite(v) and v < 40.0, (
+        f"top speed {v:.2f} m/s is a blow-up, not physics"
+    )
 
 
 def test_sensors_finite_under_load(car):
     """No NaN reaches the agent's observation while driving + steering hard."""
     d = _sim.settle(car)
-    ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0; ctrl[STEER] = 0.4
+    ctrl = np.zeros(car.nu)
+    ctrl[DRIVE] = 1.0
+    ctrl[STEER] = 0.4
     s = _sim.sensors(car, _sim.run(car, d, ctrl, 500))
     bad = [k for k, v in s.items() if not np.all(np.isfinite(v))]
     assert not bad, f"non-finite sensors: {bad}"
 
 
-def test_imu_readings_finite_under_load(car):
+def test_imu_reading_finite_under_load(car):
     """The typed IMUReading must stay finite while driving + steering hard."""
     d = _sim.settle(car)
-    ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0; ctrl[STEER] = 0.4
-    imu = sl.imu_readings(sl.read(car, _sim.run(car, d, ctrl, 500)))
-    assert np.all(np.isfinite(imu.acceleration)), f"non-finite acceleration: {imu.acceleration}"
-    assert np.all(np.isfinite(imu.angular_velocity)), f"non-finite angular_velocity: {imu.angular_velocity}"
-    assert np.all(np.isfinite(imu.orientation)), f"non-finite orientation: {imu.orientation}"
+    ctrl = np.zeros(car.nu)
+    ctrl[DRIVE] = 1.0
+    ctrl[STEER] = 0.4
+    sensors = sl.read(car, _sim.run(car, d, ctrl, 500))
+    imu = sl.IMUReading(
+        acceleration=sensors.imu_accel,
+        angular_velocity=sensors.imu_gyro,
+        orientation=sensors.imu_quat,
+    )
+    assert np.all(np.isfinite(imu.acceleration)), (
+        f"non-finite acceleration: {imu.acceleration}"
+    )
+    assert np.all(np.isfinite(imu.angular_velocity)), (
+        f"non-finite angular_velocity: {imu.angular_velocity}"
+    )
+    assert np.all(np.isfinite(imu.orientation)), (
+        f"non-finite orientation: {imu.orientation}"
+    )
 
 
 def test_deterministic(car):
     """Same start + same ctrl -> identical trajectory. RL breaks on hidden nondeterminism."""
+
     def rollout():
         d = _sim.settle(car)
-        ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0; ctrl[STEER] = 0.2
+        ctrl = np.zeros(car.nu)
+        ctrl[DRIVE] = 1.0
+        ctrl[STEER] = 0.2
         return _sim.run(car, d, ctrl, 300).qpos.copy()
+
     assert np.array_equal(rollout(), rollout()), "trajectory not reproducible"

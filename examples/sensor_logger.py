@@ -33,15 +33,16 @@ class SensorReadings:
     slice (a numpy array), so scalars come back as length-1 arrays — read [0].
     Defaults let tests build partial instances; read() always fills them all.
     """
+
     # IMU at the chassis centre
-    imu_accel:  np.ndarray = field(default_factory=_empty)  # linear accel (m/s²)
-    imu_gyro:   np.ndarray = field(default_factory=_empty)  # angular vel (rad/s)
-    imu_quat:   np.ndarray = field(default_factory=_empty)  # orientation (w,x,y,z)
+    imu_accel: np.ndarray = field(default_factory=_empty)  # linear accel (m/s²)
+    imu_gyro: np.ndarray = field(default_factory=_empty)  # angular vel (rad/s)
+    imu_quat: np.ndarray = field(default_factory=_empty)  # orientation (w,x,y,z)
     imu_linvel: np.ndarray = field(default_factory=_empty)  # world linear vel (m/s)
     # steering angles (rad)
     steer_cmd_pos: np.ndarray = field(default_factory=_empty)  # virtual command
-    fl_steer_pos:  np.ndarray = field(default_factory=_empty)  # actual front-left
-    fr_steer_pos:  np.ndarray = field(default_factory=_empty)  # actual front-right
+    fl_steer_pos: np.ndarray = field(default_factory=_empty)  # actual front-left
+    fr_steer_pos: np.ndarray = field(default_factory=_empty)  # actual front-right
     # wheel angular velocity (rad/s)
     fl_wheel_vel: np.ndarray = field(default_factory=_empty)
     fr_wheel_vel: np.ndarray = field(default_factory=_empty)
@@ -98,26 +99,13 @@ class IMUReading:
                         hardware reference attitude.
 
     These are MuJoCo's native readings with no axis/sign correction applied —
-    see imu_readings() (raw) vs calibrate_imu() (calibrated) below.
+    construct directly from SensorReadings (raw) and pass through
+    calibrate_imu() (calibrated) below.
     """
+
     acceleration: np.ndarray
     angular_velocity: np.ndarray
     orientation: np.ndarray
-
-
-def imu_readings(sensors: SensorReadings) -> IMUReading:
-    """
-    Pack the raw imu_accel/imu_gyro/imu_quat sensors into a typed IMUReading.
-
-    This is the RAW simulator reading — uncalibrated. Pass it through
-    calibrate_imu() for the calibrated reading (currently a no-op; see that
-    function's docstring).
-    """
-    return IMUReading(
-        acceleration=sensors.imu_accel.copy(),
-        angular_velocity=sensors.imu_gyro.copy(),
-        orientation=sensors.imu_quat.copy(),
-    )
 
 
 # No hardware bench-calibration data (bias, scale-factor, axis misalignment)
@@ -126,13 +114,19 @@ def imu_readings(sensors: SensorReadings) -> IMUReading:
 # concern tracked separately, not a reading-calibration one.
 #
 # TODO(hardware-calibration): once bench-characterized bias/misalignment values
-# exist for the real IMU, apply them here. Until then this is an identity
-# pass-through, so downstream code can be written against the calibrated-reading
-# interface now instead of waiting on unmeasured correction values.
+# exist for the real IMU, apply them here. Until then this returns a copy of
+# raw's values unchanged, so downstream code can be written against the
+# calibrated-reading interface now instead of waiting on unmeasured correction
+# values.
 def calibrate_imu(raw: IMUReading) -> IMUReading:
-    """Apply hardware IMU calibration to a raw IMUReading. Currently a no-op —
-    see the TODO above this function."""
-    return raw
+    """Apply hardware IMU calibration to a raw IMUReading, returning a new
+    IMUReading. Currently a value-preserving copy — see the TODO above this
+    function."""
+    return IMUReading(
+        acceleration=raw.acceleration.copy(),
+        angular_velocity=raw.angular_velocity.copy(),
+        orientation=raw.orientation.copy(),
+    )
 
 
 def wheel_speed_ms(sensors: SensorReadings) -> dict:
@@ -147,6 +141,7 @@ def wheel_speed_ms(sensors: SensorReadings) -> dict:
 
 def print_sensors(sensors: SensorReadings) -> None:
     """Print a one-line summary of the most useful sensor values."""
+
     def f(name, idx=0):
         v = getattr(sensors, name)
         return float(v[idx]) if len(v) > idx else float("nan")
@@ -155,19 +150,19 @@ def print_sensors(sensors: SensorReadings) -> None:
     avg_speed = sum(speeds.values()) / max(len(speeds), 1)
 
     steer_cmd = f("steer_cmd_pos")
-    fl_steer  = f("fl_steer_pos")
-    fr_steer  = f("fr_steer_pos")
-    fl_susp   = f("fl_susp_pos")
-    fr_susp   = f("fr_susp_pos")
-    rl_susp   = f("rl_susp_pos")
-    rr_susp   = f("rr_susp_pos")
+    fl_steer = f("fl_steer_pos")
+    fr_steer = f("fr_steer_pos")
+    fl_susp = f("fl_susp_pos")
+    fr_susp = f("fr_susp_pos")
+    rl_susp = f("rl_susp_pos")
+    rr_susp = f("rr_susp_pos")
 
     accel_z = f("imu_accel", 2)
-    gyro_z  = f("imu_gyro",  2)
+    gyro_z = f("imu_gyro", 2)
 
     lidar_fwd = f("lidar_000")
-    lidar_l   = f("lidar_090")
-    lidar_r   = f("lidar_270")
+    lidar_l = f("lidar_090")
+    lidar_r = f("lidar_270")
 
     print(
         f"spd={avg_speed:+5.2f}m/s  "
