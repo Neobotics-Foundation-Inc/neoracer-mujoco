@@ -43,12 +43,12 @@ def test_motor_encoder_readings_shape(car):
 
 def test_average_wheel_angular_velocity_and_speed_estimate():
     """Average angular velocity and the wheel-radius speed estimate, on known input."""
-    encoder = sl.WheelAngularVelocityReading(angular_velocity=np.array([2.0, 2.0, 2.0, 2.0]))
+    encoder = sl.MotorEncoderReading(angular_velocity=np.array([2.0, 2.0, 2.0, 2.0]))
     assert sl.average_wheel_angular_velocity(encoder) == pytest.approx(2.0)
     assert sl.estimated_linear_speed_ms(encoder) == pytest.approx(2.0 * sl.WHEEL_RADIUS)
 
     # Uneven wheel speeds -> average is the mean, not any single wheel's value.
-    uneven = sl.WheelAngularVelocityReading(angular_velocity=np.array([1.0, 3.0, 2.0, 2.0]))
+    uneven = sl.MotorEncoderReading(angular_velocity=np.array([1.0, 3.0, 2.0, 2.0]))
     assert sl.average_wheel_angular_velocity(uneven) == pytest.approx(2.0)
 
 

@@ -139,7 +139,7 @@ def test_sensors_finite_under_load(car):
 
 
 def test_motor_encoder_finite_under_load(car):
-    """The typed WheelAngularVelocityReading and its derived estimates must stay finite under load."""
+    """The typed MotorEncoderReading and its derived estimates must stay finite under load."""
     d = _sim.settle(car)
     ctrl = np.zeros(car.nu); ctrl[DRIVE] = 1.0; ctrl[STEER] = 0.4
     encoder = sl.motor_encoder_readings(sl.read(car, _sim.run(car, d, ctrl, 500)))
