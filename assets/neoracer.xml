@@ -124,17 +124,27 @@
 
             <!--
             LiDAR ray sites: 8 beams at 45° intervals in the horizontal plane.
-            euler="0 90 θ" points the site's local Z at angle θ from +X (forward).
+            zaxis="cosθ sinθ 0" points the site's local Z (the rangefinder's
+            sensing direction) directly at heading θ from +X (forward), θ
+            measured toward +Y (left). NOTE: this used to be written as
+            euler="0 90 θ", which looked plausible but was wrong for ANY value
+            of θ — MuJoCo composes intrinsic-xyz euler as R = Rx·Ry·Rz applied
+            to the vector, so Rz(θ) is the first rotation applied to the site's
+            local Z axis (0,0,1) and rotating a vector about the axis it
+            already lies on is a no-op; θ could never actually steer the beam.
+            All 8 beams pointed the same direction as a result. zaxis sidesteps
+            euler composition order entirely and was verified beam-by-beam
+            (single-wall placement test) to produce a correctly directional ring.
             Add more beams here (and matching rangefinders below) for richer RL obs.
             -->
-            <site name="lidar_000" pos="0 0 .15" euler="0 90   0" size=".005"/>
-            <site name="lidar_045" pos="0 0 .15" euler="0 90  45" size=".005"/>
-            <site name="lidar_090" pos="0 0 .15" euler="0 90  90" size=".005"/>
-            <site name="lidar_135" pos="0 0 .15" euler="0 90 135" size=".005"/>
-            <site name="lidar_180" pos="0 0 .15" euler="0 90 180" size=".005"/>
-            <site name="lidar_225" pos="0 0 .15" euler="0 90 225" size=".005"/>
-            <site name="lidar_270" pos="0 0 .15" euler="0 90 270" size=".005"/>
-            <site name="lidar_315" pos="0 0 .15" euler="0 90 315" size=".005"/>
+            <site name="lidar_000" pos="0 0 .15" zaxis="1.000000  0.000000 0" size=".005"/>
+            <site name="lidar_045" pos="0 0 .15" zaxis="0.707107  0.707107 0" size=".005"/>
+            <site name="lidar_090" pos="0 0 .15" zaxis="0.000000  1.000000 0" size=".005"/>
+            <site name="lidar_135" pos="0 0 .15" zaxis="-0.707107 0.707107 0" size=".005"/>
+            <site name="lidar_180" pos="0 0 .15" zaxis="-1.000000 0.000000 0" size=".005"/>
+            <site name="lidar_225" pos="0 0 .15" zaxis="-0.707107 -0.707107 0" size=".005"/>
+            <site name="lidar_270" pos="0 0 .15" zaxis="0.000000  -1.000000 0" size=".005"/>
+            <site name="lidar_315" pos="0 0 .15" zaxis="0.707107  -0.707107 0" size=".005"/>
             <!-- Cosmetic lidar mesh at the mount site. -->
             <geom name="vis_lidar" type="mesh" mass="0" mesh="vis_lidar"
                   pos="0 0 0.15"
