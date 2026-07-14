@@ -14,9 +14,14 @@ Sensor map (matches neoracer.xml):
 """
 
 from dataclasses import dataclass, field
+from typing import Generic, TypeVar
 
 import numpy as np
 import mujoco
+
+# Unconstrained so LidarScan can later be retargeted to another array type
+# (e.g. a JAX array) without changing the dataclass itself.
+ArrayT = TypeVar("ArrayT")
 
 # Shadows the wheel geom size in assets/neoracer.xml — keep in sync if the XML changes.
 WHEEL_RADIUS = 0.050  # ESTIMATED: 50 mm radius consistent with STL bbox and URDF CoM
@@ -75,6 +80,58 @@ def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
     # ponytail: fields are coupled to neoracer.xml's sensor set — a car XML with
     # a different sensor list fails here loudly. Add fields if the contract grows.
     return SensorReadings(**raw)
+
+
+@dataclass(frozen=True)
+class IMUReading:
+    """
+    One IMU sample, packed from neoracer.xml's imu_accel/imu_gyro/imu_quat sensors.
+
+    Frame: the imu site has no rotation relative to its parent body (pos-only,
+    no euler/quat in the XML), so this IS the car body frame: +X forward,
+    +Y left, +Z up (per the coordinate frame documented in neoracer.xml's
+    header comment).
+
+    acceleration     — m/s^2, local (body) frame. GRAVITY IS INCLUDED: MuJoCo's
+                        accelerometer reports specific/proper force like a real
+                        accelerometer, so at rest this is NOT (0,0,0) — measured
+                        empirically at rest on this model as ~(0, 0, +9.81), norm
+                        equal to the model's configured gravity magnitude.
+    angular_velocity — rad/s, local (body) frame. Measured empirically as ~0
+                        (norm ~1e-9) at rest on this model.
+    orientation      — quaternion (w, x, y, z) of the IMU frame relative to the
+                        WORLD frame. Not body-relative and not zeroed to any
+                        hardware reference attitude.
+
+    These are MuJoCo's native readings with no axis/sign correction applied —
+    construct directly from SensorReadings (raw) and pass through
+    calibrate_imu() (calibrated) below.
+    """
+
+    acceleration: np.ndarray
+    angular_velocity: np.ndarray
+    orientation: np.ndarray
+
+
+# No hardware bench-calibration data (bias, scale-factor, axis misalignment)
+# exists yet for the physical NeoRacer IMU. Note this is distinct from the IMU
+# *mount position* offset in osracer.urdf's imu_joint, which is an XML-geometry
+# concern tracked separately, not a reading-calibration one.
+#
+# TODO(hardware-calibration): once bench-characterized bias/misalignment values
+# exist for the real IMU, apply them here. Until then this returns a copy of
+# raw's values unchanged, so downstream code can be written against the
+# calibrated-reading interface now instead of waiting on unmeasured correction
+# values.
+def calibrate_imu(raw: IMUReading) -> IMUReading:
+    """Apply hardware IMU calibration to a raw IMUReading, returning a new
+    IMUReading. Currently a value-preserving copy — see the TODO above this
+    function."""
+    return IMUReading(
+        acceleration=raw.acceleration.copy(),
+        angular_velocity=raw.angular_velocity.copy(),
+        orientation=raw.orientation.copy(),
+    )
 
 
 def wheel_speed_ms(sensors: SensorReadings) -> dict:
@@ -142,6 +199,36 @@ def estimated_linear_speed_ms(encoder: MotorEncoderReading) -> float:
     based speedometer would.
     """
     return average_wheel_angular_velocity(encoder) * WHEEL_RADIUS
+
+
+# Beam order matches the rangefinder sensors in neoracer.xml, ascending 0deg..315deg.
+LIDAR_BEAM_ORDER = (
+    "lidar_000",
+    "lidar_045",
+    "lidar_090",
+    "lidar_135",
+    "lidar_180",
+    "lidar_225",
+    "lidar_270",
+    "lidar_315",
+)
+LIDAR_ANGLES_DEG = (0, 45, 90, 135, 180, 225, 270, 315)
+
+
+@dataclass(frozen=True)
+class LidarScan(Generic[ArrayT]):
+    """8-beam LiDAR ring as one ordered scan (see LIDAR_BEAM_ORDER).
+    angles[i] and ranges[i] refer to the same beam."""
+
+    angles: ArrayT  # radians
+    ranges: ArrayT  # meters; -1 = no hit within cutoff
+
+
+def lidar_scan(sensors: SensorReadings) -> LidarScan[np.ndarray]:
+    """Pack the 8 named lidar_* fields into one ordered LidarScan."""
+    ranges = np.array([getattr(sensors, name)[0] for name in LIDAR_BEAM_ORDER])
+    angles = np.deg2rad(LIDAR_ANGLES_DEG)
+    return LidarScan(angles=angles, ranges=ranges)
 
 
 def print_sensors(sensors: SensorReadings) -> None:

@@ -59,6 +59,48 @@ def test_average_wheel_angular_velocity_and_speed_estimate():
     assert sl.average_wheel_angular_velocity(uneven) == pytest.approx(2.0)
 
 
+def test_imu_reading_construction_shapes(car):
+    """IMUReading built directly from SensorReadings must have accel/gyro as
+    3-vectors and orientation as a quaternion."""
+    d = mujoco.MjData(car)
+    mujoco.mj_step(car, d)
+    sensors = sl.read(car, d)
+    imu = sl.IMUReading(
+        acceleration=sensors.imu_accel,
+        angular_velocity=sensors.imu_gyro,
+        orientation=sensors.imu_quat,
+    )
+    assert imu.acceleration.shape == (3,)
+    assert imu.angular_velocity.shape == (3,)
+    assert imu.orientation.shape == (4,)
+
+
+def test_calibrate_imu_preserves_values_and_copies_arrays():
+    """
+    calibrate_imu() has no hardware bias/misalignment data to apply yet (see its
+    TODO in sensor_logger.py), so the returned values must match the raw ones
+    exactly. This test is meant to start failing the moment real calibration
+    values are added — update it then. It also locks in that calibrate_imu()
+    returns a new IMUReading with copied arrays, not the original object, per
+    Bassel's review comment removing imu_readings().
+    """
+    raw = sl.IMUReading(
+        acceleration=np.array([0.1, -0.2, 9.81]),
+        angular_velocity=np.array([0.01, -0.02, 0.03]),
+        orientation=np.array([1.0, 0.0, 0.0, 0.0]),
+    )
+    calibrated = sl.calibrate_imu(raw)
+
+    assert np.array_equal(calibrated.acceleration, raw.acceleration)
+    assert np.array_equal(calibrated.angular_velocity, raw.angular_velocity)
+    assert np.array_equal(calibrated.orientation, raw.orientation)
+
+    assert calibrated is not raw
+    assert not np.shares_memory(calibrated.acceleration, raw.acceleration)
+    assert not np.shares_memory(calibrated.angular_velocity, raw.angular_velocity)
+    assert not np.shares_memory(calibrated.orientation, raw.orientation)
+
+
 def test_ackermann_polycoef_matches_exact_geometry(car):
     """
     The steering polycoef baked into the XML must reproduce exact Ackermann for
