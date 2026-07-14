@@ -1,0 +1,51 @@
+<mujoco model="straight_corridor">
+    <!--
+    Minimal two-wall corridor, built specifically to headlessly validate/demo
+    examples/track_centering.py. This is scenery ONLY — it does not name the
+    car. The demo script attaches neoracer.xml at runtime (see ramp_course.xml
+    for the same pattern), so this scene stays independent of the car model.
+
+    Layout (top-down, +X = forward, +Y = left). Car spawns at the origin
+    facing +X, centered between two parallel walls running the length of the
+    corridor:
+
+        +Y   ─────────────────────────────────────────────   <- left wall  (y=+CORRIDOR_HALF_WIDTH)
+              car →
+        -Y   ─────────────────────────────────────────────   <- right wall (y=-CORRIDOR_HALF_WIDTH)
+             x=-2                                        x=14
+
+    Corridor half-width 0.5 m (full width 1.0 m) is wide relative to the car's
+    0.235 m track, so a working controller has real room to wander and correct
+    rather than being pinned centered by geometry alone. Walls are thin boxes
+    0.30 m tall, matching ramp_course.xml's wall convention.
+
+    Ground plane: neoracer.xml's own floor geom lives on its worldbody as a
+    sibling of the "car" body, so MjSpec.attach_body(car.body("car")) — the
+    same composition pattern ramp_course.xml/manual_drive.py use — does NOT
+    pull it into the composed scene (attach_body grafts only the named body's
+    subtree). This track therefore carries its own floor below, matching
+    neoracer.xml's plane geom (size/friction) so the composed scene has
+    something for the car to rest on.
+    -->
+
+    <asset>
+        <texture name="corridor_grid" type="2d" builtin="checker" width="512" height="512"
+                 rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+        <material name="corridor_floor" texture="corridor_grid" texrepeat="1 1" texuniform="true"
+                  reflectance=".2"/>
+        <material name="wall" rgba=".55 .57 .60 1"/>
+    </asset>
+
+    <default>
+        <default class="scenery">
+            <geom type="box" material="wall" condim="3" friction="1.0 0.1 0.1"/>
+        </default>
+    </default>
+
+    <worldbody>
+        <geom name="floor" type="plane" size="9 1 .01" pos="6 0 0"
+              material="corridor_floor" friction="1.5 0.1 0.1"/>
+        <geom class="scenery" name="corridor_wall_left"  pos="6 .5 .15" size="8 .02 .15"/>
+        <geom class="scenery" name="corridor_wall_right" pos="6 -.5 .15" size="8 .02 .15"/>
+    </worldbody>
+</mujoco>
