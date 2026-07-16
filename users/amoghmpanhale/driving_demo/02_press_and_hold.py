@@ -1,5 +1,4 @@
 import pygame
-from pygame.locals import *
 
 pygame.init()
 
@@ -9,17 +8,17 @@ running = True
 
 while running:
     for event in pygame.event.get():
-        if event.type == QUIT:
+        if event.type == pygame.QUIT:
             running = False
 
     keys = pygame.key.get_pressed()
-    if keys[K_w]:
+    if keys[pygame.K_w]:
         print("W key is being held down")
-    if keys[K_s]:
+    if keys[pygame.K_s]:
         print("S key is being held down")
-    if keys[K_a]:
+    if keys[pygame.K_a]:
         print("A key is being held down")
-    if keys[K_d]:
+    if keys[pygame.K_d]:
         print("D key is being held down")
 
     screen.fill((0, 0, 0))
