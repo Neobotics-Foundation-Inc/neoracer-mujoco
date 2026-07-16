@@ -22,10 +22,10 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent
 _PROJECT_DIR = _SCRIPTS_DIR.parent
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
-import mujoco
-import mujoco.viewer
+import mujoco  # noqa: E402
+import mujoco.viewer  # noqa: E402
 
-import sensor_logger as sl
+import sensor_logger as sl  # noqa: E402
 
 # ── mode switch ───────────────────────────────────────────────────────────────
 # Set to False to restore original aggressive inputs (expect rollover at speed).

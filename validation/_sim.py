@@ -13,7 +13,6 @@ import glob
 import os
 
 import mujoco
-import numpy as np
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSET_DIR = os.path.join(REPO, "assets")
