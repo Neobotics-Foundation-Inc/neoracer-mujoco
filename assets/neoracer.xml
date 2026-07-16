@@ -16,11 +16,6 @@
 
     <compiler angle="radian" autolimits="true"/>
 
-    <!-- Elliptic friction cone + high impratio: MuJoCo's recommended setting for
-         wheeled vehicles — stiffens tangential contact so the tires creep less
-         sideways (measured: full-lock radius 0.77 m → 0.74 m vs 0.68 m ideal). -->
-    <option cone="elliptic" impratio="10"/>
-
     <asset>
         <texture name="grid" type="2d" builtin="checker" width="512" height="512"
                  rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
@@ -81,10 +76,8 @@
     </default>
 
     <worldbody>
-        <!-- Ground plane; friction matches the wheels. size is render extent only
-             (collision plane is infinite) — 10 m half-extent so scenery like the
-             f1_track (reaches x~8, y~7) sits on grid with margin, not black void. -->
-        <geom type="plane" size="10 10 .01" material="grid" friction="1.5 0.1 0.1"/>
+        <!-- Ground plane; friction matches the wheels. -->
+        <geom type="plane" size="5 5 .01" material="grid" friction="1.5 0.1 0.1"/>
 
         <!--
         Car body. Spawn height = chassis half-height + wheel radius = 0.0806 + 0.050
@@ -131,18 +124,27 @@
 
             <!--
             LiDAR ray sites: 8 beams at 45° intervals in the horizontal plane.
-            A rangefinder casts along the site's local +Z, so zaxis IS the beam
-            direction: [cos θ, sin θ, 0] aims beam θ° left of +X (forward).
+            zaxis="cosθ sinθ 0" points the site's local Z (the rangefinder's
+            sensing direction) directly at heading θ from +X (forward), θ
+            measured toward +Y (left). NOTE: this used to be written as
+            euler="0 90 θ", which looked plausible but was wrong for ANY value
+            of θ — MuJoCo composes intrinsic-xyz euler as R = Rx·Ry·Rz applied
+            to the vector, so Rz(θ) is the first rotation applied to the site's
+            local Z axis (0,0,1) and rotating a vector about the axis it
+            already lies on is a no-op; θ could never actually steer the beam.
+            All 8 beams pointed the same direction as a result. zaxis sidesteps
+            euler composition order entirely and was verified beam-by-beam
+            (single-wall placement test) to produce a correctly directional ring.
             Add more beams here (and matching rangefinders below) for richer RL obs.
             -->
-            <site name="lidar_000" pos="0 0 .15" zaxis=" 1     0    0" size=".005"/>
-            <site name="lidar_045" pos="0 0 .15" zaxis=" 0.707 0.707 0" size=".005"/>
-            <site name="lidar_090" pos="0 0 .15" zaxis=" 0     1    0" size=".005"/>
-            <site name="lidar_135" pos="0 0 .15" zaxis="-0.707 0.707 0" size=".005"/>
-            <site name="lidar_180" pos="0 0 .15" zaxis="-1     0    0" size=".005"/>
-            <site name="lidar_225" pos="0 0 .15" zaxis="-0.707 -0.707 0" size=".005"/>
-            <site name="lidar_270" pos="0 0 .15" zaxis=" 0    -1    0" size=".005"/>
-            <site name="lidar_315" pos="0 0 .15" zaxis=" 0.707 -0.707 0" size=".005"/>
+            <site name="lidar_000" pos="0 0 .15" zaxis="1.000000  0.000000 0" size=".005"/>
+            <site name="lidar_045" pos="0 0 .15" zaxis="0.707107  0.707107 0" size=".005"/>
+            <site name="lidar_090" pos="0 0 .15" zaxis="0.000000  1.000000 0" size=".005"/>
+            <site name="lidar_135" pos="0 0 .15" zaxis="-0.707107 0.707107 0" size=".005"/>
+            <site name="lidar_180" pos="0 0 .15" zaxis="-1.000000 0.000000 0" size=".005"/>
+            <site name="lidar_225" pos="0 0 .15" zaxis="-0.707107 -0.707107 0" size=".005"/>
+            <site name="lidar_270" pos="0 0 .15" zaxis="0.000000  -1.000000 0" size=".005"/>
+            <site name="lidar_315" pos="0 0 .15" zaxis="0.707107  -0.707107 0" size=".005"/>
             <!-- Cosmetic lidar mesh at the mount site. -->
             <geom name="vis_lidar" type="mesh" mass="0" mesh="vis_lidar"
                   pos="0 0 0.15"
