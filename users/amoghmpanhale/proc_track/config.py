@@ -52,11 +52,14 @@ class GenConfig:
 
 @dataclass(frozen=True)
 class WallConfig:
-    # K=256 boundary points per side; M % K == 0 (M=2048). 2*K=512 capsule pool.
+    # K=256 boundary points per side; M % K == 0 (M=2048). 2*K=512 box pool.
+    # Boundaries are thin vertical box walls, not capsules: continuous barriers
+    # hugging the corridor edge, resting on the floor.
     K: int = 256
-    radius: float = 0.03      # capsule radius; spans z 0.04-0.10, in chassis side face
+    half_thick: float = 0.02  # wall half-thickness (normal dir) -> 4cm-thick wall
+    half_height: float = 0.10  # wall half-height -> 20cm-tall wall
     overlap: float = 1.2      # half-length = overlap*0.5*seg_len -> 20% overlap
-    center_z: float = 0.07
+    center_z: float = 0.10    # = half_height, so the wall bottom sits on the floor
 
 
 @dataclass(frozen=True)

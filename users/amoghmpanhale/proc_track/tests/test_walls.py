@@ -1,6 +1,6 @@
-"""T4: wall coverage. Every point on each boundary curve lies within `radius` of
-some capsule axis segment -- pins overlap=1.2, K=256 (a gap would let the car
-clip the corridor edge).
+"""T4: wall coverage. Every point on each boundary curve lies within `half_thick`
+of some box wall's tangent axis segment -- pins overlap=1.2, K=256 (a gap would
+let the car clip the corridor edge).
 
 Also checks the build_model contract (fixed 2*K pool, contiguous gids, contact
 masks) once via a session-scoped fixture -- compile is the slow bit.
@@ -35,10 +35,10 @@ def _boundary_curve(track, side, n=10000):
 
 
 def _seg_axes_xy(pos, quat, half_len):
-    """World-frame xy endpoints of each capsule axis (rotate local z by quat)."""
+    """World-frame xy endpoints of each box wall's tangent axis (local x by quat)."""
     ax = np.zeros((len(pos), 3))
     for i in range(len(pos)):
-        mujoco.mju_rotVecQuat(ax[i], np.array([0.0, 0.0, 1.0]), quat[i])
+        mujoco.mju_rotVecQuat(ax[i], np.array([1.0, 0.0, 0.0]), quat[i])
     u = ax[:, :2]
     p0 = pos[:, :2] - half_len[:, None] * u
     p1 = pos[:, :2] + half_len[:, None] * u
@@ -66,9 +66,9 @@ def test_T4_wall_coverage(seed):
         p0, p1 = _seg_axes_xy(pos, quat, half_len)
         pts = _boundary_curve(track, side)
         worst = _min_dist_to_segments(pts, p0, p1).max()
-        assert worst <= WALLS.radius, (
-            f"seed {seed} side {side}: gap {worst*1000:.1f} mm > radius "
-            f"{WALLS.radius*1000:.0f} mm"
+        assert worst <= WALLS.half_thick, (
+            f"seed {seed} side {side}: gap {worst*1000:.1f} mm > half_thick "
+            f"{WALLS.half_thick*1000:.0f} mm"
         )
 
 
@@ -79,9 +79,18 @@ def test_build_model_contract(compiled):
     assert model.geom("wall_000").id == start
     assert model.geom(f"wall_{2*K-1:03d}").id == start + 2 * K - 1
     gids = start + np.arange(2 * K)
-    # contact masks + capsule type + priority (frictionless-wall contract)
+    # contact masks + box type + priority (frictionless-wall contract)
     assert np.all(model.geom_contype[gids] == 2)
     assert np.all(model.geom_conaffinity[gids] == 1)
     assert np.all(model.geom_priority[gids] == 1)
     assert np.all(model.geom_condim[gids] == 1)
-    assert np.all(model.geom_type[gids] == mujoco.mjtGeom.mjGEOM_CAPSULE)
+    assert np.all(model.geom_type[gids] == mujoco.mjtGeom.mjGEOM_BOX)
+
+
+def test_wall_orientation_is_live(compiled):
+    """Walls must honor per-reset geom_quat. Parked-at-identity geoms compile with
+    geom_sameframe set, which makes mj_kinematics ignore geom_quat and render/collide
+    every wall axis-aligned (a comb across the track). build_model clears the flag."""
+    model, start = compiled
+    gids = start + np.arange(2 * WALLS.K)
+    assert np.all(model.geom_sameframe[gids] == 0)

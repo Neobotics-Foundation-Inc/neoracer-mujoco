@@ -136,8 +136,10 @@ class ProcTrackEnv:
             gid = self.wall_gid_start + base + np.arange(cfg.K)
             self.model.geom_pos[gid] = pos
             self.model.geom_quat[gid] = quat
-            self.model.geom_size[gid, 1] = half_len  # size[0]=radius untouched
-            self.model.geom_rbound[gid] = cfg.radius + half_len  # refresh bound
+            self.model.geom_size[gid, 0] = half_len  # size[1:3]=thick,height untouched
+            self.model.geom_rbound[gid] = np.sqrt(  # refresh bound (box diagonal)
+                half_len**2 + cfg.half_thick**2 + cfg.half_height**2
+            )
 
     def _apply_dr(self, rng):
         m, cfg, base = self.model, self.cfg, self.base
