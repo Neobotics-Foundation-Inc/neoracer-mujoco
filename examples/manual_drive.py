@@ -39,34 +39,35 @@ sys.path.insert(0, str(_SCRIPTS_DIR))
 
 @dataclass(frozen=True)
 class ThrottleParams:
-    accel: float = 0.8     # N·m/s added while a throttle key is held
-    coast: float = 0.6     # N·m/s bled off when no throttle key is held
-    max:   float = 0.35    # N·m cap per wheel (matches run.py FULL throttle)
+    accel: float = 0.8  # N·m/s added while a throttle key is held
+    coast: float = 0.6  # N·m/s bled off when no throttle key is held
+    max: float = 0.35  # N·m cap per wheel (matches run.py FULL throttle)
 
 
 @dataclass(frozen=True)
 class SteeringParams:
-    rate:   float = 1.5    # rad/s toward the limit while a steer key is held
-    return_: float = 2.5   # rad/s back to center when no steer key is held
-    max:    float = 0.40   # rad — the model's Ackermann command limit
+    rate: float = 1.5  # rad/s toward the limit while a steer key is held
+    return_: float = 2.5  # rad/s back to center when no steer key is held
+    max: float = 0.40  # rad — the model's Ackermann command limit
 
 
 @dataclass(frozen=True)
 class CamParams:
-    distance:  float = 1.6     # m behind/above the car
-    elevation: float = -35.0   # deg looking down (more negative = more top-down)
-    azimuth:   float = 0.0     # deg offset added to car yaw. 0 = directly behind
-                               # (camera at -X, looking +X). 180 = front; ±90 = side.
+    distance: float = 1.6  # m behind/above the car
+    elevation: float = -35.0  # deg looking down (more negative = more top-down)
+    azimuth: float = 0.0  # deg offset added to car yaw. 0 = directly behind
+    # (camera at -X, looking +X). 180 = front; ±90 = side.
 
 
 THROTTLE = ThrottleParams()
-STEER    = SteeringParams()
-CAM      = CamParams()
+STEER = SteeringParams()
+CAM = CamParams()
 
 
 def _yaw_deg(quat) -> float:
     """Car yaw (heading) in degrees from a MuJoCo [w,x,y,z] quaternion."""
     import math
+
     w, x, y, z = quat[0], quat[1], quat[2], quat[3]
     return math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
 
@@ -78,8 +79,15 @@ def _toward(value: float, rate_dt: float) -> float:
     return min(0.0, value + rate_dt)
 
 
-def update(throttle: float, steer: float, dt: float,
-           fwd: bool, rev: bool, left: bool, right: bool) -> tuple[float, float]:
+def update(
+    throttle: float,
+    steer: float,
+    dt: float,
+    fwd: bool,
+    rev: bool,
+    left: bool,
+    right: bool,
+) -> tuple[float, float]:
     """
     One frame of game-style control given which keys are currently held.
     Held throttle ramps up; released throttle coasts down. Steer returns to
@@ -100,7 +108,7 @@ def update(throttle: float, steer: float, dt: float,
         steer = _toward(steer, STEER.return_ * dt)
 
     throttle = max(-THROTTLE.max, min(THROTTLE.max, throttle))
-    steer    = max(-STEER.max,    min(STEER.max,    steer))
+    steer = max(-STEER.max, min(STEER.max, steer))
     return throttle, steer
 
 
@@ -142,8 +150,10 @@ def load_model(xml: str | None):
     if xml:
         return mujoco.MjModel.from_xml_path(xml)
 
-    scene = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "tracks" / "ramp_course.xml"))
-    car   = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "neoracer.xml"))
+    scene = mujoco.MjSpec.from_file(
+        str(_PROJECT_DIR / "assets" / "tracks" / "ramp_course.xml")
+    )
+    car = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "neoracer.xml"))
     scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
     return scene.compile()
 
@@ -154,7 +164,7 @@ def main(xml: str | None = None) -> None:
     import sensor_logger as sl
 
     model = load_model(xml)
-    data  = mujoco.MjData(model)
+    data = mujoco.MjData(model)
     car_id = model.body("car").id
 
     if not glfw.init():
@@ -164,15 +174,15 @@ def main(xml: str | None = None) -> None:
     glfw.swap_interval(1)  # vsync
 
     cam = mujoco.MjvCamera()
-    cam.type        = mujoco.mjtCamera.mjCAMERA_TRACKING
+    cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
     cam.trackbodyid = car_id
-    cam.distance    = CAM.distance
-    cam.elevation   = CAM.elevation
+    cam.distance = CAM.distance
+    cam.elevation = CAM.elevation
     # azimuth is updated every frame from the car's yaw (see loop below)
 
-    opt   = mujoco.MjvOption()
+    opt = mujoco.MjvOption()
     scene = mujoco.MjvScene(model, maxgeom=10000)
-    ctx   = mujoco.MjrContext(model, mujoco.mjtFontScale.mjFONTSCALE_150)
+    ctx = mujoco.MjrContext(model, mujoco.mjtFontScale.mjFONTSCALE_150)
 
     print(__doc__)
 
@@ -198,7 +208,9 @@ def main(xml: str | None = None) -> None:
             throttle, steer = 0.0, 0.0
         else:
             throttle, steer = update(
-                throttle, steer, dt,
+                throttle,
+                steer,
+                dt,
                 fwd=held(glfw.KEY_UP, glfw.KEY_W),
                 rev=held(glfw.KEY_DOWN, glfw.KEY_S),
                 left=held(glfw.KEY_LEFT, glfw.KEY_A),
@@ -206,7 +218,7 @@ def main(xml: str | None = None) -> None:
             )
 
         data.ctrl[0:4] = throttle
-        data.ctrl[4]   = steer
+        data.ctrl[4] = steer
 
         # step physics to catch up to real (wall-clock) time
         target = data.time + dt
@@ -217,8 +229,9 @@ def main(xml: str | None = None) -> None:
 
         w, h = glfw.get_framebuffer_size(window)
         viewport = mujoco.MjrRect(0, 0, w, h)
-        mujoco.mjv_updateScene(model, data, opt, None, cam,
-                               mujoco.mjtCatBit.mjCAT_ALL, scene)
+        mujoco.mjv_updateScene(
+            model, data, opt, None, cam, mujoco.mjtCatBit.mjCAT_ALL, scene
+        )
         mujoco.mjr_render(viewport, scene, ctx)
         glfw.swap_buffers(window)
         glfw.poll_events()
