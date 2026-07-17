@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>proc_track — How Procedural Track Generation Works</title>
+<style>
+  :root{
+    --bg:#0f1218; --panel:#161b24; --panel2:#1c2230; --ink:#e6edf3; --muted:#9aa7b4;
+    --accent:#4f9cff; --accent2:#7ee787; --warn:#ffb454; --danger:#ff7b72;
+    --code-bg:#0b0e14; --border:#2a3240; --math-bg:#12202e;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:grid;grid-template-columns:280px 1fr;max-width:1400px;margin:0 auto}
+  /* sidebar */
+  nav{position:sticky;top:0;height:100vh;overflow-y:auto;padding:24px 18px;
+    background:var(--panel);border-right:1px solid var(--border)}
+  nav h1{font-size:18px;margin:0 0 4px}
+  nav .sub{color:var(--muted);font-size:12px;margin-bottom:18px}
+  nav ol{list-style:none;padding:0;margin:0;counter-reset:mod}
+  nav ol li{margin:2px 0}
+  nav ol li a{display:block;padding:6px 10px;border-radius:6px;color:var(--muted);font-size:13.5px}
+  nav ol li a:hover{background:var(--panel2);color:var(--ink);text-decoration:none}
+  nav ol li a .n{display:inline-block;width:22px;color:var(--accent);font-weight:700}
+  /* content */
+  main{padding:48px 56px;min-width:0}
+  .hero{border:1px solid var(--border);background:linear-gradient(160deg,#182130,#12161d);
+    border-radius:14px;padding:32px 34px;margin-bottom:40px}
+  .hero .kicker{color:var(--accent2);font-weight:700;letter-spacing:.08em;font-size:12px;text-transform:uppercase}
+  .hero h1{font-size:34px;margin:8px 0 12px;line-height:1.15}
+  .hero p{color:var(--muted);margin:0;max-width:70ch}
+  .pills{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px}
+  .pill{background:var(--panel2);border:1px solid var(--border);border-radius:20px;
+    padding:4px 12px;font-size:12.5px;color:var(--muted)}
+  section.module{margin-bottom:56px;scroll-margin-top:20px}
+  .modhead{display:flex;align-items:baseline;gap:14px;border-bottom:2px solid var(--border);
+    padding-bottom:10px;margin-bottom:22px}
+  .modhead .badge{background:var(--accent);color:#04101f;font-weight:800;border-radius:8px;
+    padding:3px 11px;font-size:13px;white-space:nowrap}
+  .modhead h2{font-size:25px;margin:0}
+  .modhead .stage{margin-left:auto;color:var(--muted);font-size:12.5px;font-family:ui-monospace,monospace}
+  h3{font-size:18px;margin:30px 0 10px;color:#cdd9e5}
+  p{margin:12px 0}
+  .lead{color:var(--muted)}
+  /* callouts */
+  .note,.warn,.key{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid var(--border)}
+  .note{background:#12202e;border-color:#1f4d6b}
+  .warn{background:#2a1f12;border-color:#5c3d16}
+  .key{background:#12241a;border-color:#1f5d38}
+  .note b,.warn b,.key b{display:block;margin-bottom:4px;font-size:12.5px;letter-spacing:.05em;text-transform:uppercase}
+  .note b{color:#66b3ff}.warn b{color:var(--warn)}.key b{color:var(--accent2)}
+  /* code */
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;overflow-x:auto;margin:16px 0;font-size:13.5px;line-height:1.6}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  :not(pre)>code{background:var(--panel2);padding:2px 6px;border-radius:5px;font-size:13px;color:#ffd9a8}
+  pre code{color:#d6dee8}
+  .c-key{color:#ff7b9c}.c-fn{color:#82d2ff}.c-str{color:#a5e08a}.c-num{color:#f5c06a}
+  .c-com{color:#6b7684;font-style:italic}.c-op{color:#c0cad6}
+  /* math */
+  .math{background:var(--math-bg);border:1px solid #24506e;
+    border-radius:8px;padding:14px 18px;margin:16px 0;overflow-x:auto;
+    font-family:"Cambria Math","Times New Roman",Georgia,serif;font-size:18px}
+  .math .lbl{float:right;color:var(--muted);font-size:12px;font-family:ui-monospace,monospace}
+  var{font-style:italic;font-family:inherit}
+  sub,sup{font-size:.72em}
+  .frac{display:inline-block;vertical-align:middle;text-align:center}
+  .frac .top{display:block;border-bottom:1.5px solid currentColor;padding:0 6px}
+  .frac .bot{display:block;padding:0 6px}
+  /* tables */
+  table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#cdd9e5}
+  td code{white-space:nowrap}
+  .fn-tbl td:first-child code{color:#82d2ff}
+  /* misc */
+  .pipe{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:18px 0;color:var(--muted);font-size:13px}
+  .pipe .box{background:var(--panel2);border:1px solid var(--border);border-radius:8px;
+    padding:8px 12px;color:var(--ink);font-family:ui-monospace,monospace;font-size:12.5px}
+  .pipe .arr{color:var(--accent)}
+  footer{color:var(--muted);font-size:13px;border-top:1px solid var(--border);
+    padding-top:20px;margin-top:40px}
+  @media (max-width:900px){
+    .wrap{grid-template-columns:1fr}
+    nav{position:static;height:auto;border-right:none;border-bottom:1px solid var(--border)}
+    main{padding:28px 20px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav>
+  <h1>proc_track</h1>
+  <div class="sub">Procedural racetrack generation · a guided course</div>
+  <ol>
+    <li><a href="#m0"><span class="n">0</span>The big picture &amp; INV-1</a></li>
+    <li><a href="#m1"><span class="n">1</span>The centerline shape</a></li>
+    <li><a href="#m2"><span class="n">2</span>Arc-length reparameterization</a></li>
+    <li><a href="#m3"><span class="n">3</span>Track width</a></li>
+    <li><a href="#m4"><span class="n">4</span>Validation &amp; repair</a></li>
+    <li><a href="#m5"><span class="n">5</span>Walls</a></li>
+    <li><a href="#m6"><span class="n">6</span>Reset &amp; randomization</a></li>
+    <li><a href="#m7"><span class="n">7</span>Projection (Frenet)</a></li>
+    <li><a href="#m8"><span class="n">8</span>Reward &amp; termination</a></li>
+    <li><a href="#m9"><span class="n">9</span>Observations</a></li>
+    <li><a href="#m10"><span class="n">10</span>The scripted driver</a></li>
+    <li><a href="#glossary"><span class="n">★</span>Function reference</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">MuJoCo · NeoRacer · Reinforcement-Learning environment</div>
+  <h1>How procedural track generation works</h1>
+  <p>Every RL episode gets a brand-new closed-loop racetrack, built deterministically from
+  one integer seed. This course walks the whole pipeline: from a handful of random points, to a
+  smooth spline, to a physically valid corridor with collidable walls, to the 23-number view the
+  agent actually learns from. Code and math side by side, one stage at a time.</p>
+  <div class="pills">
+    <span class="pill">Pure NumPy / SciPy geometry</span>
+    <span class="pill">One seed → one track</span>
+    <span class="pill">Fixed-topology MuJoCo model</span>
+    <span class="pill">Frenet-frame observations</span>
+    <span class="pill">MJX-ready</span>
+  </div>
+</div>
+
+<!-- ============ MODULE 0 ============ -->
+<section class="module" id="m0">
+  <div class="modhead"><span class="badge">Module 0</span><h2>The big picture &amp; the one invariant</h2>
+    <span class="stage">env.py · walls.py</span></div>
+
+  <p class="lead">Before any code: the whole system is a <b>pipeline from one integer to one drivable
+  world</b>. Trace a single seed through it and everything else falls into place.</p>
+
+  <div class="pipe">
+    <span class="box">seed (int)</span><span class="arr">→</span>
+    <span class="box">control points</span><span class="arr">→</span>
+    <span class="box">periodic spline</span><span class="arr">→</span>
+    <span class="box">uniform arc-length samples</span><span class="arr">→</span>
+    <span class="box">+ width</span><span class="arr">→</span>
+    <span class="box">validate / repair</span><span class="arr">→</span>
+    <span class="box"><b>Track</b></span><span class="arr">→</span>
+    <span class="box">walls + spawn</span><span class="arr">→</span>
+    <span class="box">step loop</span>
+  </div>
+
+  <p>The output of generation is one immutable object, <code>Track</code>. It is nothing but a bag
+  of NumPy arrays, all length <code>M = 2048</code>, sampled evenly along the loop. Every later
+  stage — walls, spawn, projection, reward, observation — reads only this object.</p>
+
+  <pre><code><span class="c-key">@dataclass</span>(frozen=<span class="c-key">True</span>)
+<span class="c-key">class</span> <span class="c-fn">Track</span>:
+    C:     np.ndarray  <span class="c-com"># (M,2) centerline positions (x,y)</span>
+    T:     np.ndarray  <span class="c-com"># (M,2) unit tangents</span>
+    Nrm:   np.ndarray  <span class="c-com"># (M,2) unit LEFT normals (T rotated +90°)</span>
+    kappa: np.ndarray  <span class="c-com"># (M,)  signed curvature, + = turning left</span>
+    w:     np.ndarray  <span class="c-com"># (M,)  half-width</span>
+    s:     np.ndarray  <span class="c-com"># (M,)  arc length: s[i] = i * L / M</span>
+    L:     <span class="c-fn">float</span>       <span class="c-com"># total lap length</span>
+    seed:  <span class="c-fn">int</span></code></pre>
+
+  <div class="key"><b>INV-1 — the architecture invariant</b>
+  The compiled MuJoCo model has <b>identical topology for every episode and every seed</b>:
+  floor + car + a fixed pool of <b>512 wall capsules</b>. A new track never recompiles anything —
+  <code>reset</code> only rewrites array fields (<code>geom_pos</code>, <code>geom_quat</code>,
+  <code>geom_size</code>) in place. That is the single rule that makes the later GPU (MJX) port a
+  mechanical array-swap instead of a rewrite. Hold onto it; it explains half the design choices below.</p></div>
+
+  <p>Determinism is the other backbone. A single <code>np.random.default_rng(seed)</code> drives
+  <em>all</em> randomness, consumed in a fixed order. Same seed in → bit-identical track, walls, and
+  rollout out. Repair logic uses no randomness at all, precisely to keep this promise.</p>
+</section>
+
+<!-- ============ MODULE 1 ============ -->
+<section class="module" id="m1">
+  <div class="modhead"><span class="badge">Module 1</span><h2>The centerline shape</h2>
+    <span class="stage">generator.py · make_centerline</span></div>
+
+  <p class="lead">Goal: a closed loop that is smooth, roughly round, but not boringly circular —
+  it should sometimes produce S-bends. The recipe: scatter points around a ring, wiggle them,
+  smooth them, then draw a curve through them.</p>
+
+  <h3>Step 1 — points on a ring</h3>
+  <p>Pick <var>n</var> control points (10–17). Each gets a random angle <var>θ</var> and random
+  radius <var>r</var>. In polar-to-Cartesian form:</p>
+  <div class="math"><span class="lbl">polar → xy</span>
+    <var>p<sub>i</sub></var> = ( <var>r<sub>i</sub></var> cos <var>θ<sub>i</sub></var>,&nbsp;
+    <var>r<sub>i</sub></var> sin <var>θ<sub>i</sub></var> ),&nbsp;&nbsp;
+    <var>θ<sub>i</sub></var> ∈ [0, 2π) sorted,&nbsp; <var>r<sub>i</sub></var> ∈ [6, 9] m
+  </div>
+  <p>Sorting the angles makes the points wind once around the circle in order — that is what
+  guarantees a <em>simple closed loop</em> rather than a tangled scribble. <code>respace_min_gap</code>
+  then pushes any two angles that landed too close (&lt; 0.15 rad) apart, so no two control points
+  nearly coincide and force a hairpin.</p>
+
+  <h3>Step 2 — smooth the radii, then jitter, then smooth the points</h3>
+  <pre><code><span class="c-key">def</span> <span class="c-fn">make_centerline</span>(rng, cfg):
+    n = <span class="c-fn">int</span>(rng.integers(cfg.n_ctrl_min, cfg.n_ctrl_max + <span class="c-num">1</span>))
+    theta = np.sort(rng.uniform(<span class="c-num">0</span>, <span class="c-num">2</span>*np.pi, n))
+    theta = respace_min_gap(theta, cfg.min_angular_gap)     <span class="c-com"># no near-duplicates</span>
+    r = rng.uniform(cfg.r_min, cfg.r_max, n)
+    <span class="c-key">for</span> _ <span class="c-key">in</span> <span class="c-fn">range</span>(cfg.radius_smooth_rounds):        <span class="c-com"># circular smoothing on radii</span>
+        r = <span class="c-num">0.5</span>*r + <span class="c-num">0.25</span>*(np.roll(r, <span class="c-num">1</span>) + np.roll(r, -<span class="c-num">1</span>))
+    pts = np.stack([r*np.cos(theta), r*np.sin(theta)], axis=<span class="c-num">1</span>)
+    pts += rng.normal(<span class="c-num">0.0</span>, cfg.jitter_std, pts.shape)  <span class="c-com"># the wiggle</span>
+    <span class="c-key">for</span> _ <span class="c-key">in</span> <span class="c-fn">range</span>(cfg.laplacian_rounds):
+        pts = <span class="c-num">0.5</span>*pts + <span class="c-num">0.25</span>*(np.roll(pts, <span class="c-num">1</span>, <span class="c-num">0</span>) + np.roll(pts, -<span class="c-num">1</span>, <span class="c-num">0</span>))
+    <span class="c-key">return</span> pts</code></pre>
+
+  <p>The smoothing is a <b>Laplacian (moving-average) filter on a ring</b>. Each point is pulled
+  toward the average of its two neighbours:</p>
+  <div class="math"><span class="lbl">one smoothing round</span>
+    <var>p<sub>i</sub></var> ← ½ <var>p<sub>i</sub></var> + ¼ (<var>p<sub>i−1</sub></var> + <var>p<sub>i+1</sub></var>)
+  </div>
+  <p><code>np.roll</code> is what makes it <em>circular</em> — index <var>i−1</var> of the first point
+  wraps to the last, so the loop stays seamless. This kills sharp zig-zags (high curvature) between
+  adjacent points.</p>
+
+  <div class="note"><b>Why smooth radii separately?</b>
+  Smoothing the <em>points</em> shrinks the whole loop toward its centroid (a moving average pulls
+  inward). Smoothing the <em>radii</em> alone tames sudden in/out jumps — the real curvature
+  troublemaker — <b>without shrinking the track</b>. That is why both steps exist.</p></div>
+
+  <div class="warn"><b>Tuning reality vs. the plan</b>
+  The plan suggested <code>r 3–6 m, jitter 0.8</code>. Measured, those gave median max-curvature
+  ≈ 1.06 m⁻¹ and length ≈ 22 m — <b>zero</b> valid phase-0 tracks, and repair couldn't close the
+  gap. The shipped values (<code>r 6–9, jitter 6.0, 2 rounds</code>) yield ~37% raw validity, so 20
+  attempts are plenty. Hardware and geometry never match the paper; the knob stays.</p></div>
+
+  <h3>Step 3 — a periodic cubic spline through the points</h3>
+  <pre><code><span class="c-key">def</span> <span class="c-fn">fit_spline</span>(pts):
+    n = <span class="c-fn">len</span>(pts)
+    t_knots = np.linspace(<span class="c-num">0.0</span>, <span class="c-num">1.0</span>, n + <span class="c-num">1</span>)
+    <span class="c-key">return</span> scipy.interpolate.CubicSpline(
+        t_knots, np.vstack([pts, pts[:<span class="c-num">1</span>]]), bc_type=<span class="c-str">"periodic"</span>)</code></pre>
+  <p>A cubic spline draws a smooth curve through the points with continuous first and second
+  derivatives (continuous tangent <em>and</em> curvature). Two details make it a closed racetrack:</p>
+  <ul>
+    <li><b><code>np.vstack([pts, pts[:1]])</code></b> — the first point is appended again at the end,
+    so the curve returns to where it started.</li>
+    <li><b><code>bc_type="periodic"</code></b> — forces the derivatives to match at the seam too, so
+    there is no kink where the loop closes.</li>
+  </ul>
+  <p>The spline is parameterized by <var>t</var> ∈ [0, 1]. That parameter is <b>not</b> distance
+  along the track — fixing that is Module 2.</p>
+</section>
+
+<!-- ============ MODULE 2 ============ -->
+<section class="module" id="m2">
+  <div class="modhead"><span class="badge">Module 2</span><h2>Arc-length reparameterization</h2>
+    <span class="stage">generator.py · build_track_arrays</span></div>
+
+  <p class="lead">The single most important piece of math in the generator. Everything downstream
+  assumes samples are <b>evenly spaced in distance</b>. The spline gives them evenly spaced in an
+  abstract parameter <var>t</var>, which is not the same thing.</p>
+
+  <div class="note"><b>The problem, precisely</b>
+  Where the spline curves tightly, equal steps in <var>t</var> cover <em>less</em> ground; on
+  straights they cover more. If you sampled at uniform <var>t</var>, your "2048 evenly spaced
+  points" would bunch up in corners. Curvature, wall spacing, and progress measurement would all
+  be wrong. So we re-index the curve by true distance <var>s</var>.</p></div>
+
+  <h3>The four moves</h3>
+  <pre><code><span class="c-key">def</span> <span class="c-fn">build_track_arrays</span>(spline, M, oversample):
+    P = M * oversample                          <span class="c-com"># 2048*4 = 8192 fine samples</span>
+    t = np.linspace(<span class="c-num">0.0</span>, <span class="c-num">1.0</span>, P, endpoint=<span class="c-key">False</span>)
+    p = spline(t)
+    seg = np.linalg.norm(np.roll(p, -<span class="c-num">1</span>, <span class="c-num">0</span>) - p, axis=<span class="c-num">1</span>)   <span class="c-com"># |p[i+1]-p[i]|</span>
+    cum = np.concatenate([[<span class="c-num">0.0</span>], np.cumsum(seg)])       <span class="c-com"># running distance</span>
+    L = <span class="c-fn">float</span>(cum[-<span class="c-num">1</span>])                             <span class="c-com"># total lap length</span>
+    s_uniform = np.linspace(<span class="c-num">0.0</span>, L, M, endpoint=<span class="c-key">False</span>)
+    t_of_s = np.interp(s_uniform, cum[:-<span class="c-num">1</span>], t)      <span class="c-com"># invert s(t) -> t(s)</span>
+    C = spline(t_of_s)</code></pre>
+
+  <p><b>(1) Measure.</b> Sample the spline very finely (4× oversampling = 8192 points), and add up
+  the straight-line hops between consecutive samples. This numerically approximates the arc-length
+  integral:</p>
+  <div class="math"><span class="lbl">arc length</span>
+    <var>s</var>(<var>t</var>) = ∫<sub>0</sub><sup><var>t</var></sup>
+    ‖<span class="frac"><span class="top">d<var>p</var></span><span class="bot">d<var>τ</var></span></span>‖ d<var>τ</var>
+    &nbsp;≈&nbsp; Σ ‖<var>p</var><sub>k+1</sub> − <var>p</var><sub>k</sub>‖
+  </div>
+  <p><b>(2) Invert.</b> We now know distance as a function of parameter, <var>s</var>(<var>t</var>).
+  We want the reverse: given target distances <code>s_uniform = 0, L/M, 2L/M, …</code>, what
+  parameter <var>t</var> reaches each? <code>np.interp</code> does this inversion by linear
+  interpolation. <b>(3) Resample</b> the spline at those <var>t</var> values → the centerline
+  <code>C</code>, now uniform in distance.</p>
+
+  <div class="warn"><b>Why oversample = 4 (and never below 2)?</b>
+  The chord sum underestimates true arc length on curves. 4× keeps that inversion error well under
+  1 cm. Cheap insurance; the plan calls it non-negotiable.</p></div>
+
+  <h3>Tangents, normals, curvature</h3>
+  <pre><code>    dC = spline(t_of_s, <span class="c-num">1</span>)  <span class="c-com"># d/dt (NOT d/ds) — direction only, magnitude is garbage</span>
+    T = dC / np.linalg.norm(dC, axis=<span class="c-num">1</span>, keepdims=<span class="c-key">True</span>)
+    Nrm = np.stack([-T[:, <span class="c-num">1</span>], T[:, <span class="c-num">0</span>]], axis=<span class="c-num">1</span>)      <span class="c-com"># left normal</span>
+    ds = L / M
+    dT = (np.roll(T, -<span class="c-num">1</span>, <span class="c-num">0</span>) - np.roll(T, <span class="c-num">1</span>, <span class="c-num">0</span>)) / (<span class="c-num">2</span>*ds)   <span class="c-com"># central difference</span>
+    kappa = dT[:, <span class="c-num">0</span>]*Nrm[:, <span class="c-num">0</span>] + dT[:, <span class="c-num">1</span>]*Nrm[:, <span class="c-num">1</span>]   <span class="c-com"># signed</span></code></pre>
+
+  <p><b>Tangent T</b> — direction of travel. We take the spline's <var>t</var>-derivative purely for
+  its direction, then normalize to unit length (its magnitude is in the wrong units — parameter, not
+  distance — so it's discarded).</p>
+  <p><b>Left normal Nrm</b> — rotate the tangent 90° counter-clockwise. Rotating (x, y) by +90° gives
+  (−y, x):</p>
+  <div class="math"><span class="lbl">left normal</span>
+    <var>N</var> = ( −<var>T<sub>y</sub></var>,&nbsp; <var>T<sub>x</sub></var> )
+  </div>
+  <p>This "left" direction is the ruler for the whole env: width is measured along it, walls sit at
+  ±<var>w</var>·<var>N</var>, and lateral offset is a dot product with it.</p>
+
+  <p><b>Curvature κ</b> — how fast the tangent turns per unit distance. By the Frenet relation, the
+  derivative of the unit tangent with respect to arc length points along the normal, scaled by
+  curvature:</p>
+  <div class="math"><span class="lbl">Frenet</span>
+    <span class="frac"><span class="top">d<var>T</var></span><span class="bot">d<var>s</var></span></span>
+    = <var>κ</var> <var>N</var>
+    &nbsp;⟹&nbsp;
+    <var>κ</var> =
+    <span class="frac"><span class="top">d<var>T</var></span><span class="bot">d<var>s</var></span></span> · <var>N</var>
+  </div>
+  <p>The code computes d<var>T</var>/d<var>s</var> with a <b>central difference</b> on the uniform-s
+  samples — (next − prev) / (2·<var>ds</var>) — then dots with <var>N</var>. Dotting with the
+  <em>left</em> normal gives a <b>signed</b> curvature: positive = turning left, negative = right.
+  That sign matters later for steering direction and observations.</p>
+
+  <div class="warn"><b>The footgun the code deliberately avoids</b>
+  Curvature must come from central differences on the <b>uniform-s</b> samples — never from the
+  spline's <var>t</var>-derivatives. Going through <var>t</var> means chain-ruling
+  d/ds = (d/dt)/(ds/dt), and that ratio is a classic bug magnet. The comment
+  <code># d/dt, not d/ds</code> is guarding exactly this.</p></div>
+</section>
+
+<!-- ============ MODULE 3 ============ -->
+<section class="module" id="m3">
+  <div class="modhead"><span class="badge">Module 3</span><h2>Track width</h2>
+    <span class="stage">generator.py · draw_width_randoms · width_from_draws</span></div>
+
+  <p class="lead">The corridor should breathe — wide straights, tighter corners — but smoothly and
+  seamlessly around the loop. The trick: build the width as a sum of a few sine waves. Sines are
+  periodic by construction, so the seam takes care of itself.</p>
+
+  <pre><code><span class="c-key">def</span> <span class="c-fn">width_from_draws</span>(draws, cfg):
+    _, phase, amp = draws
+    u = np.linspace(<span class="c-num">0</span>, <span class="c-num">2</span>*np.pi, cfg.M, endpoint=<span class="c-key">False</span>)
+    w = cfg.w_base + <span class="c-fn">sum</span>(
+        a * np.sin((i+<span class="c-num">1</span>)*u + p) <span class="c-key">for</span> i, (a, p) <span class="c-key">in</span> <span class="c-fn">enumerate</span>(<span class="c-fn">zip</span>(amp, phase)))
+    <span class="c-key">return</span> np.clip(w, cfg.w_min, cfg.w_max)</code></pre>
+
+  <p>This is a small truncated <b>Fourier series</b> around the loop:</p>
+  <div class="math"><span class="lbl">harmonic width</span>
+    <var>w</var>(<var>u</var>) = <var>w</var><sub>base</sub> +
+    Σ<sub>i=1</sub><sup>k</sup> <var>a<sub>i</sub></var> sin( <var>i·u</var> + <var>φ<sub>i</sub></var> ),
+    &nbsp;&nbsp; <var>u</var> ∈ [0, 2π)
+  </div>
+  <p>Each term is a full number of cycles around the ring (<var>i·u</var>), so <var>w</var>(0) =
+  <var>w</var>(2π) automatically — no discontinuity at the start/finish line. <var>k</var> is a
+  random 2–5 harmonics.</p>
+
+  <div class="note"><b>The 1/f amplitude falloff</b>
+  Amplitudes are drawn then divided by their harmonic index:
+  <code>amp = uniform(0.03, 0.12, k) / arange(1, k+1)</code>. Higher harmonics (wigglier) get smaller
+  amplitude. This "pink-noise" shaping keeps width variation gentle and organic rather than jagged —
+  the same idea used to make natural-looking terrain and textures.</p></div>
+
+  <p>The final <code>np.clip(w, w_min, w_max)</code> is a hard guarantee: whatever the sines do, the
+  half-width never drops below the phase's floor (0.35–0.60 m) nor above 0.80 m. Given the car is
+  ≈0.14 m half-width, even the tightest corridor leaves real room.</p>
+
+  <div class="key"><b>Determinism detail worth its own mention</b>
+  <code>draw_width_randoms</code> is called <b>once per attempt, before the repair loop</b>. If width
+  randoms were redrawn on every repair round, the number of RNG draws would depend on how many
+  repairs happened — and identical seeds could diverge. Drawing once, reusing across repairs, keeps
+  the RNG consumption order fixed. This is what test T3 (bit-identical output) leans on.</p></div>
+</section>
+
+<!-- ============ MODULE 4 ============ -->
+<section class="module" id="m4">
+  <div class="modhead"><span class="badge">Module 4</span><h2>Validation &amp; repair</h2>
+    <span class="stage">generator.py · check · repair · sample_valid_track</span></div>
+
+  <p class="lead">A random loop can be undrivable: a corner too tight for the car, a boundary that
+  self-intersects, two sections crossing. Rather than trying to generate perfectly, the design
+  <b>generates loosely, then checks and nudges</b> — a repair-then-reject loop.</p>
+
+  <h3>The four validity predicates</h3>
+  <table>
+    <tr><th>ID</th><th>Checks</th><th>Why</th></tr>
+    <tr><td><b>V1</b></td><td><code>max(|κ|) ≤ kappa_max</code></td>
+      <td>Corner not tighter than the car can turn. Phase-dependent: 0.4→1.0 m⁻¹.</td></tr>
+    <tr><td><b>V2</b></td><td><code>max(w·|κ|) ≤ 0.8</code></td>
+      <td>Inner boundary must not fold onto itself. Dimensionless; hard limit 1.0.</td></tr>
+    <tr><td><b>V3</b></td><td>far-apart-along-arc samples not close in space</td>
+      <td>No near-crossings / pinch points where two track sections nearly touch.</td></tr>
+    <tr><td><b>V4</b></td><td><code>L ∈ [25, 90] m</code></td>
+      <td>Not trivially small, not enormous.</td></tr>
+  </table>
+
+  <p><b>V2 explained.</b> A track boundary is the centerline offset inward by <var>w</var>. On a
+  left turn, the inner (right) boundary is at radius <var>R</var> − <var>w</var> where <var>R</var> =
+  1/<var>κ</var>. If <var>w</var> ≥ <var>R</var>, i.e. <var>w</var>·<var>κ</var> ≥ 1, the inner edge
+  passes through the center of the turn and folds over itself. Keeping <var>w</var>·|<var>κ</var>|
+  ≤ 0.8 stays safely clear.</p>
+
+  <h3>V3 — the clever bit: a KD-tree neighbor query</h3>
+  <pre><code>    clearance = <span class="c-num">2</span>*w.max() + cfg.clearance_margin
+    pairs = cKDTree(C).query_pairs(r=clearance, output_type=<span class="c-str">"ndarray"</span>)
+    <span class="c-key">if</span> <span class="c-fn">len</span>(pairs) &gt; <span class="c-num">0</span>:
+        arc = np.abs(wrap(s[pairs[:, <span class="c-num">1</span>]] - s[pairs[:, <span class="c-num">0</span>]], L))
+        prox = pairs[arc &gt; cfg.arc_sep_threshold]   <span class="c-com"># far along arc, near in space</span></code></pre>
+  <p>A brute-force "is any pair of the 2048 points too close?" is 2048² ≈ 4M comparisons. A
+  <b>KD-tree</b> answers "all pairs within radius <var>r</var>" in roughly O(n log n).
+  <code>query_pairs</code> returns every spatially-close pair; we then keep only pairs that are
+  <em>far apart along the arc</em>. Points that are close both in space and in arc length are just
+  ordinary neighbors on a straight — not a problem. Points close in space but far along the arc mean
+  two different parts of the track are nearly touching — a real defect.</p>
+
+  <p>The arc distance uses the wrap helper, which folds a difference into the shortest signed
+  distance around the loop:</p>
+  <div class="math"><span class="lbl">signed arc difference</span>
+    wrap(<var>a</var>, <var>L</var>) = ((<var>a</var> + <var>L</var>/2) mod <var>L</var>) − <var>L</var>/2
+    &nbsp;∈ (−<var>L</var>/2, <var>L</var>/2]
+  </div>
+
+  <h3>The repair-then-reject loop</h3>
+  <pre><code><span class="c-key">def</span> <span class="c-fn">sample_valid_track</span>(seed, cfg):
+    rng = np.random.default_rng(seed)
+    <span class="c-key">for</span> _ <span class="c-key">in</span> <span class="c-fn">range</span>(cfg.max_attempts):          <span class="c-com"># 20 — fresh random layout each</span>
+        pts = make_centerline(rng, cfg)
+        width_draws = draw_width_randoms(rng)     <span class="c-com"># ONCE, before repair</span>
+        <span class="c-key">for</span> _ <span class="c-key">in</span> <span class="c-fn">range</span>(cfg.max_repair):       <span class="c-com"># 5 — nudge the same layout</span>
+            C, T, Nrm, kappa, s, L = build_track_arrays(fit_spline(pts), cfg.M, cfg.oversample)
+            w = width_from_draws(width_draws, cfg)
+            violations = check(C, kappa, w, s, L, cfg)
+            <span class="c-key">if</span> <span class="c-key">not</span> violations:
+                <span class="c-key">return</span> Track(C=C, T=T, Nrm=Nrm, kappa=kappa, w=w, s=s, L=L, seed=seed)
+            pts = repair(pts, violations, C, w, cfg)
+    <span class="c-key">raise</span> TrackGenerationError(seed)</code></pre>
+
+  <p>Two nested loops with <b>hard bounds</b>: try up to 20 fresh layouts; within each, try up to 5
+  gentle repairs before giving up on it. Both bounds are fixed so runtime and RNG usage are
+  bounded and deterministic.</p>
+
+  <h3>The two repair operators (order matters)</h3>
+  <ul>
+    <li><b>Curvature (V1/V2) first:</b> for each violating sample, find the nearest control point and
+    apply one local Laplacian step to it — <code>p ← ½p + ¼(p<sub>−</sub> + p<sub>+</sub>)</code>.
+    Relaxing a control point smooths the corner near it.</li>
+    <li><b>Proximity (V3) second:</b> for each too-close pair, find the two nearest control points and
+    push them apart along the line joining them by <code>½(needed − actual)</code>, capped at 0.3 m
+    per round.</li>
+  </ul>
+  <p>Curvature is fixed before proximity because pushing points apart can re-tighten a corner;
+  doing smoothing first gives proximity the last word within a round.</p>
+
+  <div class="key"><b>Repair uses zero randomness — on purpose</b>
+  Every repair operation is a deterministic function of the current points and the violations. If
+  repair drew from the RNG, two seeds that hit different numbers of repairs would consume different
+  amounts of the random stream and diverge. No RNG in repair ⟹ identical seeds stay bit-identical
+  through arbitrarily many repair rounds. (Test T6: &lt;0.1% failures over 1000 phase-0 seeds,
+  p99 gen time &lt;20 ms.)</p></div>
+</section>
+
+<!-- ============ MODULE 5 ============ -->
+<section class="module" id="m5">
+  <div class="modhead"><span class="badge">Module 5</span><h2>Walls — turning a corridor into collidable geometry</h2>
+    <span class="stage">walls.py · wall_params · build_model</span></div>
+
+  <p class="lead">The Track is math. To crash into a wall the car needs actual MuJoCo geometry. Each
+  boundary becomes a <b>continuous rail of overlapping capsules</b> (cylinders with rounded ends).</p>
+
+  <h3>Placing K capsules along a boundary</h3>
+  <pre><code><span class="c-key">def</span> <span class="c-fn">wall_params</span>(track, side, cfg):        <span class="c-com"># side +1 = left, -1 = right</span>
+    idx = np.arange(cfg.K) * (M // cfg.K)   <span class="c-com"># K=256 evenly spaced samples (M%K==0)</span>
+    edge = track.C[idx] + side * track.w[idx, <span class="c-key">None</span>] * track.Nrm[idx]
+    a, b = edge, np.roll(edge, -<span class="c-num">1</span>, axis=<span class="c-num">0</span>)   <span class="c-com"># consecutive boundary points</span>
+    mid = <span class="c-num">0.5</span> * (a + b)
+    d = b - a
+    seg_len = np.linalg.norm(d, axis=<span class="c-num">1</span>)
+    half_len = cfg.overlap * <span class="c-num">0.5</span> * seg_len   <span class="c-com"># overlap=1.2 -> 20% longer than the gap</span>
+    u = d / seg_len[:, <span class="c-key">None</span>]</code></pre>
+
+  <p>The boundary point is just the centerline pushed sideways by the (signed) half-width along the
+  normal:</p>
+  <div class="math"><span class="lbl">boundary edge</span>
+    <var>edge<sub>i</sub></var> = <var>C<sub>i</sub></var> + <var>σ</var>·<var>w<sub>i</sub></var>·<var>N<sub>i</sub></var>,
+    &nbsp;&nbsp;<var>σ</var> = +1 (left) or −1 (right)
+  </div>
+  <p>A capsule is stretched between each pair of consecutive edge points, centered at their midpoint.
+  Making each capsule 20% longer than the gap it spans (<code>overlap = 1.2</code>) means neighbors
+  overlap, so the rail has no gaps to squeeze through even around curvature (test T4 verifies
+  coverage: every point along the boundary is within one radius of some capsule).</p>
+
+  <h3>The quaternion — the one piece of 3-D rotation math</h3>
+  <p>A MuJoCo capsule points along its local <b>z-axis</b> by default. We need it horizontal, aligned
+  with the boundary direction <var>u</var>. That's a 90° (π/2) rotation about the axis perpendicular
+  to both z and <var>u</var> — which, since <var>u</var> is horizontal, is (−<var>u<sub>y</sub></var>,
+  <var>u<sub>x</sub></var>, 0).</p>
+  <pre><code>    c = np.cos(np.pi / <span class="c-num">4</span>)                      <span class="c-com"># cos(θ/2) with θ = π/2</span>
+    quat = np.stack([np.full(K, c), -c*u[:,<span class="c-num">1</span>], c*u[:,<span class="c-num">0</span>], np.zeros(K)], axis=<span class="c-num">1</span>)</code></pre>
+  <p>A quaternion for rotation angle <var>θ</var> about unit axis <b>(a<sub>x</sub>,a<sub>y</sub>,a<sub>z</sub>)</b>
+  is:</p>
+  <div class="math"><span class="lbl">axis-angle → quaternion</span>
+    <var>q</var> = ( cos <span class="frac"><span class="top"><var>θ</var></span><span class="bot">2</span></span>,&nbsp;
+    <var>a<sub>x</sub></var> sin <span class="frac"><span class="top"><var>θ</var></span><span class="bot">2</span></span>,&nbsp;
+    <var>a<sub>y</sub></var> sin <span class="frac"><span class="top"><var>θ</var></span><span class="bot">2</span></span>,&nbsp;
+    <var>a<sub>z</sub></var> sin <span class="frac"><span class="top"><var>θ</var></span><span class="bot">2</span></span> )
+  </div>
+  <p>With <var>θ</var> = π/2, both cos(θ/2) and sin(θ/2) equal cos(π/4) = <code>c</code>. Substituting
+  the axis (−<var>u<sub>y</sub></var>, <var>u<sub>x</sub></var>, 0) gives exactly the four components
+  above: <code>[c, −c·u_y, c·u_x, 0]</code>.</p>
+
+  <h3>Build once, reposition forever (INV-1 in code)</h3>
+  <pre><code><span class="c-key">def</span> <span class="c-fn">build_model</span>(cfg, car_xml_path=CAR_XML_PATH):
+    spec = mujoco.MjSpec.from_file(car_xml_path)
+    <span class="c-key">for</span> i <span class="c-key">in</span> <span class="c-fn">range</span>(<span class="c-num">2</span> * cfg.K):                <span class="c-com"># 512 capsules, once</span>
+        g = spec.worldbody.add_geom()
+        g.type = mujoco.mjtGeom.mjGEOM_CAPSULE
+        g.size[:<span class="c-num">2</span>] = [cfg.radius, <span class="c-num">0.1</span>]        <span class="c-com"># placeholder half-length</span>
+        g.pos = [<span class="c-num">0.0</span>, <span class="c-num">0.0</span>, -<span class="c-num">10.0</span>]           <span class="c-com"># parked below the floor</span>
+        g.condim = <span class="c-num">1</span>; g.priority = <span class="c-num">1</span>
+        g.contype = <span class="c-num">2</span>; g.conaffinity = <span class="c-num">1</span>
+    model = spec.compile()
+    model.opt.disableflags |= mujoco.mjtDisableBit.mjDSBL_MIDPHASE  <span class="c-com"># see gotcha</span></code></pre>
+
+  <p>A fixed pool of 2·K = 512 capsules is compiled once with placeholder poses. Every reset just
+  overwrites <code>geom_pos</code>, <code>geom_quat</code>, <code>geom_size</code>. Topology never
+  changes → INV-1 holds → the MJX port later is a mechanical array swap.</p>
+
+  <div class="note"><b>Contact masking, in one breath</b>
+  Walls get <code>contype=2, conaffinity=1</code>; the car uses the default <code>1/1</code>. A pair
+  collides iff one's <code>contype</code> bit-ANDs the other's <code>conaffinity</code>. Car(1)&amp;wall(1)=1
+  ✓ collide. Walls and floor are both worldbody geoms, and MuJoCo never collides two geoms of the
+  same body — so walls ignore the floor and each other for free.</p></div>
+
+  <div class="warn"><b>Two gotchas the design cannot live without</b>
+  <b>priority=1</b> is required, not cosmetic: without it the wheels' <code>condim=3</code> wins the
+  contact pair and walls silently become frictional, breaking the frictionless-wall design.
+  <br><br>
+  <b>MIDPHASE disabled</b>: MuJoCo builds a bounding-volume tree over static (worldbody) geoms at
+  <em>compile</em> time, from the parked poses. Move the capsules afterward and that tree is stale —
+  wall contacts silently vanish once the model is big enough to trigger midphase (verified: 9 cm of
+  penetration, zero contacts). Disabling it forces the dynamic broadphase, which re-reads positions
+  each step. <code>geom_rbound</code> is also refreshed at reset for the same reason.</p></div>
+</section>
+
+<!-- ============ MODULE 6 ============ -->
+<section class="module" id="m6">
+  <div class="modhead"><span class="badge">Module 6</span><h2>Reset — placing a track, a car, and some noise</h2>
+    <span class="stage">env.py · reset · _apply_dr</span></div>
+
+  <p class="lead">Reset is where a fresh episode is born. Its RNG draw order is frozen forever —
+  <b>track seed → domain randomization → spawn</b> — so the whole rollout is reproducible.</p>
+
+  <pre><code><span class="c-key">def</span> <span class="c-fn">reset</span>(self, seed):
+    rng = np.random.default_rng(seed)
+    track_seed = <span class="c-fn">int</span>(rng.integers(<span class="c-num">2</span>**<span class="c-num">63</span>))          <span class="c-com"># 1) which track</span>
+    track = sample_valid_track(track_seed, cfg.gen)
+    self._write_walls(track)                     <span class="c-com"># rewrite the 512 capsules</span>
+    self._apply_dr(rng)                          <span class="c-com"># 2) physics noise</span>
+    s0 = rng.uniform(<span class="c-num">0.0</span>, track.L)              <span class="c-com"># 3) where on the loop to start</span>
+    i = <span class="c-fn">int</span>(s0 / track.L * M) % M
+    lateral = rng.uniform(-cfg.spawn_lateral_frac, cfg.spawn_lateral_frac) * track.w[i]
+    yaw = np.arctan2(track.T[i, <span class="c-num">1</span>], track.T[i, <span class="c-num">0</span>])
+    self.data.qpos[:] = self.model.qpos0
+    self.data.qpos[<span class="c-num">0</span>:<span class="c-num">2</span>] = track.C[i] + lateral * track.Nrm[i]
+    self.data.qpos[<span class="c-num">3</span>:<span class="c-num">7</span>] = quat_from_yaw(yaw)
+    mujoco.mj_forward(self.model, self.data)</code></pre>
+
+  <p><b>Spawn placement.</b> Pick a random arc position, place the car on the centerline nudged
+  sideways by a random fraction (±0.25) of the local width, and aim it along the tangent. The height
+  and joint rest come from the compiled model's <code>qpos0</code> — the settled ride height — so at
+  <var>t</var>=0 only the four wheels touch the floor (test T2). The yaw is packed into a quaternion
+  for a pure z-rotation:</p>
+  <div class="math"><span class="lbl">yaw → quaternion</span>
+    <var>q</var> = ( cos <span class="frac"><span class="top">ψ</span><span class="bot">2</span></span>, 0, 0,
+    sin <span class="frac"><span class="top">ψ</span><span class="bot">2</span></span> )
+  </div>
+
+  <h3>Domain randomization</h3>
+  <pre><code><span class="c-key">def</span> <span class="c-fn">_apply_dr</span>(self, rng):
+    f_floor = rng.uniform(*cfg.dr_floor_fric)    <span class="c-com"># U(0.8, 1.2)</span>
+    f_mass  = rng.uniform(*cfg.dr_mass)          <span class="c-com"># U(0.9, 1.1)</span>
+    ...
+    m.geom_friction[floor] = base[<span class="c-str">"floor_fric"</span>] * f_floor
+    m.body_mass[car]       = base[<span class="c-str">"car_mass"</span>]  * f_mass
+    m.body_inertia[car]    = base[<span class="c-str">"car_inertia"</span>] * f_mass   <span class="c-com"># same factor!</span></code></pre>
+  <p>Every episode perturbs floor friction, car mass+inertia, wheel friction, and motor gain by
+  small random multipliers. This forces the eventual RL policy to be robust rather than
+  overfit to one exact physics. Two rules keep it honest:</p>
+  <ul>
+    <li><b>Multiplicative on cached pristine base values</b> (grabbed once at startup), never on last
+    episode's already-randomized values — otherwise the noise compounds and drifts over time.</li>
+    <li><b>Mass and inertia scale by the same factor</b> — they are physically linked; scaling one
+    without the other would invent an impossible car.</li>
+  </ul>
+</section>
+
+<!-- ============ MODULE 7 ============ -->
+<section class="module" id="m7">
+  <div class="modhead"><span class="badge">Module 7</span><h2>Projection — where am I on the track?</h2>
+    <span class="stage">projection.py · project</span></div>
+
+  <p class="lead">Given the car's (x, y), which point on the centerline is it "at", and how far along?
+  This answers progress (reward) and lateral offset (observation + termination). The subtlety:
+  do it <b>locally</b>, never globally.</p>
+
+  <pre><code><span class="c-key">def</span> <span class="c-fn">project</span>(track, state, xy, cfg):
+    i0 = <span class="c-fn">int</span>(state.s / track.L * M)
+    idxs = (i0 + np.arange(-cfg.window_back, cfg.window_fwd)) % M   <span class="c-com"># 10 back, 40 fwd</span>
+    dists = np.linalg.norm(track.C[idxs] - xy, axis=<span class="c-num">1</span>)
+    k = <span class="c-fn">int</span>(np.argmin(dists)); j = <span class="c-fn">int</span>(idxs[k])
+    <span class="c-key">if</span> dists[k] &gt; cfg.gate_scale * track.w[j] + cfg.gate_margin:   <span class="c-com"># VALIDITY GATE</span>
+        <span class="c-key">return</span> ProjResult(valid=<span class="c-key">False</span>, ds=<span class="c-num">0.0</span>, lateral=np.inf, j=j)
+    ds = <span class="c-fn">float</span>(wrap(track.s[j] - state.s, track.L))
+    lateral = <span class="c-fn">float</span>(np.dot(xy - track.C[j], track.Nrm[j]))
+    state.s = <span class="c-fn">float</span>(track.s[j])                        <span class="c-com"># commit ONLY if valid</span>
+    <span class="c-key">return</span> ProjResult(valid=<span class="c-key">True</span>, ds=ds, lateral=lateral, j=j)</code></pre>
+
+  <div class="note"><b>Why not just find the globally nearest centerline point?</b>
+  On an S-bend or near-crossing, two different parts of the track pass close together. The globally
+  nearest point could snap to the <em>wrong</em> section, teleporting your "progress." So after
+  spawn, the search is restricted to a small window around the last committed position — 10 samples
+  back, 40 forward — and biased forward. The car can only be found near where it just was.</p></div>
+
+  <p>Two quantities come out, both using the Frenet frame from Module 2:</p>
+  <div class="math"><span class="lbl">progress &amp; lateral</span>
+    d<var>s</var> = wrap(<var>s<sub>j</sub></var> − <var>s</var><sub>prev</sub>, <var>L</var>),
+    &nbsp;&nbsp;&nbsp;
+    lateral = (<var>xy</var> − <var>C<sub>j</sub></var>) · <var>N<sub>j</sub></var>
+  </div>
+  <p><b>ds</b> is signed arc progress since the last step (driving backwards gives it negative
+  naturally — no special case). <b>lateral</b> is how far off-center, signed by side, because we dot
+  with the left normal.</p>
+
+  <div class="key"><b>Three iron rules</b>
+  (1) Gate <b>before</b> computing ds — an invalid projection contributes zero reward, even on a
+  terminal step. (2) Commit <code>state.s</code> only on a valid projection. (3) If the car outruns
+  the 40-sample forward window (only possible at physics-glitch speeds), the projection goes invalid
+  and the episode ends via E2 — which is exactly the right outcome.</p></div>
+</section>
+
+<!-- ============ MODULE 8 ============ -->
+<section class="module" id="m8">
+  <div class="modhead"><span class="badge">Module 8</span><h2>Reward &amp; termination</h2>
+    <span class="stage">env.py · _reward_and_flags · _check_termination</span></div>
+
+  <p class="lead">The reward tells the agent what "good" means. Here it is, in one line:</p>
+  <div class="math"><span class="lbl">per control step</span>
+    <var>r</var> = d<var>s</var>
+    − <var>c</var><sub>wall</sub>·𝟙[wall&nbsp;contact]
+    − <var>c</var><sub>act</sub>·‖<var>a<sub>t</sub></var> − <var>a</var><sub>t−1</sub>‖²
+    + <var>R</var><sub>lap</sub>·𝟙[lap&nbsp;done]
+  </div>
+  <ul>
+    <li><b>+ds</b> — go forward. Distance covered this step is the core signal.</li>
+    <li><b>− c<sub>wall</sub></b> (0.05) — a per-step penalty whenever any car geom touched any wall
+    capsule this frame. Presence, not count.</li>
+    <li><b>− c<sub>act</sub></b> (0.01) — squared action change: discourages jerky steering/throttle,
+    encourages smooth control.</li>
+    <li><b>+ R<sub>lap</sub></b> (5.0) — a bonus, paid once, on the step that completes a full lap.</li>
+  </ul>
+
+  <div class="warn"><b>Why the wall penalty is mandatory, not optional</b>
+  The walls are <b>frictionless</b> by design (so they don't act as a free guide-rail). But
+  frictionless walls make sliding along them physically cheap — an agent would happily wall-ride
+  every corner. The per-step contact penalty is the counterweight. Frictionless walls and the
+  contact penalty ship together or not at all; test T7 calibrates c<sub>wall</sub> so a wall-riding
+  return is ≤ half a clean-driving return.</p></div>
+
+  <h3>Six ways an episode ends</h3>
+  <p>MuJoCo/PPO care about the difference between <b>terminated</b> (a real failure — bootstrap value
+  = 0) and <b>truncated</b> (episode cut off, but the world would have continued — keep bootstrapping).</p>
+  <table>
+    <tr><th>ID</th><th>Condition</th><th>Flag</th><th>Meaning</th></tr>
+    <tr><td>E1</td><td><code>|lateral| &gt; w[j] + 0.1</code></td><td>terminated</td><td>Escaped the corridor despite walls — a physics anomaly.</td></tr>
+    <tr><td>E2</td><td>projection invalid</td><td>terminated</td><td>Lost the track (usually a glitch). Neutral, not punitive.</td></tr>
+    <tr><td>E3</td><td>chassis z ∉ [0.02, 0.5]</td><td>terminated</td><td>Flipped, launched, or buried.</td></tr>
+    <tr><td>E4</td><td>&lt;0.2 m progress over trailing 5 s</td><td>terminated</td><td>Stalled. Uses a 250-slot ring buffer of ds.</td></tr>
+    <tr><td>E5</td><td>total progress ≥ L</td><td><b>truncated</b></td><td>Lap done — success, pays R<sub>lap</sub>.</td></tr>
+    <tr><td>E6</td><td>t ≥ 60 s</td><td><b>truncated</b></td><td>Ran out of time.</td></tr>
+  </table>
+  <p>Every <em>terminated</em> case zeroes that step's reward — you don't get paid for the frame you
+  crashed. The stall detector (E4) is a fixed-size ring buffer: each step writes its ds into
+  <code>ds_ring[ptr % 250]</code>; once the buffer is full, if the sum of the last 250 ds values is
+  below 0.2 m, the car is stuck.</p>
+</section>
+
+<!-- ============ MODULE 9 ============ -->
+<section class="module" id="m9">
+  <div class="modhead"><span class="badge">Module 9</span><h2>Observations — the 23 numbers the agent sees</h2>
+    <span class="stage">env.py · _obs</span></div>
+
+  <p class="lead">The policy never sees the world map or its absolute position. It sees a
+  <b>Frenet-frame</b> snapshot: everything relative to the track under it, plus a preview of what's
+  coming. That is deliberate — global position would let it memorize specific tracks.</p>
+
+  <table>
+    <tr><th>Index</th><th>Quantity</th><th>Normalization</th></tr>
+    <tr><td><code>0</code></td><td>lateral offset</td><td>/ w[j], clip ±2</td></tr>
+    <tr><td><code>1–2</code></td><td>heading error: sin ψ<sub>err</sub>, cos ψ<sub>err</sub></td><td>—</td></tr>
+    <tr><td><code>3–4</code></td><td>body-frame velocity vx, vy</td><td>/ 5, clip ±2</td></tr>
+    <tr><td><code>5</code></td><td>yaw rate</td><td>/ 5, clip ±2</td></tr>
+    <tr><td><code>6–9</code></td><td>four wheel angular speeds</td><td>/ 100</td></tr>
+    <tr><td><code>10</code></td><td>steering angle</td><td>/ 0.4</td></tr>
+    <tr><td><code>11–12</code></td><td>previous action</td><td>already ∈ [−1,1]</td></tr>
+    <tr><td><code>13–22</code></td><td>curvature+width preview at 5 look-aheads</td><td>clip ±2</td></tr>
+  </table>
+
+  <h3>Two ideas worth the math</h3>
+  <p><b>Heading error as sin/cos.</b> The angle between the car's yaw and the track tangent could
+  wrap at ±π and confuse the network. Splitting it into (sin, cos) makes it continuous and
+  unambiguous:</p>
+  <div class="math"><span class="lbl">heading error</span>
+    ψ<sub>err</sub> = ψ<sub>car</sub> − atan2(<var>T<sub>j,y</sub></var>, <var>T<sub>j,x</sub></var>)
+    &nbsp;→&nbsp; (sin ψ<sub>err</sub>, cos ψ<sub>err</sub>)
+  </div>
+  <p><b>World velocity into the car's own frame.</b> The agent should reason in "forward / sideways",
+  not "east / north". Rotate the world velocity by −yaw:</p>
+  <div class="math"><span class="lbl">body-frame velocity</span>
+    <var>v<sub>bx</sub></var> = cos ψ · <var>v<sub>x</sub></var> + sin ψ · <var>v<sub>y</sub></var>,
+    &nbsp;&nbsp;
+    <var>v<sub>by</sub></var> = −sin ψ · <var>v<sub>x</sub></var> + cos ψ · <var>v<sub>y</sub></var>
+  </div>
+
+  <h3>The curvature preview — the policy's entire map</h3>
+  <pre><code>    <span class="c-key">for</span> delta <span class="c-key">in</span> cfg.obs_preview_deltas:      <span class="c-com"># {0.25, 0.5, 1.0, 2.0, 4.0} m</span>
+        dsamp = <span class="c-fn">max</span>(<span class="c-num">1</span>, <span class="c-fn">round</span>(delta * M / L))   <span class="c-com"># meters -> sample count</span>
+        jp = (j + dsamp) % M
+        obs[k]   = np.clip(track.kappa[jp], -clip, clip)   <span class="c-com"># upcoming curvature</span>
+        obs[k+<span class="c-num">1</span>] = np.clip(track.w[jp] / cfg.obs_w_norm, -clip, clip)</code></pre>
+  <p>At five distances ahead (0.25 m to 4 m), the agent gets the upcoming curvature and width. That
+  is all it knows about the road shape — no raycasts, no absolute <var>s</var>, no world position.
+  A distance in meters is converted to a sample offset by <code>Δ·M/L</code> (samples per meter is
+  M/L). This forward-looking, position-free view is what forces the policy to <em>drive</em> rather
+  than memorize.</p>
+</section>
+
+<!-- ============ MODULE 10 ============ -->
+<section class="module" id="m10">
+  <div class="modhead"><span class="badge">Module 10</span><h2>The scripted driver (classical baseline)</h2>
+    <span class="stage">drive.py · scripted_action</span></div>
+
+  <p class="lead">Before any learning, a hand-written controller proves the tracks are actually
+  drivable. If this classical driver can't lap a track, the generator is broken — you fix the
+  generator, never the test. It has two parts: steering (pure pursuit) and speed (a PD controller).</p>
+
+  <h3>Pure pursuit — steering toward a point ahead</h3>
+  <pre><code>    i_look = <span class="c-fn">int</span>((s + cfg.lookahead) / L * M) % M    <span class="c-com"># a point 0.6 m ahead</span>
+    target = track.C[i_look] + bias * track.w[i_look] * track.Nrm[i_look]
+    rel = target - pos
+    y_local = -sn * rel[<span class="c-num">0</span>] + c * rel[<span class="c-num">1</span>]           <span class="c-com"># target's sideways offset in car frame</span>
+    Ld = np.linalg.norm(rel)
+    curvature = <span class="c-num">2.0</span> * y_local / <span class="c-fn">max</span>(Ld*Ld, <span class="c-num">1e-6</span>)
+    steer = <span class="c-fn">float</span>(np.clip(curvature * cfg.wheelbase, -<span class="c-num">1.0</span>, <span class="c-num">1.0</span>))</code></pre>
+  <p>Pure pursuit picks a target a fixed distance ahead on the centerline and computes the curvature
+  of the circular arc that connects the car to it. The classic formula, where <var>L<sub>d</sub></var>
+  is the look-ahead distance and <var>y</var> is the target's lateral offset in the car frame:</p>
+  <div class="math"><span class="lbl">pure-pursuit curvature</span>
+    <var>κ</var> = <span class="frac"><span class="top">2<var>y</var></span><span class="bot"><var>L<sub>d</sub></var>²</span></span>
+  </div>
+  <p>Curvature times wheelbase gives the steering command (small-angle bicycle model), clipped to
+  [−1, 1] which the env maps to ±0.4 rad. The optional <code>bias</code> shifts the target toward a
+  wall — that's the wall-ride variant test T7 uses to calibrate the penalty.</p>
+
+  <h3>Speed — slow for corners, PD to hit the target</h3>
+  <pre><code>    kappa_ahead = np.max(np.abs(track.kappa[idxs]))       <span class="c-com"># tightest corner in next 1.5 m</span>
+    v_target = np.sqrt(cfg.a_lat_max / <span class="c-fn">max</span>(kappa_ahead, cfg.kappa_floor))
+    v_target = <span class="c-fn">float</span>(np.clip(v_target, cfg.v_min, cfg.v_max))
+    throttle = <span class="c-fn">float</span>(np.tanh(cfg.kp_speed * (v_target - v_fwd)))</code></pre>
+  <p>The target speed comes from a lateral-acceleration budget. Cornering at speed <var>v</var> on
+  curvature <var>κ</var> needs lateral acceleration <var>a</var> = <var>v</var>²<var>κ</var>. Cap it at
+  a comfortable <var>a</var><sub>max</sub> = 4 m/s² and solve for the fastest safe speed:</p>
+  <div class="math"><span class="lbl">corner speed limit</span>
+    <var>a</var> = <var>v</var>²<var>κ</var>
+    &nbsp;⟹&nbsp;
+    <var>v</var><sub>target</sub> = √( <var>a</var><sub>max</sub> / <var>κ</var><sub>ahead</sub> )
+  </div>
+  <p>Tight corner ahead → smaller target speed; straight → capped at v_max. Then a proportional
+  controller on the speed error, squashed through <code>tanh</code> to stay in [−1, 1], sets the
+  throttle. Simple, classical, and enough to lap every valid track (test T1: 30/30 laps at the
+  hardest phase).</p>
+</section>
+
+<!-- ============ GLOSSARY ============ -->
+<section class="module" id="glossary">
+  <div class="modhead"><span class="badge">★</span><h2>Function reference — what each one does</h2>
+    <span class="stage">quick lookup</span></div>
+
+  <h3>generator.py</h3>
+  <table class="fn-tbl">
+    <tr><th>Function</th><th>Purpose</th></tr>
+    <tr><td><code>wrap(a, L)</code></td><td>Signed shortest arc difference around the loop, in (−L/2, L/2].</td></tr>
+    <tr><td><code>respace_min_gap(theta, gap)</code></td><td>Push sorted angles apart so no two control points nearly coincide.</td></tr>
+    <tr><td><code>make_centerline(rng, cfg)</code></td><td>Draw radial points, smooth radii, jitter, Laplacian-smooth → (n,2) control points.</td></tr>
+    <tr><td><code>fit_spline(pts)</code></td><td>Periodic cubic spline through the points (a closed, kink-free loop).</td></tr>
+    <tr><td><code>build_track_arrays(spline, M, os)</code></td><td>Reparameterize to uniform arc length; return C, T, Nrm, κ, s, L.</td></tr>
+    <tr><td><code>draw_width_randoms(rng)</code></td><td>Draw harmonic width parameters once per attempt (determinism).</td></tr>
+    <tr><td><code>width_from_draws(draws, cfg)</code></td><td>Build the smooth periodic half-width from those draws; clip to [w_min, w_max].</td></tr>
+    <tr><td><code>check(C, κ, w, s, L, cfg)</code></td><td>Evaluate validity predicates V1–V4; return a Violations record.</td></tr>
+    <tr><td><code>repair(pts, viol, C, w, cfg)</code></td><td>Nudge control points to fix curvature (first) then proximity (second). No RNG.</td></tr>
+    <tr><td><code>sample_valid_track(seed, cfg)</code></td><td>The top-level loop: generate → validate → repair, up to bounds → a valid Track.</td></tr>
+  </table>
+
+  <h3>walls.py</h3>
+  <table class="fn-tbl">
+    <tr><th>Function</th><th>Purpose</th></tr>
+    <tr><td><code>wall_params(track, side, cfg)</code></td><td>Pose + half-length of K capsules along one boundary (overlapping rail).</td></tr>
+    <tr><td><code>build_model(cfg, xml)</code></td><td>Compile the car XML once with a fixed pool of 2K parked capsules; disable midphase.</td></tr>
+  </table>
+
+  <h3>projection.py</h3>
+  <table class="fn-tbl">
+    <tr><th>Function</th><th>Purpose</th></tr>
+    <tr><td><code>project(track, state, xy, cfg)</code></td><td>Local forward-biased projection → progress ds + lateral offset; gates &amp; commits.</td></tr>
+  </table>
+
+  <h3>env.py</h3>
+  <table class="fn-tbl">
+    <tr><th>Function</th><th>Purpose</th></tr>
+    <tr><td><code>yaw_from_quat / quat_from_yaw</code></td><td>Convert between z-yaw and a MuJoCo (w,x,y,z) quaternion.</td></tr>
+    <tr><td><code>ProcTrackEnv.__init__</code></td><td>Build the model once; cache geom/joint indices and pristine base values.</td></tr>
+    <tr><td><code>reset(seed)</code></td><td>Generate a track, write walls, apply DR, spawn the car. Fixed RNG order.</td></tr>
+    <tr><td><code>_write_walls / _apply_dr</code></td><td>Rewrite the capsule pool in place; multiplicatively randomize physics.</td></tr>
+    <tr><td><code>step(action)</code></td><td>Apply [steer, throttle], run 10 substeps, project, reward, flags, obs.</td></tr>
+    <tr><td><code>_wall_contact</code></td><td>True if any current contact touches a wall geom.</td></tr>
+    <tr><td><code>_reward_and_flags</code></td><td>Compute the per-step reward and the terminated/truncated flags.</td></tr>
+    <tr><td><code>_check_termination</code></td><td>Evaluate E1–E6 end conditions.</td></tr>
+    <tr><td><code>_obs</code></td><td>Assemble the 23-dim Frenet observation vector.</td></tr>
+  </table>
+
+  <h3>drive.py</h3>
+  <table class="fn-tbl">
+    <tr><th>Function</th><th>Purpose</th></tr>
+    <tr><td><code>scripted_action(env, cfg, bias)</code></td><td>One [steer, throttle]: pure-pursuit steering + corner-aware PD speed.</td></tr>
+  </table>
+</section>
+
+<footer>
+  <p><b>Try it yourself:</b>
+  <code>python3 users/amoghmpanhale/proc_track/demo.py --seed 7 --phase 3</code> generates a track,
+  saves a top-down PNG, and drives a lap with the scripted controller — the same one track flows
+  through every stage above. For the live viewer:
+  <code>mjpython users/amoghmpanhale/proc_track/view.py --seed 7</code>.</p>
+  <p>Source: <code>users/amoghmpanhale/proc_track/</code> · full design in
+  <code>proc_track_plan.md</code>. Per-developer scratch — not part of the shared baseline.</p>
+</footer>
+
+</main>
+</div>
+</body>
+</html>
