@@ -23,6 +23,13 @@ uv pip install -r requirements.txt
 source .venv/bin/activate
 ```
 
+Then install the package (editable), so `neoracer_mujoco` is importable by the
+examples and the validation suite:
+
+```sh
+pip install -e .
+```
+
 ## Quick start
 
 ```sh
@@ -41,10 +48,15 @@ python3 -m pytest validation/ -v
 ├── assets/
 │   ├── neoracer.xml       — MuJoCo MJCF model (the source of truth)
 │   └── meshes/            — visual STL meshes (cosmetic; mass="0")
+├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
+│   ├── contract.py        — the car contract (single source of truth)
+│   ├── assets.py          — cars() / load() model discovery + compile
+│   ├── sensors.py         — SensorReadings/IMUReading/LidarScan + read()
+│   ├── sim.py             — compile/settle/run + physics probes
+│   └── control/           — classical controllers (track_centering)
 ├── examples/
 │   ├── run.py             — viewer launch script (mjpython entry point)
-│   ├── manual_drive.py    — arrow-key teleop (game-style, python3 entry point)
-│   └── sensor_logger.py   — sensor read/print helpers
+│   └── manual_drive.py    — arrow-key teleop (game-style, python3 entry point)
 ├── validation/            — pytest physics + logic conformance suite
 └── docs/                  — design notes and parameter log
 ```
