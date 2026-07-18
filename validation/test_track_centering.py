@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 
 import mujoco
-import sensor_logger as sl
-from track_centering import (
+from neoracer_mujoco import sensors as sl
+from neoracer_mujoco.control.track_centering import (
     ALL_BEAMS,
     TrackCenteringConfig,
     TrackCenteringController,
