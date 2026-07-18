@@ -29,9 +29,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-_SCRIPTS_DIR = Path(__file__).resolve().parent
-_PROJECT_DIR = _SCRIPTS_DIR.parent
-sys.path.insert(0, str(_SCRIPTS_DIR))
+_PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 # ── tuning knobs (feel is physical — turn these while driving) ─────────────────
 # Rates are per second, so the feel is the same regardless of frame rate.
@@ -161,7 +159,7 @@ def load_model(xml: str | None):
 def main(xml: str | None = None) -> None:
     import glfw
     import mujoco
-    import sensor_logger as sl
+    from neoracer_mujoco import sensors as sl
 
     model = load_model(xml)
     data = mujoco.MjData(model)
