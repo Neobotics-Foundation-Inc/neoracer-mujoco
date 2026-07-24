@@ -34,12 +34,11 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent
 _PROJECT_DIR = _SCRIPTS_DIR.parent
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
-import mujoco  # noqa: E402
-import mujoco.viewer  # noqa: E402
-import numpy as np  # noqa: E402
-
-import sensor_logger as sl  # noqa: E402
-from track_centering import (  # noqa: E402
+import mujoco
+import mujoco.viewer
+import numpy as np
+import sensor_logger as sl
+from track_centering import (
     LEFT_BEAMS,
     RIGHT_BEAMS,
     TrackCenteringConfig,
