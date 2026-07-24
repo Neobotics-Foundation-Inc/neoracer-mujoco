@@ -6,12 +6,10 @@ exploited by an RL agent. If one fails, the message tells you which failure mode
 Run:  pytest validation/ -v
 """
 
-import numpy as np
-
 import _sim
+import numpy as np
 import sensor_logger as sl
 from _sim import DRIVE, STEER
-
 
 # --- it exists and is wired the way the contract says ------------------------
 

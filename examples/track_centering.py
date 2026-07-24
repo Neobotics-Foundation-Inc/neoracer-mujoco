@@ -77,7 +77,6 @@ steering command on bad data.
 from dataclasses import dataclass
 
 import numpy as np
-
 from sensor_logger import SensorReadings
 
 LEFT_BEAMS = ("lidar_045", "lidar_090", "lidar_135")
@@ -220,8 +219,8 @@ class TrackCenteringController:
     D-term spike from the last episode's final error.
     """
 
-    def __init__(self, config: TrackCenteringConfig = TrackCenteringConfig()):
-        self.config = config
+    def __init__(self, config: TrackCenteringConfig | None = None):
+        self.config = config or TrackCenteringConfig()
         self.reset()
 
     def reset(self) -> None:

@@ -9,7 +9,6 @@ from dataclasses import fields
 import mujoco
 import numpy as np
 import pytest
-
 import sensor_logger as sl
 
 

@@ -10,10 +10,9 @@ real simulator (finite values, steering clamped, stays upright, doesn't
 immediately hit a wall).
 """
 
+import mujoco
 import numpy as np
 import pytest
-
-import mujoco
 import sensor_logger as sl
 from track_centering import (
     ALL_BEAMS,
