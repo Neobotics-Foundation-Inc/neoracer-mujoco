@@ -159,6 +159,7 @@ def load_model(xml: str | None):
 def main(xml: str | None = None) -> None:
     import glfw
     import mujoco
+
     from neoracer_mujoco import sensors as sl
 
     model = load_model(xml)

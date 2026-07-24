@@ -97,7 +97,7 @@ def _log(
     """Print one diagnostic line per PRINT_HZ steps."""
     car_z = data.xpos[car_id][2]
     q = sensors.imu_quat  # the orientation the RL agent sees
-    roll, pitch, yaw = _quat_to_euler(q)
+    roll, pitch, _yaw = _quat_to_euler(q)  # yaw unused here; heading isn't printed
     yaw_rate = math.degrees(sensors.imu_gyro[2])  # deg/s
 
     fl_s = sensors.fl_steer_pos[0]

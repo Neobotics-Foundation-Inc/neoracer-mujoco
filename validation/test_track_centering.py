@@ -10,10 +10,10 @@ real simulator (finite values, steering clamped, stays upright, doesn't
 immediately hit a wall).
 """
 
+import mujoco
 import numpy as np
 import pytest
 
-import mujoco
 from neoracer_mujoco import sensors as sl
 from neoracer_mujoco.control.track_centering import (
     ALL_BEAMS,

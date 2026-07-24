@@ -220,8 +220,8 @@ class TrackCenteringController:
     D-term spike from the last episode's final error.
     """
 
-    def __init__(self, config: TrackCenteringConfig = TrackCenteringConfig()):
-        self.config = config
+    def __init__(self, config: TrackCenteringConfig | None = None):
+        self.config = config or TrackCenteringConfig()
         self.reset()
 
     def reset(self) -> None:

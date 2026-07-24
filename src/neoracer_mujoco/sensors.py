@@ -16,8 +16,8 @@ Sensor map (matches neoracer.xml):
 from dataclasses import dataclass, field
 from typing import Generic, TypeVar
 
-import numpy as np
 import mujoco
+import numpy as np
 
 # Unconstrained so LidarScan can later be retargeted to another array type
 # (e.g. a JAX array) without changing the dataclass itself.
