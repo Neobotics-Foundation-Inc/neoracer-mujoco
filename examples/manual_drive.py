@@ -20,6 +20,9 @@ coast down, release the wheel to re-center.
     Space    hard stop (zero both)              Backspace   reset car (un-flip)
     Esc      quit
 
+Driver's test: touching a wall (see collision_reset.py) auto-resets the car
+to its spawn position, same as pressing Backspace.
+
 Actuator mapping (from assets/neoracer.xml):
   ctrl[0..3] = fl/fr/rl/rr wheel torque (N·m), positive = forward
   ctrl[4]    = steer_servo target angle (rad), positive = left, range ±0.4
@@ -162,6 +165,7 @@ def main(xml: str | None = None) -> None:
     import glfw
     import mujoco
     import sensor_logger as sl
+    from collision_reset import reset_if_wall_hit
 
     model = load_model(xml)
     data = mujoco.MjData(model)
@@ -224,6 +228,9 @@ def main(xml: str | None = None) -> None:
         target = data.time + dt
         while data.time < target:
             mujoco.mj_step(model, data)
+            if reset_if_wall_hit(model, data):
+                throttle, steer = 0.0, 0.0
+                break
 
         cam.azimuth = CAM.azimuth + _yaw_deg(data.xquat[car_id])
 
