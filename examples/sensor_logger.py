@@ -156,6 +156,23 @@ LIDAR_BEAM_ORDER = (
     "lidar_315",
 )
 LIDAR_ANGLES_DEG = (0, 45, 90, 135, 180, 225, 270, 315)
+ALL_BEAMS = LIDAR_BEAM_ORDER
+
+# Named beam groupings shared by LiDAR-based controllers (track_centering.py,
+# wall_following.py) so they agree on which beam is "front-left" etc. without
+# each controller re-deriving it.
+LEFT_BEAMS = ("lidar_045", "lidar_090", "lidar_135")
+RIGHT_BEAMS = ("lidar_315", "lidar_270", "lidar_225")
+# Deliberately lidar_000 ONLY, not a wider cone: lidar_045/lidar_315 already
+# do double duty in LEFT_BEAMS/RIGHT_BEAMS. Including them here too would
+# couple a forward-obstacle slowdown to side-wall proximity during a lateral
+# correction (a wall picked up obliquely by a diagonal beam would look like
+# a forward obstacle and cut throttle when nothing is ahead).
+FRONT_CONE_BEAMS = ("lidar_000",)
+FRONT_LEFT_BEAM = "lidar_045"
+REAR_LEFT_BEAM = "lidar_135"
+FRONT_RIGHT_BEAM = "lidar_315"
+REAR_RIGHT_BEAM = "lidar_225"
 
 
 @dataclass(frozen=True)
