@@ -56,11 +56,12 @@ def test_stays_upright_at_rest(car):
 
 
 def test_motor_encoder_near_zero_at_rest(car):
-    """No control, no motion -> wheel angular velocities should read ~0 rad/s."""
+    """No control, no motion -> motor angular velocity should read ~0 rad/s."""
     d = _sim.settle(car)
-    encoder = sl.motor_encoder_readings(sl.read(car, d))
-    mag = float(np.linalg.norm(encoder.angular_velocity))
-    assert mag < 0.05, f"stationary |wheel_vel|={mag:.4f} rad/s, expected ~0"
+    encoder = sl.motor_encoder_reading(sl.read(car, d))
+    assert abs(encoder.angular_velocity) < 0.05, (
+        f"stationary motor encoder={encoder.angular_velocity:.4f} rad/s, expected ~0"
+    )
 
 
 def test_imu_stationary_accel_matches_gravity(car):
@@ -109,28 +110,13 @@ def test_throttle_drives_forward(car):
 
 
 def test_motor_encoder_positive_under_forward_throttle(car):
-    """Full forward throttle must spin every driven wheel forward (+ angular velocity)."""
+    """Full forward throttle must spin the motor forward (+ angular velocity)."""
     d = _sim.settle(car)
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
-    encoder = sl.motor_encoder_readings(sl.read(car, _sim.run(car, d, ctrl, 400)))
-    assert np.all(encoder.angular_velocity > 0.1), (
-        f"expected all wheel speeds > 0 under forward throttle, got {encoder.angular_velocity}"
-    )
-
-
-def test_motor_encoder_left_right_consistent_straight(car):
-    """Driving straight (no steer) must spin left/right wheel pairs at matching speed."""
-    d = _sim.settle(car)
-    ctrl = np.zeros(car.nu)
-    ctrl[DRIVE] = 0.5
-    encoder = sl.motor_encoder_readings(sl.read(car, _sim.run(car, d, ctrl, 400)))
-    fl, fr, rl, rr = encoder.angular_velocity
-    assert abs(fl - fr) < 0.5, (
-        f"front wheels diverged going straight: fl={fl:.3f} fr={fr:.3f}"
-    )
-    assert abs(rl - rr) < 0.5, (
-        f"rear wheels diverged going straight: rl={rl:.3f} rr={rr:.3f}"
+    encoder = sl.motor_encoder_reading(sl.read(car, _sim.run(car, d, ctrl, 400)))
+    assert encoder.angular_velocity > 0.1, (
+        f"expected motor encoder > 0 under forward throttle, got {encoder.angular_velocity}"
     )
 
 
@@ -194,16 +180,15 @@ def test_sensors_finite_under_load(car):
 
 
 def test_motor_encoder_finite_under_load(car):
-    """The typed MotorEncoderReading and its derived estimates must stay finite under load."""
+    """The typed MotorEncoderReading and its derived estimate must stay finite under load."""
     d = _sim.settle(car)
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
     ctrl[STEER] = 0.4
-    encoder = sl.motor_encoder_readings(sl.read(car, _sim.run(car, d, ctrl, 500)))
-    assert np.all(np.isfinite(encoder.angular_velocity)), (
-        f"non-finite wheel angular velocity: {encoder.angular_velocity}"
+    encoder = sl.motor_encoder_reading(sl.read(car, _sim.run(car, d, ctrl, 500)))
+    assert np.isfinite(encoder.angular_velocity), (
+        f"non-finite motor encoder angular velocity: {encoder.angular_velocity}"
     )
-    assert np.isfinite(sl.average_wheel_angular_velocity(encoder))
     assert np.isfinite(sl.estimated_linear_speed_ms(encoder))
 
 

@@ -147,34 +147,40 @@ def wheel_speed_ms(sensors: SensorReadings) -> dict:
 @dataclass(frozen=True)
 class MotorEncoderReading:
     """
-    Motor encoder readings, packed from neoracer.xml's fl/fr/rl/rr_wheel_vel
-    sensors (a <jointvel> on each drive/motor joint).
+    Single motor encoder reading.
 
-    This is the sim's ground-truth motor angular velocity, not encoder ticks
-    or shaft position: a real quadrature encoder reports incremental shaft
-    position, and an ECU normally derives velocity from consecutive tick
-    deltas. The drive joints (fl/fr/rl/rr_drive) have no <jointpos> sensor in
-    the XML — only <jointvel> — so no tick/position-equivalent signal is
-    available to expose here. This struct makes no encoder-fidelity claim; it
-    is simply the motor angular velocity, with no quantization or sensor
-    noise applied.
+    The real NeoRacer has one drive motor with one shaft encoder, not one
+    encoder per wheel. neoracer.xml's <actuator> models AWD by driving all
+    four wheel joints from an identical per-wheel torque command (see its
+    "one torque motor per wheel" comment) as an approximation of the single
+    real motor's drivetrain — it does not mean four independently sensed
+    motors exist. Absent wheel slip, the four fl/fr/rl/rr_wheel_vel jointvel
+    sensors read the same value, so the mean across them is the correct
+    single-encoder proxy.
 
-    angular_velocity — rad/s, shape (4,). Positive = forward rotation (same
-                        convention as the wheel_vel sensors in neoracer.xml).
-                        Order: (fl, fr, rl, rr) — matches ctrl[0:4] in the
-                        drive-torque contract and SensorReadings' wheel_vel
-                        fields.
+    Not encoder ticks or shaft position: a real quadrature encoder reports
+    incremental shaft position, and an ECU normally derives velocity from
+    consecutive tick deltas. The drive joints (fl/fr/rl/rr_drive) have no
+    <jointpos> sensor in the XML — only <jointvel> — so no tick/position-
+    equivalent signal is available to expose here. This struct makes no
+    encoder-fidelity claim; it is simply the motor angular velocity, with no
+    quantization or sensor noise applied.
+
+    angular_velocity — rad/s. Positive = forward rotation (same convention
+                        as the wheel_vel sensors in neoracer.xml).
     """
 
-    angular_velocity: np.ndarray
+    angular_velocity: float
 
 
-def motor_encoder_readings(sensors: SensorReadings) -> MotorEncoderReading:
+def motor_encoder_reading(sensors: SensorReadings) -> MotorEncoderReading:
     """
-    Pack the four wheel_vel jointvel sensors into a typed MotorEncoderReading.
+    Derive the single motor encoder reading from the four wheel_vel jointvel
+    sensors (mean angular velocity across all driven wheels — see
+    MotorEncoderReading for why a mean is the correct single-motor proxy).
     Raw simulator values — no calibration, filtering, or quantization applied.
     """
-    angular_velocity = np.array(
+    wheel_velocities = np.array(
         [
             sensors.fl_wheel_vel[0],
             sensors.fr_wheel_vel[0],
@@ -182,23 +188,18 @@ def motor_encoder_readings(sensors: SensorReadings) -> MotorEncoderReading:
             sensors.rr_wheel_vel[0],
         ]
     )
-    return MotorEncoderReading(angular_velocity=angular_velocity)
-
-
-def average_wheel_angular_velocity(encoder: MotorEncoderReading) -> float:
-    """Mean angular velocity across all four driven wheels (rad/s)."""
-    return float(np.mean(encoder.angular_velocity))
+    return MotorEncoderReading(angular_velocity=float(np.mean(wheel_velocities)))
 
 
 def estimated_linear_speed_ms(encoder: MotorEncoderReading) -> float:
     """
-    ESTIMATE of vehicle speed from wheel rotation (m/s) — NOT ground truth.
-    average_wheel_angular_velocity() * WHEEL_RADIUS, i.e. it assumes zero
-    wheel slip. Will diverge from the true chassis speed (e.g. SensorReadings
-    .imu_linvel) under wheelspin or lockup, exactly like a real wheel-speed-
-    based speedometer would.
+    ESTIMATE of vehicle speed from motor rotation (m/s) — NOT ground truth.
+    encoder.angular_velocity * WHEEL_RADIUS, i.e. it assumes zero wheel slip.
+    Will diverge from the true chassis speed (e.g. SensorReadings.imu_linvel)
+    under wheelspin or lockup, exactly like a real wheel-speed-based
+    speedometer would.
     """
-    return average_wheel_angular_velocity(encoder) * WHEEL_RADIUS
+    return encoder.angular_velocity * WHEEL_RADIUS
 
 
 # Beam order matches the rangefinder sensors in neoracer.xml, ascending 0deg..315deg.

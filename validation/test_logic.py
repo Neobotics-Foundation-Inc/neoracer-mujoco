@@ -40,23 +40,28 @@ def test_read_returns_every_sensor(car):
     assert out.imu_accel.shape == (3,) and out.imu_quat.shape == (4,)
 
 
-def test_motor_encoder_readings_shape(car):
-    """motor_encoder_readings() must pack the four wheel_vel sensors into one 4-vector."""
+def test_motor_encoder_reading_is_mean_of_wheel_vel(car):
+    """motor_encoder_reading() must return the single-motor mean, not per-wheel values."""
     d = mujoco.MjData(car)
     mujoco.mj_step(car, d)
-    encoder = sl.motor_encoder_readings(sl.read(car, d))
-    assert encoder.angular_velocity.shape == (4,)
+    sensors = sl.read(car, d)
+    encoder = sl.motor_encoder_reading(sensors)
+    expected = np.mean(
+        [
+            sensors.fl_wheel_vel[0],
+            sensors.fr_wheel_vel[0],
+            sensors.rl_wheel_vel[0],
+            sensors.rr_wheel_vel[0],
+        ]
+    )
+    assert isinstance(encoder.angular_velocity, float)
+    assert encoder.angular_velocity == pytest.approx(expected)
 
 
-def test_average_wheel_angular_velocity_and_speed_estimate():
-    """Average angular velocity and the wheel-radius speed estimate, on known input."""
-    encoder = sl.MotorEncoderReading(angular_velocity=np.array([2.0, 2.0, 2.0, 2.0]))
-    assert sl.average_wheel_angular_velocity(encoder) == pytest.approx(2.0)
+def test_estimated_linear_speed_ms():
+    """Wheel-radius speed estimate, on known input."""
+    encoder = sl.MotorEncoderReading(angular_velocity=2.0)
     assert sl.estimated_linear_speed_ms(encoder) == pytest.approx(2.0 * sl.WHEEL_RADIUS)
-
-    # Uneven wheel speeds -> average is the mean, not any single wheel's value.
-    uneven = sl.MotorEncoderReading(angular_velocity=np.array([1.0, 3.0, 2.0, 2.0]))
-    assert sl.average_wheel_angular_velocity(uneven) == pytest.approx(2.0)
 
 
 def test_imu_reading_construction_shapes(car):
