@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 class TrackSettings:
     """Tunables for one track generation run. All lengths in meters."""
 
-    # --- Stage 1: the ring of random control points the loop is drawn through ---
+    # --- Step 1: the ring of random control points the loop is drawn through ---
     control_points_min: int = 10
     control_points_max: int = 17
     ring_radius_min: float = 6.0        # control points start on a ring of this
@@ -22,16 +22,16 @@ class TrackSettings:
     point_smoothing_rounds: int = 2     # blur the points to soften sharp corners
     min_angle_between_points: float = 0.15  # radians, stops points stacking up
 
-    # --- Stage 2: how finely the smooth loop is sampled ---
+    # --- Step 2: how finely the smooth loop is sampled ---
     samples: int = 2048             # points in the finished centerline
     oversample_factor: int = 4      # extra spline samples used to measure length
 
-    # --- Stage 3: how the corridor width varies around the loop ---
+    # --- Step 3: how the corridor width varies around the loop ---
     half_width_base: float = 0.50
     half_width_min: float = 0.35    # difficulty raises this (wider = easier)
     half_width_max: float = 0.80
 
-    # --- Rejection thresholds: what makes a track invalid ---
+    # --- Step 4 rejection thresholds: what makes a track invalid ---
     max_curvature: float = 1.0          # 1/m; difficulty lowers this
     max_width_times_curvature: float = 0.8   # corridor must not fold onto itself
     min_separation_along_loop: float = 2.5   # two samples this far apart along
@@ -39,7 +39,7 @@ class TrackSettings:
     min_total_length: float = 25.0           # in space, or they nearly touch
     max_total_length: float = 90.0
 
-    # --- Retry budget ---
+    # --- Step 5 retry budget ---
     # 60 attempts because difficulty 0 is the strict end: measured over 20 seeds,
     # 20 attempts leaves 7 of them with no valid track, 60 leaves none.
     max_attempts: int = 60          # fresh random tracks before giving up

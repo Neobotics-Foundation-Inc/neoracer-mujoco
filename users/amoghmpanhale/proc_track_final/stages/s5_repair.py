@@ -1,14 +1,26 @@
-"""Stage 4b: nudge the control points responsible for a track's problems.
+"""Step 5: nudge the control points behind the problems step 4 reported.
 
-Cheaper than redrawing: most rejected tracks are one bad corner away from valid.
-Everything here is deterministic - repair uses no randomness, so a seed that
-needed three repair passes still reproduces exactly.
+  nearest_control_point    maps a failing sample back to the point that moves it
+  smooth_sharp_corners     fixes too_curvy: blend a point toward its neighbors
+  push_apart_near_touches  fixes too_close: shove two points away from each other
+  repair                   the stage entry point: corners first, then near-touches
+
+Nudge rather than redraw, because most rejected tracks are one bad corner away
+from valid and a redraw throws away the other fifteen good ones. Nothing here
+guarantees a fix - the caller re-splines and re-checks, and gives up on this
+candidate after max_repairs_per_attempt passes.
+
+No randomness at all, so a seed that needed three repair passes reproduces
+exactly. Per-pass shifts are capped (max_repair_shift) so one bad pair cannot
+fling the loop into a new shape; anything larger arrives over several passes.
+There is no rule 4 (total length) repair - length is a whole-loop property with
+no single control point to blame, so a too-long track is redrawn instead.
 """
 
 import numpy as np
 
-from .settings import TrackSettings
-from .validation import Problems
+from ..settings import TrackSettings
+from .s4_validation import Problems
 
 
 def nearest_control_point(points, position):

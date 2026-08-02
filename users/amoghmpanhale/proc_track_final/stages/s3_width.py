@@ -1,13 +1,22 @@
-"""Stage 3: how wide the corridor is at each sample around the loop.
+"""Step 3: the corridor half-width at each sample around the loop.
 
-Width is a few slow sine waves summed onto a base width, so the track breathes
-between narrow and wide without ever stepping. It is drawn independently of the
-centerline shape - a sample's width does not depend on where that sample is.
+  draw_width_waves       the random part: sine wave phases and amplitudes
+  half_width_from_waves  sums those waves onto the base width, one per sample
+
+Two functions instead of one because the random draw and the profile it produces
+have different lifetimes: waves are drawn once per attempt and reused across
+every repair pass, so a repaired track keeps the width it was validated against.
+
+A sum of harmonics rather than smoothed noise, because harmonics of the loop
+close on themselves exactly - no seam to patch where sample N-1 meets sample 0.
+Width is independent of the centerline: it is a function of position around the
+loop, not of the shape there. Step 4 is what rejects a width the corners cannot
+take.
 """
 
 import numpy as np
 
-from .settings import TrackSettings
+from ..settings import TrackSettings
 
 
 def draw_width_waves(random):

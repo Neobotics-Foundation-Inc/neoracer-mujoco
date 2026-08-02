@@ -1,8 +1,18 @@
-"""Stage 2: turn control points into a smooth loop sampled evenly in meters.
+"""Step 2: spline the control points, then sample the loop evenly in meters.
 
-The output of this stage is the geometry a car actually drives on: positions,
-which way the track points, and how hard it is turning, at samples that are all
-the same distance apart. Nothing here is random.
+  fit_closed_spline             periodic cubic spline through the control points
+  measure_distance_along_spline arc-length lookup table for that spline
+  sample_evenly_by_distance     the stage entry point: center, tangent,
+                                left_normal, curvature, distance_along, length
+  shortest_loop_distance        wrap-aware distance helper, also used by step 4
+
+A cubic spline is parameterized by a dimensionless 0..1, and equal steps in it
+are not equal steps in meters, so a spline sampled directly bunches up in the
+corners. Rather than reparameterize the spline by arc length analytically, this
+measures its length numerically at oversample_factor times the output density
+and interpolates the parameter back out - one table lookup instead of a solve,
+and the error is bounded by the dense spacing. Even spacing is not cosmetic:
+curvature here is a central difference that assumes it. Nothing here is random.
 """
 
 import numpy as np

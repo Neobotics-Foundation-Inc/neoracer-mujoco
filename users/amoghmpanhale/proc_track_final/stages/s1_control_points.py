@@ -1,13 +1,18 @@
-"""Stage 1: the ring of random control points a track is drawn through.
+"""Step 1: draw the ring of random control points a track is spline'd through.
 
-Nothing here knows about splines or racetracks. It produces a small ring of
-scattered 2D points in loop order - that is the entire random seed of a track's
-shape, and every later stage is deterministic given these points.
+  draw_control_points  the stage entry point: returns (n, 2) points in loop order
+  spread_out_angles    helper, keeps two points from landing at the same angle
+  smooth_around_loop   helper, periodic blur used on both radii and points
+
+Polar, not cartesian: each point is an angle plus a radius, so sorting by angle
+puts them in loop order for free and the loop always encloses the origin. The
+only randomness in a track's shape is here - every later stage is deterministic
+given these points.
 """
 
 import numpy as np
 
-from .settings import TrackSettings
+from ..settings import TrackSettings
 
 
 def spread_out_angles(angles, min_gap):

@@ -1,18 +1,20 @@
 """Procedural generation of closed-loop racetracks: the Track and the loop that
-makes one. This is the file to read first; each stage lives in its own module.
+makes one. This is the file to read first; each step lives in its own module
+under stages/, named for the order it runs in.
 
 The whole procedure, start to finish:
 
-  1. Scatter a ring of random points around the origin.       control_points.py
-  2. Draw a smooth closed spline through them - the loop.     centerline.py
-  3. Resample the loop evenly in meters and measure its
-     tangent and curvature at every sample.                   centerline.py
-  4. Give the corridor a half-width that varies smoothly
-     around the loop.                                         width.py
-  5. Check the result against four rules. If it fails, nudge  validation.py
-     the offending control points and go back to step 2.      repair.py
-     If nudging does not fix it in a few passes, throw the
-     track away and redraw from step 1.
+  1. Scatter a ring of random points around the origin.  stages/s1_control_points.py
+  2. Draw a smooth closed spline through them - the loop,
+     then resample it evenly in meters and measure its
+     tangent and curvature at every sample.              stages/s2_centerline.py
+  3. Give the corridor a half-width that varies smoothly
+     around the loop.                                    stages/s3_width.py
+  4. Check the result against four rules.                stages/s4_validation.py
+  5. If it fails, nudge the offending control points     stages/s5_repair.py
+     and go back to step 2. If nudging does not fix it
+     in a few passes, throw the track away and redraw
+     from step 1.
 
 Pure NumPy/SciPy. No MuJoCo, no simulator assumptions - the output is geometry.
 
@@ -24,12 +26,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .centerline import fit_closed_spline, sample_evenly_by_distance
-from .control_points import draw_control_points
-from .repair import repair
 from .settings import TrackSettings, settings_for_difficulty
-from .validation import find_problems
-from .width import draw_width_waves, half_width_from_waves
+from .stages.s1_control_points import draw_control_points
+from .stages.s2_centerline import fit_closed_spline, sample_evenly_by_distance
+from .stages.s3_width import draw_width_waves, half_width_from_waves
+from .stages.s4_validation import find_problems
+from .stages.s5_repair import repair
 
 
 class TrackGenerationError(RuntimeError):

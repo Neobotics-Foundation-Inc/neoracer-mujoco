@@ -1,9 +1,18 @@
-"""Stage 4a: decide whether a candidate track is drivable.
+"""Step 4: the four rules that reject a candidate track.
 
-Four rejection rules, checked on the finished geometry rather than on the
-control points, because a well-behaved ring of control points can still spline
-into a hairpin. Reporting *which* samples failed is the point - `repair` uses
-those indices to decide what to move.
+  Problems                 what failed: sample indices, not just a bool
+  find_too_curvy_samples   rules 1-2, corner too tight / corridor folds over
+  find_near_self_touches   rule 3, loop passes too close to itself
+  find_problems            the stage entry point: all four, rule 4 inline
+
+Checked on the sampled geometry, not on the control points, because a
+well-behaved ring of control points still splines into a hairpin now and then.
+Problems carries indices rather than a verdict so step 5 can nudge exactly the
+control points behind a failure; a bool would leave it redrawing whole tracks.
+
+The self-touch search is a cKDTree radius query, not the O(N^2) pairwise
+distance matrix - N is 2048 samples per candidate and this runs on every repair
+pass of every attempt.
 """
 
 from dataclasses import dataclass
@@ -11,8 +20,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .centerline import shortest_loop_distance
-from .settings import TrackSettings
+from ..settings import TrackSettings
+from .s2_centerline import shortest_loop_distance
 
 
 @dataclass
