@@ -2,7 +2,7 @@
 Classical (non-learned) wall-following controller for NeoRacer (issue #6).
 
 Maintains a fixed standoff distance from ONE wall (configurable follow_side)
-using the 8-beam LiDAR ring off SensorReadings (see sensor_logger.py).
+using the 8-beam LiDAR ring off SensorReadings (see neoracer_mujoco.sensors).
 Unlike track_centering.py, which balances clearance between TWO walls, this
 tracks a single wall so it stays useful where a second wall isn't
 guaranteed (e.g. around a bend, or an otherwise open course).
@@ -29,7 +29,8 @@ throttle.
 from dataclasses import dataclass
 
 import numpy as np
-from sensor_logger import (
+
+from ..sensors import (
     FRONT_CONE_BEAMS,
     FRONT_LEFT_BEAM,
     FRONT_RIGHT_BEAM,

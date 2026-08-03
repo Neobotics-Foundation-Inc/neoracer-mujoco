@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "neoracer-mujoco"
+version = "0.1.0"
+description = "MuJoCo simulation baseline + reusable toolbox for the NeoRacer 1/12-scale RC car."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mujoco>=3.9.0",
+    "numpy>=1.26.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "ruff==0.16.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/neoracer_mujoco"]
+
+# ponytail: assets/ deliberately stays at the repo root (the XML is the product,
+# drag-droppable into other MuJoCo tools), so it is NOT bundled as package data.
+# load() resolves it relative to the source checkout. If this ever needs to work
+# from a pip install into a different tree, add assets to the wheel here.

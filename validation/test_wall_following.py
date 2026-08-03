@@ -1,5 +1,6 @@
 """
-Pure-logic + one physics-integration check for examples/wall_following.py.
+Pure-logic + one physics-integration check for
+neoracer_mujoco.control.wall_following.
 
 Mirrors test_track_centering.py's style: synthetic SensorReadings for the
 pure-logic tests (fast, no compiled model), one physics test against the
@@ -9,14 +10,15 @@ real straight_corridor.xml car for an end-to-end sanity check.
 import mujoco
 import numpy as np
 import pytest
-import sensor_logger as sl
-from sensor_logger import ALL_BEAMS, SensorReadings
-from wall_following import (
+
+from neoracer_mujoco import sensors as sl
+from neoracer_mujoco.control.wall_following import (
     SIDE_BEAM,
     WallFollowingConfig,
     WallFollowingController,
     compute_signals,
 )
+from neoracer_mujoco.sensors import ALL_BEAMS, SensorReadings
 
 DT = 0.02
 

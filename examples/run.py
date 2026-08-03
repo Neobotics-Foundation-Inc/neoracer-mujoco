@@ -14,18 +14,15 @@ Actuator mapping (from models/neoracer.xml):
 """
 
 import math
-import sys
 import time
 from pathlib import Path
 
 import mujoco
 import mujoco.viewer
 
-_SCRIPTS_DIR = Path(__file__).resolve().parent
-_PROJECT_DIR = _SCRIPTS_DIR.parent
-sys.path.insert(0, str(_SCRIPTS_DIR))
+from neoracer_mujoco import sensors as sl
 
-import sensor_logger as sl  # noqa: E402  # sibling module; requires sys.path insert above
+_PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 # ── mode switch ───────────────────────────────────────────────────────────────
 # Set to False to restore original aggressive inputs (expect rollover at speed).
@@ -100,7 +97,7 @@ def _log(
     """Print one diagnostic line per PRINT_HZ steps."""
     car_z = data.xpos[car_id][2]
     q = sensors.imu_quat  # the orientation the RL agent sees
-    roll, pitch, yaw = _quat_to_euler(q)
+    roll, pitch, _yaw = _quat_to_euler(q)  # yaw unused here; heading isn't printed
     yaw_rate = math.degrees(sensors.imu_gyro[2])  # deg/s
 
     fl_s = sensors.fl_steer_pos[0]

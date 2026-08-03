@@ -8,10 +8,10 @@ Run:  pytest validation/ -v
 
 import numpy as np
 
-import _sim
-import sensor_logger as sl
-from _sim import DRIVE, STEER
-
+from neoracer_mujoco import contract
+from neoracer_mujoco import sensors as sl
+from neoracer_mujoco import sim as _sim
+from neoracer_mujoco.contract import DRIVE, STEER
 
 # --- it exists and is wired the way the contract says ------------------------
 
@@ -19,19 +19,21 @@ from _sim import DRIVE, STEER
 def test_actuator_contract(car):
     """5 actuators in the agreed ctrl order; agent code indexes ctrl[0:4]+ctrl[4]."""
     names = [car.actuator(i).name for i in range(car.nu)]
-    assert names == _sim.EXPECTED_ACTUATORS, f"got {names}"
+    assert names == contract.EXPECTED_ACTUATORS, f"got {names}"
 
 
 def test_required_sensors_present(car):
     names = {car.sensor(i).name for i in range(car.nsensor)}
-    missing = [s for s in _sim.REQUIRED_SENSORS if s not in names]
+    missing = [s for s in contract.REQUIRED_SENSORS if s not in names]
     assert not missing, f"missing sensors: {missing}"
 
 
 def test_total_mass_plausible(car):
     """Catches the default-density bug: a geom with no explicit mass weighs tens of kg."""
     m = _sim.car_mass(car)
-    assert _sim.MASS_MIN < m < _sim.MASS_MAX, f"car mass {m:.2f} kg outside RC range"
+    assert contract.MASS_MIN < m < contract.MASS_MAX, (
+        f"car mass {m:.2f} kg outside RC range"
+    )
 
 
 # --- it won't explode or fall apart at rest ---------------------------------
