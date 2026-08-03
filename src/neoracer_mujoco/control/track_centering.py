@@ -78,29 +78,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..sensors import SensorReadings
-
-LEFT_BEAMS = ("lidar_045", "lidar_090", "lidar_135")
-RIGHT_BEAMS = ("lidar_315", "lidar_270", "lidar_225")
-# Deliberately lidar_000 ONLY, not a wider cone: lidar_045/lidar_315 already
-# do double duty in LEFT_BEAMS/RIGHT_BEAMS. Including them here too would
-# couple the forward-obstacle slowdown to side-wall proximity during a
-# lateral correction (a wall picked up obliquely by a diagonal beam would
-# look like a forward obstacle and cut throttle when nothing is ahead).
-FRONT_CONE_BEAMS = ("lidar_000",)
-FRONT_LEFT_BEAM = "lidar_045"
-REAR_LEFT_BEAM = "lidar_135"
-FRONT_RIGHT_BEAM = "lidar_315"
-REAR_RIGHT_BEAM = "lidar_225"
-ALL_BEAMS = (
-    "lidar_000",
-    "lidar_045",
-    "lidar_090",
-    "lidar_135",
-    "lidar_180",
-    "lidar_225",
-    "lidar_270",
-    "lidar_315",
+from ..sensors import (
+    ALL_BEAMS,
+    FRONT_CONE_BEAMS,
+    FRONT_LEFT_BEAM,
+    FRONT_RIGHT_BEAM,
+    LEFT_BEAMS,
+    REAR_LEFT_BEAM,
+    REAR_RIGHT_BEAM,
+    RIGHT_BEAMS,
+    SensorReadings,
 )
 
 
