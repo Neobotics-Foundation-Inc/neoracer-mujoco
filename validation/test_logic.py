@@ -10,7 +10,7 @@ import mujoco
 import numpy as np
 import pytest
 
-import sensor_logger as sl
+from neoracer_mujoco import sensors as sl
 
 
 def test_wheel_speed_conversion():
