@@ -1,5 +1,5 @@
 """
-Tests for examples/collision_reset.py: the auto-reset-on-wall-collision
+Tests for neoracer_mujoco.collision: the auto-reset-on-wall-collision
 "driver's test" (issue #5).
 
 Uses the same straight_corridor.xml + neoracer.xml composition pattern as
@@ -9,7 +9,8 @@ test_track_centering.py's physics-integration test.
 import os
 
 import mujoco
-from collision_reset import car_hit_wall, reset_if_wall_hit, wall_geom_ids
+
+from neoracer_mujoco.collision import car_hit_wall, reset_if_wall_hit, wall_geom_ids
 
 
 def _load_corridor_model() -> mujoco.MjModel:

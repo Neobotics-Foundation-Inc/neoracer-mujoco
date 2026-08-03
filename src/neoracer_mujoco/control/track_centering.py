@@ -2,10 +2,10 @@
 Classical (non-learned) lateral track-centering controller for NeoRacer.
 
 Keeps the car near the middle of a two-sided corridor by reading the 8-beam
-LiDAR ring off SensorReadings (see sensor_logger.py) and computing a PD-style
-steering correction plus throttle shaping. Pure control logic only — this
-module never loads a model, steps the simulator, or reads sensors off a live
-mujoco.MjData; see track_centering_demo.py for that.
+LiDAR ring off SensorReadings (see neoracer_mujoco.sensors) and computing a
+PD-style steering correction plus throttle shaping. Pure control logic only —
+this module never loads a model, steps the simulator, or reads sensors off a
+live mujoco.MjData; see examples/track_centering_demo.py for that.
 
 Coordinate + steering convention (matches assets/neoracer.xml / README):
   +X = forward, +Y = left, +Z = up.
@@ -78,7 +78,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from sensor_logger import SensorReadings
+from ..sensors import SensorReadings
 
 LEFT_BEAMS = ("lidar_045", "lidar_090", "lidar_135")
 RIGHT_BEAMS = ("lidar_315", "lidar_270", "lidar_225")
@@ -220,8 +220,8 @@ class TrackCenteringController:
     D-term spike from the last episode's final error.
     """
 
-    def __init__(self, config: TrackCenteringConfig = TrackCenteringConfig()):
-        self.config = config
+    def __init__(self, config: TrackCenteringConfig | None = None):
+        self.config = config or TrackCenteringConfig()
         self.reset()
 
     def reset(self) -> None:
