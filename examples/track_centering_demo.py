@@ -26,26 +26,23 @@ thread, keeping the main thread free for the viewer's Cocoa event loop.
 """
 
 import argparse
-import sys
 import time
 from pathlib import Path
 
-_SCRIPTS_DIR = Path(__file__).resolve().parent
-_PROJECT_DIR = _SCRIPTS_DIR.parent
-sys.path.insert(0, str(_SCRIPTS_DIR))
+import mujoco
+import mujoco.viewer
+import numpy as np
 
-import mujoco  # noqa: E402
-import mujoco.viewer  # noqa: E402
-import numpy as np  # noqa: E402
-
-import sensor_logger as sl  # noqa: E402
-from track_centering import (  # noqa: E402
+from neoracer_mujoco import sensors as sl
+from neoracer_mujoco.control.track_centering import (
     LEFT_BEAMS,
     RIGHT_BEAMS,
     TrackCenteringConfig,
     TrackCenteringController,
     compute_signals,
 )
+
+_PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 STEPS = 3000
 SETTLE_STEPS = 400

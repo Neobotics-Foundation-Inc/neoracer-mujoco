@@ -23,6 +23,17 @@ uv pip install -r requirements.txt
 source .venv/bin/activate
 ```
 
+Then install the package (editable), so `neoracer_mujoco` is importable by the
+examples and the validation suite:
+
+```sh
+pip install -e .
+```
+
+Install from a clone, not PyPI: the package is intentionally not published, and
+the wheel does not bundle `assets/` — the model XML and meshes are the product
+and stay at the repo root, so `load()` resolves them from your checkout.
+
 ## Quick start
 
 ```sh
@@ -41,12 +52,18 @@ python3 -m pytest validation/ -v
 ├── assets/
 │   ├── neoracer.xml       — MuJoCo MJCF model (the source of truth)
 │   └── meshes/            — visual STL meshes (cosmetic; mass="0")
+├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
+│   ├── contract.py        — the car contract (single source of truth)
+│   ├── assets.py          — cars() / load() model discovery + compile
+│   ├── sensors.py         — SensorReadings/IMUReading/LidarScan + read()
+│   ├── sim.py             — compile/settle/run + physics probes
+│   └── control/           — classical controllers (track_centering)
 ├── examples/
-│   ├── run.py             — viewer launch script (mjpython entry point)
-│   ├── manual_drive.py    — arrow-key teleop (game-style, python3 entry point)
-│   └── sensor_logger.py   — sensor read/print helpers
+│   ├── run.py                  — viewer launch script (mjpython entry point)
+│   ├── manual_drive.py         — arrow-key teleop (game-style, python3 entry point)
+│   └── track_centering_demo.py — PD centering controller on the corridor track
 ├── validation/            — pytest physics + logic conformance suite
-└── docs/                  — design notes and parameter log
+└── docs/                  — (reserved) design notes and parameter log
 ```
 
 ## Model summary (`assets/neoracer.xml`)
@@ -96,12 +113,19 @@ stable API.
   suspension, wall contacts. Run with plain `python3 -m examples.manual_drive` (NOT
   mjpython — the glfw window must be created on the main thread). Camera and control
   feel are tunable via the constants at the top of the file.
-- **`sensor_logger.py`** — helpers to read every named sensor off a compiled model
-  into a dict and pretty-print them (`read`, `wheel_speed_ms`, `print_sensors`).
-  Import it from your own script to log IMU / wheel / steer / suspension / LiDAR.
+- **`track_centering_demo.py`** — runs the classical PD `TrackCenteringController`
+  on the straight corridor track, headless by default or with an interactive
+  viewer. Composes `neoracer.xml` onto `assets/tracks/straight_corridor.xml` at
+  runtime, settles, then drives the controller and reports centering performance.
+  `python3 -m examples.track_centering_demo` (headless) or
+  `mjpython -m examples.track_centering_demo --viewer`.
 
-Add your own demos here — a pure-pursuit follower, a keyboard teleop, a data
-recorder, etc. — using `run.py` as the template for the load → step → control loop.
+Sensor reading lives in the package, not the examples: import from
+`neoracer_mujoco.sensors` (`read`, `wheel_speed_ms`, `print_sensors`,
+`lidar_scan`) to log IMU / wheel / steer / suspension / LiDAR off a compiled model.
+
+Add your own demos here — a pure-pursuit follower, a data recorder, etc. — using
+`run.py` as the template for the load → step → control loop.
 
 ## Validation suite (`validation/`)
 
@@ -120,6 +144,8 @@ python3 -m pytest validation/ -v
   sensors under load, determinism).
 - **`test_logic.py`** — pure-logic checks: wheel-speed unit conversion, sensor read,
   and the Ackermann polyfit validated against exact arctan geometry.
+- **`test_track_centering.py`** — `TrackCenteringController` sign/safety logic plus
+  one physics-integration run on the corridor track.
 
 The car contract (expected actuators, required sensors, mass band, ctrl layout)
-lives in `validation/_sim.py` — update it there if the contract changes.
+lives in `src/neoracer_mujoco/contract.py` — update it there if the contract changes.

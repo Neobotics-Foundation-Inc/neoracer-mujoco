@@ -16,8 +16,8 @@ Sensor map (matches neoracer.xml):
 from dataclasses import dataclass, field
 from typing import Generic, TypeVar
 
-import numpy as np
 import mujoco
+import numpy as np
 
 # Unconstrained so LidarScan can later be retargeted to another array type
 # (e.g. a JAX array) without changing the dataclass itself.
@@ -29,6 +29,17 @@ WHEEL_RADIUS = 0.050  # ESTIMATED: 50 mm radius consistent with STL bbox and URD
 
 def _empty() -> np.ndarray:
     return np.array([])
+
+
+def read_raw(model: mujoco.MjModel, data: mujoco.MjData) -> dict:
+    """Every named sensor as a flat {name: ndarray} dict. The shared read loop
+    behind both read() (typed struct) and the dict form used by validation."""
+    out = {}
+    for i in range(model.nsensor):
+        adr = model.sensor_adr[i]
+        dim = model.sensor_dim[i]
+        out[model.sensor(i).name] = data.sensordata[adr : adr + dim].copy()
+    return out
 
 
 @dataclass(frozen=True)
@@ -71,15 +82,9 @@ class SensorReadings:
 
 def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
     """Read every named sensor into a SensorReadings struct."""
-    raw = {}
-    for i in range(model.nsensor):
-        name = model.sensor(i).name
-        adr = model.sensor_adr[i]
-        dim = model.sensor_dim[i]
-        raw[name] = data.sensordata[adr : adr + dim].copy()
     # ponytail: fields are coupled to neoracer.xml's sensor set — a car XML with
     # a different sensor list fails here loudly. Add fields if the contract grows.
-    return SensorReadings(**raw)
+    return SensorReadings(**read_raw(model, data))
 
 
 @dataclass(frozen=True)
