@@ -125,10 +125,11 @@
             <site name="imu" pos="0 0 0" size=".01" rgba="1 1 0 1"/>
 
             <!--
-            LiDAR mount site, 0.15 m above the chassis centre (top of the stack).
+            LiDAR mount site, sitting on the top face of the chassis box
+            (half-height .0806) instead of floating 7 cm above it.
             Adjust the height to match CAD when available.
             -->
-            <site name="lidar_mount" pos="0 0 .15" size=".02" rgba="1 0 0 .5"/>
+            <site name="lidar_mount" pos="0 0 .0806" size=".02" rgba="1 0 0 .5"/>
 
             <!--
             LiDAR ray sites: 8 beams at 45° intervals in the horizontal plane.
@@ -145,17 +146,17 @@
             (single-wall placement test) to produce a correctly directional ring.
             Add more beams here (and matching rangefinders below) for richer RL obs.
             -->
-            <site name="lidar_000" pos="0 0 .15" zaxis="1.000000  0.000000 0" size=".005"/>
-            <site name="lidar_045" pos="0 0 .15" zaxis="0.707107  0.707107 0" size=".005"/>
-            <site name="lidar_090" pos="0 0 .15" zaxis="0.000000  1.000000 0" size=".005"/>
-            <site name="lidar_135" pos="0 0 .15" zaxis="-0.707107 0.707107 0" size=".005"/>
-            <site name="lidar_180" pos="0 0 .15" zaxis="-1.000000 0.000000 0" size=".005"/>
-            <site name="lidar_225" pos="0 0 .15" zaxis="-0.707107 -0.707107 0" size=".005"/>
-            <site name="lidar_270" pos="0 0 .15" zaxis="0.000000  -1.000000 0" size=".005"/>
-            <site name="lidar_315" pos="0 0 .15" zaxis="0.707107  -0.707107 0" size=".005"/>
+            <site name="lidar_000" pos="0 0 .0806" zaxis="1.000000  0.000000 0" size=".005"/>
+            <site name="lidar_045" pos="0 0 .0806" zaxis="0.707107  0.707107 0" size=".005"/>
+            <site name="lidar_090" pos="0 0 .0806" zaxis="0.000000  1.000000 0" size=".005"/>
+            <site name="lidar_135" pos="0 0 .0806" zaxis="-0.707107 0.707107 0" size=".005"/>
+            <site name="lidar_180" pos="0 0 .0806" zaxis="-1.000000 0.000000 0" size=".005"/>
+            <site name="lidar_225" pos="0 0 .0806" zaxis="-0.707107 -0.707107 0" size=".005"/>
+            <site name="lidar_270" pos="0 0 .0806" zaxis="0.000000  -1.000000 0" size=".005"/>
+            <site name="lidar_315" pos="0 0 .0806" zaxis="0.707107  -0.707107 0" size=".005"/>
             <!-- Cosmetic lidar mesh at the mount site. -->
             <geom name="vis_lidar" type="mesh" mass="0" mesh="vis_lidar"
-                  pos="0 0 0.15"
+                  pos="0 0 0.0806"
                   contype="0" conaffinity="0" rgba=".2 .2 .2 1"/>
 
             <!--
