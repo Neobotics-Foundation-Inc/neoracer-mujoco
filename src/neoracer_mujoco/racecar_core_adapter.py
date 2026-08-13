@@ -43,7 +43,7 @@ RACECAR_CORE_BEAM_ORDER = (_sensors.LIDAR_BEAM_ORDER[0],) + _sensors.LIDAR_BEAM_
 
 
 def _clamp(value: float, low: float, high: float) -> float:
-    return high if value > high else low if value < low else value
+    return min(max(value, low), high)
 
 
 class MujocoDrive:
