@@ -149,6 +149,50 @@ def wheel_speed_ms(sensors: SensorReadings) -> dict:
     }
 
 
+@dataclass(frozen=True)
+class MotorEncoderReading:
+    """
+    Single motor encoder reading: rad/s, + = forward.
+
+    The real NeoRacer has one drive motor, not one per wheel -- neoracer.xml
+    approximates that with four identically-driven wheel joints, so the
+    mean of the four wheel_vel sensors is the correct single-encoder proxy.
+    Angular velocity only, not ticks/position: the drive joints have no
+    <jointpos> sensor to derive that from.
+    """
+
+    angular_velocity: float
+
+
+def motor_encoder_reading(sensors: SensorReadings) -> MotorEncoderReading:
+    """
+    Derive the single motor encoder reading from the four wheel_vel jointvel
+    sensors (mean angular velocity across all driven wheels — see
+    MotorEncoderReading for why a mean is the correct single-motor proxy).
+    Raw simulator values — no calibration, filtering, or quantization applied.
+    """
+    wheel_velocities = np.array(
+        [
+            sensors.fl_wheel_vel[0],
+            sensors.fr_wheel_vel[0],
+            sensors.rl_wheel_vel[0],
+            sensors.rr_wheel_vel[0],
+        ]
+    )
+    return MotorEncoderReading(angular_velocity=float(np.mean(wheel_velocities)))
+
+
+def estimated_linear_speed_ms(encoder: MotorEncoderReading) -> float:
+    """
+    ESTIMATE of vehicle speed from motor rotation (m/s) — NOT ground truth.
+    encoder.angular_velocity * WHEEL_RADIUS, i.e. it assumes zero wheel slip.
+    Will diverge from the true chassis speed (e.g. SensorReadings.imu_linvel)
+    under wheelspin or lockup, exactly like a real wheel-speed-based
+    speedometer would.
+    """
+    return encoder.angular_velocity * WHEEL_RADIUS
+
+
 # Beam order matches the rangefinder sensors in neoracer.xml, ascending 0deg..315deg.
 LIDAR_BEAM_ORDER = (
     "lidar_000",

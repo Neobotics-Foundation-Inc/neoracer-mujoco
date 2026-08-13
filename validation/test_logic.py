@@ -40,6 +40,30 @@ def test_read_returns_every_sensor(car):
     assert out.imu_accel.shape == (3,) and out.imu_quat.shape == (4,)
 
 
+def test_motor_encoder_reading_is_mean_of_wheel_vel(car):
+    """motor_encoder_reading() must return the single-motor mean, not per-wheel values."""
+    d = mujoco.MjData(car)
+    mujoco.mj_step(car, d)
+    sensors = sl.read(car, d)
+    encoder = sl.motor_encoder_reading(sensors)
+    expected = np.mean(
+        [
+            sensors.fl_wheel_vel[0],
+            sensors.fr_wheel_vel[0],
+            sensors.rl_wheel_vel[0],
+            sensors.rr_wheel_vel[0],
+        ]
+    )
+    assert isinstance(encoder.angular_velocity, float)
+    assert encoder.angular_velocity == pytest.approx(expected)
+
+
+def test_estimated_linear_speed_ms():
+    """Wheel-radius speed estimate, on known input."""
+    encoder = sl.MotorEncoderReading(angular_velocity=2.0)
+    assert sl.estimated_linear_speed_ms(encoder) == pytest.approx(2.0 * sl.WHEEL_RADIUS)
+
+
 def test_imu_reading_construction_shapes(car):
     """IMUReading built directly from SensorReadings must have accel/gyro as
     3-vectors and orientation as a quaternion."""
