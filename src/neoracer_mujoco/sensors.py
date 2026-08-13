@@ -152,27 +152,13 @@ def wheel_speed_ms(sensors: SensorReadings) -> dict:
 @dataclass(frozen=True)
 class MotorEncoderReading:
     """
-    Single motor encoder reading.
+    Single motor encoder reading: rad/s, + = forward.
 
-    The real NeoRacer has one drive motor with one shaft encoder, not one
-    encoder per wheel. neoracer.xml's <actuator> models AWD by driving all
-    four wheel joints from an identical per-wheel torque command (see its
-    "one torque motor per wheel" comment) as an approximation of the single
-    real motor's drivetrain — it does not mean four independently sensed
-    motors exist. Absent wheel slip, the four fl/fr/rl/rr_wheel_vel jointvel
-    sensors read the same value, so the mean across them is the correct
-    single-encoder proxy.
-
-    Not encoder ticks or shaft position: a real quadrature encoder reports
-    incremental shaft position, and an ECU normally derives velocity from
-    consecutive tick deltas. The drive joints (fl/fr/rl/rr_drive) have no
-    <jointpos> sensor in the XML — only <jointvel> — so no tick/position-
-    equivalent signal is available to expose here. This struct makes no
-    encoder-fidelity claim; it is simply the motor angular velocity, with no
-    quantization or sensor noise applied.
-
-    angular_velocity — rad/s. Positive = forward rotation (same convention
-                        as the wheel_vel sensors in neoracer.xml).
+    The real NeoRacer has one drive motor, not one per wheel -- neoracer.xml
+    approximates that with four identically-driven wheel joints, so the
+    mean of the four wheel_vel sensors is the correct single-encoder proxy.
+    Angular velocity only, not ticks/position: the drive joints have no
+    <jointpos> sensor to derive that from.
     """
 
     angular_velocity: float
