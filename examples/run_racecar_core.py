@@ -96,7 +96,7 @@ def run_controller(controller_path: str, steps: int = DEFAULT_STEPS) -> None:
     if path.suffix != ".py":
         raise ValueError(f"controller path must be a .py file, got: {path}")
 
-    model, data, rc = build_racecar(steps)
+    _model, data, rc = build_racecar(steps)
     install_racecar_core_shim(rc)
     x0 = float(data.body("car").xpos[0])
 
@@ -132,7 +132,9 @@ def main() -> None:
         run_controller(args.controller, args.steps)
     except (FileNotFoundError, ValueError) as exc:
         sys.exit(f"error: {exc}")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- report the controller's own
+        # failure with a clear message instead of a bare traceback; it can
+        # raise anything (config parse errors, missing deps, bad math, ...).
         sys.exit(f"error: controller failed during initialization/run: {exc!r}")
 
 

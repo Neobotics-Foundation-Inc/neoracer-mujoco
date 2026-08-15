@@ -23,7 +23,7 @@ _CANONICAL_DIR = _EXAMPLES_DIR / "ultimate_wall_follower"
 _TESTDATA_DIR = _REPO / "validation" / "testdata" / "ultimate_wall_follower"
 
 sys.path.insert(0, str(_EXAMPLES_DIR))
-import run_racecar_core  # noqa: E402  (needs the sys.path.insert above)
+import run_racecar_core
 
 
 @pytest.mark.parametrize(
@@ -46,9 +46,7 @@ def test_run_controller_reaches_wall_follower_start(capsys):
     racecar_core package installed."""
     assert "racecar_core" not in sys.modules
 
-    run_racecar_core.run_controller(
-        str(_CANONICAL_DIR / "wall_follower.py"), steps=10
-    )
+    run_racecar_core.run_controller(str(_CANONICAL_DIR / "wall_follower.py"), steps=10)
 
     out = capsys.readouterr().out
     assert ">> Ultimate Wall Follower ready." in out
@@ -61,9 +59,7 @@ def test_run_controller_drives_the_car(capsys):
     """End-to-end: after run_controller() returns, the car must have
     actually moved -- proof the go() loop stepped physics and update()
     fed real drive commands, not just that start() printed."""
-    run_racecar_core.run_controller(
-        str(_CANONICAL_DIR / "wall_follower.py"), steps=300
-    )
+    run_racecar_core.run_controller(str(_CANONICAL_DIR / "wall_follower.py"), steps=300)
     out = capsys.readouterr().out
     assert "steps done" in out
 
@@ -83,9 +79,17 @@ def test_cli_runs_canonical_wall_follower_end_to_end():
     entry point (argparse, error handling, exit code) works, not just the
     library function it wraps."""
     result = subprocess.run(
-        [sys.executable, str(_EXAMPLES_DIR / "run_racecar_core.py"),
-         str(_CANONICAL_DIR / "wall_follower.py"), "--steps", "50"],
-        capture_output=True, text=True, timeout=60,
+        [
+            sys.executable,
+            str(_EXAMPLES_DIR / "run_racecar_core.py"),
+            str(_CANONICAL_DIR / "wall_follower.py"),
+            "--steps",
+            "50",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     assert ">> Ultimate Wall Follower ready." in result.stdout
@@ -94,9 +98,15 @@ def test_cli_runs_canonical_wall_follower_end_to_end():
 
 def test_cli_fails_clearly_on_missing_controller():
     result = subprocess.run(
-        [sys.executable, str(_EXAMPLES_DIR / "run_racecar_core.py"),
-         str(_EXAMPLES_DIR / "does_not_exist.py")],
-        capture_output=True, text=True, timeout=30,
+        [
+            sys.executable,
+            str(_EXAMPLES_DIR / "run_racecar_core.py"),
+            str(_EXAMPLES_DIR / "does_not_exist.py"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
     )
     assert result.returncode != 0
     assert "error:" in result.stderr
