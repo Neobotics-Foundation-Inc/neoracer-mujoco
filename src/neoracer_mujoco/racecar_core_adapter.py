@@ -9,11 +9,17 @@ third backend, for neoracer_mujoco. It does not vendor or modify
 racecar_core itself -- it duck-types the same method names/signatures so
 controller code written against `rc.drive` / `rc.lidar` runs unchanged here.
 
-Only Drive and Lidar are implemented. racecar_core also defines camera,
-controller (gamepad), display, led, nav, physics, slam, telemetry, and
-vision modules; none of those have a driving-relevant MuJoCo equivalent yet,
-so adding stubs for them now would be an abstraction with no real backend
-behind it.
+Drive, Lidar, Controller, and Display are implemented, plus MujocoRacecar,
+the top-level object (issue #28) that wires them together and replaces
+racecar_core.create_racecar()'s start/update/go event loop -- enough for an
+unmodified racecar_core controller script (e.g.
+neoracer-labs/ultimate-wall-follower/wall_follower.py) to run against
+MuJoCo. racecar_core also defines camera, led, nav, physics, slam,
+telemetry, and vision modules; none of those have a driving-relevant MuJoCo
+equivalent yet, so adding stubs for them now would be an abstraction with no
+real backend behind it. Controller and Display are stubs too (no gamepad or
+screen in headless MuJoCo) but are implemented because the canonical
+wall-following example calls them directly.
 
 Two conventions differ between racecar_core and this simulator's native
 contract (see neoracer_mujoco.contract) and must be crossed exactly once,
@@ -27,6 +33,9 @@ here, rather than by every controller that uses this adapter:
      re-sequences and rescales.
 """
 
+from enum import IntEnum
+
+import mujoco
 import numpy as np
 
 from . import contract
@@ -120,3 +129,110 @@ class MujocoLidar:
 
     def get_num_samples(self) -> int:
         return len(RACECAR_CORE_BEAM_ORDER)
+
+
+class MujocoController:
+    """racecar_core.Controller backend: MuJoCo has no gamepad, so button
+    state is a settable set rather than live hardware input.
+
+    Only is_down is implemented -- the only Controller method the canonical
+    wall-following example (its RB deadman) actually calls; library/
+    controller.py also declares was_pressed/was_released/get_trigger/
+    get_joystick, but nothing here has a real backend for those yet.
+
+    held: buttons treated as pressed for the whole run. Defaults to {RB} so
+    a deadman-gated controller drives immediately in headless simulation;
+    pass held=set() (or set_held(Button.RB, False)) to simulate it released.
+    """
+
+    class Button(IntEnum):
+        A = 0
+        B = 1
+        X = 2
+        Y = 3
+        LB = 4
+        RB = 5
+        LJOY = 6
+        RJOY = 7
+
+    def __init__(self, held=None):
+        self._held = set(held) if held is not None else {self.Button.RB}
+
+    def is_down(self, button) -> bool:
+        return button in self._held
+
+    def set_held(self, button, is_held: bool) -> None:
+        if is_held:
+            self._held.add(button)
+        else:
+            self._held.discard(button)
+
+
+class MujocoDisplay:
+    """racecar_core.Display backend. No graphical display in headless
+    MuJoCo, so show_text is a no-op -- callers don't need a headless guard
+    around every call, matching library/display.py's DisplaySim(headless)."""
+
+    def show_text(self, text: str) -> None:
+        pass
+
+
+class MujocoRacecar:
+    """racecar_core.Racecar backend over MuJoCo (issue #28): wires
+    MujocoDrive/MujocoLidar/MujocoController/MujocoDisplay to one
+    MjModel/MjData and implements the start/update/update_slow/go event
+    loop, so an unmodified racecar_core controller script -- e.g.
+    neoracer-labs/ultimate-wall-follower/wall_follower.py -- runs as-is:
+    only its `import racecar_core` needs to resolve to this class.
+
+    go() steps physics then calls update(), mirroring RacecarSim's own
+    order (Unity advances a frame, then calls back into Python) so a
+    controller reading sensors in update() sees the state update() just
+    caused, not a stale one.
+
+    max_steps: None (default) matches real racecar_core -- go() blocks
+    until the process is stopped externally. Set to an int so a test can
+    run a bounded, deterministic number of steps and return instead of
+    hanging forever. This is a MujocoRacecar constructor argument, not part
+    of start/update/update_slow, so controller code never has to know
+    about it.
+    """
+
+    def __init__(self, model, data, max_steps=None, held_buttons=None):
+        self.drive = MujocoDrive(model, data)
+        self.lidar = MujocoLidar(model, data)
+        self.controller = MujocoController(held_buttons)
+        self.display = MujocoDisplay()
+        self._model = model
+        self._data = data
+        self._dt = float(model.opt.timestep)
+        self._max_steps = max_steps
+        self._update_slow_time = 1.0
+        self._start = None
+        self._update = None
+        self._update_slow = None
+
+    def set_start_update(self, start, update, update_slow=None) -> None:
+        self._start = start
+        self._update = update
+        self._update_slow = update_slow
+
+    def get_delta_time(self) -> float:
+        return self._dt
+
+    def set_update_slow_time(self, time: float = 1.0) -> None:
+        self._update_slow_time = time
+
+    def go(self) -> None:
+        self._start()
+        slow_countdown = self._update_slow_time
+        step = 0
+        while self._max_steps is None or step < self._max_steps:
+            mujoco.mj_step(self._model, self._data)
+            self._update()
+            if self._update_slow is not None:
+                slow_countdown -= self._dt
+                if slow_countdown < 0:
+                    self._update_slow()
+                    slow_countdown = self._update_slow_time
+            step += 1
