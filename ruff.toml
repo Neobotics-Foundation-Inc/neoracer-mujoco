@@ -1,1 +1,1 @@
-extend-exclude = ["users", "validation/testdata"]
+extend-exclude = ["users", "validation/testdata", "examples/ultimate_wall_follower"]
