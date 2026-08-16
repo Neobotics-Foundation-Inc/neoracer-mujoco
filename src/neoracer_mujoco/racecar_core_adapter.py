@@ -1,29 +1,21 @@
 """
-MuJoCo backend for the racecar_core controller interface (issue #8).
+MuJoCo backend for the racecar_core controller interface (issue #8, #28).
 
 racecar_core (Neobotics-Foundation-Inc/racecar-neo-library) is the interface
-every NeoRacer controller is meant to be portable against: the physical car
-and the browser Playground sim both implement it today
-(library/real/*_real.py, library/simulation/*_sim.py). This module is the
-third backend, for neoracer_mujoco. It does not vendor or modify
-racecar_core itself -- it duck-types the same method names/signatures so
-controller code written against `rc.drive` / `rc.lidar` runs unchanged here.
+every NeoRacer controller is written against. This module duck-types it over
+a MuJoCo MjModel/MjData -- same method names/signatures, no vendoring or
+modification of racecar_core itself -- so unmodified controller code
+(`rc.drive`, `rc.lidar`, `rc.set_start_update`/`rc.go`, ...) runs against
+this sim as-is.
 
-Drive, Lidar, Controller, and Display are implemented, plus MujocoRacecar,
-the top-level object (issue #28) that wires them together and replaces
-racecar_core.create_racecar()'s start/update/go event loop -- enough for an
-unmodified racecar_core controller script (e.g.
-neoracer-labs/ultimate-wall-follower/wall_follower.py) to run against
-MuJoCo. racecar_core also defines camera, led, nav, physics, slam,
-telemetry, and vision modules; none of those have a driving-relevant MuJoCo
-equivalent yet, so adding stubs for them now would be an abstraction with no
-real backend behind it. Controller and Display are stubs too (no gamepad or
-screen in headless MuJoCo) but are implemented because the canonical
-wall-following example calls them directly.
+Implements Drive, Lidar, Controller, Display, and MujocoRacecar (the
+create_racecar()-equivalent that wires the above together and runs the
+start/update/update_slow/go loop). camera/led/nav/physics/slam/telemetry/
+vision are not implemented: no MuJoCo-relevant backend exists for them yet.
 
 Two conventions differ between racecar_core and this simulator's native
-contract (see neoracer_mujoco.contract) and must be crossed exactly once,
-here, rather than by every controller that uses this adapter:
+contract (see neoracer_mujoco.contract) and are crossed exactly once, here,
+rather than by every controller that uses this adapter:
 
   1. Steering sign. racecar_core's `angle` is + = right. This sim's
      ctrl[4] (steer_servo) is + = left. MujocoDrive negates angle.
@@ -38,17 +30,16 @@ from enum import IntEnum
 import mujoco
 import numpy as np
 
-from . import contract
-from . import sensors as _sensors
+from . import contract, sensors
 
 # racecar_core scans clockwise from front; LIDAR_BEAM_ORDER is ordered
 # counterclockwise from front (see sensors.py). Both wind through the same
 # ring starting at the same beam (000, straight ahead), so reversing every
 # beam except the first re-sequences counterclockwise into clockwise without
 # changing which physical direction any beam points.
-RACECAR_CORE_BEAM_ORDER = (_sensors.LIDAR_BEAM_ORDER[0],) + _sensors.LIDAR_BEAM_ORDER[
-    1:
-][::-1]
+RACECAR_CORE_BEAM_ORDER = (sensors.LIDAR_BEAM_ORDER[0],) + sensors.LIDAR_BEAM_ORDER[1:][
+    ::-1
+]
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -110,7 +101,7 @@ class MujocoLidar:
         self._data = data
 
     def get_samples(self) -> np.ndarray:
-        readings = _sensors.read(self._model, self._data)
+        readings = sensors.read(self._model, self._data)
         meters = np.array(
             [getattr(readings, name)[0] for name in RACECAR_CORE_BEAM_ORDER]
         )

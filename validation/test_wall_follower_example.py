@@ -7,6 +7,13 @@ Uses the vendored, byte-for-byte copy of neoracer-labs/ultimate-wall-follower
 wall_follower.py's own `import racecar_core` is satisfied by injecting a
 fake `racecar_core` module into sys.modules whose create_racecar() returns a
 MujocoRacecar; the vendored files themselves are never touched.
+
+Additional MuJoCo validation (see PR #27 discussion) independently verified
+steering sign, LiDAR ordering/winding, and units through the adapter against
+real physical geometry, confirming the compatibility interface itself is
+correct. This test (and that validation) assert compatibility only --
+neither claims that any given controller will autonomously wall-follow
+successfully in every environment.
 """
 
 import importlib.util
