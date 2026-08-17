@@ -12,3 +12,6 @@ venv/
 MUJOCO_LOG.TXT
 
 CLAUDE.md
+
+# Generated validation output (not source), e.g. Stage D trial results
+examples/wall_follower_vs/*.pkl
