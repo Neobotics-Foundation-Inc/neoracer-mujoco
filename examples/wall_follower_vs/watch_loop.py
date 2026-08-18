@@ -27,9 +27,9 @@ import numpy as np
 _EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _EXAMPLES_DIR)
 sys.path.insert(0, os.path.dirname(_EXAMPLES_DIR))
-import dense_lidar as dl  # noqa: E402
-import vehicle_space_controller as vsc  # noqa: E402
-from run_racecar_core import load_scene  # noqa: E402
+import dense_lidar as dl
+import vehicle_space_controller as vsc
+from run_racecar_core import load_scene
 
 
 def main() -> None:

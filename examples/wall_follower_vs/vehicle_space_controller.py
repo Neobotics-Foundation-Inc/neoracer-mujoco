@@ -341,7 +341,7 @@ def _build_arc_table(
     arc length at which kappa*s reaches 180 degrees; straight (kappa~=0) is
     uncapped (never wraps).
     """
-    n_samples = int(round(horizon_m / ds_m)) + 1
+    n_samples = round(horizon_m / ds_m) + 1
     s = np.linspace(0.0, horizon_m, n_samples)
     arc_x = np.zeros((len(steer_deg_grid), n_samples))
     arc_y = np.zeros_like(arc_x)

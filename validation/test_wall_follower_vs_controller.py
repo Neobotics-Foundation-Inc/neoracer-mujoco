@@ -28,8 +28,8 @@ sys.path.insert(
     ),
 )
 
-import synthetic_scenes as scenes  # noqa: E402
-import vehicle_space_controller as vsc  # noqa: E402
+import synthetic_scenes as scenes
+import vehicle_space_controller as vsc
 
 RESOLUTIONS = [24, 270, 540, 1080]
 STRAIGHT_IDX = int(np.argmin(np.abs(vsc.CANDIDATE_HEADINGS_DEG)))

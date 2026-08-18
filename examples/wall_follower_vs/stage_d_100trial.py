@@ -16,7 +16,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import loop_trials as lt  # noqa: E402
+import loop_trials as lt
 
 N = 1080
 SEED0 = 0

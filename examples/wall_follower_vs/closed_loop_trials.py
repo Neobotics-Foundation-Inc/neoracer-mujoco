@@ -22,8 +22,8 @@ import mujoco
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import dense_lidar as dl  # noqa: E402
-import vehicle_space_controller as vsc  # noqa: E402
+import dense_lidar as dl
+import vehicle_space_controller as vsc
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -60,7 +60,8 @@ class TrialResult:
 
 
 def run_trial(model: mujoco.MjModel, n: int, seed: int) -> TrialResult:
-    from neoracer_mujoco import collision, sim as _sim
+    from neoracer_mujoco import collision
+    from neoracer_mujoco import sim as _sim
 
     data = _sim.settle(model)
 

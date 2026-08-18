@@ -28,9 +28,9 @@ import numpy as np
 _EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _EXAMPLES_DIR)
 sys.path.insert(0, os.path.dirname(_EXAMPLES_DIR))
-import dense_lidar as dl  # noqa: E402
-import vehicle_space_controller as vsc  # noqa: E402
-from run_racecar_core import load_scene  # noqa: E402
+import dense_lidar as dl
+import vehicle_space_controller as vsc
+from run_racecar_core import load_scene
 
 MAX_SIM_TIME_S = 60.0  # ~1 lap (~23m centerline) at ~0.3-1.0 m/s + cornering slowdown
 STUCK_WINDOW_S = 4.0
@@ -90,7 +90,8 @@ class LoopTrialResult:
 def run_loop_trial(
     model: mujoco.MjModel, n: int, seed: int, verbose: bool = False, log_every: int = 1
 ) -> LoopTrialResult:
-    from neoracer_mujoco import collision, sim as _sim
+    from neoracer_mujoco import collision
+    from neoracer_mujoco import sim as _sim
 
     data = _settle(model)
 
