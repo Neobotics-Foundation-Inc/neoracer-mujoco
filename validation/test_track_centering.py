@@ -14,6 +14,7 @@ import mujoco
 import numpy as np
 import pytest
 
+from neoracer_mujoco import compose
 from neoracer_mujoco import sensors as sl
 from neoracer_mujoco.control.track_centering import (
     ALL_BEAMS,
@@ -180,15 +181,7 @@ def test_reset_clears_derivative_and_slew_history():
 
 
 def _load_corridor_model() -> mujoco.MjModel:
-    import os
-
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(repo, "assets", "tracks", "straight_corridor.xml")
-    )
-    car = mujoco.MjSpec.from_file(os.path.join(repo, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
+    return compose("straight_corridor")
 
 
 def test_controller_stable_on_corridor():

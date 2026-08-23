@@ -3,6 +3,9 @@ channels:
   - conda-forge
 dependencies:
   - python=3.13
+  # From conda-forge rather than pip: track generation leans on CubicSpline and
+  # cKDTree, and the conda build links a proper BLAS.
+  - scipy>=1.13
   - pip
   - pip:
       - -r requirements.txt

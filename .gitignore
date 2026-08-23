@@ -12,3 +12,6 @@ venv/
 MUJOCO_LOG.TXT
 
 CLAUDE.md
+
+# macOS
+.DS_Store

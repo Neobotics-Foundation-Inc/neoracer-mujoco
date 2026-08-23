@@ -2,35 +2,24 @@
 Tests for neoracer_mujoco.collision: the auto-reset-on-wall-collision
 "driver's test" (issue #5).
 
-Uses the same straight_corridor.xml + neoracer.xml composition pattern as
-test_track_centering.py's physics-integration test.
+Uses neoracer_mujoco.compose to put the car on a hand-written track,
+the same way test_track_centering.py's physics-integration test does.
 """
 
 import os
 
 import mujoco
 
+from neoracer_mujoco import compose
 from neoracer_mujoco.collision import car_hit_wall, reset_if_wall_hit, wall_geom_ids
 
 
 def _load_corridor_model() -> mujoco.MjModel:
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(repo, "assets", "tracks", "straight_corridor.xml")
-    )
-    car = mujoco.MjSpec.from_file(os.path.join(repo, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
+    return compose("straight_corridor")
 
 
 def _load_ramp_model() -> mujoco.MjModel:
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(repo, "assets", "tracks", "ramp_course.xml")
-    )
-    car = mujoco.MjSpec.from_file(os.path.join(repo, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
+    return compose("ramp_course")
 
 
 def _settle(model: mujoco.MjModel) -> mujoco.MjData:

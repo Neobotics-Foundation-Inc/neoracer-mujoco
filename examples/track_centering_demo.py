@@ -3,8 +3,8 @@ Demonstration/validation run of TrackCenteringController — headless by
 default, or with an optional interactive MuJoCo viewer.
 
 Composes neoracer.xml onto assets/tracks/straight_corridor.xml at runtime
-(same MjSpec.attach_body pattern as manual_drive.py's load_model — neither
-XML file names or depends on the other), settles the car, then drives the
+(neoracer_mujoco.compose — neither XML file names or depends on the
+other), settles the car, then drives the
 controller for a fixed number of steps and reports centering performance.
 
 No walled corridor with a "true" centerline exists elsewhere in the repo, so
@@ -27,12 +27,12 @@ thread, keeping the main thread free for the viewer's Cocoa event loop.
 
 import argparse
 import time
-from pathlib import Path
 
 import mujoco
 import mujoco.viewer
 import numpy as np
 
+from neoracer_mujoco import compose
 from neoracer_mujoco import sensors as sl
 from neoracer_mujoco.control.track_centering import (
     LEFT_BEAMS,
@@ -41,8 +41,6 @@ from neoracer_mujoco.control.track_centering import (
     TrackCenteringController,
     compute_signals,
 )
-
-_PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 STEPS = 3000
 SETTLE_STEPS = 400
@@ -61,12 +59,7 @@ DEFAULT_VIEWER_DURATION_S = 6.0
 
 
 def load_model() -> mujoco.MjModel:
-    scene = mujoco.MjSpec.from_file(
-        str(_PROJECT_DIR / "assets" / "tracks" / "straight_corridor.xml")
-    )
-    car = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
+    return compose("straight_corridor")
 
 
 def _side_clearance(

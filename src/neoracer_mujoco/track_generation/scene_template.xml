@@ -1,0 +1,54 @@
+<mujoco model="generated_track_$seed">
+    <!--
+    Template for a procedurally generated track. mjcf.py substitutes the
+    placeholders below (Python's string.Template) and writes out the result;
+    the wall boxes themselves are generated, everything else is here.
+
+    Not loadable as-is -- the placeholders are not valid MJCF. Editing this
+    file changes every generated track, so it is the place to change wall
+    colour, floor texture, or friction. Wall box size and placement come from
+    the track geometry, so those live in mjcf.py.
+
+    Generated tracks are scenery ONLY -- this does not name the car. Attach
+    neoracer.xml at runtime (neoracer_mujoco.compose does it), the same pattern
+    the hand-written tracks in assets/tracks/ use.
+
+    Filled in below: seed $seed, loop length $total_length m, $wall_count wall
+    boxes. The car spawns at the origin facing +X, on the loop's sample 0.
+    -->
+
+    <!-- The track is the parent spec when the car is attached, so its compiler
+         settings govern the composed scene. MuJoCo defaults to degrees and
+         every euler in the generated walls is radians. -->
+    <compiler angle="radian"/>
+
+    <asset>
+        <!-- Prefixed names: attaching the car merges its assets in, and a
+             repeated name there is a compile-time ValueError, not a merge.
+             straight_corridor.xml prefixes its own the same way. -->
+        <texture name="track_grid" type="2d" builtin="checker" width="512" height="512"
+                 rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+        <material name="track_floor" texture="track_grid" texrepeat="1 1"
+                  texuniform="true" reflectance=".2"/>
+        <!-- Must stay named "wall": collision.py identifies walls by material
+             name, and that is what makes car_hit_wall / reset_if_wall_hit work
+             on a generated track with no extra code on either side. -->
+        <material name="wall" rgba=".55 .57 .60 1"/>
+    </asset>
+
+    <default>
+        <default class="track_wall">
+            <geom type="box" material="wall" condim="3" friction="1.0 0.1 0.1"/>
+        </default>
+    </default>
+
+    <worldbody>
+        <!-- Attaching grafts only neoracer.xml's "car" body, not its floor, so
+             the scene needs its own. Friction matches the wheels'. -->
+        <geom name="track_floor_plane" type="plane"
+              size="$floor_size_x $floor_size_y 0.1"
+              pos="$floor_pos_x $floor_pos_y 0"
+              material="track_floor" friction="1.5 0.1 0.1"/>
+$walls
+    </worldbody>
+</mujoco>

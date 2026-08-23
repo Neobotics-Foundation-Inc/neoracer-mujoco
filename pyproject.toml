@@ -11,6 +11,9 @@ requires-python = ">=3.10"
 dependencies = [
     "mujoco>=3.9.0",
     "numpy>=1.26.4",
+    # CubicSpline (track centerline) and cKDTree (self-touch check, replacing an
+    # O(N^2) pass that runs on every repair of every generation attempt).
+    "scipy>=1.13",
 ]
 
 [project.optional-dependencies]

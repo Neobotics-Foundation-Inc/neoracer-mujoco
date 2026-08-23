@@ -54,14 +54,16 @@ python3 -m pytest validation/ -v
 │   └── meshes/            — visual STL meshes (cosmetic; mass="0")
 ├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
 │   ├── contract.py        — the car contract (single source of truth)
-│   ├── assets.py          — cars() / load() model discovery + compile
+│   ├── assets.py          — cars() / tracks() / load() discovery + compose()
 │   ├── sensors.py         — SensorReadings/IMUReading/LidarScan + read()
 │   ├── sim.py             — compile/settle/run + physics probes
-│   └── control/           — classical controllers (track_centering)
+│   ├── control/           — classical controllers (track_centering)
+│   └── track_generation/  — procedural racetracks (generate_track → Track → MJCF)
 ├── examples/
 │   ├── run.py                  — viewer launch script (mjpython entry point)
 │   ├── manual_drive.py         — arrow-key teleop (game-style, python3 entry point)
-│   └── track_centering_demo.py — PD centering controller on the corridor track
+│   ├── track_centering_demo.py — PD centering controller on the corridor track
+│   └── track_generation.py     — generate procedural tracks, describe or drive one
 ├── validation/            — pytest physics + logic conformance suite
 └── docs/                  — (reserved) design notes and parameter log
 ```
@@ -96,6 +98,46 @@ python3 -m pytest validation/ -v
 Steering command range is ±0.4 rad; the two Ackermann equality constraints split
 it into the correct inner/outer front-wheel angles automatically.
 
+## Track generation (`src/neoracer_mujoco/track_generation/`)
+
+Two calls are the whole API — one makes the geometry, the other puts the car on it:
+
+```python
+from neoracer_mujoco import compose, generate_track
+
+track = generate_track(seed=7, difficulty=2)   # pure geometry, no MuJoCo
+model = compose(track)                         # a compiled MjModel, car included
+
+model = compose("straight_corridor")           # or a hand-written assets/tracks/ XML
+```
+
+`generate_track(seed, difficulty)` returns a `Track`: N evenly spaced samples
+around a closed loop, each with a centerline position, tangent, left normal,
+curvature, and corridor half-width, plus the loop's total length. Same seed, same
+track, always. `difficulty` runs 0 (gentle and wide) to 3 (tight and narrow); pass
+a full `TrackSettings` instead if you want every knob.
+
+Generation draws a candidate, checks it for corners tighter than the car can take,
+a loop that doubles back and touches itself, and a total length outside the target
+range — then nudges the control points behind each complaint and re-checks, rather
+than redrawing the whole loop. A candidate that can't be repaired is thrown away
+and a fresh one drawn; `TrackGenerationError` means the limits are asking for
+something the generator can't draw.
+
+Five files, split by pipeline stage:
+
+| File | Role |
+|---|---|
+| `track.py` | the `Track` itself and the attempt/repair loop — **read this first** |
+| `shape.py` | control points → spline → even resample → corridor width |
+| `reject.py` | what makes a candidate invalid, and how to nudge it |
+| `config.py` | the knobs (`TrackSettings`, `settings_for_difficulty`) |
+| `mjcf.py` | `to_mjcf(track)` → scenery-only walls + floor; the only module here that touches MuJoCo |
+
+Everything except `mjcf.py` is plain NumPy/SciPy with no simulator assumptions, so
+the geometry is usable outside MuJoCo. `compose()` lives in `assets.py` rather than
+here because it also serves hand-written tracks that never touch the generator.
+
 ## Usage / demo scripts (`examples/`)
 
 `examples/` holds runnable, hackable demos — start here to drive the car yourself
@@ -119,6 +161,13 @@ stable API.
   runtime, settles, then drives the controller and reports centering performance.
   `python3 -m examples.track_centering_demo` (headless) or
   `mjpython -m examples.track_centering_demo --viewer`.
+
+- **`track_generation.py`** — generates procedural tracks and reports what came
+  out (loop length, corridor width, tightest corner, geom count) across seeds and
+  difficulties. `--save PATH` writes one as standalone MJCF; `--drive` puts the car
+  on it under the wall-following controller in the viewer.
+  `python3 -m examples.track_generation` (headless) or
+  `mjpython -m examples.track_generation --drive --seed 7 --difficulty 3`.
 
 Sensor reading lives in the package, not the examples: import from
 `neoracer_mujoco.sensors` (`read`, `wheel_speed_ms`, `print_sensors`,
@@ -146,6 +195,11 @@ python3 -m pytest validation/ -v
   and the Ackermann polyfit validated against exact arctan geometry.
 - **`test_track_centering.py`** — `TrackCenteringController` sign/safety logic plus
   one physics-integration run on the corridor track.
+- **`test_track_generation.py`** — the generator's own rules (every track valid,
+  determinism, difficulty ordering, impossible limits raise) plus the MJCF layer's
+  conventions (wall material name, spawn clearance, geom budget). The slow one:
+  difficulty 0 burns most of its attempt budget per track, so it dominates suite
+  runtime (~45 s).
 
 The car contract (expected actuators, required sensors, mass band, ctrl layout)
 lives in `src/neoracer_mujoco/contract.py` — update it there if the contract changes.
