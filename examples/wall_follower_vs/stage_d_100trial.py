@@ -17,6 +17,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import loop_trials as lt
+from scene_utils import load_track_scene
 
 N = 1080
 SEED0 = 0
@@ -47,7 +48,7 @@ def classify_failure(r: lt.LoopTrialResult) -> str:
 
 
 def main() -> None:
-    model = lt.load_scene("loop_corridor.xml")
+    model = load_track_scene("loop_corridor.xml")
     results: list[lt.LoopTrialResult] = []
     for i in range(N_TRIALS):
         seed = SEED0 + i

@@ -26,10 +26,9 @@ import numpy as np
 
 _EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _EXAMPLES_DIR)
-sys.path.insert(0, os.path.dirname(_EXAMPLES_DIR))
 import dense_lidar as dl
 import vehicle_space_controller as vsc
-from run_racecar_core import load_scene
+from scene_utils import load_track_scene
 
 
 def main() -> None:
@@ -40,7 +39,7 @@ def main() -> None:
 
     from neoracer_mujoco import sim as _sim
 
-    model = load_scene("loop_corridor.xml")
+    model = load_track_scene("loop_corridor.xml")
     data = _sim.settle(model)
 
     rng = np.random.default_rng(args.seed)

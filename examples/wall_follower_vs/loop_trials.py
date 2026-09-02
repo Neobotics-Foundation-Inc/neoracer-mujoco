@@ -5,7 +5,7 @@ previously caused wall-following controllers to graze walls, corner too
 late, wedge, spin, or get stuck (see loop_corridor.xml's own docstring).
 Experimental; run manually, not part of `pytest validation/`.
 
-Reuses examples/run_racecar_core.py's load_scene() so the car spawns at the
+Reuses this feature's scene_utils.load_track_scene() so the car spawns at the
 same (0, -2.5, 0) offset -- centered in the bottom straight, facing +X --
 that every other loop_corridor.xml consumer in this repo uses.
 
@@ -17,32 +17,35 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
-import sys
 import time
 from dataclasses import dataclass
 
+import dense_lidar as dl
 import mujoco
 import numpy as np
-
-_EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _EXAMPLES_DIR)
-sys.path.insert(0, os.path.dirname(_EXAMPLES_DIR))
-import dense_lidar as dl
 import vehicle_space_controller as vsc
-from run_racecar_core import load_scene
+from math_utils import compose_yaw_perturbation
+from report_utils import outcome_header
+from scene_utils import load_track_scene
 
-MAX_SIM_TIME_S = 60.0  # ~1 lap (~23m centerline) at ~0.3-1.0 m/s + cornering slowdown
-STUCK_WINDOW_S = 4.0
-STUCK_PROGRESS_RAD = 0.05  # minimum angular progress required over the window
-UPRIGHT_ROLLOVER_COS = 0.5
-LAP_TARGET_RAD = 2.0 * np.pi
+from neoracer_mujoco import collision
+from neoracer_mujoco import sim as _sim
 
 
-def _settle(model: mujoco.MjModel) -> mujoco.MjData:
-    from neoracer_mujoco import sim as _sim
+@dataclass(frozen=True)
+class LoopTrialParams:
+    max_sim_time_s: float = (
+        60.0  # ~1 lap (~23m centerline) at ~0.3-1.0 m/s + cornering slowdown
+    )
+    stuck_window_s: float = 4.0
+    stuck_progress_rad: float = (
+        0.05  # minimum angular progress required over the window
+    )
+    upright_rollover_cos: float = 0.5
+    lap_target_rad: float = 2.0 * np.pi
 
-    return _sim.settle(model)
+
+_DEFAULT_LOOP_TRIAL_PARAMS = LoopTrialParams()
 
 
 def _quat_yaw(data: mujoco.MjData) -> float:
@@ -88,28 +91,20 @@ class LoopTrialResult:
 
 
 def run_loop_trial(
-    model: mujoco.MjModel, n: int, seed: int, verbose: bool = False, log_every: int = 1
+    model: mujoco.MjModel,
+    n: int,
+    seed: int,
+    verbose: bool = False,
+    log_every: int = 1,
+    params: LoopTrialParams = _DEFAULT_LOOP_TRIAL_PARAMS,
 ) -> LoopTrialResult:
-    from neoracer_mujoco import collision
-    from neoracer_mujoco import sim as _sim
-
-    data = _settle(model)
+    data = _sim.settle(model)
 
     rng = np.random.default_rng(seed)
     lateral = float(rng.uniform(-0.15, 0.15))
     yaw = float(rng.uniform(-0.15, 0.15))
     data.qpos[1] += lateral
-    half = yaw / 2.0
-    dq = np.array([np.cos(half), 0.0, 0.0, np.sin(half)])
-    q = data.qpos[3:7]
-    w0, x0, y0, z0 = q
-    w1, x1, y1, z1 = dq
-    data.qpos[3:7] = [
-        w0 * w1 - x0 * x1 - y0 * y1 - z0 * z1,
-        w0 * x1 + x0 * w1 + y0 * z1 - z0 * y1,
-        w0 * y1 - x0 * z1 + y0 * w1 + z0 * x1,
-        w0 * z1 + x0 * y1 - y0 * x1 + z0 * w1,
-    ]
+    data.qpos[3:7] = compose_yaw_perturbation(data.qpos[3:7], yaw)
     mujoco.mj_forward(model, data)
     for _ in range(50):
         mujoco.mj_step(model, data)
@@ -122,7 +117,7 @@ def run_loop_trial(
     dt_control = 1.0 / vsc.CONTROL_HZ
     physics_dt = float(model.opt.timestep)
     ticks_per_control = max(1, round(dt_control / physics_dt))
-    max_ticks = int(MAX_SIM_TIME_S / dt_control)
+    max_ticks = int(params.max_sim_time_s / dt_control)
 
     torque_limit = float(model.actuator("fl_motor").ctrlrange[1])
     steer_limit = float(model.actuator("steer_servo").ctrlrange[1])
@@ -247,21 +242,21 @@ def run_loop_trial(
         prev_state = result.state
 
         upright = _sim.car_upright_cos(data)
-        if upright < UPRIGHT_ROLLOVER_COS:
+        if upright < params.upright_rollover_cos:
             outcome = "rollover"
             if verbose:
                 print(f"  ROLLOVER at t={sim_time_s:.2f}s upright_cos={upright:.3f}")
             break
 
-        if abs(cum_angle) >= LAP_TARGET_RAD:
+        if abs(cum_angle) >= params.lap_target_rad:
             outcome = "success"
             break
-        if sim_time_s >= STUCK_WINDOW_S:
-            cutoff = sim_time_s - STUCK_WINDOW_S
+        if sim_time_s >= params.stuck_window_s:
+            cutoff = sim_time_s - params.stuck_window_s
             past_angle = next(
                 (pa for pt, pa in angle_history if pt >= cutoff), angle_history[0][1]
             )
-            if abs(cum_angle - past_angle) < STUCK_PROGRESS_RAD:
+            if abs(cum_angle - past_angle) < params.stuck_progress_rad:
                 outcome = "stuck"
                 if verbose:
                     print(f"  STUCK detected at t={sim_time_s:.2f}s")
@@ -275,7 +270,7 @@ def run_loop_trial(
         for start in no_path_event_start_ticks
     )
 
-    lap_frac = abs(cum_angle) / LAP_TARGET_RAD
+    lap_frac = abs(cum_angle) / params.lap_target_rad
     max_jump = float(np.max(np.abs(np.diff(targets)))) if len(targets) > 1 else 0.0
 
     return LoopTrialResult(
@@ -306,10 +301,13 @@ def run_loop_trial(
 
 
 def run_loop_trials(
-    n: int, n_trials: int = 10, seed0: int = 0
+    n: int,
+    n_trials: int = 10,
+    seed0: int = 0,
+    params: LoopTrialParams = _DEFAULT_LOOP_TRIAL_PARAMS,
 ) -> list[LoopTrialResult]:
-    model = load_scene("loop_corridor.xml")
-    return [run_loop_trial(model, n, seed0 + i) for i in range(n_trials)]
+    model = load_track_scene("loop_corridor.xml")
+    return [run_loop_trial(model, n, seed0 + i, params=params) for i in range(n_trials)]
 
 
 def _tick_total_ms(r: LoopTrialResult) -> np.ndarray:
@@ -319,10 +317,7 @@ def _tick_total_ms(r: LoopTrialResult) -> np.ndarray:
 
 
 def summarize(results: list[LoopTrialResult]) -> None:
-    n_success = sum(r.outcome == "success" for r in results)
-    n_stuck = sum(r.outcome == "stuck" for r in results)
-    n_rollover = sum(r.outcome == "rollover" for r in results)
-    print(f"success={n_success}/{len(results)}  stuck={n_stuck}  rollover={n_rollover}")
+    print(outcome_header(results))
     for r in results:
         total_ms = _tick_total_ms(r)
         mean_ms = float(np.mean(total_ms)) if len(total_ms) else 0.0
@@ -407,7 +402,7 @@ if __name__ == "__main__":
     parser.add_argument("--log-every", type=int, default=1)
     args = parser.parse_args()
     if args.trials == 1 and args.verbose:
-        model = load_scene("loop_corridor.xml")
+        model = load_track_scene("loop_corridor.xml")
         r = run_loop_trial(
             model, args.n, args.seed0, verbose=True, log_every=args.log_every
         )

@@ -1,0 +1,114 @@
+<mujoco model="loop_corridor">
+    <!--
+    Closed rectangular-ring corridor, built for visually evaluating
+    examples/run_racecar_core.py's --viewer path against a wall-following
+    controller (e.g. examples/ultimate_wall_follower/wall_follower.py).
+
+    straight_corridor.xml is a dead end: a controller running its full-speed,
+    untouched config exits the far end in ~1-2s of sim time, well before any
+    steady-state wall-following behavior (oscillation, cornering stability,
+    sustained wall distance) is visible. This track instead loops back on
+    itself, so a working controller can drive it indefinitely with no walls
+    ever running out.
+
+    This is scenery ONLY — it does not name the car. The runner attaches
+    neoracer.xml at runtime (same MjSpec.attach_body pattern as
+    straight_corridor.xml / ramp_course.xml), so this scene stays independent
+    of the car model.
+
+    Layout (top-down, +X = forward, +Y = left). Outer wall is an 8m x 6m
+    rectangle (x:[-4,4], y:[-3,3]); inner wall is a 6m x 4m rectangle
+    (x:[-3,3], y:[-2,2]); the corridor between them is a uniform 1.0 m wide
+    ring on the straights (same width as straight_corridor.xml, for the same
+    reason: wide relative to the car's 0.235 m track, so the controller has
+    real room to wander and correct rather than being pinned centered by
+    geometry alone).
+
+    Corners are 45-degree CHAMFERED, not square: a first version of this
+    track had plain 90-degree corners, and the wall-following controller
+    (config/wall_follower.yaml's untouched speed=1.0) reliably clipped the
+    outer wall approaching the very first corner and tumbled -- not a lack
+    of collision handling, a genuine "this controller can't make this corner
+    at this speed with zero reaction room" failure. Each corner instead cuts
+    a 1.0 m chamfer off both the inner and outer walls, which (a) turns one
+    90-degree direction change into two gentler ~45-degree ones with a wider
+    bay in between (the diagonal-to-diagonal distance across a chamfered
+    corner is ~1.41 m, wider than the 1.0 m straights), and (b) delays where
+    the outer wall closes in ahead of the car, giving the controller's
+    forward-clearance probe more room to react before the turn.
+
+        +Y  ┌───────────────╲       ╱───────────────┐   outer (y=+3)
+            │                ╲     ╱                │
+            │     ┌───────────╲   ╱───────────┐     │   inner (y=+2)
+            │     │                            │     │
+            │     │      car → (x=0,y=-2.5)    │     │
+            │     └───────────╱   ╲───────────┘     │   inner (y=-2)
+            │                ╱     ╲                │
+         -Y └───────────────╱       ╲───────────────┘   outer (y=-3)
+              x=-4                                 x=4
+
+    The car spawns centered in the bottom straight segment (y=-2.5, midway
+    between the inner and outer bottom walls), facing +X -- same
+    "car spawns already centered, facing down a straight" convention as
+    straight_corridor.xml. Because the wall-following controller centers
+    between whichever two walls it currently sees (not "always follow the
+    right/left wall specifically"), the loop works the same way whichever
+    direction the car ends up circling.
+
+    Ground plane: neoracer.xml's own floor geom is NOT pulled in by
+    attach_body (see straight_corridor.xml's docstring for why), so this
+    track carries its own floor, sized to cover the full outer rectangle
+    plus margin.
+    -->
+
+    <asset>
+        <texture name="loop_grid" type="2d" builtin="checker" width="512" height="512"
+                 rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+        <material name="loop_floor" texture="loop_grid" texrepeat="4 4" texuniform="true"
+                  reflectance=".2"/>
+        <material name="wall" rgba=".55 .57 .60 1"/>
+    </asset>
+
+    <default>
+        <default class="scenery">
+            <geom type="box" material="wall" condim="3" friction="1.0 0.1 0.1"/>
+        </default>
+    </default>
+
+    <worldbody>
+        <geom name="floor" type="plane" size="4.5 3.9 .01" pos="0 0 0"
+              material="loop_floor" friction="1.5 0.1 0.1"/>
+
+        <!-- outer ring (8m x 6m outer footprint): each straight wall is cut
+             1.0m short of the corner on both ends (a 0.05m overlap is added
+             back in so it still seals against the diagonal chamfer piece
+             below -- 3.0+0.05, 2.0+0.05). -->
+        <geom class="scenery" name="outer_top"    pos="0  3 .15" size="3.05 .02 .15"/>
+        <geom class="scenery" name="outer_bottom" pos="0 -3 .15" size="3.05 .02 .15"/>
+        <geom class="scenery" name="outer_left"   pos="-4 0 .15" size=".02 2.05 .15"/>
+        <geom class="scenery" name="outer_right"  pos=" 4 0 .15" size=".02 2.05 .15"/>
+
+        <!-- outer corner chamfers: each connects the shortened outer_top/
+             outer_bottom endpoint to the shortened outer_left/outer_right
+             endpoint with a 45-degree diagonal (e.g. top-right runs from
+             (3,3) to (4,2)). 0.757 = 1.0m corner cut's diagonal half-length
+             (0.5*sqrt(2)) plus the same 0.05m overlap. -->
+        <geom class="scenery" name="outer_chamfer_tr" pos=" 3.5  2.5 .15" size=".757 .02 .15" euler="0 0 -45"/>
+        <geom class="scenery" name="outer_chamfer_tl" pos="-3.5  2.5 .15" size=".757 .02 .15" euler="0 0  45"/>
+        <geom class="scenery" name="outer_chamfer_br" pos=" 3.5 -2.5 .15" size=".757 .02 .15" euler="0 0  45"/>
+        <geom class="scenery" name="outer_chamfer_bl" pos="-3.5 -2.5 .15" size=".757 .02 .15" euler="0 0 -45"/>
+
+        <!-- inner ring (6m x 4m outer footprint of the inner wall): same
+             1.0m-short-plus-overlap construction, chamfering the corners
+             that would otherwise poke into the turn. -->
+        <geom class="scenery" name="inner_top"    pos="0  2 .15" size="2.05 .02 .15"/>
+        <geom class="scenery" name="inner_bottom" pos="0 -2 .15" size="2.05 .02 .15"/>
+        <geom class="scenery" name="inner_left"   pos="-3 0 .15" size=".02 1.05 .15"/>
+        <geom class="scenery" name="inner_right"  pos=" 3 0 .15" size=".02 1.05 .15"/>
+
+        <geom class="scenery" name="inner_chamfer_tr" pos=" 2.5  1.5 .15" size=".757 .02 .15" euler="0 0 -45"/>
+        <geom class="scenery" name="inner_chamfer_tl" pos="-2.5  1.5 .15" size=".757 .02 .15" euler="0 0  45"/>
+        <geom class="scenery" name="inner_chamfer_br" pos=" 2.5 -1.5 .15" size=".757 .02 .15" euler="0 0  45"/>
+        <geom class="scenery" name="inner_chamfer_bl" pos="-2.5 -1.5 .15" size=".757 .02 .15" euler="0 0 -45"/>
+    </worldbody>
+</mujoco>
