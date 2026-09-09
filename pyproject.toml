@@ -15,6 +15,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4", "ruff==0.16.0"]
+# Optional: only needed for src/neoracer_mujoco/envs/ (issue #7). The base
+# package must stay importable without gymnasium installed.
+rl = ["gymnasium>=1.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/neoracer_mujoco"]
