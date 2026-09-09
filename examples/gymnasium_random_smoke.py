@@ -24,7 +24,6 @@ MAX_STEPS_PER_EPISODE = 600  # bounded -- not the env's full max_episode_steps
 
 def main() -> None:
     env = NeoRacerEnv()
-    rng = np.random.default_rng(0)
 
     print(
         f"[gymnasium_random_smoke] {N_EPISODES} episodes, "
@@ -33,7 +32,9 @@ def main() -> None:
 
     for ep in range(N_EPISODES):
         obs, info = env.reset(seed=ep)
-        assert env.observation_space.contains(obs), "reset obs outside observation_space"
+        assert env.observation_space.contains(obs), (
+            "reset obs outside observation_space"
+        )
 
         ep_return = 0.0
         outcome = "max_steps_reached"
@@ -43,8 +44,12 @@ def main() -> None:
             action = env.action_space.sample()
             obs, reward, terminated, truncated, info = env.step(action)
 
-            assert np.all(np.isfinite(obs)), f"non-finite obs at ep {ep} step {step_count}"
-            assert np.isfinite(reward), f"non-finite reward at ep {ep} step {step_count}"
+            assert np.all(np.isfinite(obs)), (
+                f"non-finite obs at ep {ep} step {step_count}"
+            )
+            assert np.isfinite(reward), (
+                f"non-finite reward at ep {ep} step {step_count}"
+            )
             assert env.observation_space.contains(obs), (
                 f"obs outside observation_space at ep {ep} step {step_count}"
             )
@@ -65,7 +70,9 @@ def main() -> None:
         )
 
     env.close()
-    print("[gymnasium_random_smoke] done -- no NaNs, no crashes, all observations valid.")
+    print(
+        "[gymnasium_random_smoke] done -- no NaNs, no crashes, all observations valid."
+    )
 
 
 if __name__ == "__main__":
