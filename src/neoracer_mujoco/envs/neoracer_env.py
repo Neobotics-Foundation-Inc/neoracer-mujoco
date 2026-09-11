@@ -60,7 +60,8 @@ pass only):
 Termination (terminated=True) vs. truncation (truncated=True):
     terminated: rollover (upright_cos below threshold), stuck (no net
     angular progress over a trailing window), or lap completion
-    (|cumulative angle| >= 2*pi).
+    (cumulative angle >= 2*pi in the track's intended forward-travel
+    direction -- empirically confirmed positive; see _update_progress).
     truncated: max_episode_steps reached.
     Ordinary wall contact is NOT terminal by itself -- it's recorded in
     info and penalized in the reward; stuck detection is the sole backstop
@@ -97,6 +98,13 @@ _DEFAULT_TRACK = os.path.join(_assets.ASSET_DIR, "tracks", "loop_corridor.xml")
 # drivable ring entirely.
 _LOOP_SPAWN_OFFSET = (0.0, -2.5, 0.0)
 
+# This first-pass environment's task semantics (spawn offset, angular
+# progress around the world origin, lap fraction, lap completion, reward
+# shaping) are all specifically derived from loop_corridor.xml's own
+# geometry -- there is no generic track/task abstraction in this PR. See
+# __init__'s track_path validation below.
+_SUPPORTED_TRACK_FILENAME = "loop_corridor.xml"
+
 OBS_DIM = 20
 
 
@@ -118,7 +126,7 @@ def _compose_scene(track_path: str, car_path: str) -> mujoco.MjModel:
     scene = mujoco.MjSpec.from_file(track_path)
     car = mujoco.MjSpec.from_file(car_path)
     frame = scene.worldbody.add_frame()
-    if track_path.endswith("loop_corridor.xml"):
+    if track_path.endswith(_SUPPORTED_TRACK_FILENAME):
         frame.pos = _LOOP_SPAWN_OFFSET
     frame.attach_body(car.body("car"), "", "")
     return scene.compile()
@@ -248,6 +256,16 @@ class NeoRacerEnv(gym.Env):
     ):
         super().__init__()
         self.config = config or NeoRacerEnvConfig()
+        if not self.config.track_path.endswith(_SUPPORTED_TRACK_FILENAME):
+            raise ValueError(
+                "NeoRacerEnv currently only supports "
+                f"assets/tracks/{_SUPPORTED_TRACK_FILENAME} "
+                f"(got track_path={self.config.track_path!r}). This first-pass "
+                "environment's spawn offset, angular-progress/lap-fraction/"
+                "lap-completion logic, and reward shaping are all specific to "
+                "that track's geometry -- see the module docstring. Other "
+                "tracks are not supported."
+            )
         if render_mode is not None and render_mode not in self.metadata["render_modes"]:
             raise ValueError(f"Unsupported render_mode: {render_mode!r}")
         self.render_mode = render_mode
@@ -429,7 +447,7 @@ class NeoRacerEnv(gym.Env):
         elif self._is_stuck():
             terminated = True
             reason = "stuck"
-        elif abs(self._cum_angle) >= 2.0 * np.pi:
+        elif self._cum_angle >= 2.0 * np.pi:
             terminated = True
             reason = "lap_complete"
 

@@ -63,6 +63,20 @@ def test_gymnasium_check_env_passes(env):
     check_env(env, skip_render_check=True)
 
 
+def test_unsupported_track_raises_clear_error():
+    """This first-pass env's progress/lap/reward semantics are specific to
+    loop_corridor.xml (no generic track abstraction exists yet) -- an
+    unsupported track_path must fail loudly at construction, not silently
+    apply loop-specific semantics to a track they don't fit."""
+    import os
+
+    from neoracer_mujoco import assets as _assets
+
+    other_track = os.path.join(_assets.ASSET_DIR, "tracks", "straight_corridor.xml")
+    with pytest.raises(ValueError, match="loop_corridor"):
+        NeoRacerEnv(config=NeoRacerEnvConfig(track_path=other_track))
+
+
 # --- reset() / step() basic contract ----------------------------------------
 
 
@@ -233,7 +247,12 @@ def test_lap_completion_terminates_successfully(env):
     """Directly sets cumulative progress past the lap threshold (see
     module docstring: no trained policy exists yet to actually complete a
     lap) and confirms the next step reports terminated/'lap_complete' with
-    a positive (bonus-dominated) reward."""
+    a positive (bonus-dominated) reward.
+
+    +2*pi is the empirically-confirmed intended forward-travel direction
+    (positive throttle from the loop_corridor spawn produces positive
+    cumulative angle -- see test_negative_full_lap_progress_does_not_
+    complete_lap for the negative-direction counterpart)."""
     env.reset(seed=0)
     env._cum_angle = 2.0 * np.pi + 0.5  # already past the 2*pi threshold
     env._angle_history.clear()
@@ -246,6 +265,26 @@ def test_lap_completion_terminates_successfully(env):
     assert not truncated
     assert info["termination_reason"] == "lap_complete"
     assert reward > 0
+
+
+def test_negative_full_lap_progress_does_not_complete_lap(env):
+    """A full lap's worth of progress in the WRONG (negative) direction
+    must not be treated as a successful lap: only positive cumulative
+    angle -- the empirically-confirmed forward-travel direction from the
+    loop_corridor spawn -- counts (see module docstring)."""
+    env.reset(seed=0)
+    env._cum_angle = -(2.0 * np.pi + 0.5)  # full lap of NEGATIVE progress
+    env._angle_history.clear()
+    env._angle_history.append(env._cum_angle)
+
+    _obs, _reward, terminated, truncated, info = env.step(
+        np.array([1.0, 0.0], dtype=np.float32)
+    )
+    assert info["termination_reason"] != "lap_complete"
+    # A single step with a fresh angle_history can't trigger rollover or
+    # stuck either -- so a fixed-up condition should simply not terminate.
+    assert not terminated
+    assert not truncated
 
 
 def test_timeout_truncates():
