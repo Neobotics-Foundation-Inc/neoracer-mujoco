@@ -190,21 +190,13 @@ class NeoRacerEnvConfig:
     reward: RewardConfig = field(default_factory=RewardConfig)
 
 
-# Empirically-derived bounds (issue #7), NOT the nominal/steady-state
-# ranges -- verified against 80 adversarial episodes (full-throttle,
-# oscillating hard steer and random actions, deliberately wall-slam-seeking)
-# on loop_corridor.xml, picked with real margin over the observed worst case
-# rather than clipping physically valid readings to fit a guessed bound:
-#   imu_accel: nominal is ~9.81 m/s^2 at rest, but a hard wall-collision
-#     impulse can spike it far higher -- observed max ~511 m/s^2 during
-#     rollover-inducing collisions. Bound: +/-1000.
-#   imu_gyro: observed max ~42.4 rad/s during a violent tumble. Bound: +/-100.
-#   steer_cmd_pos: steer_input's own mechanical joint range is +/-0.45 rad
-#     (limited="true" in neoracer.xml), tighter than ctrl[4]'s +/-0.4 command
-#     range -- but MuJoCo enforces joint limits as a soft constraint, not a
-#     hard wall, so a violent enough collision can transiently push the
-#     reading past the nominal limit. Observed max ~0.87 rad. Bound: +/-1.0.
-# Re-verify these if the track, spawn range, or car model changes.
+# Observation bounds, with margin over the peaks seen in 80 adversarial
+# episodes (full throttle, hard steering, wall crashes) on loop_corridor.xml:
+#   imu_accel: ~511 m/s^2 peak in crashes
+#   imu_gyro: ~42 rad/s peak when tumbling
+#   steer_cmd_pos: ~0.87 rad peak; the 0.45 rad joint limit is soft in
+#     MuJoCo, so crashes can push past it
+# Re-check these if the track, spawn range, or car changes.
 _ACCEL_BOUND = 1000.0
 _GYRO_BOUND = 100.0
 _STEER_BOUND = 1.0
