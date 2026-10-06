@@ -1,0 +1,266 @@
+<mujoco model="f1_track">
+    <!--
+    Monaco-ish street circuit (feel-test, not for RL yet). Scenery ONLY:
+    this file does not name the car. The driver composes it with
+    neoracer.xml at runtime (MjSpec.attach), same as ramp_course.xml, so
+    the floor comes from the car model and the scene stays car-agnostic.
+
+    Closed loop, clockwise. The car spawns at the origin facing +X
+    on the start/finish straight (y=0) and drives into Turn 1. Signature
+    bits: long straight, a tight hairpin on the right, a left-right chicane
+    up top, sweepers linking them. Each wall is a chain of flat box
+    panels 0.30 m tall (taller than the car, so it cannot hop them)
+    joined at miter-offset vertices, with a round cylinder post at every
+    joint. The post radius = wall thickness, so it envelopes the panel
+    corners: the track-facing surface is smooth, no edge protrudes to nick
+    the car.
+
+    Clear track width 1.10 m (~4 car widths). Footprint ~10 x 8 m.
+
+    GENERATED from a coarse centerline (Chaikin-smoothed, 2 iters). To
+    reshape, edit the waypoints and regenerate. Coarse centerline (x,y):
+    (-2.0,0.0), (5.5,0.0), (7.4,1.0), (8.2,2.6), (8.3,4.1), (7.8,5.4), (6.4,6.4), (4.2,6.4), (3.2,7.0), (2.0,6.4), (0.2,6.4), (-1.8,5.7), (-2.8,3.8), (-2.6,1.6), (-2.0,0.0)
+    -->
+
+    <asset>
+        <material name="wall_outer" rgba=".80 .20 .20 1"/>
+        <material name="wall_inner" rgba=".92 .92 .95 1"/>
+    </asset>
+
+    <default>
+        <!-- All scenery is static; condim 3 = plain sliding contact. -->
+        <default class="scenery">
+            <geom type="box" condim="3" friction="1.0 0.1 0.1"/>
+        </default>
+    </default>
+
+    <worldbody>
+        <!-- outer wall: box panels + rounded joint posts -->
+        <geom class="scenery" name="outer_panel_00" material="wall_outer" type="box" pos="1.746 -0.600 0.150" euler="0 0 0.00" size="0.954 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_01" material="wall_outer" type="box" pos="3.478 -0.568 0.150" euler="0 0 2.35" size="0.779 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_02" material="wall_outer" type="box" pos="4.871 -0.471 0.150" euler="0 0 6.07" size="0.618 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_03" material="wall_outer" type="box" pos="5.954 -0.299 0.150" euler="0 0 12.80" size="0.480 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_04" material="wall_outer" type="box" pos="6.712 -0.040 0.150" euler="0 0 27.76" size="0.327 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_05" material="wall_outer" type="box" pos="7.240 0.281 0.150" euler="0 0 35.29" size="0.291 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_06" material="wall_outer" type="box" pos="7.680 0.644 0.150" euler="0 0 43.92" size="0.282 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_07" material="wall_outer" type="box" pos="8.048 1.062 0.150" euler="0 0 53.45" size="0.277 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_08" material="wall_outer" type="box" pos="8.331 1.520 0.150" euler="0 0 63.43" size="0.263 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_09" material="wall_outer" type="box" pos="8.536 1.977 0.150" euler="0 0 68.36" size="0.239 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_10" material="wall_outer" type="box" pos="8.689 2.422 0.150" euler="0 0 73.81" size="0.232 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_11" material="wall_outer" type="box" pos="8.794 2.867 0.150" euler="0 0 79.78" size="0.226 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_12" material="wall_outer" type="box" pos="8.849 3.308 0.150" euler="0 0 86.19" size="0.220 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_13" material="wall_outer" type="box" pos="8.856 3.740 0.150" euler="0 0 91.97" size="0.213 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_14" material="wall_outer" type="box" pos="8.819 4.161 0.150" euler="0 0 98.13" size="0.210 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_15" material="wall_outer" type="box" pos="8.737 4.570 0.150" euler="0 0 104.53" size="0.208 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_16" material="wall_outer" type="box" pos="8.607 4.973 0.150" euler="0 0 111.04" size="0.216 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_17" material="wall_outer" type="box" pos="8.414 5.370 0.150" euler="0 0 120.62" size="0.227 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_18" material="wall_outer" type="box" pos="8.152 5.743 0.150" euler="0 0 129.56" size="0.231 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_19" material="wall_outer" type="box" pos="7.829 6.081 0.150" euler="0 0 137.54" size="0.238 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_20" material="wall_outer" type="box" pos="7.441 6.394 0.150" euler="0 0 144.46" size="0.261 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_21" material="wall_outer" type="box" pos="6.982 6.661 0.150" euler="0 0 154.89" size="0.273 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_22" material="wall_outer" type="box" pos="6.464 6.852 0.150" euler="0 0 164.48" size="0.281 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_23" material="wall_outer" type="box" pos="5.903 6.964 0.150" euler="0 0 172.87" size="0.293 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_24" material="wall_outer" type="box" pos="5.331 7.000 0.150" euler="0 0 180.00" size="0.282 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_25" material="wall_outer" type="box" pos="4.839 7.017 0.150" euler="0 0 175.49" size="0.210 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_26" material="wall_outer" type="box" pos="4.467 7.064 0.150" euler="0 0 169.38" size="0.165 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_27" material="wall_outer" type="box" pos="4.192 7.133 0.150" euler="0 0 160.91" size="0.119 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_28" material="wall_outer" type="box" pos="3.948 7.251 0.150" euler="0 0 149.04" size="0.154 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_29" material="wall_outer" type="box" pos="3.606 7.390 0.150" euler="0 0 164.05" size="0.218 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_30" material="wall_outer" type="box" pos="3.179 7.450 0.150" euler="0 0 180.00" size="0.218 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_31" material="wall_outer" type="box" pos="2.749 7.395 0.150" euler="0 0 -165.38" size="0.218 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_32" material="wall_outer" type="box" pos="2.379 7.260 0.150" euler="0 0 -153.43" size="0.178 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_33" material="wall_outer" type="box" pos="2.089 7.137 0.150" euler="0 0 -161.57" size="0.138 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_34" material="wall_outer" type="box" pos="1.805 7.063 0.150" euler="0 0 -168.69" size="0.157 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_35" material="wall_outer" type="box" pos="1.475 7.016 0.150" euler="0 0 -174.81" size="0.177 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_36" material="wall_outer" type="box" pos="1.072 7.000 0.150" euler="0 0 180.00" size="0.226 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_37" material="wall_outer" type="box" pos="0.588 6.976 0.150" euler="0 0 -174.60" size="0.260 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_38" material="wall_outer" type="box" pos="0.067 6.903 0.150" euler="0 0 -169.56" size="0.267 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_39" material="wall_outer" type="box" pos="-0.461 6.783 0.150" euler="0 0 -164.93" size="0.276 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_40" material="wall_outer" type="box" pos="-1.014 6.611 0.150" euler="0 0 -160.71" size="0.303 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_41" material="wall_outer" type="box" pos="-1.568 6.358 0.150" euler="0 0 -150.26" size="0.309 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_42" material="wall_outer" type="box" pos="-2.068 6.004 0.150" euler="0 0 -139.09" size="0.307 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_43" material="wall_outer" type="box" pos="-2.490 5.559 0.150" euler="0 0 -128.00" size="0.310 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_44" material="wall_outer" type="box" pos="-2.828 5.034 0.150" euler="0 0 -117.76" size="0.317 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_45" material="wall_outer" type="box" pos="-3.078 4.465 0.150" euler="0 0 -109.52" size="0.306 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_46" material="wall_outer" type="box" pos="-3.239 3.878 0.150" euler="0 0 -101.04" size="0.305 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_47" material="wall_outer" type="box" pos="-3.312 3.270 0.150" euler="0 0 -92.69" size="0.308 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_48" material="wall_outer" type="box" pos="-3.299 2.658 0.150" euler="0 0 -84.81" size="0.305 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_49" material="wall_outer" type="box" pos="-3.231 2.081 0.150" euler="0 0 -81.67" size="0.277 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_50" material="wall_outer" type="box" pos="-3.137 1.550 0.150" euler="0 0 -78.11" size="0.263 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_51" material="wall_outer" type="box" pos="-3.014 1.053 0.150" euler="0 0 -74.05" size="0.250 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_52" material="wall_outer" type="box" pos="-2.825 0.492 0.150" euler="0 0 -69.44" size="0.341 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_53" material="wall_outer" type="box" pos="-2.275 -0.050 0.150" euler="0 0 -27.30" size="0.485 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_54" material="wall_outer" type="box" pos="-1.277 -0.384 0.150" euler="0 0 -11.17" size="0.577 0.050 0.150"/>
+        <geom class="scenery" name="outer_panel_55" material="wall_outer" type="box" pos="0.041 -0.548 0.150" euler="0 0 -3.96" size="0.753 0.050 0.150"/>
+        <geom class="scenery" name="outer_post_00" material="wall_outer" type="cylinder" pos="0.792 -0.600 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_01" material="wall_outer" type="cylinder" pos="2.700 -0.600 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_02" material="wall_outer" type="cylinder" pos="4.257 -0.536 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_03" material="wall_outer" type="cylinder" pos="5.486 -0.405 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_04" material="wall_outer" type="cylinder" pos="6.422 -0.193 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_05" material="wall_outer" type="cylinder" pos="7.002 0.112 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_06" material="wall_outer" type="cylinder" pos="7.477 0.449 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_07" material="wall_outer" type="cylinder" pos="7.883 0.840 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_08" material="wall_outer" type="cylinder" pos="8.213 1.285 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_09" material="wall_outer" type="cylinder" pos="8.448 1.755 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_10" material="wall_outer" type="cylinder" pos="8.624 2.199 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_11" material="wall_outer" type="cylinder" pos="8.754 2.644 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_12" material="wall_outer" type="cylinder" pos="8.834 3.089 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_13" material="wall_outer" type="cylinder" pos="8.863 3.528 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_14" material="wall_outer" type="cylinder" pos="8.849 3.953 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_15" material="wall_outer" type="cylinder" pos="8.789 4.368 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_16" material="wall_outer" type="cylinder" pos="8.685 4.771 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_17" material="wall_outer" type="cylinder" pos="8.529 5.175 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_18" material="wall_outer" type="cylinder" pos="8.299 5.565 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_19" material="wall_outer" type="cylinder" pos="8.005 5.921 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_20" material="wall_outer" type="cylinder" pos="7.653 6.242 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_21" material="wall_outer" type="cylinder" pos="7.229 6.545 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_22" material="wall_outer" type="cylinder" pos="6.734 6.777 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_23" material="wall_outer" type="cylinder" pos="6.193 6.927 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_24" material="wall_outer" type="cylinder" pos="5.612 7.000 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_25" material="wall_outer" type="cylinder" pos="5.049 7.000 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_26" material="wall_outer" type="cylinder" pos="4.629 7.033 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_27" material="wall_outer" type="cylinder" pos="4.304 7.094 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_28" material="wall_outer" type="cylinder" pos="4.080 7.172 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_29" material="wall_outer" type="cylinder" pos="3.816 7.330 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_30" material="wall_outer" type="cylinder" pos="3.397 7.450 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_31" material="wall_outer" type="cylinder" pos="2.961 7.450 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_32" material="wall_outer" type="cylinder" pos="2.538 7.340 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_33" material="wall_outer" type="cylinder" pos="2.220 7.181 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_34" material="wall_outer" type="cylinder" pos="1.958 7.094 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_35" material="wall_outer" type="cylinder" pos="1.651 7.032 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_36" material="wall_outer" type="cylinder" pos="1.298 7.000 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_37" material="wall_outer" type="cylinder" pos="0.847 7.000 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_38" material="wall_outer" type="cylinder" pos="0.330 6.951 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_39" material="wall_outer" type="cylinder" pos="-0.195 6.854 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_40" material="wall_outer" type="cylinder" pos="-0.727 6.711 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_41" material="wall_outer" type="cylinder" pos="-1.300 6.511 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_42" material="wall_outer" type="cylinder" pos="-1.836 6.204 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_43" material="wall_outer" type="cylinder" pos="-2.299 5.803 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_44" material="wall_outer" type="cylinder" pos="-2.681 5.315 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_45" material="wall_outer" type="cylinder" pos="-2.976 4.754 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_46" material="wall_outer" type="cylinder" pos="-3.180 4.177 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_47" material="wall_outer" type="cylinder" pos="-3.297 3.578 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_48" material="wall_outer" type="cylinder" pos="-3.326 2.962 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_49" material="wall_outer" type="cylinder" pos="-3.271 2.354 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_50" material="wall_outer" type="cylinder" pos="-3.191 1.807 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_51" material="wall_outer" type="cylinder" pos="-3.083 1.293 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_52" material="wall_outer" type="cylinder" pos="-2.945 0.812 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_53" material="wall_outer" type="cylinder" pos="-2.706 0.173 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_54" material="wall_outer" type="cylinder" pos="-1.843 -0.272 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="outer_post_55" material="wall_outer" type="cylinder" pos="-0.710 -0.496 0.150" size="0.050 0.150"/>
+
+        <!-- inner wall: box panels + rounded joint posts -->
+        <geom class="scenery" name="inner_panel_00" material="wall_inner" type="box" pos="1.754 0.600 0.150" euler="0 0 0.00" size="0.921 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_01" material="wall_inner" type="box" pos="3.422 0.631 0.150" euler="0 0 2.35" size="0.747 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_02" material="wall_inner" type="box" pos="4.729 0.721 0.150" euler="0 0 6.07" size="0.563 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_03" material="wall_inner" type="box" pos="5.646 0.862 0.150" euler="0 0 12.80" size="0.366 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_04" material="wall_inner" type="box" pos="6.188 1.040 0.150" euler="0 0 27.76" size="0.209 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_05" material="wall_inner" type="box" pos="6.542 1.257 0.150" euler="0 0 35.29" size="0.206 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_06" material="wall_inner" type="box" pos="6.845 1.506 0.150" euler="0 0 43.92" size="0.187 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_07" material="wall_inner" type="box" pos="7.083 1.775 0.150" euler="0 0 53.45" size="0.174 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_08" material="wall_inner" type="box" pos="7.269 2.080 0.150" euler="0 0 63.43" size="0.185 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_09" material="wall_inner" type="box" pos="7.420 2.417 0.150" euler="0 0 68.36" size="0.185 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_10" material="wall_inner" type="box" pos="7.536 2.753 0.150" euler="0 0 73.81" size="0.172 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_11" material="wall_inner" type="box" pos="7.612 3.077 0.150" euler="0 0 79.78" size="0.161 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_12" material="wall_inner" type="box" pos="7.651 3.392 0.150" euler="0 0 86.19" size="0.156 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_13" material="wall_inner" type="box" pos="7.657 3.697 0.150" euler="0 0 91.97" size="0.150 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_14" material="wall_inner" type="box" pos="7.631 3.989 0.150" euler="0 0 98.13" size="0.144 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_15" material="wall_inner" type="box" pos="7.576 4.268 0.150" euler="0 0 104.53" size="0.141 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_16" material="wall_inner" type="box" pos="7.493 4.527 0.150" euler="0 0 111.04" size="0.132 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_17" material="wall_inner" type="box" pos="7.380 4.761 0.150" euler="0 0 120.62" size="0.129 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_18" material="wall_inner" type="box" pos="7.223 4.982 0.150" euler="0 0 129.56" size="0.142 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_19" material="wall_inner" type="box" pos="7.015 5.200 0.150" euler="0 0 137.54" size="0.160 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_20" material="wall_inner" type="box" pos="6.759 5.406 0.150" euler="0 0 144.46" size="0.170 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_21" material="wall_inner" type="box" pos="6.468 5.576 0.150" euler="0 0 154.89" size="0.168 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_22" material="wall_inner" type="box" pos="6.136 5.698 0.150" euler="0 0 164.48" size="0.186 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_23" material="wall_inner" type="box" pos="5.747 5.774 0.150" euler="0 0 172.87" size="0.211 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_24" material="wall_inner" type="box" pos="5.269 5.800 0.150" euler="0 0 -180.00" size="0.268 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_25" material="wall_inner" type="box" pos="4.736 5.821 0.150" euler="0 0 175.49" size="0.266 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_26" material="wall_inner" type="box" pos="4.233 5.886 0.150" euler="0 0 169.38" size="0.242 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_27" material="wall_inner" type="box" pos="3.783 6.005 0.150" euler="0 0 160.91" size="0.225 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_28" material="wall_inner" type="box" pos="3.452 6.149 0.150" euler="0 0 149.04" size="0.137 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_29" material="wall_inner" type="box" pos="3.281 6.235 0.150" euler="0 0 164.05" size="0.055 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_30" material="wall_inner" type="box" pos="3.171 6.250 0.150" euler="0 0 180.00" size="0.057 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_31" material="wall_inner" type="box" pos="3.038 6.230 0.150" euler="0 0 -165.38" size="0.079 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_32" material="wall_inner" type="box" pos="2.821 6.140 0.150" euler="0 0 -153.43" size="0.158 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_33" material="wall_inner" type="box" pos="2.473 6.000 0.150" euler="0 0 -161.57" size="0.218 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_34" material="wall_inner" type="box" pos="2.045 5.887 0.150" euler="0 0 -168.69" size="0.226 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_35" material="wall_inner" type="box" pos="1.588 5.821 0.150" euler="0 0 -174.81" size="0.237 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_36" material="wall_inner" type="box" pos="1.128 5.800 0.150" euler="0 0 180.00" size="0.224 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_37" material="wall_inner" type="box" pos="0.699 5.781 0.150" euler="0 0 -174.60" size="0.205 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_38" material="wall_inner" type="box" pos="0.283 5.722 0.150" euler="0 0 -169.56" size="0.216 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_39" material="wall_inner" type="box" pos="-0.151 5.623 0.150" euler="0 0 -164.93" size="0.229 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_40" material="wall_inner" type="box" pos="-0.586 5.489 0.150" euler="0 0 -160.71" size="0.226 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_41" material="wall_inner" type="box" pos="-0.969 5.317 0.150" euler="0 0 -150.26" size="0.195 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_42" material="wall_inner" type="box" pos="-1.282 5.096 0.150" euler="0 0 -139.09" size="0.190 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_43" material="wall_inner" type="box" pos="-1.547 4.816 0.150" euler="0 0 -128.00" size="0.198 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_44" material="wall_inner" type="box" pos="-1.772 4.466 0.150" euler="0 0 -117.76" size="0.220 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_45" material="wall_inner" type="box" pos="-1.947 4.066 0.150" euler="0 0 -109.52" size="0.218 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_46" material="wall_inner" type="box" pos="-2.061 3.647 0.150" euler="0 0 -101.04" size="0.217 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_47" material="wall_inner" type="box" pos="-2.113 3.211 0.150" euler="0 0 -92.69" size="0.223 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_48" material="wall_inner" type="box" pos="-2.101 2.742 0.150" euler="0 0 -84.81" size="0.247 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_49" material="wall_inner" type="box" pos="-2.044 2.257 0.150" euler="0 0 -81.67" size="0.241 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_50" material="wall_inner" type="box" pos="-1.963 1.800 0.150" euler="0 0 -78.11" size="0.223 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_51" material="wall_inner" type="box" pos="-1.861 1.385 0.150" euler="0 0 -74.05" size="0.205 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_52" material="wall_inner" type="box" pos="-1.775 1.108 0.150" euler="0 0 -69.44" size="0.086 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_53" material="wall_inner" type="box" pos="-1.594 0.950 0.150" euler="0 0 -27.30" size="0.169 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_54" material="wall_inner" type="box" pos="-0.998 0.784 0.150" euler="0 0 -11.17" size="0.455 0.050 0.150"/>
+        <geom class="scenery" name="inner_panel_55" material="wall_inner" type="box" pos="0.141 0.648 0.150" euler="0 0 -3.96" size="0.694 0.050 0.150"/>
+        <geom class="scenery" name="inner_post_00" material="wall_inner" type="cylinder" pos="0.833 0.600 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_01" material="wall_inner" type="cylinder" pos="2.675 0.600 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_02" material="wall_inner" type="cylinder" pos="4.168 0.661 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_03" material="wall_inner" type="cylinder" pos="5.289 0.780 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_04" material="wall_inner" type="cylinder" pos="6.003 0.943 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_05" material="wall_inner" type="cylinder" pos="6.373 1.138 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_06" material="wall_inner" type="cylinder" pos="6.710 1.376 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_07" material="wall_inner" type="cylinder" pos="6.979 1.635 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_08" material="wall_inner" type="cylinder" pos="7.187 1.915 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_09" material="wall_inner" type="cylinder" pos="7.352 2.245 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_10" material="wall_inner" type="cylinder" pos="7.488 2.588 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_11" material="wall_inner" type="cylinder" pos="7.584 2.919 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_12" material="wall_inner" type="cylinder" pos="7.641 3.236 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_13" material="wall_inner" type="cylinder" pos="7.662 3.547 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_14" material="wall_inner" type="cylinder" pos="7.651 3.847 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_15" material="wall_inner" type="cylinder" pos="7.611 4.132 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_16" material="wall_inner" type="cylinder" pos="7.540 4.404 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_17" material="wall_inner" type="cylinder" pos="7.446 4.650 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_18" material="wall_inner" type="cylinder" pos="7.314 4.873 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_19" material="wall_inner" type="cylinder" pos="7.133 5.092 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_20" material="wall_inner" type="cylinder" pos="6.897 5.308 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_21" material="wall_inner" type="cylinder" pos="6.621 5.505 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_22" material="wall_inner" type="cylinder" pos="6.316 5.648 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_23" material="wall_inner" type="cylinder" pos="5.957 5.748 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_24" material="wall_inner" type="cylinder" pos="5.538 5.800 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_25" material="wall_inner" type="cylinder" pos="5.001 5.800 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_26" material="wall_inner" type="cylinder" pos="4.471 5.842 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_27" material="wall_inner" type="cylinder" pos="3.996 5.931 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_28" material="wall_inner" type="cylinder" pos="3.570 6.078 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_29" material="wall_inner" type="cylinder" pos="3.334 6.220 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_30" material="wall_inner" type="cylinder" pos="3.228 6.250 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_31" material="wall_inner" type="cylinder" pos="3.114 6.250 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_32" material="wall_inner" type="cylinder" pos="2.962 6.210 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_33" material="wall_inner" type="cylinder" pos="2.680 6.069 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_34" material="wall_inner" type="cylinder" pos="2.267 5.931 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_35" material="wall_inner" type="cylinder" pos="1.824 5.843 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_36" material="wall_inner" type="cylinder" pos="1.352 5.800 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_37" material="wall_inner" type="cylinder" pos="0.903 5.800 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_38" material="wall_inner" type="cylinder" pos="0.495 5.761 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_39" material="wall_inner" type="cylinder" pos="0.070 5.683 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_40" material="wall_inner" type="cylinder" pos="-0.373 5.564 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_41" material="wall_inner" type="cylinder" pos="-0.800 5.414 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_42" material="wall_inner" type="cylinder" pos="-1.139 5.221 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_43" material="wall_inner" type="cylinder" pos="-1.426 4.972 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_44" material="wall_inner" type="cylinder" pos="-1.669 4.660 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_45" material="wall_inner" type="cylinder" pos="-1.874 4.271 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_46" material="wall_inner" type="cylinder" pos="-2.020 3.860 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_47" material="wall_inner" type="cylinder" pos="-2.103 3.434 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_48" material="wall_inner" type="cylinder" pos="-2.124 2.988 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_49" material="wall_inner" type="cylinder" pos="-2.079 2.496 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_50" material="wall_inner" type="cylinder" pos="-2.009 2.018 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_51" material="wall_inner" type="cylinder" pos="-1.917 1.582 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_52" material="wall_inner" type="cylinder" pos="-1.805 1.188 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_53" material="wall_inner" type="cylinder" pos="-1.744 1.027 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_54" material="wall_inner" type="cylinder" pos="-1.444 0.872 0.150" size="0.050 0.150"/>
+        <geom class="scenery" name="inner_post_55" material="wall_inner" type="cylinder" pos="-0.552 0.696 0.150" size="0.050 0.150"/>
+    </worldbody>
+</mujoco>
