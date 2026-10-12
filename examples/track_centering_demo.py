@@ -1,61 +1,82 @@
 """
-Demonstration/validation run of the track-centering controller — headless by
-default, or with an optional interactive MuJoCo viewer.
+Run the track-centering controller in a straight corridor and report the result.
 
-Composes neoracer.xml onto assets/tracks/straight_corridor.xml at runtime
-(with assets.compose, as manual_drive.py's load_model does — neither
-XML file names or depends on the other), settles the car, then drives the
-controller for a fixed number of steps and reports centering performance.
+By default the demo runs headless. With --viewer, it opens the MuJoCo viewer.
 
-No walled corridor with a "true" centerline exists elsewhere in the repo, so
-the metric used here is a PROXY: how close the car stays to lateral_error==0
-(balanced left/right LiDAR clearance, see track_centering.py's docstring for
-the exact sign convention), not literal distance from a labeled center point.
+The demo puts the car (neoracer.xml) on assets/tracks/straight_corridor.xml with assets.compose.
+The two XML files do not name each other.
+The demo lets the car settle, moves it toward the left wall, and then runs the controller.
 
-Viewer code (run_viewer, _side_clearance, _print_status) is isolated from
-the controller: it only calls the same public compute_signals()/step()
-API the headless run() uses, and never touches track_centering.py.
+The repo has no corridor with a labeled centerline.
+So the demo measures lateral_error, not the distance from a centerline.
+lateral_error is 0 when the left and right LiDAR clearances are equal.
+track_centering.py gives the sign convention.
+
+The viewer code (run_viewer, _side_clearance, _print_status) uses only the
+public compute_signals() and step() functions, the same as run().
 
 Usage:
-    python3 -m examples.track_centering_demo              # headless (default)
-    mjpython -m examples.track_centering_demo --viewer     # interactive viewer
+    python3 -m examples.track_centering_demo                       # headless
+    mjpython -m examples.track_centering_demo --viewer             # viewer, 6 s
+    mjpython -m examples.track_centering_demo --viewer --no-limit  # until you close it
 
-NOTE: on macOS, the passive viewer requires mjpython, not plain python3 (same
-constraint as examples/run.py) — mjpython runs the script on a secondary
-thread, keeping the main thread free for the viewer's Cocoa event loop.
+On macOS, the passive viewer needs mjpython, not plain python3.
+mjpython runs the script on a second thread, so the viewer can use the main thread.
+
+Frame: +X forward, +Y left, +Z up.
 """
 
 import argparse
 import os
 import time
+from dataclasses import dataclass
 
 import mujoco
 import mujoco.viewer
 import numpy as np
 
-from neoracer_mujoco import assets
-from neoracer_mujoco import sensors as sl
+from neoracer_mujoco import assets, sensors, sim
 from neoracer_mujoco.control import PDState, track_centering
+from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.control.track_centering import (
+    CenteringSignals,
     TrackCenteringConfig,
     compute_signals,
 )
-from neoracer_mujoco.sensors import LEFT_BEAMS, RIGHT_BEAMS
 
-STEPS = 3000
-SETTLE_STEPS = 400
-# Deliberate initial lateral offset (m), applied AFTER settling, toward the
-# left wall (corridor half-width is 0.5 m) — without this the car spawns
-# already centered in this symmetric corridor and the run would never
-# exercise the controller's correction behavior, only its steady-state one.
-INITIAL_Y_OFFSET = 0.25
-VIEWER_PRINT_STEPS = 50  # ~0.1s at the model's 0.002s timestep
-# Default --viewer session length. 6.0s matches STEPS*timestep (3000*0.002)
-# in the headless run() below, and the car stays well inside the 16 m
-# corridor over that window (measured: ~9-10 m traveled by t=6s, corridor
-# spans x=-2..14) — the viewer would otherwise run indefinitely until the
-# car eventually exits the far end and LiDAR has nothing left to measure.
-DEFAULT_VIEWER_DURATION_S = 6.0
+
+@dataclass(frozen=True)
+class DemoParams:
+    steps: int = 3000  # physics steps of the headless run; 6 s at a 0.002 s timestep
+    # m, + = toward the left wall. The demo moves the car by this offset after
+    # the settle. The corridor half-width is 0.5 m. Without the offset, the car
+    # starts at the center, and the run does not test the correction.
+    initial_y_offset_m: float = 0.25
+    # s of simulation time in viewer mode. It is the same as the headless run.
+    # In 6 s the car travels about 9 to 10 m (measured). The corridor goes from
+    # x = -2 m to x = 14 m, so the car stays in the corridor.
+    viewer_duration_s: float = 6.0
+    print_every_steps: int = 50  # physics steps between two status lines; 0.1 s
+    # The car is upright while the cosine of its tilt is above this value.
+    min_upright_cos: float = 0.7
+
+
+@dataclass(frozen=True)
+class CenteringReport:
+    """The result of the headless run. Distances in m, steer in rad, throttle in N·m."""
+
+    distance_traveled_x: float
+    mean_abs_lateral_error: float
+    max_abs_lateral_error: float
+    first_quarter_mean_abs_lateral_error: float
+    last_quarter_mean_abs_lateral_error: float
+    mean_abs_steer: float
+    max_abs_steer: float
+    steer_within_limits: bool
+    mean_throttle: float
+    min_front_distance: float
+    upright_throughout: bool
+    finite_throughout: bool
 
 
 def load_model() -> mujoco.MjModel:
@@ -64,33 +85,36 @@ def load_model() -> mujoco.MjModel:
     )
 
 
+def _spawn(model: mujoco.MjModel, params: DemoParams) -> mujoco.MjData:
+    """Settle the car, then move it sideways by params.initial_y_offset_m."""
+    data = sim.settle(model)
+    data.qpos[1] += params.initial_y_offset_m
+    mujoco.mj_forward(model, data)
+    return data
+
+
 def _side_clearance(
-    sensors: sl.SensorReadings, beams: tuple[int, ...], cfg: TrackCenteringConfig
+    readings: sensors.SensorReadings,
+    beams: tuple[int, ...],
+    cfg: TrackCenteringConfig,
 ) -> float:
-    """Mean clearance across the given beams, for DISPLAY only — mirrors
-    (does not modify) the controller's no-hit-as-open convention. The
-    controller's own internal beam handling lives entirely in
-    track_centering.py; this is a read-only echo of it for the overlay."""
-    ranges = sl.lidar_ranges(sensors)
-    values = []
-    for i in beams:
-        raw = float(ranges[i])
-        values.append(cfg.max_beam_range if raw < 0 else min(raw, cfg.max_beam_range))
+    """The mean clearance (m) of the given beams, for the status line only.
+    It uses the same beam_distance as the controller."""
+    ranges = sensors.lidar_ranges(readings)
+    values = [
+        sensors.beam_distance(sensors.parse_beam(float(ranges[i])), cfg.max_beam_range)
+        for i in beams
+    ]
     return sum(values) / len(values)
 
 
-def run() -> dict:
+def run(params: DemoParams) -> CenteringReport:
+    """Run the controller headless for params.steps steps and measure the result."""
     model = load_model()
-    data = mujoco.MjData(model)
+    data = _spawn(model, params)
     car_id = model.body("car").id
+    layout = sensors.sensor_layout(model)
     dt = model.opt.timestep
-
-    data.ctrl[:] = 0
-    for _ in range(SETTLE_STEPS):
-        mujoco.mj_step(model, data)
-
-    data.qpos[1] += INITIAL_Y_OFFSET
-    mujoco.mj_forward(model, data)
 
     cfg = TrackCenteringConfig()
     state = PDState()
@@ -98,13 +122,12 @@ def run() -> dict:
     lateral_errors, steers, throttles, front_dists = [], [], [], []
     upright_all, finite_all = True, True
 
-    for _ in range(STEPS):
-        sensors = sl.read(model, data)
-        signals = compute_signals(sensors, cfg)
-        state, control = track_centering.step(cfg, state, sensors, dt)
+    for _ in range(params.steps):
+        readings = sensors.read_layout(layout, data)
+        signals = compute_signals(readings, cfg)
+        state, control = track_centering.step(cfg, state, readings, dt)
 
-        data.ctrl[0:4] = control.throttle
-        data.ctrl[4] = control.steer
+        sim.apply_command(data, control)
         mujoco.mj_step(model, data)
 
         lateral_errors.append(signals.lateral_error)
@@ -112,8 +135,7 @@ def run() -> dict:
         throttles.append(control.throttle)
         front_dists.append(signals.front_distance)
 
-        upright_cos = float(data.body("car").xmat[8])
-        if upright_cos < 0.7:
+        if sim.car_upright_cos(data, car_id) < params.min_upright_cos:
             upright_all = False
         if not (np.isfinite(data.qpos).all() and np.isfinite(data.qvel).all()):
             finite_all = False
@@ -124,35 +146,36 @@ def run() -> dict:
     front_dists = np.array(front_dists)
     quarter = len(lateral_errors) // 4
 
-    return {
-        "final_pos": data.xpos[car_id].copy(),
-        "distance_traveled_x": float(data.xpos[car_id][0]),
-        "initial_y_offset": INITIAL_Y_OFFSET,
-        "mean_abs_lateral_error": float(np.mean(np.abs(lateral_errors))),
-        "max_abs_lateral_error": float(np.max(np.abs(lateral_errors))),
-        "first_quarter_mean_abs_lateral_error": float(
+    return CenteringReport(
+        distance_traveled_x=float(data.xpos[car_id][0]),
+        mean_abs_lateral_error=float(np.mean(np.abs(lateral_errors))),
+        max_abs_lateral_error=float(np.max(np.abs(lateral_errors))),
+        first_quarter_mean_abs_lateral_error=float(
             np.mean(np.abs(lateral_errors[:quarter]))
         ),
-        "last_quarter_mean_abs_lateral_error": float(
+        last_quarter_mean_abs_lateral_error=float(
             np.mean(np.abs(lateral_errors[-quarter:]))
         ),
-        "mean_abs_steer": float(np.mean(np.abs(steers))),
-        "max_abs_steer": float(np.max(np.abs(steers))),
-        "steer_within_limits": bool(
+        mean_abs_steer=float(np.mean(np.abs(steers))),
+        max_abs_steer=float(np.max(np.abs(steers))),
+        steer_within_limits=bool(
             np.all(np.abs(steers) <= cfg.shaping.steer_limit + 1e-9)
         ),
-        "mean_throttle": float(np.mean(throttles)),
-        "min_front_distance": float(np.min(front_dists)),
-        "upright_throughout": upright_all,
-        "finite_throughout": finite_all,
-    }
+        mean_throttle=float(np.mean(throttles)),
+        min_front_distance=float(np.min(front_dists)),
+        upright_throughout=upright_all,
+        finite_throughout=finite_all,
+    )
 
 
 def _print_status(
-    data: mujoco.MjData, control, signals, left: float, right: float
+    data: mujoco.MjData,
+    control: ControlCommand,
+    signals: CenteringSignals,
+    left: float,
+    right: float,
 ) -> None:
-    """One diagnostic line, printed periodically in viewer mode (mirrors
-    run.py's _log pattern)."""
+    """Print one status line in viewer mode."""
     print(
         f"t={data.time:6.2f}s "
         f"steer={control.steer:+.3f} thr={control.throttle:+.3f} "
@@ -161,130 +184,131 @@ def _print_status(
     )
 
 
-def run_viewer(duration: float = DEFAULT_VIEWER_DURATION_S) -> None:
-    """Same settle -> offset -> controller loop as run(), but synced to an
-    interactive mujoco.viewer.launch_passive window instead of collecting
-    metrics headlessly. Requires mjpython on macOS (see module docstring).
+def run_viewer(params: DemoParams, duration_s: float | None) -> None:
+    """Run the same loop as run() in the passive viewer, in real time.
 
-    Exits when EITHER `duration` seconds of simulated time have elapsed OR
-    the viewer window is closed, whichever comes first. Pass duration<=0
-    for no automatic limit (run until the window is closed)."""
+    The loop stops after duration_s seconds of simulation time, or when you
+    close the window. If duration_s is None, only the window close stops it.
+    On macOS, run it with mjpython (see the module docstring).
+    """
     model = load_model()
-    data = mujoco.MjData(model)
+    data = _spawn(model, params)
     car_id = model.body("car").id
+    layout = sensors.sensor_layout(model)
     dt = model.opt.timestep
-    max_steps = int(duration / dt) if duration and duration > 0 else None
-
-    data.ctrl[:] = 0
-    for _ in range(SETTLE_STEPS):
-        mujoco.mj_step(model, data)
-
-    data.qpos[1] += INITIAL_Y_OFFSET
-    mujoco.mj_forward(model, data)
+    max_steps = None if duration_s is None else int(duration_s / dt)
 
     cfg = TrackCenteringConfig()
     state = PDState()
 
-    if max_steps is not None:
+    if duration_s is None:
         print(
-            f"NeoRacer track-centering demo — viewer mode, stops automatically "
-            f"after {duration:.1f}s (or close the window to exit early)."
+            "NeoRacer track-centering demo — viewer mode. Close the viewer window to exit."
         )
     else:
         print(
-            "NeoRacer track-centering demo — viewer mode. Close the viewer window to exit."
+            f"NeoRacer track-centering demo — viewer mode, stops automatically "
+            f"after {duration_s:.1f}s (or close the window to exit early)."
         )
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
         viewer.cam.trackbodyid = car_id
-        viewer.cam.distance = 1.6
-        viewer.cam.azimuth = 90
-        viewer.cam.elevation = -30
+        viewer.cam.distance = 1.6  # m from the car
+        viewer.cam.azimuth = 90  # deg
+        viewer.cam.elevation = -30  # deg; negative = the camera looks down
 
         step = 0
         while viewer.is_running():
             if max_steps is not None and step >= max_steps:
-                print(f"Reached the {duration:.1f}s duration limit — stopping.")
+                print(f"Reached the {duration_s:.1f}s duration limit — stopping.")
                 break
 
             loop_start = time.time()
 
-            sensors = sl.read(model, data)
-            signals = compute_signals(sensors, cfg)
-            state, control = track_centering.step(cfg, state, sensors, dt)
+            readings = sensors.read_layout(layout, data)
+            signals = compute_signals(readings, cfg)
+            state, control = track_centering.step(cfg, state, readings, dt)
 
-            data.ctrl[0:4] = control.throttle
-            data.ctrl[4] = control.steer
+            sim.apply_command(data, control)
             mujoco.mj_step(model, data)
             viewer.sync()
 
             step += 1
-            if step % VIEWER_PRINT_STEPS == 0:
-                left = _side_clearance(sensors, LEFT_BEAMS, cfg)
-                right = _side_clearance(sensors, RIGHT_BEAMS, cfg)
+            if step % params.print_every_steps == 0:
+                left = _side_clearance(readings, sensors.LEFT_BEAMS, cfg)
+                right = _side_clearance(readings, sensors.RIGHT_BEAMS, cfg)
                 _print_status(data, control, signals, left, right)
 
-            # sleep only the time left in this timestep, so the sim tracks
-            # real time instead of running faster/slower than real-world pace.
+            # Sleep only for the rest of this timestep, so the simulation
+            # keeps pace with real time.
             remaining = dt - (time.time() - loop_start)
             if remaining > 0:
                 time.sleep(remaining)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    params = DemoParams()
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "--viewer",
         action="store_true",
         help="open an interactive MuJoCo passive viewer instead of running headless",
     )
-    parser.add_argument(
+    limit = parser.add_mutually_exclusive_group()
+    limit.add_argument(
         "--duration",
         type=float,
-        default=DEFAULT_VIEWER_DURATION_S,
+        default=params.viewer_duration_s,
         help=(
             "viewer mode only: seconds of simulated time before auto-stopping "
-            f"(default {DEFAULT_VIEWER_DURATION_S:.1f}s; <=0 disables the limit). "
-            "Ignored in headless mode, which always runs its fixed STEPS."
+            f"(default {params.viewer_duration_s:.1f}s). "
+            "Ignored in headless mode, which always runs its fixed steps."
         ),
+    )
+    limit.add_argument(
+        "--no-limit",
+        action="store_true",
+        help="viewer mode only: run until you close the window",
     )
     args = parser.parse_args()
 
     if args.viewer:
-        run_viewer(duration=args.duration)
+        run_viewer(params, None if args.no_limit else args.duration)
         return
 
-    result = run()
+    report = run(params)
     print(
         "NeoRacer track-centering demo — straight_corridor.xml, "
-        f"{STEPS} steps after {SETTLE_STEPS}-step settle"
+        f"{params.steps} steps after {sim.SETTLE_STEPS}-step settle"
     )
     print()
-    print(f"  initial lateral offset        : {result['initial_y_offset']:+.3f} m")
-    print(f"  distance traveled (x)        : {result['distance_traveled_x']:+.3f} m")
-    print(f"  mean |lateral_error|          : {result['mean_abs_lateral_error']:.3f} m")
-    print(f"  max  |lateral_error|          : {result['max_abs_lateral_error']:.3f} m")
+    print(f"  initial lateral offset        : {params.initial_y_offset_m:+.3f} m")
+    print(f"  distance traveled (x)        : {report.distance_traveled_x:+.3f} m")
+    print(f"  mean |lateral_error|          : {report.mean_abs_lateral_error:.3f} m")
+    print(f"  max  |lateral_error|          : {report.max_abs_lateral_error:.3f} m")
     print(
-        f"  first-quarter mean |error|    : {result['first_quarter_mean_abs_lateral_error']:.3f} m"
+        f"  first-quarter mean |error|    : {report.first_quarter_mean_abs_lateral_error:.3f} m"
     )
     print(
-        f"  last-quarter  mean |error|    : {result['last_quarter_mean_abs_lateral_error']:.3f} m"
+        f"  last-quarter  mean |error|    : {report.last_quarter_mean_abs_lateral_error:.3f} m"
     )
-    print(f"  mean |steer|                  : {result['mean_abs_steer']:.3f} rad")
-    print(f"  max  |steer|                  : {result['max_abs_steer']:.3f} rad")
-    print(f"  steer stayed within ±limits   : {result['steer_within_limits']}")
-    print(f"  mean throttle                 : {result['mean_throttle']:+.3f} N·m")
-    print(f"  min front clearance seen      : {result['min_front_distance']:.3f} m")
-    print(f"  upright for entire run        : {result['upright_throughout']}")
-    print(f"  all qpos/qvel finite          : {result['finite_throughout']}")
+    print(f"  mean |steer|                  : {report.mean_abs_steer:.3f} rad")
+    print(f"  max  |steer|                  : {report.max_abs_steer:.3f} rad")
+    print(f"  steer stayed within ±limits   : {report.steer_within_limits}")
+    print(f"  mean throttle                 : {report.mean_throttle:+.3f} N·m")
+    print(f"  min front clearance seen      : {report.min_front_distance:.3f} m")
+    print(f"  upright for entire run        : {report.upright_throughout}")
+    print(f"  all qpos/qvel finite          : {report.finite_throughout}")
     print()
     print("  NOTE: lateral_error is a PROXY metric (balanced left/right LiDAR")
     print("  clearance), not distance from a labeled track centerline — no such")
     print("  centerline exists in this repo. Its MAGNITUDE is not directly")
     print("  comparable to the physical spawn offset in meters (diagonal beams")
     print(
-        f"  amplify it ~1.41x) — the {INITIAL_Y_OFFSET:.2f} m offset above produces a"
+        f"  amplify it ~1.41x) — the {params.initial_y_offset_m:.2f} m offset above produces a"
     )
     print("  much larger initial lateral_error; track its trend, not its raw value.")
     print("  Results are for this specific 1.0 m-wide straight corridor only;")
