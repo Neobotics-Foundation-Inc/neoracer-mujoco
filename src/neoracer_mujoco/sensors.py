@@ -14,6 +14,7 @@ Sensor map (matches neoracer.xml):
 """
 
 from dataclasses import dataclass
+from typing import assert_never
 
 import mujoco
 import numpy as np
@@ -213,23 +214,22 @@ LIDAR_BEAM_ORDER = (
     "lidar_315",
 )
 LIDAR_ANGLES_DEG = (0, 45, 90, 135, 180, 225, 270, 315)
-ALL_BEAMS = LIDAR_BEAM_ORDER
 
-# Named beam groupings shared by LiDAR-based controllers (track_centering.py,
-# wall_following.py) so they agree on which beam is "front-left" etc. without
-# each controller re-deriving it.
-LEFT_BEAMS = ("lidar_045", "lidar_090", "lidar_135")
-RIGHT_BEAMS = ("lidar_315", "lidar_270", "lidar_225")
-# Deliberately lidar_000 ONLY, not a wider cone: lidar_045/lidar_315 already
-# do double duty in LEFT_BEAMS/RIGHT_BEAMS. Including them here too would
-# couple a forward-obstacle slowdown to side-wall proximity during a lateral
-# correction (a wall picked up obliquely by a diagonal beam would look like
-# a forward obstacle and cut throttle when nothing is ahead).
-FRONT_CONE_BEAMS = ("lidar_000",)
-FRONT_LEFT_BEAM = "lidar_045"
-REAR_LEFT_BEAM = "lidar_135"
-FRONT_RIGHT_BEAM = "lidar_315"
-REAR_RIGHT_BEAM = "lidar_225"
+# Beam groups shared by the LiDAR controllers (track_centering.py,
+# wall_following.py). Each value is an index into LIDAR_BEAM_ORDER and into
+# LidarScan.ranges.
+LEFT_BEAMS = (1, 2, 3)  # lidar_045, lidar_090, lidar_135
+RIGHT_BEAMS = (7, 6, 5)  # lidar_315, lidar_270, lidar_225
+# Only lidar_000, not a wider cone: lidar_045/lidar_315 are already in
+# LEFT_BEAMS/RIGHT_BEAMS. In the cone, a side wall seen by a diagonal beam
+# would look like a forward obstacle and cut the throttle.
+FRONT_CONE_BEAMS = (0,)  # lidar_000
+LEFT_BEAM = 2  # lidar_090
+RIGHT_BEAM = 6  # lidar_270
+FRONT_LEFT_BEAM = 1  # lidar_045
+REAR_LEFT_BEAM = 3  # lidar_135
+FRONT_RIGHT_BEAM = 7  # lidar_315
+REAR_RIGHT_BEAM = 5  # lidar_225
 
 
 @dataclass(frozen=True)
@@ -259,6 +259,44 @@ def lidar_scan(sensors: SensorReadings) -> LidarScan[np.ndarray]:
     )
     angles = np.deg2rad(LIDAR_ANGLES_DEG)
     return LidarScan(angles=angles, ranges=ranges)
+
+
+@dataclass(frozen=True)
+class Hit:
+    distance: float  # m
+
+
+@dataclass(frozen=True)
+class NoHit: ...
+
+
+@dataclass(frozen=True)
+class Corrupt: ...
+
+
+type Beam = Hit | NoHit | Corrupt
+
+
+def parse_beam(value: float) -> Beam:
+    """Classify one rangefinder value (m). MuJoCo gives -1 when no geom is
+    within the cutoff. NaN and Inf are corrupt."""
+    if not np.isfinite(value):
+        return Corrupt()
+    if value < 0:
+        return NoHit()
+    return Hit(value)
+
+
+def beam_distance(beam: Beam, max_range: float) -> float:
+    """Distance (m) for a controller. A beam with no hit or a corrupt value
+    reads as max_range, so that bad data never looks like a close wall."""
+    match beam:
+        case Hit(distance=d):
+            return min(d, max_range)
+        case NoHit() | Corrupt():
+            return max_range
+        case _:
+            assert_never(beam)
 
 
 def print_sensors(sensors: SensorReadings) -> None:

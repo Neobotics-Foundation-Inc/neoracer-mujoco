@@ -150,7 +150,7 @@ def test_forward_beam_is_index_zero(car):
 
 
 def test_right_side_beam_lands_clockwise_quarter_turn(car):
-    """lidar_270 is this sim's right-side beam (see wall_following.SIDE_BEAM).
+    """lidar_270 is this sim's right-side beam (see sensors.RIGHT_BEAM).
     racecar_core's clockwise scan must place the right side one quarter-turn
     (index 2 of 8) after front, matching its own angle convention where
     right = +90 deg clockwise."""

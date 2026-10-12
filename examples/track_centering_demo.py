@@ -1,5 +1,5 @@
 """
-Demonstration/validation run of TrackCenteringController — headless by
+Demonstration/validation run of the track-centering controller — headless by
 default, or with an optional interactive MuJoCo viewer.
 
 Composes neoracer.xml onto assets/tracks/straight_corridor.xml at runtime
@@ -13,7 +13,7 @@ the metric used here is a PROXY: how close the car stays to lateral_error==0
 the exact sign convention), not literal distance from a labeled center point.
 
 Viewer code (run_viewer, _side_clearance, _print_status) is isolated from
-the controller: it only calls the same public compute_signals()/compute()
+the controller: it only calls the same public compute_signals()/step()
 API the headless run() uses, and never touches track_centering.py.
 
 Usage:
@@ -34,13 +34,12 @@ import mujoco.viewer
 import numpy as np
 
 from neoracer_mujoco import sensors as sl
+from neoracer_mujoco.control import PDState, track_centering
 from neoracer_mujoco.control.track_centering import (
-    LEFT_BEAMS,
-    RIGHT_BEAMS,
     TrackCenteringConfig,
-    TrackCenteringController,
     compute_signals,
 )
+from neoracer_mujoco.sensors import LEFT_BEAMS, RIGHT_BEAMS
 
 _PROJECT_DIR = Path(__file__).resolve().parent.parent
 
@@ -70,15 +69,16 @@ def load_model() -> mujoco.MjModel:
 
 
 def _side_clearance(
-    sensors: sl.SensorReadings, beam_names, cfg: TrackCenteringConfig
+    sensors: sl.SensorReadings, beams: tuple[int, ...], cfg: TrackCenteringConfig
 ) -> float:
     """Mean clearance across the given beams, for DISPLAY only — mirrors
     (does not modify) the controller's no-hit-as-open convention. The
     controller's own internal beam handling lives entirely in
     track_centering.py; this is a read-only echo of it for the overlay."""
+    ranges = sl.lidar_scan(sensors).ranges
     values = []
-    for name in beam_names:
-        raw = float(getattr(sensors, name)[0])
+    for i in beams:
+        raw = float(ranges[i])
         values.append(cfg.max_beam_range if raw < 0 else min(raw, cfg.max_beam_range))
     return sum(values) / len(values)
 
@@ -97,7 +97,7 @@ def run() -> dict:
     mujoco.mj_forward(model, data)
 
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
+    state = PDState()
 
     lateral_errors, steers, throttles, front_dists = [], [], [], []
     upright_all, finite_all = True, True
@@ -105,7 +105,7 @@ def run() -> dict:
     for _ in range(STEPS):
         sensors = sl.read(model, data)
         signals = compute_signals(sensors, cfg)
-        control = controller.compute(sensors, dt)
+        state, control = track_centering.step(cfg, state, sensors, dt)
 
         data.ctrl[0:4] = control.throttle
         data.ctrl[4] = control.steer
@@ -185,7 +185,7 @@ def run_viewer(duration: float = DEFAULT_VIEWER_DURATION_S) -> None:
     mujoco.mj_forward(model, data)
 
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
+    state = PDState()
 
     if max_steps is not None:
         print(
@@ -214,7 +214,7 @@ def run_viewer(duration: float = DEFAULT_VIEWER_DURATION_S) -> None:
 
             sensors = sl.read(model, data)
             signals = compute_signals(sensors, cfg)
-            control = controller.compute(sensors, dt)
+            state, control = track_centering.step(cfg, state, sensors, dt)
 
             data.ctrl[0:4] = control.throttle
             data.ctrl[4] = control.steer

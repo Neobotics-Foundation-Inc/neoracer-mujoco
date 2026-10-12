@@ -16,12 +16,13 @@ import pytest
 from fake_sensors import fake_readings
 
 from neoracer_mujoco import sensors as sl
+from neoracer_mujoco.control import PDState
 from neoracer_mujoco.control.track_centering import (
-    ALL_BEAMS,
     TrackCenteringConfig,
-    TrackCenteringController,
     compute_signals,
+    step,
 )
+from neoracer_mujoco.sensors import LIDAR_BEAM_ORDER
 
 DT = 0.02
 
@@ -29,29 +30,26 @@ DT = 0.02
 def _sensors(**overrides) -> sl.SensorReadings:
     """Build a SensorReadings with all 8 lidar beams defaulted to 1.0 m,
     overridden per-beam by name (e.g. lidar_090=0.5)."""
-    return fake_readings(**{name: 1.0 for name in ALL_BEAMS} | overrides)
+    return fake_readings(**{name: 1.0 for name in LIDAR_BEAM_ORDER} | overrides)
 
 
 def test_equal_left_right_is_approximately_neutral():
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
-    control = controller.compute(_sensors(), DT)
+    _, control = step(cfg, PDState(), _sensors(), DT)
     assert control.steer == pytest.approx(0.0, abs=1e-9)
 
 
 def test_closer_left_boundary_steers_right():
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
     sensors = _sensors(lidar_045=0.3, lidar_090=0.3, lidar_135=0.3)  # left wall close
-    control = controller.compute(sensors, DT)
+    _, control = step(cfg, PDState(), sensors, DT)
     assert control.steer < 0.0, "closer left wall must steer right (negative)"
 
 
 def test_closer_right_boundary_steers_left():
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
     sensors = _sensors(lidar_225=0.3, lidar_270=0.3, lidar_315=0.3)  # right wall close
-    control = controller.compute(sensors, DT)
+    _, control = step(cfg, PDState(), sensors, DT)
     assert control.steer > 0.0, "closer right wall must steer left (positive)"
 
 
@@ -60,31 +58,28 @@ def test_heading_toward_left_wall_corrects_right():
     reading short relative to rear-left => nose angled at the left wall =>
     controller should correct away from it (steer right, negative)."""
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
     sensors = _sensors(lidar_045=0.5, lidar_090=1.0, lidar_135=1.5)
     signals = compute_signals(sensors, cfg)
     assert signals.lateral_error == pytest.approx(
         0.0
     )  # mean(0.5,1,1.5)=1 == right mean 1
     assert signals.heading_error < 0.0
-    control = controller.compute(sensors, DT)
+    _, control = step(cfg, PDState(), sensors, DT)
     assert control.steer < 0.0
 
 
 def test_heading_toward_right_wall_corrects_left():
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
     sensors = _sensors(lidar_315=0.5, lidar_270=1.0, lidar_225=1.5)
     signals = compute_signals(sensors, cfg)
     assert signals.lateral_error == pytest.approx(0.0)
     assert signals.heading_error > 0.0
-    control = controller.compute(sensors, DT)
+    _, control = step(cfg, PDState(), sensors, DT)
     assert control.steer > 0.0
 
 
 def test_steer_output_is_clamped():
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
     sensors = _sensors(
         lidar_045=10.0,
         lidar_090=10.0,
@@ -93,18 +88,18 @@ def test_steer_output_is_clamped():
         lidar_270=0.05,
         lidar_315=0.05,
     )
+    state = PDState()
     for _ in range(200):  # let the slew-rate limiter reach steady state
-        control = controller.compute(sensors, DT)
+        state, control = step(cfg, state, sensors, DT)
     assert abs(control.steer) <= cfg.steer_limit + 1e-9
     assert control.steer == pytest.approx(cfg.steer_limit, abs=1e-6)
 
 
 def test_invalid_readings_trigger_safe_fallback():
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
-    # All 8 beams missing/NaN -> corrupt count 8 > max_corrupt_beams (4).
-    sensors = _sensors(**{name: float("nan") for name in ALL_BEAMS})
-    control = controller.compute(sensors, DT)
+    # All 8 beams NaN -> corrupt count 8 > max_corrupt_beams (4).
+    sensors = _sensors(**{name: float("nan") for name in LIDAR_BEAM_ORDER})
+    _, control = step(cfg, PDState(), sensors, DT)
     assert control.throttle == pytest.approx(
         cfg.target_throttle * cfg.safe_fallback_throttle_fraction
     )
@@ -115,10 +110,11 @@ def test_invalid_readings_trigger_safe_fallback():
 
 def test_infinite_readings_also_trigger_fallback():
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
     infinities = (float("inf"), float("-inf"))
-    sensors = _sensors(**{name: infinities[i % 2] for i, name in enumerate(ALL_BEAMS)})
-    control = controller.compute(sensors, DT)
+    sensors = _sensors(
+        **{name: infinities[i % 2] for i, name in enumerate(LIDAR_BEAM_ORDER)}
+    )
+    _, control = step(cfg, PDState(), sensors, DT)
     assert control.throttle == pytest.approx(
         cfg.target_throttle * cfg.safe_fallback_throttle_fraction
     )
@@ -128,7 +124,7 @@ def test_no_hit_reading_is_not_treated_as_corrupt():
     """-1 (legitimate no-hit) must NOT trip the corrupt-data fallback — it's
     real data meaning 'clear', not a sensor fault."""
     cfg = TrackCenteringConfig()
-    sensors = _sensors(**{name: -1.0 for name in ALL_BEAMS})
+    sensors = _sensors(**{name: -1.0 for name in LIDAR_BEAM_ORDER})
     signals = compute_signals(sensors, cfg)
     assert signals.n_corrupt == 0
     assert signals.lateral_error == pytest.approx(0.0)
@@ -136,40 +132,37 @@ def test_no_hit_reading_is_not_treated_as_corrupt():
 
 def test_throttle_decreases_for_sharp_steering_correction():
     cfg = TrackCenteringConfig()
-    straight = TrackCenteringController(cfg).compute(_sensors(), DT)
-    sharp_controller = TrackCenteringController(cfg)
-    sharp = None
+    _, straight = step(cfg, PDState(), _sensors(), DT)
+    state = PDState()
     sensors = _sensors(lidar_045=0.2, lidar_090=0.2, lidar_135=0.2)
     for _ in range(200):
-        sharp = sharp_controller.compute(sensors, DT)
+        state, sharp = step(cfg, state, sensors, DT)
     assert sharp.throttle < straight.throttle
 
 
 def test_throttle_decreases_for_close_forward_obstacle():
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
-    clear = controller.compute(_sensors(lidar_000=cfg.max_beam_range), DT)
-    controller.reset()
-    blocked = controller.compute(_sensors(lidar_000=0.1), DT)
+    _, clear = step(cfg, PDState(), _sensors(lidar_000=cfg.max_beam_range), DT)
+    _, blocked = step(cfg, PDState(), _sensors(lidar_000=0.1), DT)
     assert blocked.throttle < clear.throttle
     assert blocked.throttle == pytest.approx(0.0, abs=1e-9)
 
 
 def test_reset_clears_derivative_and_slew_history():
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
     offset_sensors = _sensors(lidar_045=0.2, lidar_090=0.2, lidar_135=0.2)
+    state = PDState()
     for _ in range(50):
-        controller.compute(offset_sensors, DT)
-    assert controller._prev_steer != 0.0  # history has built up
+        state, _ = step(cfg, state, offset_sensors, DT)
+    assert state.prev_steer != 0.0  # history has built up
 
-    controller.reset()
-    assert controller._prev_steer == 0.0
-    assert controller._prev_lateral_error == 0.0
+    state = PDState()
+    assert state.prev_steer == 0.0
+    assert state.prev_error == 0.0
 
     # With history cleared, a single neutral reading must be exactly neutral
     # again — no lingering pull from the pre-reset offset.
-    control = controller.compute(_sensors(), DT)
+    _, control = step(cfg, state, _sensors(), DT)
     assert control.steer == pytest.approx(0.0, abs=1e-9)
 
 
@@ -203,14 +196,14 @@ def test_controller_stable_on_corridor():
     mujoco.mj_forward(model, data)
 
     cfg = TrackCenteringConfig()
-    controller = TrackCenteringController(cfg)
+    state = PDState()
     steer_ctrlrange = model.actuator("steer_servo").ctrlrange
 
     min_front = float("inf")
     for _ in range(1500):
         sensors = sl.read(model, data)
         signals = compute_signals(sensors, cfg)
-        control = controller.compute(sensors, dt)
+        state, control = step(cfg, state, sensors, dt)
 
         data.ctrl[0:4] = control.throttle
         data.ctrl[4] = control.steer

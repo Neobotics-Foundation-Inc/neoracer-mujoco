@@ -13,37 +13,43 @@ import pytest
 from fake_sensors import fake_readings
 
 from neoracer_mujoco import sensors as sl
+from neoracer_mujoco.control import PDState
 from neoracer_mujoco.control.wall_following import (
-    SIDE_BEAM,
     WallFollowingConfig,
-    WallFollowingController,
     compute_signals,
+    step,
 )
-from neoracer_mujoco.sensors import ALL_BEAMS, SensorReadings
+from neoracer_mujoco.sensors import LIDAR_BEAM_ORDER, SensorReadings
 
 DT = 0.02
 
 
 def _sensors(**overrides) -> SensorReadings:
     """All 8 lidar beams defaulted to 1.0 m, overridden per-beam by name."""
-    return fake_readings(**{name: 1.0 for name in ALL_BEAMS} | overrides)
+    return fake_readings(**{name: 1.0 for name in LIDAR_BEAM_ORDER} | overrides)
+
+
+def _command(cfg, sensors):
+    """Command of the first step of an episode."""
+    _, command = step(cfg, PDState(), sensors, DT)
+    return command
 
 
 def test_left_and_right_are_mirror_images():
     """Same magnitude of 'too far from the wall' on each side must produce
     exactly opposite steering commands -- also exercises both follow_side
     values end to end."""
-    right = WallFollowingController(WallFollowingConfig(follow_side="right"))
-    left = WallFollowingController(WallFollowingConfig(follow_side="left"))
-    right_control = right.compute(_sensors(lidar_270=1.0), DT)
-    left_control = left.compute(_sensors(lidar_090=1.0), DT)
+    right = WallFollowingConfig(follow_side="right")
+    left = WallFollowingConfig(follow_side="left")
+    right_control = _command(right, _sensors(lidar_270=1.0))
+    left_control = _command(left, _sensors(lidar_090=1.0))
     assert left_control.steer == pytest.approx(-right_control.steer)
     assert left_control.throttle == pytest.approx(right_control.throttle)
 
 
 def test_too_far_from_wall_steers_toward_it():
     cfg = WallFollowingConfig(follow_side="right", target_distance=0.3)
-    control = WallFollowingController(cfg).compute(_sensors(lidar_270=1.0), DT)
+    control = _command(cfg, _sensors(lidar_270=1.0))
     assert control.steer < 0.0, (
         "too far from the right wall must steer right (negative)"
     )
@@ -51,14 +57,14 @@ def test_too_far_from_wall_steers_toward_it():
 
 def test_too_close_to_wall_steers_away():
     cfg = WallFollowingConfig(follow_side="right", target_distance=0.3)
-    control = WallFollowingController(cfg).compute(_sensors(lidar_270=0.1), DT)
+    control = _command(cfg, _sensors(lidar_270=0.1))
     assert control.steer > 0.0, "too close to the right wall must steer left (positive)"
 
 
 def test_at_target_distance_and_parallel_is_neutral():
     cfg = WallFollowingConfig(follow_side="right", target_distance=0.3)
     sensors = _sensors(lidar_270=0.3, lidar_315=0.3, lidar_225=0.3)
-    control = WallFollowingController(cfg).compute(sensors, DT)
+    control = _command(cfg, sensors)
     assert control.steer == pytest.approx(0.0, abs=1e-9)
 
 
@@ -70,30 +76,25 @@ def test_nose_angled_toward_wall_corrects_away():
     signals = compute_signals(sensors, cfg)
     assert signals.distance_error == pytest.approx(0.0)
     assert signals.wall_skew > 0.0
-    control = WallFollowingController(cfg).compute(sensors, DT)
+    control = _command(cfg, sensors)
     assert control.steer > 0.0
 
 
 def test_throttle_decreases_for_close_forward_obstacle():
     cfg = WallFollowingConfig(follow_side="right", target_distance=0.3)
-    controller = WallFollowingController(cfg)
-    clear = controller.compute(
-        _sensors(lidar_270=0.3, lidar_000=cfg.max_beam_range), DT
-    )
-    controller.reset()
-    blocked = controller.compute(_sensors(lidar_270=0.3, lidar_000=0.1), DT)
+    clear = _command(cfg, _sensors(lidar_270=0.3, lidar_000=cfg.max_beam_range))
+    blocked = _command(cfg, _sensors(lidar_270=0.3, lidar_000=0.1))
     assert blocked.throttle < clear.throttle
     assert blocked.throttle == pytest.approx(0.0, abs=1e-9)
 
 
 def test_throttle_decreases_for_sharp_steering_correction():
     cfg = WallFollowingConfig(follow_side="right", target_distance=0.3)
-    straight = WallFollowingController(cfg).compute(_sensors(lidar_270=0.3), DT)
-    sharp_controller = WallFollowingController(cfg)
+    straight = _command(cfg, _sensors(lidar_270=0.3))
+    state = PDState()
     sensors = _sensors(lidar_270=1.0)  # far from wall -> large correction
-    sharp = None
     for _ in range(200):
-        sharp = sharp_controller.compute(sensors, DT)
+        state, sharp = step(cfg, state, sensors, DT)
     assert sharp.throttle < straight.throttle
 
 
@@ -101,7 +102,7 @@ def test_invalid_readings_trigger_safe_fallback():
     cfg = WallFollowingConfig(follow_side="right")
     nan = float("nan")
     sensors = _sensors(lidar_270=nan, lidar_315=nan, lidar_225=nan, lidar_000=1.0)
-    control = WallFollowingController(cfg).compute(sensors, DT)
+    control = _command(cfg, sensors)
     assert control.throttle == pytest.approx(
         cfg.target_throttle * cfg.safe_fallback_throttle_fraction
     )
@@ -119,11 +120,10 @@ def test_no_hit_reading_is_not_treated_as_corrupt():
 
 def test_steer_output_is_clamped():
     cfg = WallFollowingConfig(follow_side="right", target_distance=0.3)
-    controller = WallFollowingController(cfg)
     sensors = _sensors(lidar_270=cfg.max_beam_range)  # maximally far -> saturates
-    control = None
+    state = PDState()
     for _ in range(200):  # let the slew-rate limiter reach steady state
-        control = controller.compute(sensors, DT)
+        state, control = step(cfg, state, sensors, DT)
     assert abs(control.steer) <= cfg.steer_limit + 1e-9
     assert control.steer == pytest.approx(-cfg.steer_limit, abs=1e-6)
 
@@ -132,11 +132,10 @@ def test_steer_slew_rate_limits_first_step():
     cfg = WallFollowingConfig(
         follow_side="right", target_distance=0.3, steer_slew_limit=1.0
     )
-    controller = WallFollowingController(cfg)
     sensors = _sensors(
         lidar_270=cfg.max_beam_range
     )  # would otherwise saturate instantly
-    control = controller.compute(sensors, DT)
+    control = _command(cfg, sensors)
     max_first_step_delta = cfg.steer_slew_limit * DT
     assert abs(control.steer) <= max_first_step_delta + 1e-9
     assert abs(control.steer) < cfg.steer_limit, (
@@ -146,17 +145,17 @@ def test_steer_slew_rate_limits_first_step():
 
 def test_reset_clears_derivative_and_slew_history():
     cfg = WallFollowingConfig(follow_side="right", target_distance=0.3)
-    controller = WallFollowingController(cfg)
     offset_sensors = _sensors(lidar_270=1.0)
+    state = PDState()
     for _ in range(50):
-        controller.compute(offset_sensors, DT)
-    assert controller._prev_steer != 0.0  # history has built up
+        state, _ = step(cfg, state, offset_sensors, DT)
+    assert state.prev_steer != 0.0  # history has built up
 
-    controller.reset()
-    assert controller._prev_steer == 0.0
-    assert controller._prev_distance_error == 0.0
+    state = PDState()
+    assert state.prev_steer == 0.0
+    assert state.prev_error == 0.0
 
-    control = controller.compute(_sensors(lidar_270=0.3), DT)
+    _, control = step(cfg, state, _sensors(lidar_270=0.3), DT)
     assert control.steer == pytest.approx(0.0, abs=1e-9)
 
 
@@ -188,20 +187,20 @@ def test_controller_converges_to_target_distance_on_corridor():
         mujoco.mj_step(model, data)
 
     cfg = WallFollowingConfig(follow_side="right")
-    controller = WallFollowingController(cfg)
+    state = PDState()
     steer_ctrlrange = model.actuator("steer_servo").ctrlrange
 
     side_distances = []
     for _ in range(1500):
         sensors = sl.read(model, data)
-        control = controller.compute(sensors, dt)
+        state, control = step(cfg, state, sensors, dt)
         data.ctrl[0:4] = control.throttle
         data.ctrl[4] = control.steer
         mujoco.mj_step(model, data)
 
         assert steer_ctrlrange[0] - 1e-9 <= control.steer <= steer_ctrlrange[1] + 1e-9
         assert np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel))
-        side_distances.append(float(getattr(sensors, SIDE_BEAM["right"])[0]))
+        side_distances.append(float(sensors.lidar_270[0]))
 
     upright_cos = float(data.body("car").xmat[8])
     assert upright_cos > 0.7, "car should not have flipped during the run"

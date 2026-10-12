@@ -113,7 +113,7 @@ stable API.
   suspension, wall contacts. Run with plain `python3 -m examples.manual_drive` (NOT
   mjpython — the glfw window must be created on the main thread). Camera and control
   feel are tunable via the constants at the top of the file.
-- **`track_centering_demo.py`** — runs the classical PD `TrackCenteringController`
+- **`track_centering_demo.py`** — runs the classical PD track-centering controller (`control.track_centering.step`)
   on the straight corridor track, headless by default or with an interactive
   viewer. Composes `neoracer.xml` onto `assets/tracks/straight_corridor.xml` at
   runtime, settles, then drives the controller and reports centering performance.
@@ -144,7 +144,7 @@ python3 -m pytest validation/ -v
   sensors under load, determinism).
 - **`test_logic.py`** — pure-logic checks: wheel-speed unit conversion, sensor read,
   and the Ackermann polyfit validated against exact arctan geometry.
-- **`test_track_centering.py`** — `TrackCenteringController` sign/safety logic plus
+- **`test_track_centering.py`** — track-centering `step` sign/safety logic plus
   one physics-integration run on the corridor track.
 
 The car contract (expected actuators, required sensors, mass band, ctrl layout)

@@ -1,15 +1,10 @@
-"""Classical (non-learned) controllers for the NeoRacer car."""
+"""Classical (non-learned) controllers for the NeoRacer car.
 
-from .track_centering import (
-    ControlCommand,
-    TrackCenteringConfig,
-    TrackCenteringController,
-    compute_signals,
-)
+Each controller module has a frozen config, a pure compute_signals() and a
+pure step(config, state, readings, dt) -> (state, command).
+"""
 
-__all__ = [
-    "ControlCommand",
-    "TrackCenteringConfig",
-    "TrackCenteringController",
-    "compute_signals",
-]
+from . import track_centering, wall_following
+from .steering import ControlCommand, PDState
+
+__all__ = ["ControlCommand", "PDState", "track_centering", "wall_following"]
