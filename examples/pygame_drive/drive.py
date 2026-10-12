@@ -39,25 +39,43 @@ from examples.pygame_drive.drive_sim import (
 )
 from neoracer_mujoco import assets, sensors
 
-WIDTH, HEIGHT = 900, 600
 
-# Limit: SDL axis numbers for an Xbox-style pad. Other pads may need other numbers.
-STEER_AXIS = 0  # left stick X, +1 = right
-ACCEL_AXIS = 5  # right trigger, rests at -1
-BRAKE_AXIS = 4  # left trigger, rests at -1
-RESET_BUTTON = 7  # Start
-DEADZONE = 0.1
+@dataclass(frozen=True)
+class ViewParams:
+    """The window and the chase camera."""
 
-CAM_DISTANCE = 1.6  # m behind and above the car
-CAM_ELEVATION = -35.0  # deg looking down
+    width: int = 900  # px
+    height: int = 600  # px
+    cam_distance: float = 1.6  # m behind and above the car
+    cam_elevation: float = -35.0  # deg looking down
 
-LIDAR_MAX = 2.0  # m; a beam past this, or with no hit, is drawn at the rim
-RADAR_R = 90  # px radius of the radar disc
-RADAR_PAD = 12  # px from the top-right corner
 
-KEY_SZ = 34  # px per key cap
-KEY_GAP = 4
-KEY_PAD = 12  # px from the bottom-right corner
+@dataclass(frozen=True)
+class GamepadParams:
+    """SDL axis and button numbers of the gamepad.
+
+    Limit: the numbers are for an Xbox-style pad. If a pad drives wrong, print
+    pad.get_axis(i) for each i in range(pad.get_numaxes()) while you move one
+    control at a time. Then change the numbers here.
+    """
+
+    steer_axis: int = 0  # left stick X, +1 = right
+    accel_axis: int = 5  # right trigger, rests at -1
+    brake_axis: int = 4  # left trigger, rests at -1
+    reset_button: int = 7  # Start
+    deadzone: float = 0.1  # steer input below this is 0
+
+
+@dataclass(frozen=True)
+class HudParams:
+    """The LiDAR radar and the WASD key caps."""
+
+    lidar_max: float = 2.0  # m; a beam past this, or with no hit, is drawn at the rim
+    radar_radius: int = 90  # px
+    radar_pad: int = 12  # px from the top-right corner
+    key_size: int = 34  # px per key cap
+    key_gap: int = 4  # px
+    key_pad: int = 12  # px from the bottom-right corner
 
 
 @dataclass(frozen=True)
@@ -80,14 +98,14 @@ _KEY_ACTIONS: frozendict[int, Action] = frozendict(
 )
 
 
-def event_action(event: pygame.event.Event) -> Action:
+def event_action(gamepad: GamepadParams, event: pygame.event.Event) -> Action:
     """What a pygame event asks for. Held keys (WASD, Space) are read each
     frame instead, with pygame.key.get_pressed."""
     if event.type == pygame.QUIT:
         return "quit"
     if event.type == pygame.KEYDOWN:
         return _KEY_ACTIONS.get(event.key, "none")
-    if event.type == pygame.JOYBUTTONDOWN and event.button == RESET_BUTTON:
+    if event.type == pygame.JOYBUTTONDOWN and event.button == gamepad.reset_button:
         return "reset_car"
     return "none"
 
@@ -115,34 +133,38 @@ def keyboard_inputs(keys: pygame.key.ScancodeWrapper) -> Inputs:
     )
 
 
-def gamepad_inputs(pad: pygame.joystick.JoystickType) -> Inputs:
-    throttle = (pad.get_axis(ACCEL_AXIS) + 1) / 2 - (pad.get_axis(BRAKE_AXIS) + 1) / 2
-    steer = -pad.get_axis(STEER_AXIS)  # stick right = steer right = negative
-    return Inputs(throttle=throttle, steer=0.0 if abs(steer) < DEADZONE else steer)
+def gamepad_inputs(p: GamepadParams, pad: pygame.joystick.JoystickType) -> Inputs:
+    throttle = (pad.get_axis(p.accel_axis) + 1) / 2 - (
+        pad.get_axis(p.brake_axis) + 1
+    ) / 2
+    steer = -pad.get_axis(p.steer_axis)  # stick right = steer right = negative
+    return Inputs(throttle=throttle, steer=0.0 if abs(steer) < p.deadzone else steer)
 
 
-def draw_lidar(screen: pygame.Surface, ranges: sensors.Vec8) -> None:
+def draw_lidar(hud: HudParams, screen: pygame.Surface, ranges: sensors.Vec8) -> None:
     """Top-right radar: one dot per beam at its angle and range, yellow when
     far and red when close. Car forward (+X) is up and car left (+Y) is left,
     the same as the chase camera."""
-    disc = pygame.Surface((2 * RADAR_R, 2 * RADAR_R), pygame.SRCALPHA)
-    pygame.draw.circle(disc, (10, 10, 10, 160), (RADAR_R, RADAR_R), RADAR_R)
-    pygame.draw.circle(disc, (0, 255, 0, 90), (RADAR_R, RADAR_R), RADAR_R, 1)
+    r = hud.radar_radius
+    disc = pygame.Surface((2 * r, 2 * r), pygame.SRCALPHA)
+    pygame.draw.circle(disc, (10, 10, 10, 160), (r, r), r)
+    pygame.draw.circle(disc, (0, 255, 0, 90), (r, r), r, 1)
     for i, value in enumerate(ranges):
         angle = math.radians(45 * i)  # LIDAR_BEAM_ORDER is 0deg..315deg in 45deg steps
-        dist = (
-            sensors.beam_distance(sensors.parse_beam(float(value)), LIDAR_MAX)
-            / LIDAR_MAX
-        )
-        px = RADAR_R - math.sin(angle) * dist * RADAR_R
-        py = RADAR_R - math.cos(angle) * dist * RADAR_R
+        beam = sensors.parse_beam(float(value))
+        dist = sensors.beam_distance(beam, hud.lidar_max) / hud.lidar_max
+        px = r - math.sin(angle) * dist * r
+        py = r - math.cos(angle) * dist * r
         pygame.draw.circle(disc, (255, int(255 * dist), 0), (int(px), int(py)), 5)
-    pygame.draw.circle(disc, (0, 200, 255), (RADAR_R, RADAR_R), 3)  # the car
-    screen.blit(disc, (screen.get_width() - 2 * RADAR_R - RADAR_PAD, RADAR_PAD))
+    pygame.draw.circle(disc, (0, 200, 255), (r, r), 3)  # the car
+    screen.blit(disc, (screen.get_width() - 2 * r - hud.radar_pad, hud.radar_pad))
 
 
 def draw_wasd(
-    screen: pygame.Surface, keys: pygame.key.ScancodeWrapper, font: pygame.font.Font
+    hud: HudParams,
+    screen: pygame.Surface,
+    keys: pygame.key.ScancodeWrapper,
+    font: pygame.font.Font,
 ) -> None:
     """Bottom-right WASD key caps; a held key is green."""
     caps = (
@@ -151,12 +173,11 @@ def draw_wasd(
         ("S", pygame.K_s, 1, 1),
         ("D", pygame.K_d, 2, 1),
     )
-    x0 = screen.get_width() - 3 * (KEY_SZ + KEY_GAP) - KEY_PAD
-    y0 = screen.get_height() - 2 * (KEY_SZ + KEY_GAP) - KEY_PAD
+    size, step = hud.key_size, hud.key_size + hud.key_gap
+    x0 = screen.get_width() - 3 * step - hud.key_pad
+    y0 = screen.get_height() - 2 * step - hud.key_pad
     for label, key, col, row in caps:
-        rect = pygame.Rect(
-            x0 + col * (KEY_SZ + KEY_GAP), y0 + row * (KEY_SZ + KEY_GAP), KEY_SZ, KEY_SZ
-        )
+        rect = pygame.Rect(x0 + col * step, y0 + row * step, size, size)
         held = keys[key]
         pygame.draw.rect(
             screen, (0, 200, 60) if held else (40, 40, 40), rect, border_radius=6
@@ -169,6 +190,7 @@ def draw_wasd(
 
 
 def main(track: str, bare: bool) -> None:
+    view, gamepad, hud = ViewParams(), GamepadParams(), HudParams()
     model = load_model(track, bare)
     data = mujoco.MjData(model)
     params, state = DriveParams(), DriveState()
@@ -178,17 +200,17 @@ def main(track: str, bare: bool) -> None:
 
     # The offscreen buffer must be at least the window size before the
     # Renderer is made. The MJCF default is 640x480.
-    model.vis.global_.offwidth = max(WIDTH, model.vis.global_.offwidth)
-    model.vis.global_.offheight = max(HEIGHT, model.vis.global_.offheight)
-    renderer = mujoco.Renderer(model, height=HEIGHT, width=WIDTH)
+    model.vis.global_.offwidth = max(view.width, model.vis.global_.offwidth)
+    model.vis.global_.offheight = max(view.height, model.vis.global_.offheight)
+    renderer = mujoco.Renderer(model, height=view.height, width=view.width)
     cam = mujoco.MjvCamera()
     cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
     cam.trackbodyid = car_id
-    cam.distance = CAM_DISTANCE
-    cam.elevation = CAM_ELEVATION
+    cam.distance = view.cam_distance
+    cam.elevation = view.cam_elevation
 
     pygame.init()
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    screen = pygame.display.set_mode((view.width, view.height))
     pygame.display.set_caption("NeoRacer: pygame drive")
     clock = pygame.time.Clock()
     key_font = pygame.font.SysFont(None, 26)
@@ -203,7 +225,7 @@ def main(track: str, bare: bool) -> None:
     running = True
     while running:
         for event in pygame.event.get():
-            match event_action(event):
+            match event_action(gamepad, event):
                 case "quit":
                     running = False
                 case "reset_car":
@@ -219,7 +241,9 @@ def main(track: str, bare: bool) -> None:
                     assert_never(other)
 
         keys = pygame.key.get_pressed()
-        inputs = gamepad_inputs(pad) if pad is not None else keyboard_inputs(keys)
+        inputs = (
+            gamepad_inputs(gamepad, pad) if pad is not None else keyboard_inputs(keys)
+        )
         if keys[pygame.K_SPACE]:
             state, inputs = DriveState(), Inputs(0.0, 0.0)  # hard stop, no slew
         state = next_state(params, state, inputs.throttle, inputs.steer, dt)
@@ -231,8 +255,9 @@ def main(track: str, bare: bool) -> None:
         screen.blit(pygame.surfarray.make_surface(frame.swapaxes(0, 1)), (0, 0))
         if timing:
             elapsed += dt
-        draw_lidar(screen, sensors.lidar_ranges(sensors.read_layout(layout, data)))
-        draw_wasd(screen, keys, key_font)
+        ranges = sensors.lidar_ranges(sensors.read_layout(layout, data))
+        draw_lidar(hud, screen, ranges)
+        draw_wasd(hud, screen, keys, key_font)
         color = (0, 255, 90) if timing else (220, 220, 220)
         label = timer_font.render(
             f"{int(elapsed // 60):02d}:{elapsed % 60:05.2f}", True, color

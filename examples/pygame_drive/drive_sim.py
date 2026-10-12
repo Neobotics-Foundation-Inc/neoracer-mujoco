@@ -37,6 +37,9 @@ class DriveParams:
     # N·m of rolling resistance per wheel. Back-EMF alone fades near zero speed
     # and leaves the car creeping.
     roll_friction: float = 0.02
+    # N·m per rad/s; the rolling friction grows at this rate from zero spin to
+    # roll_friction, so it does not flip sign at every step near zero speed.
+    roll_friction_slope: float = 0.05
     max_steer: float = 0.40  # rad; the model's Ackermann command limit
     throttle_slew: float = 2.5  # 1/s; how fast the applied throttle follows the input
     steer_slew: float = 4.0  # 1/s; smooths digital WASD input, sticks barely notice
@@ -90,7 +93,9 @@ def wheel_torque(
     drag and a smoothed rolling friction. At zero throttle the drag brakes the
     car; at full throttle drive and drag balance at the top speed."""
     torque = throttle * p.max_torque - p.motor_damping * wheel_spin
-    torque -= np.clip(wheel_spin * 0.05, -p.roll_friction, p.roll_friction)
+    torque -= np.clip(
+        wheel_spin * p.roll_friction_slope, -p.roll_friction, p.roll_friction
+    )
     return np.clip(torque, -p.max_torque, p.max_torque)
 
 
