@@ -15,7 +15,7 @@ Signals (see compute_signals()), both direction-agnostic w.r.t. follow_side:
     + => farther than target => steer TOWARD the wall.
   wall_skew = rear_side_beam - front_side_beam.
     + => nose angled TOWARD the wall => steer AWAY from it.
-step() applies one +-1 sign flip (toward_wall, see _side_beams) to turn
+step() applies one +-1 sign flip (SideBeams.toward_wall) to turn
 these into an actual steer command, so "left" and "right" are exact mirrors.
 
 Invalid-beam handling is the same as in track_centering.py (see
@@ -83,15 +83,22 @@ class WallFollowingSignals:
     n_corrupt: int  # of the 4 beams used here that were NaN/Inf
 
 
-def _side_beams(side: Side) -> tuple[int, int, int, float]:
-    """(side beam, front beam, rear beam, toward_wall) for one side. The side
-    beam points perpendicular to the wall. toward_wall is the sign of a steer
-    command toward the wall: + for the left wall, - for the right wall."""
+@dataclass(frozen=True)
+class SideBeams:
+    """The beams that watch one wall, as indices into LidarScan.ranges."""
+
+    side: int  # points perpendicular to the wall
+    front: int
+    rear: int
+    toward_wall: float  # sign of a steer toward the wall: + left wall, - right wall
+
+
+def _side_beams(side: Side) -> SideBeams:
     match side:
         case "left":
-            return LEFT_BEAM, FRONT_LEFT_BEAM, REAR_LEFT_BEAM, 1.0
+            return SideBeams(LEFT_BEAM, FRONT_LEFT_BEAM, REAR_LEFT_BEAM, 1.0)
         case "right":
-            return RIGHT_BEAM, FRONT_RIGHT_BEAM, REAR_RIGHT_BEAM, -1.0
+            return SideBeams(RIGHT_BEAM, FRONT_RIGHT_BEAM, REAR_RIGHT_BEAM, -1.0)
         case _:
             assert_never(side)
 
@@ -100,16 +107,17 @@ def compute_signals(
     sensors: SensorReadings, cfg: WallFollowingConfig
 ) -> WallFollowingSignals:
     """Pure function: SensorReadings -> WallFollowingSignals."""
-    side, front, rear, _ = _side_beams(cfg.follow_side)
+    sb = _side_beams(cfg.follow_side)
     ranges = lidar_scan(sensors).ranges
     beams = {
-        i: parse_beam(float(ranges[i])) for i in (side, front, rear, *FRONT_CONE_BEAMS)
+        i: parse_beam(float(ranges[i]))
+        for i in (sb.side, sb.front, sb.rear, *FRONT_CONE_BEAMS)
     }
     d = {i: beam_distance(b, cfg.max_beam_range) for i, b in beams.items()}
 
     return WallFollowingSignals(
-        distance_error=d[side] - cfg.target_distance,
-        wall_skew=d[rear] - d[front],
+        distance_error=d[sb.side] - cfg.target_distance,
+        wall_skew=d[sb.rear] - d[sb.front],
         front_distance=min(d[i] for i in FRONT_CONE_BEAMS),
         n_corrupt=sum(is_corrupt(b) for b in beams.values()),
     )
@@ -123,9 +131,8 @@ def step(
     if signals.n_corrupt > cfg.max_corrupt_beams:
         return steering.fallback(cfg, state, dt)
 
-    _, _, _, toward_wall = _side_beams(cfg.follow_side)
     error_rate = steering.error_rate(state, signals.distance_error, dt)
-    steer_raw = toward_wall * (
+    steer_raw = _side_beams(cfg.follow_side).toward_wall * (
         cfg.kp_distance * signals.distance_error
         - cfg.kp_heading * signals.wall_skew
         + cfg.kd * error_rate
