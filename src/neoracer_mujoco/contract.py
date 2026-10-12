@@ -1,26 +1,30 @@
 """
-The NeoRacer car contract: what every NeoRacer-family model must satisfy.
+The NeoRacer car contract: what contract.py requires of every NeoRacer car model.
 
-A new car = a new XML dropped in assets/. It is picked up automatically by
-assets.cars(), and validation/ runs the full conformance battery against it
-with no test edits — but only if it honors the promises below.
+A new car is a new XML file in assets/. assets.cars() finds it, and the tests
+in validation/ run the conformance tests on it with no test edits. The tests
+pass only if the XML satisfies the requirements below.
 
-This is the single source of truth for the interface. It lives in a real
-module (not a test helper) precisely because production code, examples, and
-tests all depend on it.
+This module is the one source of truth for the interface. Code, examples and
+tests all read it.
 
-Control layout contract (ctrl[0:4] + ctrl[4]):
-  ctrl[0..3] = fl/fr/rl/rr wheel drive torque (N·m), positive = forward
-  ctrl[4]    = steer_servo target angle (rad), positive = left
+Frame: +X forward, +Y left, +Z up.
+Control layout (ctrl[0:4] + ctrl[4]):
+  ctrl[0..3] = fl/fr/rl/rr wheel drive torque (N·m), + = forward
+  ctrl[4]    = steer_servo target angle (rad), + = left
 """
 
+from dataclasses import dataclass
+
+import mujoco
+
 # --- actuators + ctrl layout ------------------------------------------------
-EXPECTED_ACTUATORS = ["fl_motor", "fr_motor", "rl_motor", "rr_motor", "steer_servo"]
+EXPECTED_ACTUATORS = ("fl_motor", "fr_motor", "rl_motor", "rr_motor", "steer_servo")
 DRIVE = slice(0, 4)  # ctrl indices for the four wheel motors
 STEER = 4  # ctrl index for the steering servo
 
 # --- sensors ----------------------------------------------------------------
-REQUIRED_SENSORS = [
+REQUIRED_SENSORS = (
     "imu_accel",
     "imu_gyro",
     "imu_quat",
@@ -36,14 +40,30 @@ REQUIRED_SENSORS = [
     "fr_susp_pos",
     "rl_susp_pos",
     "rr_susp_pos",
-]
+)
 
 # --- physical sanity --------------------------------------------------------
-# Total car mass sanity band. Real NeoRacer is ~2.08 kg (CAD/STEP, see aeh961
-# neoracer_mjcf/README.md) / 2.6 kg estimated. Band is checked on TOTAL mass, not
-# per-geom: a mesh is allowed to carry mass (dense battery/motor), it just has to
-# add up to something physical. The upper bound still trips the classic "default
-# 1000 kg/m³ density" bug — e.g. the chassis bbox as solid water = 19.2 kg.
-# Limit: widen per car family if a new vehicle is genuinely heavier; for an
-# exact check, assert against that car's documented spec mass instead of a band.
+# The real NeoRacer has a mass of approximately 2.08 kg (from CAD, see aeh961
+# neoracer_mjcf/README.md) or 2.6 kg (estimated). The test checks the total
+# mass, not the mass of each geom, so a mesh can carry mass (a dense battery
+# or motor). If a mesh uses MuJoCo's default density of 1000 kg/m³, the total
+# mass is above MASS_MAX: the chassis box as solid water is 19.2 kg.
+# Limit: if a new car is really heavier, widen this band for its car family.
+# For an exact check, compare with the documented mass of that car instead.
 MASS_MIN, MASS_MAX = 1.0, 8.0  # kg
+
+
+@dataclass(frozen=True)
+class ActuatorLimits:
+    """The upper ctrlrange limits of the drive and steer actuators."""
+
+    torque_nm: float  # N·m per wheel; fl_motor ctrlrange
+    steer_rad: float  # rad; steer_servo ctrlrange
+
+
+def actuator_limits(model: mujoco.MjModel) -> ActuatorLimits:
+    """Read the actuator limits from a compiled car model, once per model."""
+    return ActuatorLimits(
+        torque_nm=float(model.actuator("fl_motor").ctrlrange[1]),
+        steer_rad=float(model.actuator("steer_servo").ctrlrange[1]),
+    )

@@ -36,7 +36,7 @@ def test_car_comes_to_rest_on_every_track(track):
     neoracer.xml is not in the scene."""
     model = assets.compose(mujoco.MjSpec.from_file(track))
     data = mujoco.MjData(model)
-    sim.run(model, data, 0.0, sim.SETTLE_STEPS)
+    sim.apply_ctrl_and_step(model, data, 0.0, sim.SETTLE_STEPS)
     car = data.body("car")
     assert 0.05 < float(car.xpos[2]) < 0.2, f"car z = {car.xpos[2]:.3f} m"
     assert float(np.linalg.norm(data.qvel[:3])) < 0.05

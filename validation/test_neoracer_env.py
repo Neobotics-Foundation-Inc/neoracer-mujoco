@@ -218,7 +218,10 @@ def test_rollover_terminates(env):
     mujoco.mj_forward(env.model, env.data)
     from neoracer_mujoco import sim as _sim
 
-    assert _sim.car_upright_cos(env.data) < env.config.termination.upright_rollover_cos
+    assert (
+        _sim.car_upright_cos(env.data, env.model.body("car").id)
+        < env.config.termination.upright_rollover_cos
+    )
 
     _obs, reward, terminated, truncated, info = env.step(
         np.array([0.0, 0.0], dtype=np.float32)

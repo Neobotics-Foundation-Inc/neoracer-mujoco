@@ -59,7 +59,7 @@ class LoopTrialResult:
     outcome: str  # "success" | "stuck" | "rollover"
     sim_time_s: float
     lap_frac: float
-    # Contacts: from actual MuJoCo contact state (collision.car_hit_wall),
+    # Contacts: from actual MuJoCo contact state (collision.car_touches_wall),
     # NOT the controller's forward_clear_m diagnostic.
     contact_ticks: int
     contact_events: int  # contiguous contact runs, not raw ticks
@@ -113,6 +113,8 @@ def run_loop_trial(
     prev_angle = float(np.arctan2(y0p, x0p))
     cum_angle = 0.0
 
+    car_id = model.body("car").id
+    walls = collision.wall_geom_ids(model)
     ctrl = vsc.VehicleSpaceController()
     dt_control = 1.0 / vsc.CONTROL_HZ
     physics_dt = float(model.opt.timestep)
@@ -170,7 +172,7 @@ def run_loop_trial(
         tick_had_contact = False
         for _ in range(ticks_per_control):
             mujoco.mj_step(model, data)
-            if collision.car_hit_wall(model, data):
+            if collision.car_touches_wall(model, data, car_id, walls):
                 contact_ticks += 1
                 tick_had_contact = True
         if tick_had_contact:
@@ -241,7 +243,7 @@ def run_loop_trial(
             )
         prev_state = result.state
 
-        upright = _sim.car_upright_cos(data)
+        upright = _sim.car_upright_cos(data, car_id)
         if upright < params.upright_rollover_cos:
             outcome = "rollover"
             if verbose:

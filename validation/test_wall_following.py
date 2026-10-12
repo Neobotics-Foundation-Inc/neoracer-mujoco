@@ -199,7 +199,7 @@ def test_controller_converges_to_target_distance_on_corridor():
 
         assert steer_ctrlrange[0] - 1e-9 <= control.steer <= steer_ctrlrange[1] + 1e-9
         assert np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel))
-        side_distances.append(float(sensors.lidar_270[0]))
+        side_distances.append(sensors.lidar_270)
 
     upright_cos = float(data.body("car").xmat[8])
     assert upright_cos > 0.7, "car should not have flipped during the run"

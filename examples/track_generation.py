@@ -23,8 +23,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from neoracer_mujoco import assets, sensors
-from neoracer_mujoco.collision import reset_if_wall_hit
+from neoracer_mujoco import assets, collision, sensors
 from neoracer_mujoco.contract import DRIVE, STEER
 from neoracer_mujoco.control import wall_following
 from neoracer_mujoco.control.steering import PDState
@@ -86,10 +85,12 @@ def drive(seed: int, difficulty: Difficulty) -> None:
         f"{model.ngeom} geoms. Close the viewer window to exit."
     )
 
+    car_id = model.body("car").id
+    walls = collision.wall_geom_ids(model)
     state = PDState()
     with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-        viewer.cam.trackbodyid = model.body("car").id
+        viewer.cam.trackbodyid = car_id
         viewer.cam.distance = 2.5
         viewer.cam.elevation = -35
 
@@ -103,7 +104,8 @@ def drive(seed: int, difficulty: Difficulty) -> None:
 
             # Touching a wall resets the car to its spawn pose. Clear the
             # controller state too, or its D-term carries across the jump.
-            if reset_if_wall_hit(model, data):
+            if collision.car_touches_wall(model, data, car_id, walls):
+                collision.reset_car(model, data)
                 state = PDState()
 
             viewer.sync()

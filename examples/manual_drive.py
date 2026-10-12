@@ -31,6 +31,12 @@ Actuator mapping (from assets/neoracer.xml):
 import sys
 from dataclasses import dataclass
 
+from neoracer_mujoco.sensors import (
+    SensorReadings,
+    estimated_linear_speed_ms,
+    motor_encoder_rad_s,
+)
+
 # ── tuning knobs (feel is physical — turn these while driving) ─────────────────
 # Rates are per second, so the feel is the same regardless of frame rate.
 
@@ -136,6 +142,18 @@ def _selftest() -> None:
     print("selftest OK")
 
 
+def print_sensors(s: SensorReadings) -> None:
+    """Print a one-line summary of the most useful sensor values."""
+    print(
+        f"spd={estimated_linear_speed_ms(motor_encoder_rad_s(s)):+5.2f}m/s  "
+        f"steer={s.steer_cmd_pos:+.3f}({s.fl_steer_pos:+.3f}/{s.fr_steer_pos:+.3f})  "
+        f"susp=[{s.fl_susp_pos:+.3f} {s.fr_susp_pos:+.3f} "
+        f"{s.rl_susp_pos:+.3f} {s.rr_susp_pos:+.3f}]m  "
+        f"az={s.imu_accel[2]:+5.1f}  gz={s.imu_gyro[2]:+.3f}  "
+        f"lidar[fwd={s.lidar_000:.2f} L={s.lidar_090:.2f} R={s.lidar_270:.2f}]"
+    )
+
+
 def load_model(xml: str | None):
     """
     No arg -> compose the ramp course + car at runtime, so the track XML never
@@ -161,12 +179,13 @@ def main(xml: str | None = None) -> None:
     import glfw
     import mujoco
 
-    from neoracer_mujoco import sensors as sl
-    from neoracer_mujoco.collision import reset_if_wall_hit
+    from neoracer_mujoco import collision, sensors
 
     model = load_model(xml)
     data = mujoco.MjData(model)
     car_id = model.body("car").id
+    walls = collision.wall_geom_ids(model)
+    layout = sensors.sensor_layout(model)
 
     if not glfw.init():
         raise RuntimeError("glfw.init() failed")
@@ -225,7 +244,8 @@ def main(xml: str | None = None) -> None:
         target = data.time + dt
         while data.time < target:
             mujoco.mj_step(model, data)
-            if reset_if_wall_hit(model, data):
+            if collision.car_touches_wall(model, data, car_id, walls):
+                collision.reset_car(model, data)
                 throttle, steer = 0.0, 0.0
                 break
 
@@ -242,7 +262,7 @@ def main(xml: str | None = None) -> None:
 
         hud_accum += dt
         if hud_accum >= 0.1:
-            sl.print_sensors(sl.read(model, data))
+            print_sensors(sensors.read_layout(layout, data))
             hud_accum = 0.0
 
     glfw.terminate()

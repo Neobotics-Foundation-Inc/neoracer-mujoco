@@ -1,17 +1,14 @@
 """
-Tests for neoracer_mujoco.collision: the auto-reset-on-wall-collision
-"driver's test" (issue #5).
-
-Uses the same straight_corridor.xml + neoracer.xml composition pattern as
-test_track_centering.py's physics-integration test.
+Tests for collision.py: wall detection, and the reset after a wall hit.
 """
 
 import os
 
 import mujoco
+import numpy as np
 
-from neoracer_mujoco import assets
-from neoracer_mujoco.collision import car_hit_wall, reset_if_wall_hit, wall_geom_ids
+from neoracer_mujoco import assets, sim
+from neoracer_mujoco.collision import car_touches_wall, reset_car, wall_geom_ids
 
 
 def _compose(track: str) -> mujoco.MjModel:
@@ -20,35 +17,23 @@ def _compose(track: str) -> mujoco.MjModel:
     )
 
 
-def _load_corridor_model() -> mujoco.MjModel:
-    return _compose("straight_corridor.xml")
-
-
-def _load_ramp_model() -> mujoco.MjModel:
-    return _compose("ramp_course.xml")
-
-
-def _settle(model: mujoco.MjModel) -> mujoco.MjData:
-    data = mujoco.MjData(model)
-    data.ctrl[:] = 0
-    for _ in range(400):
-        mujoco.mj_step(model, data)
-    return data
+def _touches_wall(model: mujoco.MjModel, data: mujoco.MjData) -> bool:
+    return car_touches_wall(model, data, model.body("car").id, wall_geom_ids(model))
 
 
 # --- wall_geom_ids -----------------------------------------------------------
 
 
 def test_wall_geom_ids_finds_corridor_walls():
-    model = _load_corridor_model()
+    model = _compose("straight_corridor.xml")
     names = {model.geom(i).name for i in wall_geom_ids(model)}
     assert names == {"corridor_wall_left", "corridor_wall_right"}
 
 
 def test_wall_geom_ids_excludes_ramp_and_floor():
-    """ramp_course.xml's ramp is drivable scenery, not a wall -- it uses a
-    different material and must not be treated as one."""
-    model = _load_ramp_model()
+    """The ramp in ramp_course.xml is drivable. It uses another material, so
+    it is not a wall."""
+    model = _compose("ramp_course.xml")
     names = {model.geom(i).name for i in wall_geom_ids(model)}
     assert names == {"turn1", "turn2"}
 
@@ -56,75 +41,59 @@ def test_wall_geom_ids_excludes_ramp_and_floor():
 def test_wall_geom_ids_counts_wall_prefixed_materials():
     """f1_track.xml colors its walls with materials wall_outer and wall_inner.
     Every panel and post is a wall; the floor is not."""
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    model = mujoco.MjModel.from_xml_path(
-        os.path.join(repo, "assets", "tracks", "f1_track.xml")
-    )
+    model = mujoco.MjModel.from_xml_path(os.path.join(assets.TRACK_DIR, "f1_track.xml"))
     names = {model.geom(i).name for i in wall_geom_ids(model)}
     assert len(names) == model.ngeom - 1
     assert "floor" not in names
 
 
 def test_wall_geom_ids_empty_when_no_walls():
-    """The bare car on its own plane (no track attached) has no wall
-    material at all, so this must return empty rather than error."""
-    model = mujoco.MjModel.from_xml_path(
-        os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "assets",
-            "neoracer.xml",
-        )
-    )
-    assert wall_geom_ids(model) == set()
+    """The bare car on its own plane has no wall material."""
+    assert wall_geom_ids(assets.load()) == frozenset()
 
 
-# --- car_hit_wall / reset_if_wall_hit -----------------------------------------
+# --- car_touches_wall / reset_car --------------------------------------------
 
 
-def test_no_reset_at_rest_in_corridor_center():
-    model = _load_corridor_model()
-    data = _settle(model)
-    assert not car_hit_wall(model, data)
-    assert not reset_if_wall_hit(model, data)
+def test_no_contact_at_rest_in_corridor_center():
+    model = _compose("straight_corridor.xml")
+    assert not _touches_wall(model, sim.settle(model))
 
 
-def test_reset_triggers_on_wall_penetration():
-    model = _load_corridor_model()
-    data = _settle(model)
+def test_reset_after_wall_penetration_restores_the_spawn_state():
+    model = _compose("straight_corridor.xml")
+    data = sim.settle(model)
 
-    # Corridor half-width is 0.5 m; teleport the car into the left wall.
+    # The corridor half-width is 0.5 m: this moves the car into the left wall.
     data.qpos[1] = 0.6
     mujoco.mj_forward(model, data)
+    assert _touches_wall(model, data)
 
-    assert car_hit_wall(model, data)
-    was_reset = reset_if_wall_hit(model, data)
-    assert was_reset
-    assert data.qpos[1] == 0.0, "reset must restore the car's spawn position"
-    assert not car_hit_wall(model, data), (
-        "freshly reset state must not itself count as a hit"
-    )
+    reset_car(model, data)
+    assert np.array_equal(data.qpos, model.qpos0)
+    assert not _touches_wall(model, data)
+
+    # A second reset changes nothing.
+    before = data.qpos.copy(), data.qvel.copy(), data.time
+    reset_car(model, data)
+    assert np.array_equal(data.qpos, before[0])
+    assert np.array_equal(data.qvel, before[1])
+    assert data.time == before[2]
 
 
-def test_no_reset_when_car_never_touches_wall():
-    """Driving straight down the middle of the corridor for a while must
-    never trigger a reset -- otherwise the driver's test would be useless."""
-    model = _load_corridor_model()
-    data = _settle(model)
-    for _ in range(500):
-        data.ctrl[0:4] = 0.1
+def test_no_contact_when_driving_down_the_center():
+    """A car that drives straight down the center never touches a wall."""
+    model = _compose("straight_corridor.xml")
+    data = sim.settle(model)
+    car_root, walls = model.body("car").id, wall_geom_ids(model)
+    data.ctrl[0:4] = 0.1  # N·m per wheel
+    for _ in range(500):  # 1 s at the 2 ms timestep
         mujoco.mj_step(model, data)
-        assert not reset_if_wall_hit(model, data)
+        assert not car_touches_wall(model, data, car_root, walls)
 
 
-def test_bare_car_never_resets():
-    """No wall material exists on the bare car model, so nothing should
-    ever be flagged as a collision regardless of physics state."""
-    model = mujoco.MjModel.from_xml_path(
-        os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "assets",
-            "neoracer.xml",
-        )
-    )
-    data = _settle(model)
-    assert not reset_if_wall_hit(model, data)
+def test_bare_car_never_touches_a_wall():
+    """The bare car model has no wall material, so no contact is a wall
+    contact."""
+    model = assets.load()
+    assert not _touches_wall(model, sim.settle(model))

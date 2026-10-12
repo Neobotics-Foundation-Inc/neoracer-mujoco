@@ -1,81 +1,72 @@
 """
-Classical (non-learned) lateral track-centering controller for NeoRacer.
+Classical lateral track-centering controller for NeoRacer.
 
-Keeps the car near the middle of a two-sided corridor by reading the 8-beam
-LiDAR ring off SensorReadings (see neoracer_mujoco.sensors) and computing a
-PD-style steering correction plus throttle shaping. Pure control logic only —
-this module never loads a model, steps the simulator, or reads sensors off a
-live mujoco.MjData; see examples/track_centering_demo.py for that.
+The controller keeps the car near the middle of a corridor with two walls. It
+reads the 8-beam LiDAR ring from SensorReadings (see neoracer_mujoco.sensors)
+and computes a PD steer command and a throttle. This module is pure control
+logic: it does not load a model, step the simulator or read MjData. See
+examples/track_centering_demo.py for a demo that does.
 
-Coordinate + steering convention (matches assets/neoracer.xml / README):
-  +X = forward, +Y = left, +Z = up.
-  ctrl[0:4] = wheel torque (N·m), + = forward.
-  ctrl[4]   = steer_servo target angle (rad), + = LEFT, range [-0.4, 0.4].
+Frame: +X forward, +Y left, +Z up.
+ctrl[0:4] = wheel torque (N·m), + = forward.
+ctrl[4] = steer_servo target angle (rad), + = left, range [-0.4, 0.4].
 
-LiDAR beam layout (verified empirically against the compiled model, not
-assumed from the XML comments): 8 beams at 45° steps, purely horizontal.
+LiDAR beams: 8 horizontal beams at 45° steps.
   lidar_000 = straight ahead (+X)      lidar_180 = straight behind (-X)
   lidar_045 = front-left                lidar_225 = rear-right
   lidar_090 = left (+Y)                 lidar_270 = right (-Y)
   lidar_135 = rear-left                 lidar_315 = front-right
-Each reading is meters to the nearest hit, or -1 if nothing is within range.
+Each reading is the distance (m) to the nearest hit, or -1 if no geom is in
+range.
 
-Centering-error sign convention:
-  lateral_error = (mean of left-side beams) - (mean of right-side beams).
-    Positive  -> more clearance on the LEFT (car is closer to the RIGHT
-                 wall) -> controller steers left (+) toward the open side.
-    Negative  -> more clearance on the RIGHT -> steers right (-).
-  heading_error: on a straight corridor with parallel walls, the front and
-    rear beam on the same side read equal distances when the car's heading
-    is parallel to the walls (both measure the same perpendicular distance
-    via symmetric 45° beam geometry). If the car's nose is angled toward a
-    wall, that wall's FRONT beam shortens relative to its REAR beam.
-        left_skew  = rear_left  - front_left   (positive => angled toward left wall)
-        right_skew = rear_right - front_right  (positive => angled toward right wall)
+Error signals:
+  lateral_error = (mean of the left beams) - (mean of the right beams).
+    If it is positive, the left side has more clearance, so the car is closer
+    to the right wall. The controller then steers left (+).
+  heading_error: in a straight corridor with parallel walls, the front and rear
+    diagonal beams on one side read the same distance when the car is parallel
+    to the walls. If the nose turns toward a wall, the front beam on that side
+    gets shorter than the rear beam.
+        left_skew  = rear_left  - front_left   (+ = nose toward the left wall)
+        right_skew = rear_right - front_right  (+ = nose toward the right wall)
         heading_error = right_skew - left_skew
-    Positive heading_error -> angled toward the right wall -> steers left (+)
-    to straighten out; negative -> angled toward the left wall -> steers right.
-  Both signals are in meters; steer = Kp_lateral*lateral_error +
-  Kp_heading*heading_error + Kd*d(lateral_error)/dt, clamped to ±steer_limit.
+    If heading_error is positive, the nose points toward the right wall, so
+    the controller steers left (+).
+  steer = kp_lateral * lateral_error + kp_heading * heading_error
+          + kd * d(lateral_error)/dt, clamped to ±steer_limit.
 
-  IMPORTANT: lateral_error is a CLEARANCE-DIFFERENCE metric, not the car's
-  physical lateral distance from the track centerline — do not compare its
-  magnitude directly to a physical offset in meters. Two of the three beams
-  per side (the 45 degree diagonals) travel 1/sin(45 degrees) ~= 1.41x
-  farther than the perpendicular distance to reach a parallel wall, so this
-  metric is systematically larger in magnitude than the car's actual
-  sideways offset. Example (straight corridor, half-width 0.5 m): a car
-  physically 0.25 m off-center produces lateral_error ~= -0.64 m, not -0.5 m
-  (let alone -0.25 m) — verified both analytically and against the compiled
-  simulator. Track relative change in lateral_error over time to judge
-  centering performance, not its raw value against a physical distance.
+lateral_error is a difference of clearances, not the sideways offset of the
+car. Four of the six side beams are diagonal. A diagonal beam travels about
+1.41 times the perpendicular distance to a parallel wall. So lateral_error is
+larger than the real offset. For example, in a corridor with a half-width of
+0.5 m, a car 0.25 m off center gives lateral_error ~= -0.64 m. To judge the
+centering, compare lateral_error over time, not with a distance in meters.
 
-Assumptions and known limitations:
-  - heading_error's symmetry argument assumes straight, parallel walls. On a
-    curve or at a corner it will be biased and can fight the lateral term;
-    this controller is not designed for curved track validation.
-  - No IMU-based heading estimate is used; heading is inferred purely from
-    the LiDAR skew above.
-  - Steering smoothing is a rad/s SLEW-RATE limiter (dt-scaled, see
-    steering.py), not a low-pass filter, so it is only as smooth as the
-    caller's step rate.
-  - Gains below are a reasonable starting point tuned against the demo
-    script's corridor run, not a plant-derived/optimal controller.
+Limit: heading_error assumes straight, parallel walls. On a curve it has a
+bias and can work against the lateral term. If you use this controller on a
+curved track, set kp_heading to 0 or use wall_following instead.
 
-Invalid-sensor handling (see sensors.parse_beam): a beam is corrupt if its
-value is NaN or infinite. A legitimate -1 (no hit within range) is NOT
-corrupt — it's real data meaning "clear". Both read as `max_beam_range` (an
-open/clear reading). If MORE than `max_corrupt_beams` of the 8 beams are
-corrupt in a single reading, step() skips the normal control law entirely
-and returns steering.fallback(): steering slewed toward 0 and throttle cut
-to `safe_fallback_throttle_fraction` of target — never an extreme steering
-command on bad data.
+Limit: the controller estimates the heading only from the LiDAR skew, not
+from the IMU. If the walls are not parallel, add an IMU heading estimate.
 
-Usage, one call per control step (a rollout is a fold over step):
+Limit: the steer smoothing is a rate limit (rad/s, see steering.py), not a
+low-pass filter. So the smoothness depends on the control step rate.
+
+Limit: the default gains come from the demo corridor run. They are not
+derived from a model of the car. If the car oscillates, tune them again.
+
+Bad sensor data (see sensors.parse_beam): a beam is corrupt if its value is
+NaN or infinite. A -1 (no hit) is valid data and means "clear". Both read as
+max_beam_range. If more than max_corrupt_beams of the 8 beams are corrupt,
+step() does not use the control law. It returns steering.fallback(): the
+steer moves toward 0 and the throttle drops to
+safe_fallback_throttle_fraction of target_throttle.
+
+Usage: call step in a loop, and pass each new state to the next call.
     state = PDState()
     state, command = step(TrackCenteringConfig(), state, sensor_readings, dt)
-    data.ctrl[0:4] = command.throttle
-    data.ctrl[4]   = command.steer
+    data.ctrl[contract.DRIVE] = command.throttle
+    data.ctrl[contract.STEER] = command.steer
 """
 
 from dataclasses import dataclass
@@ -83,7 +74,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..sensors import (
-    FRONT_CONE_BEAMS,
+    FRONT_BEAM,
     FRONT_LEFT_BEAM,
     FRONT_RIGHT_BEAM,
     LEFT_BEAMS,
@@ -102,8 +93,7 @@ from .steering import ControlCommand, PDState, ShapingConfig
 
 @dataclass(frozen=True)
 class TrackCenteringConfig:
-    """Named, documented tuning parameters — nothing in step() is a bare
-    unexplained constant; every knob used by the control law lives here."""
+    """Tuning parameters for step()."""
 
     kp_lateral: float = 1.2  # rad of steer per meter of lateral_error
     kp_heading: float = 3.0  # rad of steer per meter of heading_error
@@ -115,19 +105,19 @@ class TrackCenteringConfig:
 
 @dataclass(frozen=True)
 class CenteringSignals:
-    """Intermediate error signals, exposed separately from ControlCommand so
-    the demo/tests can inspect and log them without recomputing."""
+    """The error signals that step() uses. The demo and the tests read them
+    for logs and checks."""
 
     lateral_error: float  # m; + = more clearance on the left
     heading_error: float  # m; + = angled toward the right wall
-    front_distance: float  # m; straight-ahead clearance (FRONT_CONE_BEAMS)
+    front_distance: float  # m; clearance straight ahead (FRONT_BEAM)
     n_corrupt: int  # count of the 8 beams that were NaN/Inf
 
 
 def compute_signals(
     sensors: SensorReadings, cfg: TrackCenteringConfig
 ) -> CenteringSignals:
-    """Pure function: SensorReadings -> CenteringSignals."""
+    """Compute the error signals from the LiDAR readings."""
     beams = [parse_beam(float(r)) for r in lidar_ranges(sensors)]
     d = [beam_distance(b, cfg.max_beam_range) for b in beams]
 
@@ -139,7 +129,7 @@ def compute_signals(
     return CenteringSignals(
         lateral_error=left_mean - right_mean,
         heading_error=right_skew - left_skew,
-        front_distance=float(min(d[i] for i in FRONT_CONE_BEAMS)),
+        front_distance=d[FRONT_BEAM],
         n_corrupt=sum(is_corrupt(b) for b in beams),
     )
 
@@ -147,7 +137,7 @@ def compute_signals(
 def step(
     cfg: TrackCenteringConfig, state: PDState, sensors: SensorReadings, dt: float
 ) -> tuple[PDState, ControlCommand]:
-    """One PD control step: (state, readings) -> (next state, command)."""
+    """Compute one control command and the next controller state."""
     signals = compute_signals(sensors, cfg)
     if signals.n_corrupt > cfg.max_corrupt_beams:
         return steering.fallback(cfg.shaping, state, dt)
