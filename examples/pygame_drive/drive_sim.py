@@ -60,6 +60,11 @@ def drive_wheel_dofs(model: mujoco.MjModel) -> WheelDofs:
     )
 
 
+def frame_dt(p: DriveParams, dt: float) -> float:
+    """The frame time (s) that physics uses: never negative, at most max_dt."""
+    return max(0.0, min(dt, p.max_dt))
+
+
 def slew(current: float, target: float, max_delta: float) -> float:
     """Move current toward target by at most max_delta, without overshoot."""
     return current + max(-max_delta, min(max_delta, target - current))
@@ -69,7 +74,7 @@ def next_state(
     p: DriveParams, state: DriveState, throttle: float, steer: float, dt: float
 ) -> DriveState:
     """The applied commands after dt (s), for inputs throttle and steer."""
-    dt = min(dt, p.max_dt)
+    dt = frame_dt(p, dt)
     throttle = max(-1.0, min(1.0, throttle))
     steer = max(-1.0, min(1.0, steer))
     return DriveState(
@@ -100,6 +105,6 @@ def apply_and_step(
     """Write the commands of state to data.ctrl and step the physics dt (s)."""
     data.ctrl[contract.STEER] = state.steer * p.max_steer
     data.ctrl[contract.DRIVE] = wheel_torque(p, state.throttle, data.qvel[wheels])
-    end = data.time + min(dt, p.max_dt)
+    end = data.time + frame_dt(p, dt)
     while data.time < end:
         mujoco.mj_step(model, data)

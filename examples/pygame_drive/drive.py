@@ -70,12 +70,14 @@ class Inputs:
 
 type Action = Literal["quit", "reset_car", "toggle_timer", "reset_timer", "none"]
 
-_KEY_ACTIONS: dict[int, Action] = {
-    pygame.K_ESCAPE: "quit",
-    pygame.K_BACKSPACE: "reset_car",
-    pygame.K_t: "toggle_timer",
-    pygame.K_r: "reset_timer",
-}
+_KEY_ACTIONS: frozendict[int, Action] = frozendict(
+    {
+        pygame.K_ESCAPE: "quit",
+        pygame.K_BACKSPACE: "reset_car",
+        pygame.K_t: "toggle_timer",
+        pygame.K_r: "reset_timer",
+    }
+)
 
 
 def event_action(event: pygame.event.Event) -> Action:

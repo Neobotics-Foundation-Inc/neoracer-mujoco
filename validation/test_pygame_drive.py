@@ -52,6 +52,15 @@ def test_next_state_cuts_a_long_frame():
     )
 
 
+def test_a_negative_frame_time_changes_nothing():
+    state = DriveState(throttle=0.5, steer=-0.5)
+    assert next_state(P, state, 1.0, 1.0, -0.1) == state
+    model = assets.load()
+    data = mujoco.MjData(model)
+    apply_and_step(model, data, P, drive_wheel_dofs(model), state, -0.1)
+    assert data.time == 0.0
+
+
 def test_wheel_torque_stays_in_limits_and_brakes_a_spinning_wheel():
     spin = np.array([-1000.0, -10.0, 10.0, 1000.0])
     for throttle in (-1.0, 0.0, 1.0):
