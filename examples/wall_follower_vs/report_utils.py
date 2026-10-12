@@ -6,6 +6,7 @@ does not compute or alter any trial metric.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
 
@@ -13,7 +14,7 @@ class _HasOutcome(Protocol):
     outcome: str
 
 
-def outcome_header(results: list[_HasOutcome]) -> str:
+def outcome_header(results: Sequence[_HasOutcome]) -> str:
     """success/stuck/rollover counts line shared by closed_loop_trials.py's
     and loop_trials.py's summarize()."""
     n_success = sum(r.outcome == "success" for r in results)

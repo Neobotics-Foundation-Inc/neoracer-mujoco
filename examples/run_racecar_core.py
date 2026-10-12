@@ -81,7 +81,7 @@ def install_racecar_core_shim(rc: MujocoRacecar) -> None:
     `import racecar_core; racecar_core.create_racecar()` resolves to `rc`
     with no real racecar_core install anywhere on this machine."""
     shim = types.ModuleType("racecar_core")
-    shim.create_racecar = lambda *args, **kwargs: rc
+    shim.__dict__["create_racecar"] = lambda *args, **kwargs: rc
     sys.modules["racecar_core"] = shim
 
 

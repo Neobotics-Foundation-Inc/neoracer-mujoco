@@ -51,7 +51,7 @@ def _import_vendored_wall_follower(rc, monkeypatch):
     seam: everything downstream (control.py, wall_follower.py) runs
     unmodified."""
     shim = types.ModuleType("racecar_core")
-    shim.create_racecar = lambda *args, **kwargs: rc
+    shim.__dict__["create_racecar"] = lambda *args, **kwargs: rc
     monkeypatch.setitem(sys.modules, "racecar_core", shim)
     # wall_follower.py does `import control`, resolved by bare module name
     # from whatever directory it lives in -- put that directory on sys.path
@@ -60,6 +60,8 @@ def _import_vendored_wall_follower(rc, monkeypatch):
 
     path = os.path.join(_FIXTURE_DIR, "wall_follower.py")
     spec = importlib.util.spec_from_file_location("_vendored_wall_follower", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     try:

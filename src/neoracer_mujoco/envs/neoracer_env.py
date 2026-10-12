@@ -62,7 +62,7 @@ Termination (terminated=True) vs. truncation (truncated=True):
 
 import os
 from dataclasses import dataclass, field
-from typing import ClassVar, Literal, assert_never
+from typing import Any, Literal, assert_never
 
 import gymnasium as gym
 import mujoco
@@ -99,7 +99,7 @@ def _compose_scene(track_path: str, car_path: str) -> mujoco.MjModel:
     scene = mujoco.MjSpec.from_file(track_path)
     car = mujoco.MjSpec.from_file(car_path)
     frame = scene.worldbody.add_frame()
-    frame.pos = _LOOP_SPAWN_OFFSET
+    frame.pos = np.array(_LOOP_SPAWN_OFFSET)
     frame.attach_body(car.body("car"), "", "")
     return scene.compile()
 
@@ -277,7 +277,8 @@ class NeoRacerEnv(gym.Env):
     instance seeded generator), never global numpy random state.
     """
 
-    metadata: ClassVar[dict] = {"render_modes": ["human"], "render_fps": 30}
+    # The same type as gym.Env.metadata, so not a ClassVar.
+    metadata: dict[str, Any] = {"render_modes": ["human"], "render_fps": 30}  # noqa: RUF012
 
     def __init__(
         self,
