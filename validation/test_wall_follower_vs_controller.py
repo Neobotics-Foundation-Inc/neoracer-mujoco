@@ -23,9 +23,12 @@ from examples.wall_follower_vs.vehicle_space_controller import (
     NoPath,
     VsParams,
     VsState,
+    _blocked_samples,
+    _median_filter,
     arc_table,
     car_geometry,
     extract_regions,
+    obstacle_points,
     safe_arc_lengths,
     score_region,
     step,
@@ -266,3 +269,88 @@ def test_arc_spacing_is_at_most_arc_sample_ds():
 
 def test_a_single_beam_points_forward():
     assert scan_angles(DenseLidarParams(n_beams=1)).tolist() == [0.0]
+
+
+def _random_scan(rng: np.random.Generator, n: int) -> Scan:
+    """n beams at random ascending angles over 270 deg, with random ranges.
+    Some ranges are no return (-1, 0, inf) or not a number."""
+    angles = np.sort(rng.uniform(-np.radians(135.0), np.radians(135.0), n))
+    ranges = rng.uniform(0.05, 4.0, n)
+    bad = rng.random(n)
+    ranges[bad < 0.1] = -1.0
+    ranges[(bad >= 0.1) & (bad < 0.12)] = 0.0
+    ranges[(bad >= 0.12) & (bad < 0.13)] = np.inf
+    ranges[(bad >= 0.13) & (bad < 0.14)] = np.nan
+    return angles, ranges
+
+
+def test_median_filter_equals_median_of_each_window():
+    # Law: the filter gives, bit for bit, the np.median of the ranges in the
+    # angular window of each beam. A beam alone in its window keeps its range.
+    rng = np.random.default_rng(7)
+    window_rad = np.radians(PARAMS.outlier_window_deg)
+    for n in [1, 2, 24, 270, 1080]:
+        angles, ranges = _random_scan(rng, n)
+        expected = ranges.copy()
+        for i, theta in enumerate(angles):
+            in_window = np.abs(angles - theta) <= window_rad
+            if in_window.sum() > 1:
+                expected[i] = np.median(ranges[in_window])
+        np.testing.assert_array_equal(
+            _median_filter(PARAMS, angles, ranges), expected, strict=True
+        )
+
+
+def _all_pairs_safe_arc_lengths(angles: np.ndarray, ranges: np.ndarray) -> np.ndarray:
+    """safe_arc_lengths() by a direct test of every (sample, point) pair."""
+    x, y = obstacle_points(PARAMS, angles, ranges)
+    dx = TABLE.x_m[:, :, None] - x[None, None, :]  # (candidates, samples, points)
+    dy = TABLE.y_m[:, :, None] - y[None, None, :]
+    clearance2 = PARAMS.clearance_radius_m * PARAMS.clearance_radius_m
+    blocked = ((dx * dx + dy * dy) <= clearance2).any(axis=2) & TABLE.valid
+    return np.array(
+        [
+            TABLE.s_m[np.argmax(row)] if row.any() else cap
+            for row, cap in zip(blocked, TABLE.cap_m, strict=True)
+        ]
+    )
+
+
+def test_safe_arc_lengths_equal_a_test_of_all_pairs():
+    # Law: the k-d tree search gives, bit for bit, the safe arc lengths of a
+    # direct test of every pair of arc sample and obstacle point.
+    rng = np.random.default_rng(11)
+    for n in [24, 90, 270]:
+        for _ in range(5):
+            angles, ranges = _random_scan(rng, n)
+            np.testing.assert_array_equal(
+                safe_arc_lengths(PARAMS, angles, ranges),
+                _all_pairs_safe_arc_lengths(angles, ranges),
+                strict=True,
+            )
+        walls = _random_walls(rng)
+        np.testing.assert_array_equal(
+            safe_arc_lengths(PARAMS, *_scan(walls, n)),
+            _all_pairs_safe_arc_lengths(*_scan(walls, n)),
+            strict=True,
+        )
+
+
+def test_blocked_samples_include_points_at_the_clearance_radius():
+    # Law: for points at the clearance radius from a sample, to the last bit,
+    # the k-d tree search gives the same blocked samples as a test of all pairs.
+    rng = np.random.default_rng(3)
+    rows = rng.choice(len(TABLE.valid_flat), 200)
+    flat = TABLE.valid_flat[rows]
+    heading = rng.uniform(0.0, 2.0 * np.pi, len(flat))
+    radius_m = PARAMS.clearance_radius_m * (
+        1.0 + rng.integers(-3, 4, len(flat)) * 1e-16
+    )
+    x = TABLE.x_m.ravel()[flat] + radius_m * np.cos(heading)
+    y = TABLE.y_m.ravel()[flat] + radius_m * np.sin(heading)
+
+    dx = TABLE.x_m.ravel()[TABLE.valid_flat][:, None] - x[None, :]
+    dy = TABLE.y_m.ravel()[TABLE.valid_flat][:, None] - y[None, :]
+    clearance2 = PARAMS.clearance_radius_m * PARAMS.clearance_radius_m
+    expected = TABLE.valid_flat[((dx * dx + dy * dy) <= clearance2).any(axis=1)]
+    assert np.array_equal(np.unique(_blocked_samples(PARAMS, TABLE, x, y)), expected)
