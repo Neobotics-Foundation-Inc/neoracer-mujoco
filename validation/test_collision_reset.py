@@ -6,15 +6,10 @@ import os
 
 import mujoco
 import numpy as np
+from scenes import corridor_model
 
-from neoracer_mujoco import assets, sim
+from neoracer_mujoco import assets, contract, sim
 from neoracer_mujoco.collision import car_touches_wall, reset_car, wall_geom_ids
-
-
-def _compose(track: str) -> mujoco.MjModel:
-    return assets.compose(
-        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, track))
-    )
 
 
 def _touches_wall(model: mujoco.MjModel, data: mujoco.MjData) -> bool:
@@ -25,7 +20,7 @@ def _touches_wall(model: mujoco.MjModel, data: mujoco.MjData) -> bool:
 
 
 def test_wall_geom_ids_finds_corridor_walls():
-    model = _compose("straight_corridor.xml")
+    model = corridor_model()
     names = {model.geom(i).name for i in wall_geom_ids(model)}
     assert names == {"corridor_wall_left", "corridor_wall_right"}
 
@@ -33,7 +28,8 @@ def test_wall_geom_ids_finds_corridor_walls():
 def test_wall_geom_ids_excludes_ramp_and_floor():
     """The ramp in ramp_course.xml is drivable. It uses another material, so
     it is not a wall."""
-    model = _compose("ramp_course.xml")
+    ramp_course = os.path.join(assets.TRACK_DIR, "ramp_course.xml")
+    model = assets.compose(mujoco.MjSpec.from_file(ramp_course))
     names = {model.geom(i).name for i in wall_geom_ids(model)}
     assert names == {"turn1", "turn2"}
 
@@ -56,12 +52,12 @@ def test_wall_geom_ids_empty_when_no_walls():
 
 
 def test_no_contact_at_rest_in_corridor_center():
-    model = _compose("straight_corridor.xml")
+    model = corridor_model()
     assert not _touches_wall(model, sim.settle(model))
 
 
 def test_reset_after_wall_penetration_restores_the_spawn_state():
-    model = _compose("straight_corridor.xml")
+    model = corridor_model()
     data = sim.settle(model)
 
     # The corridor half-width is 0.5 m: this moves the car into the left wall.
@@ -83,10 +79,10 @@ def test_reset_after_wall_penetration_restores_the_spawn_state():
 
 def test_no_contact_when_driving_down_the_center():
     """A car that drives straight down the center never touches a wall."""
-    model = _compose("straight_corridor.xml")
+    model = corridor_model()
     data = sim.settle(model)
     car_root, walls = model.body("car").id, wall_geom_ids(model)
-    data.ctrl[0:4] = 0.1  # N·m per wheel
+    data.ctrl[contract.DRIVE] = 0.1  # N·m per wheel
     for _ in range(500):  # 1 s at the 2 ms timestep
         mujoco.mj_step(model, data)
         assert not car_touches_wall(model, data, car_root, walls)
