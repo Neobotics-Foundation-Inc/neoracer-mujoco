@@ -12,7 +12,6 @@ command for a step with too many corrupt beams.
 """
 
 from dataclasses import dataclass
-from typing import Protocol
 
 
 @dataclass(frozen=True)
@@ -33,26 +32,22 @@ class PDState:
     prev_steer: float = 0.0  # rad; steer command of the last step, for the slew limit
 
 
-class ShapingParams(Protocol):
-    """The tuning parameters that command() and fallback() read."""
+@dataclass(frozen=True)
+class ShapingConfig:
+    """Steer and throttle limits that command() and fallback() apply."""
 
-    @property
-    def target_throttle(self) -> float: ...  # N·m per wheel
-    @property
-    def steer_limit(self) -> float: ...  # rad
-    @property
-    def steer_slew_limit(self) -> float: ...  # rad/s
-    @property
-    def steer_slowdown_gain(self) -> float: ...  # throttle cut at full steer
-    @property
-    def min_safe_forward_distance(self) -> float: ...  # m; throttle 0 at or below
-    @property
-    def slowdown_threshold(self) -> float: ...  # m; throttle ramps down below
-    @property
-    def safe_fallback_throttle_fraction(self) -> float: ...  # of target_throttle
+    target_throttle: float = 0.10  # N·m per wheel, base forward drive command
+    steer_limit: float = 0.4  # rad; matches ctrl[4] ctrlrange in neoracer.xml
+    steer_slew_limit: float = 3.0  # rad/s max steering rate of change
+    steer_slowdown_gain: float = 0.6  # throttle cut fraction at full steer deflection
+    min_safe_forward_distance: float = 0.25  # m; front clearance -> throttle 0
+    slowdown_threshold: float = (
+        0.8  # m; front clearance below which throttle ramps down
+    )
+    safe_fallback_throttle_fraction: float = 0.3  # of target_throttle, during fallback
 
 
-def _slew(p: ShapingParams, prev_steer: float, target: float, dt: float) -> float:
+def _slew(p: ShapingConfig, prev_steer: float, target: float, dt: float) -> float:
     max_delta = p.steer_slew_limit * max(dt, 0.0)
     delta = max(-max_delta, min(max_delta, target - prev_steer))
     steer = prev_steer + delta
@@ -67,7 +62,7 @@ def error_rate(state: PDState, error: float, dt: float) -> float:
 
 
 def command(
-    p: ShapingParams,
+    p: ShapingConfig,
     state: PDState,
     error: float,
     steer_raw: float,
@@ -98,7 +93,7 @@ def command(
 
 
 def fallback(
-    p: ShapingParams, state: PDState, dt: float
+    p: ShapingConfig, state: PDState, dt: float
 ) -> tuple[PDState, ControlCommand]:
     """Command for a step with bad LiDAR data: slew the steer toward 0 and
     drive at a reduced throttle. The error history is cleared, so that the

@@ -2,8 +2,12 @@ extend-exclude = ["users", "validation/testdata", "examples/ultimate_wall_follow
 
 # A frozen dataclass with immutable fields is a safe default value
 # (AGENTS.md rule 1: `params: Params = Params()`). ruff B008 does not know this
-# yet (https://github.com/astral-sh/ruff/issues/29071). List each such class
-# that is a function default here. RUF009 already allows them as dataclass
-# field defaults. When ruff fixes B008, remove this section.
+# yet (https://github.com/astral-sh/ruff/issues/29071). RUF009 knows it only
+# for a class in the same module. List here each frozen config class that is a
+# default in another module, or a function default. When ruff fixes this,
+# remove this section.
 [lint.flake8-bugbear]
-extend-immutable-calls = ["neoracer_mujoco.envs.neoracer_env.NeoRacerEnvConfig"]
+extend-immutable-calls = [
+  "neoracer_mujoco.control.steering.ShapingConfig",
+  "neoracer_mujoco.envs.neoracer_env.NeoRacerEnvConfig",
+]

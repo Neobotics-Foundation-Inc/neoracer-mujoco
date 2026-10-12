@@ -91,8 +91,8 @@ def test_steer_output_is_clamped():
     state = PDState()
     for _ in range(200):  # let the slew-rate limiter reach steady state
         state, control = step(cfg, state, sensors, DT)
-    assert abs(control.steer) <= cfg.steer_limit + 1e-9
-    assert control.steer == pytest.approx(cfg.steer_limit, abs=1e-6)
+    assert abs(control.steer) <= cfg.shaping.steer_limit + 1e-9
+    assert control.steer == pytest.approx(cfg.shaping.steer_limit, abs=1e-6)
 
 
 def test_invalid_readings_trigger_safe_fallback():
@@ -101,7 +101,7 @@ def test_invalid_readings_trigger_safe_fallback():
     sensors = _sensors(**{name: float("nan") for name in LIDAR_BEAM_ORDER})
     _, control = step(cfg, PDState(), sensors, DT)
     assert control.throttle == pytest.approx(
-        cfg.target_throttle * cfg.safe_fallback_throttle_fraction
+        cfg.shaping.target_throttle * cfg.shaping.safe_fallback_throttle_fraction
     )
     assert abs(control.steer) < 0.05, (
         "fallback must not issue an extreme steering command"
@@ -116,7 +116,7 @@ def test_infinite_readings_also_trigger_fallback():
     )
     _, control = step(cfg, PDState(), sensors, DT)
     assert control.throttle == pytest.approx(
-        cfg.target_throttle * cfg.safe_fallback_throttle_fraction
+        cfg.shaping.target_throttle * cfg.shaping.safe_fallback_throttle_fraction
     )
 
 

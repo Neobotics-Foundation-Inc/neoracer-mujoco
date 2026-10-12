@@ -97,7 +97,7 @@ from ..sensors import (
     parse_beam,
 )
 from . import steering
-from .steering import ControlCommand, PDState
+from .steering import ControlCommand, PDState, ShapingConfig
 
 
 @dataclass(frozen=True)
@@ -105,20 +105,12 @@ class TrackCenteringConfig:
     """Named, documented tuning parameters — nothing in step() is a bare
     unexplained constant; every knob used by the control law lives here."""
 
-    target_throttle: float = 0.10  # N·m per wheel, base forward drive command
     kp_lateral: float = 1.2  # rad of steer per meter of lateral_error
     kp_heading: float = 3.0  # rad of steer per meter of heading_error
     kd: float = 0.05  # rad of steer per (m/s) of lateral_error rate
-    steer_limit: float = 0.4  # rad; matches ctrl[4] ctrlrange in neoracer.xml
-    steer_slew_limit: float = 3.0  # rad/s max steering rate of change (smoothing)
-    min_safe_forward_distance: float = 0.25  # m; front clearance -> throttle 0
-    slowdown_threshold: float = (
-        0.8  # m; front clearance below which throttle ramps down
-    )
-    steer_slowdown_gain: float = 0.6  # throttle cut fraction at full steer deflection
     max_beam_range: float = 3.0  # m; substituted for no-hit(-1) or corrupt beams
     max_corrupt_beams: int = 4  # of 8; more triggers the safe fallback command
-    safe_fallback_throttle_fraction: float = 0.3  # of target_throttle, during fallback
+    shaping: ShapingConfig = ShapingConfig()  # steer and throttle limits
 
 
 @dataclass(frozen=True)
@@ -158,7 +150,7 @@ def step(
     """One PD control step: (state, readings) -> (next state, command)."""
     signals = compute_signals(sensors, cfg)
     if signals.n_corrupt > cfg.max_corrupt_beams:
-        return steering.fallback(cfg, state, dt)
+        return steering.fallback(cfg.shaping, state, dt)
 
     error_rate = steering.error_rate(state, signals.lateral_error, dt)
     steer_raw = (
@@ -167,5 +159,5 @@ def step(
         + cfg.kd * error_rate
     )
     return steering.command(
-        cfg, state, signals.lateral_error, steer_raw, signals.front_distance, dt
+        cfg.shaping, state, signals.lateral_error, steer_raw, signals.front_distance, dt
     )
