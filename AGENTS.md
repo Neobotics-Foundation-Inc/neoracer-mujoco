@@ -10,10 +10,11 @@ Follow every rule here. If a task conflicts with a rule, say so in the pull requ
 - Put a new test in `validation/test_<module>.py`, never in the module that it tests.
 - Keep the tests green after each commit. If a change alters behavior, change its test in the same commit.
 - Never skip, delete or loosen a test to make it pass. If a test fails, find the cause.
-- Do not change `users/`, `validation/testdata/` or `examples/ultimate_wall_follower/` unless the task names them.
+- Do not change `validation/testdata/` or `examples/ultimate_wall_follower/` unless the task names them.
 - `users/` is the place where people experiment. Each person has a folder, `users/<github-name>/`.
   The rules in this file, ruff, ty and the tests do not apply there, and CI does not check it.
   Do not edit, format, fix or delete anything in `users/`, even if a tool reports a problem there.
+  The only exception: if a person asks you to work in their own folder, work only in that folder.
   Code in `src/`, `examples/` and `validation/` must never import from `users/`.
   To make experiment code part of the project, copy it to `src/` or `examples/` in its own pull request, and make it follow these rules there.
 - Keep one change in one pull request.
