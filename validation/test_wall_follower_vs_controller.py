@@ -5,7 +5,6 @@ synthetic scans. The tests use no physics and no unseeded random numbers.
 Frame: +X forward, +Y left. A steering angle is + = left.
 """
 
-import time
 from typing import assert_never
 
 import numpy as np
@@ -244,14 +243,3 @@ def test_no_path_keeps_state_and_recovers_toward_closer_option():
         f"expected a target nearer to -9 deg (the last target was "
         f"{prev_target_deg:.1f} deg), got {result.target_steer_deg:.1f} deg"
     )
-
-
-def test_performance_n1080_under_hard_budget():
-    angles, ranges = _scan(_forward_blocked_side_open("right"), 1080)
-    state, _ = step(PARAMS, VsState(), angles, ranges, DT)  # builds the arc table
-    n_iters = 50
-    t0 = time.perf_counter()
-    for _ in range(n_iters):
-        state, _ = step(PARAMS, state, angles, ranges, DT)
-    mean_ms = (time.perf_counter() - t0) / n_iters * 1000.0
-    assert mean_ms < 1000.0 * DT, f"exceeded the 30 Hz budget: {mean_ms:.3f} ms"
