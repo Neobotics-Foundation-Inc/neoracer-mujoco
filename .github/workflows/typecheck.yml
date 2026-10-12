@@ -23,7 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt "gymnasium>=1.0"
+          pip install -r requirements.txt
           pip install -e .
 
       # mujoco ships no type stubs. Generate them from the installed version.
