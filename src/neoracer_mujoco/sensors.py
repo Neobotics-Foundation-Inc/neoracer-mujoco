@@ -319,6 +319,18 @@ def beam_distance(beam: Beam, max_range: float) -> float:
             assert_never(beam)
 
 
+def is_corrupt(beam: Beam) -> bool:
+    """True for a NaN or Inf value. A controller counts these beams to
+    decide on its fallback command."""
+    match beam:
+        case Corrupt():
+            return True
+        case Hit() | NoHit():
+            return False
+        case _:
+            assert_never(beam)
+
+
 def print_sensors(sensors: SensorReadings) -> None:
     """Print a one-line summary of the most useful sensor values."""
     s = sensors

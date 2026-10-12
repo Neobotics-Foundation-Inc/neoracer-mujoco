@@ -90,9 +90,9 @@ from ..sensors import (
     REAR_LEFT_BEAM,
     REAR_RIGHT_BEAM,
     RIGHT_BEAMS,
-    Corrupt,
     SensorReadings,
     beam_distance,
+    is_corrupt,
     lidar_scan,
     parse_beam,
 )
@@ -148,7 +148,7 @@ def compute_signals(
         lateral_error=left_mean - right_mean,
         heading_error=right_skew - left_skew,
         front_distance=float(min(d[i] for i in FRONT_CONE_BEAMS)),
-        n_corrupt=sum(isinstance(b, Corrupt) for b in beams),
+        n_corrupt=sum(is_corrupt(b) for b in beams),
     )
 
 
