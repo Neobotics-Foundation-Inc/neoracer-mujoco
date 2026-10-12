@@ -1,13 +1,17 @@
 # AGENTS.md
 
-This file is the technical style guide for this repository.
-It applies to people and to coding agents.
-CONTRIBUTING.md has the workflow and the rules for written English.
+This file tells a coding agent how to work in this repository: the checks, the code rules and how to write text.
+Follow every rule here. If a task conflicts with a rule, say so in the pull request.
 
 ## Before you push
 
-Follow "Before you push" in CONTRIBUTING.md.
-It gives the checks to run and the directories that you must not change.
+- Run `ruff check .`, `ruff format --check .`, `ty check` and `python -m pytest validation`. All four must pass.
+- If `ty check` cannot see mujoco, make the stubs: `pybind11-stubgen mujoco mujoco.viewer -o typings`.
+- Put a new test in `validation/test_<module>.py`, never in the module that it tests.
+- Keep the tests green after each commit. If a change alters behavior, change its test in the same commit.
+- Never skip, delete or loosen a test to make it pass. If a test fails, find the cause.
+- Do not change `users/`, `validation/testdata/` or `examples/ultimate_wall_follower/` unless the task names them.
+- Keep one change in one pull request.
 
 The code requires Python 3.15. Use a feature from Python 3.13 to 3.15 where it removes a check,
 a class of bugs or a copy of code (rule 9), not only because it is new.
@@ -165,7 +169,8 @@ def reward(term: RewardTerm, step: StepInfo) -> float:
   ) -> tuple[State, ControlCommand]: ...
   ```
 
-  Do not hide it in `self._prev_*` fields. A rollout is then a fold over `step`.
+  Do not hide it in `self._prev_*` fields.
+  A rollout is then a loop that calls `step` again and again and passes each new state to the next call.
   Gymnasium's `FuncEnv` uses the same shape.
 - Pass a `np.random.Generator` as an argument. Do not use the global `np.random` functions.
 - Do not change an argument.
@@ -243,4 +248,29 @@ class Stamped[T]:
 - A name says what a thing does. A function that does not use `async` is not called `async`.
 - A comment says what the code does.
   It does not give history ("issue #7", "reimplemented from PR #29"). The commit message does that.
-- Write comments and docstrings in the simple technical English of CONTRIBUTING.md.
+- A docstring describes the contract (inputs, outputs, units) in as few lines as it can.
+
+## 14. Written English
+
+Write comments, docstrings, commit messages and pull request descriptions in simple technical English,
+close to [ASD-STE100](https://www.asd-ste100.org).
+Short sentences are not enough. A reader must understand each sentence on the first read, without decoding it.
+
+- Give each sentence a concrete subject, a plain verb and an explicit object. Say who does what to what.
+- Only people and programs act. Data, files and documents do not "promise", "say", "plan" or "know".
+- Do not write riddles, wordplay or slogans. State the fact plainly.
+- Use common words. Define a technical term in one plain sentence where it first appears, or link to its definition.
+  Do not put two technical terms in one short phrase.
+- Write an instruction in 20 words or fewer, and a description in 25 or fewer. Put one idea in each sentence.
+- Write an instruction in the imperative, and put the condition first: "If the lock is held, stop."
+- Use the active voice and the simple present: "The sweep deletes the key", not "The key is deleted".
+- Use one word for one thing: the name the code uses, everywhere.
+- Keep "the" and "a". Do not remove words to make a sentence short.
+- Write for a reader who does not know the code yet, not as notes to yourself.
+
+Examples (compressed → plain):
+
+- "The sensor parse keeps what it checked." → "The sensor parser returns a typed reading, so later code does not check the values again."
+- "The rollout is a fold over step." → "The rollout calls `step` in a loop and passes each new state to the next call."
+- "What the contract promises." → "What `contract.py` requires of every car model."
+- "Reimplemented independently, not imported (see PR #29)." → Delete it from the comment. The commit message gives the history.
