@@ -34,5 +34,17 @@ Write comments, docstrings, commit messages and pull request descriptions in sim
 - Use one word for one thing. When you choose a term, use it everywhere.
 - Keep "the" and "a". Do not remove words to make a sentence short.
 - Use plain words. Do not use idioms or figures of speech.
+- Give each sentence a concrete subject, a plain verb and an explicit object. Say who does what to what.
+- Only people and programs act. Data, files and documents do not "promise", "say", "plan" or "know".
+- Do not write riddles or slogans. State the fact plainly.
+- If you use a technical term, define it in one plain sentence where it first appears, or link to its definition.
+  Do not put two technical terms in one short phrase.
+- Write for a reader who does not know the code yet, not as notes to yourself.
+
+Examples (compressed → plain):
+
+- "The sensor parse keeps what it checked." → "The sensor parser returns a typed reading, so later code does not check the values again."
+- "The rollout is a fold over step." → "The rollout calls `step` in a loop and passes each new state to the next call."
+- "What the contract promises." → "What `contract.py` requires of every car model."
 - A comment says what the code does. It does not give the history or the motivation; the commit message does that.
 - A docstring describes the contract (inputs, outputs, units) in as few lines as it can.

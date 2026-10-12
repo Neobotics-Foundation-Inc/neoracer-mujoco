@@ -165,7 +165,8 @@ def reward(term: RewardTerm, step: StepInfo) -> float:
   ) -> tuple[State, ControlCommand]: ...
   ```
 
-  Do not hide it in `self._prev_*` fields. A rollout is then a fold over `step`.
+  Do not hide it in `self._prev_*` fields.
+  A rollout is then a loop that calls `step` again and again and passes each new state to the next call.
   Gymnasium's `FuncEnv` uses the same shape.
 - Pass a `np.random.Generator` as an argument. Do not use the global `np.random` functions.
 - Do not change an argument.
