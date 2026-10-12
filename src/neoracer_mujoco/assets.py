@@ -5,7 +5,7 @@ assets/ deliberately stays at the repo root (the XML is the product, meant to
 be drag-droppable into other MuJoCo tools), so it is not bundled as package
 data. Paths here are resolved relative to the source checkout.
 
-ponytail: resolves assets/ as three dirs up from this file (repo/src/
+Limit: resolves assets/ as three dirs up from this file (repo/src/
 neoracer_mujoco/assets.py -> repo). Works from any cwd in a source checkout;
 does NOT work if the package is pip-installed into a different tree. Bundle
 assets as package data (see pyproject.toml) if that case ever matters.

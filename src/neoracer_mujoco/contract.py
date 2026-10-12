@@ -44,6 +44,6 @@ REQUIRED_SENSORS = [
 # per-geom: a mesh is allowed to carry mass (dense battery/motor), it just has to
 # add up to something physical. The upper bound still trips the classic "default
 # 1000 kg/m³ density" bug — e.g. the chassis bbox as solid water = 19.2 kg.
-# ponytail: widen per car family if a new vehicle is genuinely heavier; for an
+# Limit: widen per car family if a new vehicle is genuinely heavier; for an
 # exact check, assert against that car's documented spec mass instead of a band.
 MASS_MIN, MASS_MAX = 1.0, 8.0  # kg

@@ -97,7 +97,7 @@
             model places the wheels symmetrically about the body origin. So the raw URDF
             CoM (-0.0278 -0.0143 -0.0816) is shifted by the URDF axle-center offset to keep
             the CoM in the same place relative to the wheels → (+0.0090 +0.0029 -0.0617).
-            ponytail: laser/imu/camera mass not lumped in — revisit only if rollover looks wrong.
+            Limit: laser/imu/camera mass not lumped in — revisit only if rollover looks wrong.
             -->
             <inertial pos=".0090 .0029 -.0617" mass="1.6211"
                       diaginertia=".002377 .0058394 .0070057"/>
