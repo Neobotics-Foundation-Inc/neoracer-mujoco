@@ -11,6 +11,9 @@ requires-python = ">=3.15"
 dependencies = [
     "mujoco>=3.9.0",
     "numpy>=1.26.4",
+    # CubicSpline (track centerline) and KDTree (self-touch check) in
+    # track_generation/.
+    "scipy>=1.13",
 ]
 
 [project.optional-dependencies]

@@ -57,12 +57,14 @@ python3 -m pytest validation/ -v
 │   ├── assets.py          — cars() / load() model discovery + compile
 │   ├── sensors.py         — SensorReadings + read()
 │   ├── sim.py             — compile/settle/run + physics probes
-│   └── control/           — classical controllers (track_centering)
+│   ├── control/           — classical controllers (track_centering)
+│   └── track_generation/  — procedural racetracks (generate_track → Track → MJCF)
 ├── examples/
 │   ├── run.py                  — viewer launch script (mjpython entry point)
 │   ├── manual_drive.py         — arrow-key teleop (game-style, python3 entry point)
 │   ├── pygame_drive/           — WASD or gamepad driving with a LiDAR radar (pygame)
-│   └── track_centering_demo.py — PD centering controller on the corridor track
+│   ├── track_centering_demo.py — PD centering controller on the corridor track
+│   └── track_generation.py     — generate procedural tracks, describe or drive one
 ├── validation/            — pytest physics + logic conformance suite
 └── docs/                  — (reserved) design notes and parameter log
 ```
@@ -97,6 +99,41 @@ python3 -m pytest validation/ -v
 Steering command range is ±0.4 rad; the two Ackermann equality constraints split
 it into the correct inner/outer front-wheel angles automatically.
 
+## Track generation (`src/neoracer_mujoco/track_generation/`)
+
+Two calls are the whole API. One makes the geometry, the other puts the car on it:
+
+```python
+from neoracer_mujoco import assets
+from neoracer_mujoco.track_generation import (
+    NoValidTrack,
+    Track,
+    generate_track,
+    settings_for_difficulty,
+    to_spec,
+)
+
+match generate_track(7, settings_for_difficulty(2)):  # pure geometry, no MuJoCo
+    case Track() as track:
+        model = assets.compose(to_spec(track))  # a compiled MjModel, car included
+    case NoValidTrack():
+        ...  # try another seed or looser settings
+```
+
+`generate_track(seed, settings)` returns a `Track` or a `NoValidTrack`. A `Track` holds N evenly spaced samples around a closed loop, each with a centerline position, tangent, left normal, curvature and corridor half-width, plus the loop's total length. The same seed always gives the same track. `settings_for_difficulty` gives the limits for difficulty 0 (gentle and wide) to 3 (tight and narrow); use `dataclasses.replace` on the result to change other knobs in `TrackSettings`.
+
+Generation draws a candidate and checks it for corners tighter than the car can take, a loop that touches itself, and a total length outside the target range. Then it moves the control points behind each problem and checks again, instead of drawing the whole loop again. A candidate that cannot be repaired is thrown away and a new one is drawn. If every attempt fails, `generate_track` returns `NoValidTrack`. Then try another seed, a larger `max_attempts` or looser limits.
+
+| File | Role |
+|---|---|
+| `track.py` | the `Track` itself and the attempt and repair loop. **Read this first.** |
+| `shape.py` | control points → spline → even resample → corridor width |
+| `reject.py` | what makes a candidate invalid, and how to move it |
+| `config.py` | the knobs (`TrackSettings`, `settings_for_difficulty`) |
+| `mjcf.py` | `to_mjcf(track)` and `to_spec(track)`: walls and a floor, no car. The only module here that uses MuJoCo. |
+
+Everything except `mjcf.py` is plain NumPy and SciPy with no simulator assumptions, so the geometry is usable outside MuJoCo.
+
 ## Usage / demo scripts (`examples/`)
 
 `examples/` holds runnable, hackable demos — start here to drive the car yourself
@@ -121,6 +158,7 @@ stable API.
   Install pygame-ce with `pip install -e ".[demo]"`, then run
   `python3 -m examples.pygame_drive.drive` (the F1 track),
   `--track ramp_course.xml` for another track, or `--bare` for the car alone.
+- **`track_generation.py`** — generates procedural tracks and prints what came out (loop length, corridor width, tightest corner, geom count) across seeds and difficulties. `--save PATH` writes one as MJCF; `--drive` puts the car on it under the wall-following controller in the viewer. `python3 -m examples.track_generation` (headless) or `mjpython -m examples.track_generation --drive --seed 7 --difficulty 3`.
 - **`track_centering_demo.py`** — runs the classical PD track-centering controller (`control.track_centering.step`)
   on the straight corridor track, headless by default or with an interactive
   viewer. Composes `neoracer.xml` onto `assets/tracks/straight_corridor.xml` at
