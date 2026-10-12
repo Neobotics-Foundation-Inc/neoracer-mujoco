@@ -1,7 +1,7 @@
-"""Parametrize every conformance test over each car XML found in assets/.
+"""The `car` fixture runs a test once for each car XML in assets/.
 
-New XML in assets/ -> discovered by neoracer_mujoco.cars() -> tested with no
-edits here."""
+neoracer_mujoco.cars() finds every car XML in assets/. So a new car XML gets
+the conformance tests with no change to this file."""
 
 import os
 
@@ -10,7 +10,7 @@ import pytest
 from neoracer_mujoco import cars, load
 
 
-@pytest.fixture(params=cars(), ids=lambda p: os.path.basename(p))
+@pytest.fixture(params=cars(), ids=os.path.basename)
 def car(request):
     """A freshly compiled MjModel for each car."""
     return load(request.param)
