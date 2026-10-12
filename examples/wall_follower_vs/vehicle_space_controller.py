@@ -112,8 +112,15 @@ class VsParams:
         # arc_table() divides by n_candidates - 1. extract_regions() divides
         # by a sum of safe arc lengths that are each at least
         # clearance_radius_m. The throttle must stay in [0, max_throttle_nm].
-        if self.n_candidates < 2:
-            raise ValueError(f"n_candidates must be >= 2, got {self.n_candidates}")
+        # An odd count puts one candidate at 0 deg, the straight path.
+        if self.n_candidates < 3 or self.n_candidates % 2 == 0:
+            raise ValueError(
+                f"n_candidates must be odd and >= 3, got {self.n_candidates}"
+            )
+        if not self.planning_horizon_m > 0:
+            raise ValueError(
+                f"planning_horizon_m must be > 0, got {self.planning_horizon_m}"
+            )
         if not self.clearance_radius_m > 0:
             raise ValueError(
                 f"clearance_radius_m must be > 0, got {self.clearance_radius_m}"
@@ -173,7 +180,9 @@ def arc_table(params: VsParams) -> ArcTable:
     steer_max_deg = math.degrees(params.car.steer_max_rad)
     steer_deg = np.linspace(-steer_max_deg, steer_max_deg, params.n_candidates)
     horizon_m = params.planning_horizon_m
-    n_samples = round(horizon_m / params.arc_sample_ds_m) + 1
+    # ceil, so the spacing is at most arc_sample_ds_m. The 1e-9 keeps an exact
+    # multiple (3.0 / 0.1 = 29.999...) from getting one more sample.
+    n_samples = math.ceil(horizon_m / params.arc_sample_ds_m - 1e-9) + 1
     s = np.linspace(0.0, horizon_m, n_samples)
     arc_x = np.zeros((len(steer_deg), n_samples))
     arc_y = np.zeros_like(arc_x)
@@ -477,8 +486,10 @@ def step(
 
     angles_rad: beam angles (rad, + = left), ascending.
     ranges_m: range of each beam (m); a value that is not > 0 is no return.
-    dt: time since the last tick (s).
+    dt: time since the last tick (s), > 0.
     """
+    if not dt > 0:
+        raise ValueError(f"dt must be > 0, got {dt}")
     table = arc_table(params)
     safe_m = safe_arc_lengths(params, angles_rad, ranges_m)
     regions = extract_regions(params, safe_m)

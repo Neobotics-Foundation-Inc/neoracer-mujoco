@@ -5,12 +5,13 @@ synthetic scans. The tests use no physics and no unseeded random numbers.
 Frame: +X forward, +Y left. A steering angle is + = left.
 """
 
+from dataclasses import replace
 from typing import assert_never
 
 import numpy as np
 import pytest
 
-from examples.wall_follower_vs.dense_lidar import DenseLidarParams, Scan
+from examples.wall_follower_vs.dense_lidar import DenseLidarParams, Scan, scan_angles
 from examples.wall_follower_vs.synthetic_scenes import (
     Segment,
     cast_scan,
@@ -243,3 +244,25 @@ def test_no_path_keeps_state_and_recovers_toward_closer_option():
         f"expected a target nearer to -9 deg (the last target was "
         f"{prev_target_deg:.1f} deg), got {result.target_steer_deg:.1f} deg"
     )
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [{"n_candidates": 80}, {"n_candidates": 1}, {"planning_horizon_m": 0.0}],
+)
+def test_params_reject_a_grid_without_a_straight_path_or_horizon(bad):
+    with pytest.raises(ValueError):
+        replace(PARAMS, **bad)
+
+
+def test_arc_spacing_is_at_most_arc_sample_ds():
+    """The arc samples are never farther apart than arc_sample_ds_m."""
+    for horizon, ds in [(3.0, 0.1), (0.24, 0.1), (1.0, 0.07)]:
+        params = replace(PARAMS, planning_horizon_m=horizon, arc_sample_ds_m=ds)
+        s = arc_table(params).s_m
+        assert np.max(np.diff(s)) <= ds + 1e-12
+        assert s[-1] == pytest.approx(horizon)
+
+
+def test_a_single_beam_points_forward():
+    assert scan_angles(DenseLidarParams(n_beams=1)).tolist() == [0.0]

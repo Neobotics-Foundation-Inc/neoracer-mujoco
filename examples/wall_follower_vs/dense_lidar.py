@@ -26,10 +26,17 @@ class DenseLidarParams:
     fov_deg: float = 270.0  # deg; centered on +X
     max_range_m: float = 12.0  # m; a beam with no hit in this range has no return
 
+    def __post_init__(self) -> None:
+        if self.n_beams < 1:
+            raise ValueError(f"n_beams must be >= 1, got {self.n_beams}")
+
 
 def scan_angles(params: DenseLidarParams) -> npt.NDArray[np.float64]:
     """Beam angles (rad), ascending and symmetric about 0 rad. With
-    n_beams = 1080 and fov_deg = 270 the step is 0.25 deg."""
+    n_beams = 1080 and fov_deg = 270 the step is 0.25 deg. One beam points
+    along +X."""
+    if params.n_beams == 1:
+        return np.zeros(1)
     half = math.radians(params.fov_deg) / 2.0
     return np.linspace(-half, half, params.n_beams)
 
