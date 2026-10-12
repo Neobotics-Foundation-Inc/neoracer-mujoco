@@ -145,8 +145,7 @@ def main() -> None:
             loop_start = time.time()
 
             sensors = sl.read(model, data)
-            speeds = sl.wheel_speed_ms(sensors)
-            avg_speed = sum(speeds.values()) / max(len(speeds), 1)
+            avg_speed = sl.wheel_speed_ms(sensors).mean()
 
             throttle, steer = _control(data, data.time, avg_speed)
             mujoco.mj_step(model, data)

@@ -13,20 +13,21 @@ Sensor map (matches neoracer.xml):
   lidar_000..315 — rangefinder distances (m; -1 = no hit)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import mujoco
 import numpy as np
+import numpy.typing as npt
 
 # Shadows the wheel geom size in assets/neoracer.xml — keep in sync if the XML changes.
-WHEEL_RADIUS = 0.050  # ESTIMATED: 50 mm radius consistent with STL bbox and URDF CoM
+WHEEL_RADIUS = 0.050  # m, ESTIMATED: consistent with STL bbox and URDF CoM
+
+type Vec1 = npt.NDArray[np.float64]  # shape (1,), a scalar sensor
+type Vec3 = npt.NDArray[np.float64]  # shape (3,)
+type Quat = npt.NDArray[np.float64]  # shape (4,), (w, x, y, z)
 
 
-def _empty() -> np.ndarray:
-    return np.array([])
-
-
-def read_raw(model: mujoco.MjModel, data: mujoco.MjData) -> dict:
+def read_raw(model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, np.ndarray]:
     """Every named sensor as a flat {name: ndarray} dict. The shared read loop
     behind both read() (typed struct) and the dict form used by validation."""
     out = {}
@@ -42,37 +43,36 @@ class SensorReadings:
     """
     One named field per sensor in neoracer.xml. Each value is the raw sensordata
     slice (a numpy array), so scalars come back as length-1 arrays — read [0].
-    Defaults let tests build partial instances; read() always fills them all.
     """
 
     # IMU at the chassis centre
-    imu_accel: np.ndarray = field(default_factory=_empty)  # linear accel (m/s²)
-    imu_gyro: np.ndarray = field(default_factory=_empty)  # angular vel (rad/s)
-    imu_quat: np.ndarray = field(default_factory=_empty)  # orientation (w,x,y,z)
-    imu_linvel: np.ndarray = field(default_factory=_empty)  # world linear vel (m/s)
+    imu_accel: Vec3  # linear accel (m/s²)
+    imu_gyro: Vec3  # angular vel (rad/s)
+    imu_quat: Quat  # orientation (w,x,y,z)
+    imu_linvel: Vec3  # world linear vel (m/s)
     # steering angles (rad)
-    steer_cmd_pos: np.ndarray = field(default_factory=_empty)  # virtual command
-    fl_steer_pos: np.ndarray = field(default_factory=_empty)  # actual front-left
-    fr_steer_pos: np.ndarray = field(default_factory=_empty)  # actual front-right
+    steer_cmd_pos: Vec1  # virtual command
+    fl_steer_pos: Vec1  # actual front-left
+    fr_steer_pos: Vec1  # actual front-right
     # wheel angular velocity (rad/s)
-    fl_wheel_vel: np.ndarray = field(default_factory=_empty)
-    fr_wheel_vel: np.ndarray = field(default_factory=_empty)
-    rl_wheel_vel: np.ndarray = field(default_factory=_empty)
-    rr_wheel_vel: np.ndarray = field(default_factory=_empty)
+    fl_wheel_vel: Vec1
+    fr_wheel_vel: Vec1
+    rl_wheel_vel: Vec1
+    rr_wheel_vel: Vec1
     # suspension travel (m; + = compressed)
-    fl_susp_pos: np.ndarray = field(default_factory=_empty)
-    fr_susp_pos: np.ndarray = field(default_factory=_empty)
-    rl_susp_pos: np.ndarray = field(default_factory=_empty)
-    rr_susp_pos: np.ndarray = field(default_factory=_empty)
+    fl_susp_pos: Vec1
+    fr_susp_pos: Vec1
+    rl_susp_pos: Vec1
+    rr_susp_pos: Vec1
     # 8-beam lidar ring (m; -1 = no hit)
-    lidar_000: np.ndarray = field(default_factory=_empty)
-    lidar_045: np.ndarray = field(default_factory=_empty)
-    lidar_090: np.ndarray = field(default_factory=_empty)
-    lidar_135: np.ndarray = field(default_factory=_empty)
-    lidar_180: np.ndarray = field(default_factory=_empty)
-    lidar_225: np.ndarray = field(default_factory=_empty)
-    lidar_270: np.ndarray = field(default_factory=_empty)
-    lidar_315: np.ndarray = field(default_factory=_empty)
+    lidar_000: Vec1
+    lidar_045: Vec1
+    lidar_090: Vec1
+    lidar_135: Vec1
+    lidar_180: Vec1
+    lidar_225: Vec1
+    lidar_270: Vec1
+    lidar_315: Vec1
 
 
 def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
@@ -108,9 +108,9 @@ class IMUReading:
     calibrate_imu() (calibrated) below.
     """
 
-    acceleration: np.ndarray
-    angular_velocity: np.ndarray
-    orientation: np.ndarray
+    acceleration: Vec3
+    angular_velocity: Vec3
+    orientation: Quat
 
 
 # No hardware bench-calibration data (bias, scale-factor, axis misalignment)
@@ -134,14 +134,27 @@ def calibrate_imu(raw: IMUReading) -> IMUReading:
     )
 
 
-def wheel_speed_ms(sensors: SensorReadings) -> dict:
+@dataclass(frozen=True)
+class WheelSpeeds:
+    """Surface speed of each wheel (m/s, + = forward)."""
+
+    fl: float
+    fr: float
+    rl: float
+    rr: float
+
+    def mean(self) -> float:
+        return (self.fl + self.fr + self.rl + self.rr) / 4
+
+
+def wheel_speed_ms(sensors: SensorReadings) -> WheelSpeeds:
     """Convert each wheel's angular velocity (rad/s) to surface speed (m/s)."""
-    return {
-        "fl_wheel_speed_ms": float(sensors.fl_wheel_vel[0]) * WHEEL_RADIUS,
-        "fr_wheel_speed_ms": float(sensors.fr_wheel_vel[0]) * WHEEL_RADIUS,
-        "rl_wheel_speed_ms": float(sensors.rl_wheel_vel[0]) * WHEEL_RADIUS,
-        "rr_wheel_speed_ms": float(sensors.rr_wheel_vel[0]) * WHEEL_RADIUS,
-    }
+    return WheelSpeeds(
+        fl=float(sensors.fl_wheel_vel[0]) * WHEEL_RADIUS,
+        fr=float(sensors.fr_wheel_vel[0]) * WHEEL_RADIUS,
+        rl=float(sensors.rl_wheel_vel[0]) * WHEEL_RADIUS,
+        rr=float(sensors.rr_wheel_vel[0]) * WHEEL_RADIUS,
+    )
 
 
 @dataclass(frozen=True)
@@ -231,40 +244,33 @@ class LidarScan[A]:
 
 def lidar_scan(sensors: SensorReadings) -> LidarScan[np.ndarray]:
     """Pack the 8 named lidar_* fields into one ordered LidarScan."""
-    ranges = np.array([getattr(sensors, name)[0] for name in LIDAR_BEAM_ORDER])
+    s = sensors
+    ranges = np.array(
+        [
+            s.lidar_000[0],
+            s.lidar_045[0],
+            s.lidar_090[0],
+            s.lidar_135[0],
+            s.lidar_180[0],
+            s.lidar_225[0],
+            s.lidar_270[0],
+            s.lidar_315[0],
+        ]
+    )
     angles = np.deg2rad(LIDAR_ANGLES_DEG)
     return LidarScan(angles=angles, ranges=ranges)
 
 
 def print_sensors(sensors: SensorReadings) -> None:
     """Print a one-line summary of the most useful sensor values."""
-
-    def f(name, idx=0):
-        v = getattr(sensors, name)
-        return float(v[idx]) if len(v) > idx else float("nan")
-
-    speeds = wheel_speed_ms(sensors)
-    avg_speed = sum(speeds.values()) / max(len(speeds), 1)
-
-    steer_cmd = f("steer_cmd_pos")
-    fl_steer = f("fl_steer_pos")
-    fr_steer = f("fr_steer_pos")
-    fl_susp = f("fl_susp_pos")
-    fr_susp = f("fr_susp_pos")
-    rl_susp = f("rl_susp_pos")
-    rr_susp = f("rr_susp_pos")
-
-    accel_z = f("imu_accel", 2)
-    gyro_z = f("imu_gyro", 2)
-
-    lidar_fwd = f("lidar_000")
-    lidar_l = f("lidar_090")
-    lidar_r = f("lidar_270")
-
+    s = sensors
     print(
-        f"spd={avg_speed:+5.2f}m/s  "
-        f"steer={steer_cmd:+.3f}({fl_steer:+.3f}/{fr_steer:+.3f})  "
-        f"susp=[{fl_susp:+.3f} {fr_susp:+.3f} {rl_susp:+.3f} {rr_susp:+.3f}]m  "
-        f"az={accel_z:+5.1f}  gz={gyro_z:+.3f}  "
-        f"lidar[fwd={lidar_fwd:.2f} L={lidar_l:.2f} R={lidar_r:.2f}]"
+        f"spd={wheel_speed_ms(s).mean():+5.2f}m/s  "
+        f"steer={s.steer_cmd_pos[0]:+.3f}"
+        f"({s.fl_steer_pos[0]:+.3f}/{s.fr_steer_pos[0]:+.3f})  "
+        f"susp=[{s.fl_susp_pos[0]:+.3f} {s.fr_susp_pos[0]:+.3f} "
+        f"{s.rl_susp_pos[0]:+.3f} {s.rr_susp_pos[0]:+.3f}]m  "
+        f"az={s.imu_accel[2]:+5.1f}  gz={s.imu_gyro[2]:+.3f}  "
+        f"lidar[fwd={s.lidar_000[0]:.2f} L={s.lidar_090[0]:.2f} "
+        f"R={s.lidar_270[0]:.2f}]"
     )

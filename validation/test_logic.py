@@ -9,26 +9,19 @@ from dataclasses import fields
 import mujoco
 import numpy as np
 import pytest
+from fake_sensors import fake_readings
 
 from neoracer_mujoco import sensors as sl
 
 
 def test_wheel_speed_conversion():
     """rad/s -> m/s is angular velocity x wheel radius, per wheel."""
-    fake = sl.SensorReadings(
-        **{
-            n: np.array([2.0])
-            for n in ("fl_wheel_vel", "fr_wheel_vel", "rl_wheel_vel", "rr_wheel_vel")
-        }
+    fake = fake_readings(
+        fl_wheel_vel=2.0, fr_wheel_vel=2.0, rl_wheel_vel=2.0, rr_wheel_vel=2.0
     )
     out = sl.wheel_speed_ms(fake)
-    assert out["fl_wheel_speed_ms"] == pytest.approx(2.0 * sl.WHEEL_RADIUS)
-    assert set(out) == {
-        "fl_wheel_speed_ms",
-        "fr_wheel_speed_ms",
-        "rl_wheel_speed_ms",
-        "rr_wheel_speed_ms",
-    }
+    assert out.fl == pytest.approx(2.0 * sl.WHEEL_RADIUS)
+    assert {f.name for f in fields(out)} == {"fl", "fr", "rl", "rr"}
 
 
 def test_read_returns_every_sensor(car):

@@ -13,6 +13,7 @@ immediately hit a wall).
 import mujoco
 import numpy as np
 import pytest
+from fake_sensors import fake_readings
 
 from neoracer_mujoco import sensors as sl
 from neoracer_mujoco.control.track_centering import (
@@ -28,10 +29,7 @@ DT = 0.02
 def _sensors(**overrides) -> sl.SensorReadings:
     """Build a SensorReadings with all 8 lidar beams defaulted to 1.0 m,
     overridden per-beam by name (e.g. lidar_090=0.5)."""
-    values = {name: np.array([1.0]) for name in ALL_BEAMS}
-    for name, value in overrides.items():
-        values[name] = np.array([value])
-    return sl.SensorReadings(**values)
+    return fake_readings(**{name: 1.0 for name in ALL_BEAMS} | overrides)
 
 
 def test_equal_left_right_is_approximately_neutral():
@@ -105,9 +103,7 @@ def test_invalid_readings_trigger_safe_fallback():
     cfg = TrackCenteringConfig()
     controller = TrackCenteringController(cfg)
     # All 8 beams missing/NaN -> corrupt count 8 > max_corrupt_beams (4).
-    sensors = sl.SensorReadings(
-        **{name: np.array([float("nan")]) for name in ALL_BEAMS}
-    )
+    sensors = _sensors(**{name: float("nan") for name in ALL_BEAMS})
     control = controller.compute(sensors, DT)
     assert control.throttle == pytest.approx(
         cfg.target_throttle * cfg.safe_fallback_throttle_fraction
@@ -117,10 +113,11 @@ def test_invalid_readings_trigger_safe_fallback():
     )
 
 
-def test_invalid_readings_via_empty_arrays_also_trigger_fallback():
+def test_infinite_readings_also_trigger_fallback():
     cfg = TrackCenteringConfig()
     controller = TrackCenteringController(cfg)
-    sensors = sl.SensorReadings()  # all lidar fields default to empty arrays
+    infinities = (float("inf"), float("-inf"))
+    sensors = _sensors(**{name: infinities[i % 2] for i, name in enumerate(ALL_BEAMS)})
     control = controller.compute(sensors, DT)
     assert control.throttle == pytest.approx(
         cfg.target_throttle * cfg.safe_fallback_throttle_fraction

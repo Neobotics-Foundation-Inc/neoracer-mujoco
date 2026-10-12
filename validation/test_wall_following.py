@@ -10,6 +10,7 @@ real straight_corridor.xml car for an end-to-end sanity check.
 import mujoco
 import numpy as np
 import pytest
+from fake_sensors import fake_readings
 
 from neoracer_mujoco import sensors as sl
 from neoracer_mujoco.control.wall_following import (
@@ -25,10 +26,7 @@ DT = 0.02
 
 def _sensors(**overrides) -> SensorReadings:
     """All 8 lidar beams defaulted to 1.0 m, overridden per-beam by name."""
-    values = {name: np.array([1.0]) for name in ALL_BEAMS}
-    for name, value in overrides.items():
-        values[name] = np.array([value])
-    return SensorReadings(**values)
+    return fake_readings(**{name: 1.0 for name in ALL_BEAMS} | overrides)
 
 
 def test_left_and_right_are_mirror_images():
@@ -101,12 +99,8 @@ def test_throttle_decreases_for_sharp_steering_correction():
 
 def test_invalid_readings_trigger_safe_fallback():
     cfg = WallFollowingConfig(follow_side="right")
-    sensors = SensorReadings(
-        lidar_270=np.array([float("nan")]),
-        lidar_315=np.array([float("nan")]),
-        lidar_225=np.array([float("nan")]),
-        lidar_000=np.array([1.0]),
-    )
+    nan = float("nan")
+    sensors = _sensors(lidar_270=nan, lidar_315=nan, lidar_225=nan, lidar_000=1.0)
     control = WallFollowingController(cfg).compute(sensors, DT)
     assert control.throttle == pytest.approx(
         cfg.target_throttle * cfg.safe_fallback_throttle_fraction
