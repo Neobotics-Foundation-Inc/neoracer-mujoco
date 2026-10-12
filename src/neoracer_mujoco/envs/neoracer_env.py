@@ -294,6 +294,7 @@ class NeoRacerEnv(gym.Env):
         self.data = mujoco.MjData(self.model)
         self._car_body = self.model.body("car").id
         self._walls = collision.wall_geom_ids(self.model)
+        self._sensor_layout = sensors.sensor_layout(self.model)
 
         physics_dt = float(self.model.opt.timestep)
         self._substeps_per_action = max(
@@ -339,7 +340,7 @@ class NeoRacerEnv(gym.Env):
         return float(self.data.xmat[self._car_body][8])
 
     def _build_observation(self) -> np.ndarray:
-        readings = sensors.read(self.model, self.data)
+        readings = sensors.read_layout(self._sensor_layout, self.data)
         lidar = sensors.lidar_scan(readings).ranges.astype(np.float32)
         accel = readings.imu_accel.astype(np.float32)
         gyro = readings.imu_gyro.astype(np.float32)

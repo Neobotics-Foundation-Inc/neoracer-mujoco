@@ -28,15 +28,29 @@ type Vec3 = npt.NDArray[np.float64]  # shape (3,)
 type Quat = npt.NDArray[np.float64]  # shape (4,), (w, x, y, z)
 
 
+type SensorLayout = tuple[tuple[str, slice], ...]  # (name, slice of sensordata)
+
+
+def sensor_layout(model: mujoco.MjModel) -> SensorLayout:
+    """The name and the sensordata slice of each sensor. Get it once per
+    model: a control loop then reads with read_layout, without name lookups."""
+    return tuple(
+        (
+            model.sensor(i).name,
+            slice(model.sensor_adr[i], model.sensor_adr[i] + model.sensor_dim[i]),
+        )
+        for i in range(model.nsensor)
+    )
+
+
+def _raw(layout: SensorLayout, data: mujoco.MjData) -> dict[str, np.ndarray]:
+    return {name: data.sensordata[s].copy() for name, s in layout}
+
+
 def read_raw(model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, np.ndarray]:
-    """Every named sensor as a flat {name: ndarray} dict. The shared read loop
-    behind both read() (typed struct) and the dict form used by validation."""
-    out = {}
-    for i in range(model.nsensor):
-        adr = model.sensor_adr[i]
-        dim = model.sensor_dim[i]
-        out[model.sensor(i).name] = data.sensordata[adr : adr + dim].copy()
-    return out
+    """Every named sensor as a flat {name: ndarray} dict, the form used by
+    validation."""
+    return _raw(sensor_layout(model), data)
 
 
 @dataclass(frozen=True)
@@ -76,11 +90,17 @@ class SensorReadings:
     lidar_315: Vec1
 
 
-def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
+def read_layout(layout: SensorLayout, data: mujoco.MjData) -> SensorReadings:
     """Read every named sensor into a SensorReadings struct."""
     # Limit: fields are coupled to neoracer.xml's sensor set — a car XML with
     # a different sensor list fails here loudly. Add fields if the contract grows.
-    return SensorReadings(**read_raw(model, data))
+    return SensorReadings(**_raw(layout, data))
+
+
+def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
+    """Read every named sensor into a SensorReadings struct. In a control
+    loop, use read_layout with a layout from sensor_layout(model)."""
+    return read_layout(sensor_layout(model), data)
 
 
 @dataclass(frozen=True)

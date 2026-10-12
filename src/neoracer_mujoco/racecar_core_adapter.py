@@ -97,11 +97,11 @@ class MujocoLidar:
     """
 
     def __init__(self, model: mujoco.MjModel, data: mujoco.MjData):
-        self._model = model
+        self._layout = sensors.sensor_layout(model)
         self._data = data
 
     def get_samples(self) -> np.ndarray:
-        readings = sensors.read(self._model, self._data)
+        readings = sensors.read_layout(self._layout, self._data)
         meters = sensors.lidar_scan(readings).ranges[_CLOCKWISE]
         cm = meters * 100.0
         # -1 (no hit) and any non-finite reading both mean "no return" (0.0)
