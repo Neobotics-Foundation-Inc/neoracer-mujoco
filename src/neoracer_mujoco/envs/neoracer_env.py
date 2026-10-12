@@ -32,7 +32,7 @@ Observation space -- Box(20,), float32, built only from sensors.SensorReadings
     [11:14] imu_gyro       rad/s, body frame
     [14:18] imu_quat       orientation quaternion (w,x,y,z), world frame
     [18]    steer_cmd_pos  rad, virtual steering input
-    [19]    estimated_speed  m/s, from motor_encoder_reading (mean of the 4
+    [19]    estimated_speed  m/s, from motor_encoder_rad_s (mean of the 4
             wheel encoders, matching the real car's single drive motor --
             NOT ground-truth imu_linvel)
 
@@ -357,8 +357,10 @@ class NeoRacerEnv(gym.Env):
         gyro = readings.imu_gyro.astype(np.float32)
         quat = readings.imu_quat.astype(np.float32)
         steer_cmd = readings.steer_cmd_pos.astype(np.float32)
-        encoder = sensors.motor_encoder_reading(readings)
-        speed = np.array([sensors.estimated_linear_speed_ms(encoder)], dtype=np.float32)
+        motor_rad_s = sensors.motor_encoder_rad_s(readings)
+        speed = np.array(
+            [sensors.estimated_linear_speed_ms(motor_rad_s)], dtype=np.float32
+        )
         return np.concatenate([lidar, accel, gyro, quat, steer_cmd, speed])
 
     def _build_info(

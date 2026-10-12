@@ -165,9 +165,6 @@ class WheelSpeeds:
     rl: float
     rr: float
 
-    def mean(self) -> float:
-        return (self.fl + self.fr + self.rl + self.rr) / 4
-
 
 def wheel_speed_ms(sensors: SensorReadings) -> WheelSpeeds:
     """Convert each wheel's angular velocity (rad/s) to surface speed (m/s)."""
@@ -179,27 +176,15 @@ def wheel_speed_ms(sensors: SensorReadings) -> WheelSpeeds:
     )
 
 
-@dataclass(frozen=True)
-class MotorEncoderReading:
-    """
-    Single motor encoder reading: rad/s, + = forward.
+def motor_encoder_rad_s(sensors: SensorReadings) -> float:
+    """The single motor encoder reading: angular velocity (rad/s, + = forward).
 
     The real NeoRacer has one drive motor, not one per wheel -- neoracer.xml
     approximates that with four identically-driven wheel joints, so the
     mean of the four wheel_vel sensors is the correct single-encoder proxy.
     Angular velocity only, not ticks/position: the drive joints have no
-    <jointpos> sensor to derive that from.
-    """
-
-    angular_velocity: float
-
-
-def motor_encoder_reading(sensors: SensorReadings) -> MotorEncoderReading:
-    """
-    Derive the single motor encoder reading from the four wheel_vel jointvel
-    sensors (mean angular velocity across all driven wheels — see
-    MotorEncoderReading for why a mean is the correct single-motor proxy).
-    Raw simulator values — no calibration, filtering, or quantization applied.
+    <jointpos> sensor to derive that from. Raw simulator values -- no
+    calibration, filtering, or quantization applied.
     """
     wheel_velocities = np.array(
         [
@@ -209,18 +194,18 @@ def motor_encoder_reading(sensors: SensorReadings) -> MotorEncoderReading:
             sensors.rr_wheel_vel[0],
         ]
     )
-    return MotorEncoderReading(angular_velocity=float(np.mean(wheel_velocities)))
+    return float(np.mean(wheel_velocities))
 
 
-def estimated_linear_speed_ms(encoder: MotorEncoderReading) -> float:
+def estimated_linear_speed_ms(motor_rad_s: float) -> float:
     """
     ESTIMATE of vehicle speed from motor rotation (m/s) — NOT ground truth.
-    encoder.angular_velocity * WHEEL_RADIUS, i.e. it assumes zero wheel slip.
+    motor_rad_s * WHEEL_RADIUS, i.e. it assumes zero wheel slip.
     Will diverge from the true chassis speed (e.g. SensorReadings.imu_linvel)
     under wheelspin or lockup, exactly like a real wheel-speed-based
     speedometer would.
     """
-    return encoder.angular_velocity * WHEEL_RADIUS
+    return motor_rad_s * WHEEL_RADIUS
 
 
 # Beam order matches the rangefinder sensors in neoracer.xml, ascending 0deg..315deg.
@@ -323,7 +308,7 @@ def print_sensors(sensors: SensorReadings) -> None:
     """Print a one-line summary of the most useful sensor values."""
     s = sensors
     print(
-        f"spd={wheel_speed_ms(s).mean():+5.2f}m/s  "
+        f"spd={estimated_linear_speed_ms(motor_encoder_rad_s(s)):+5.2f}m/s  "
         f"steer={s.steer_cmd_pos[0]:+.3f}"
         f"({s.fl_steer_pos[0]:+.3f}/{s.fr_steer_pos[0]:+.3f})  "
         f"susp=[{s.fl_susp_pos[0]:+.3f} {s.fr_susp_pos[0]:+.3f} "
