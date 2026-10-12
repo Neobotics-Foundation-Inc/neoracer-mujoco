@@ -1,151 +1,139 @@
 """
-Drive neoracer.xml by hand, video-game style — a feel-test for the physics.
+Drive the NeoRacer car by hand with the keyboard, like in a video game.
 
 Usage:
-    python3 -m examples.manual_drive                       # drive the ramp course
-    python3 -m examples.manual_drive assets/neoracer.xml   # bare car on a plane
-    python3 -m examples.manual_drive --selftest            # check math, no window
+    python3 -m examples.manual_drive                         # the ramp course
+    python3 -m examples.manual_drive --track path/to/track.xml
+    python3 -m examples.manual_drive --bare                  # the car alone on a plane
 
-NOTE: use plain python3, NOT mjpython. mjpython runs the script on a secondary
-thread (it keeps the main thread for the passive viewer's Cocoa loop), but a glfw
-window must be created on the main thread — mjpython will crash with
-"NSWindow should only be instantiated on the main thread".
+Use plain python3, not mjpython.
+mjpython runs the script on a second thread, but glfw must create its window on the main thread.
+With mjpython, the script stops with "NSWindow should only be instantiated on the main thread".
 
-Unlike the passive viewer (press-only), this owns a glfw window and polls which
-keys are *held* every frame, so it behaves like a game: hold to go, release to
-coast down, release the wheel to re-center.
+The script opens a glfw window and reads the held keys in each frame.
+If you hold a throttle key, the throttle increases. If you release it, the throttle decreases to 0.
+If you release the steer keys, the steer returns to the center.
 
     Up / W   throttle (hold to build speed)     Left  / A   steer left
     Down / S reverse                            Right / D   steer right
-    Space    hard stop (zero both)              Backspace   reset car (un-flip)
+    Space    stop (throttle and steer to 0)     Backspace   reset the car
     Esc      quit
 
-Driver's test: touching a wall (see neoracer_mujoco.collision) auto-resets the
-car to its spawn position, same as pressing Backspace.
+If the car touches a wall (see neoracer_mujoco.collision), the script resets the car.
+A reset puts the car back at its start position, the same as Backspace.
 
-Actuator mapping (from assets/neoracer.xml):
-  ctrl[0..3] = fl/fr/rl/rr wheel torque (N·m), positive = forward
-  ctrl[4]    = steer_servo target angle (rad), positive = left, range ±0.4
+Frame: +X forward, +Y left, +Z up.
+Control layout (see neoracer_mujoco.contract):
+  ctrl[0..3] = fl/fr/rl/rr wheel torque (N·m), + = forward
+  ctrl[4]    = steer_servo target angle (rad), + = left, range ±0.4
 """
 
-import sys
+import argparse
+import math
+import os
 from dataclasses import dataclass
+from typing import Literal, assert_never
 
-from neoracer_mujoco.sensors import (
-    SensorReadings,
-    estimated_linear_speed_ms,
-    motor_encoder_rad_s,
-)
+import glfw
+import mujoco
 
-# ── tuning knobs (feel is physical — turn these while driving) ─────────────────
-# Rates are per second, so the feel is the same regardless of frame rate.
+from neoracer_mujoco import assets, collision, sensors, sim
+from neoracer_mujoco.control.steering import ControlCommand
+
+type Pedal = Literal["forward", "reverse", "coast"]
+type SteerKey = Literal["left", "right", "center"]
+
+# Change these values to change how the car responds to the keys.
+# The rates are per second, so the response does not depend on the frame rate.
 
 
 @dataclass(frozen=True)
 class ThrottleParams:
     accel: float = 0.8  # N·m/s added while a throttle key is held
-    coast: float = 0.6  # N·m/s bled off when no throttle key is held
-    max: float = 0.35  # N·m cap per wheel (matches run.py FULL throttle)
+    coast: float = 0.6  # N·m/s removed while no throttle key is held
+    max: float = 0.35  # N·m per wheel; the throttle stays in [-max, max]
 
 
 @dataclass(frozen=True)
 class SteeringParams:
     rate: float = 1.5  # rad/s toward the limit while a steer key is held
-    return_: float = 2.5  # rad/s back to center when no steer key is held
-    max: float = 0.40  # rad — the model's Ackermann command limit
+    return_: float = 2.5  # rad/s back to the center while no steer key is held
+    max: float = 0.40  # rad; the steer command limit of the model
 
 
 @dataclass(frozen=True)
 class CamParams:
-    distance: float = 1.6  # m behind/above the car
-    elevation: float = -35.0  # deg looking down (more negative = more top-down)
-    azimuth: float = 0.0  # deg offset added to car yaw. 0 = directly behind
-    # (camera at -X, looking +X). 180 = front; ±90 = side.
+    distance: float = 1.6  # m from the car
+    elevation: float = -35.0  # deg; a more negative value looks more from the top
+    # deg, added to the car yaw. 0 puts the camera behind the car (at -X, looking
+    # at +X). 180 puts it in front of the car. ±90 puts it at the side.
+    azimuth: float = 0.0
 
 
-THROTTLE = ThrottleParams()
-STEER = SteeringParams()
-CAM = CamParams()
+@dataclass(frozen=True)
+class ManualDriveParams:
+    throttle: ThrottleParams = ThrottleParams()
+    steering: SteeringParams = SteeringParams()
+    cam: CamParams = CamParams()
+    window_px: tuple[int, int] = (900, 600)  # px; width, height of the window
+    max_scene_geoms: int = 10000  # the maximum number of geoms in one rendered frame
+    hud_period_s: float = 0.1  # s between two sensor print lines
 
 
-def _yaw_deg(quat) -> float:
-    """Car yaw (heading) in degrees from a MuJoCo [w,x,y,z] quaternion."""
-    import math
-
+def _yaw_deg(quat: sensors.Quat) -> float:
+    """Car yaw (heading) in degrees from a MuJoCo (w, x, y, z) quaternion."""
     w, x, y, z = quat[0], quat[1], quat[2], quat[3]
     return math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
 
 
-def _toward(value: float, rate_dt: float) -> float:
-    """Move value toward zero by at most rate_dt, without overshooting."""
+def _toward_zero(value: float, step: float) -> float:
+    """Move value toward zero by at most step. The result does not pass zero."""
     if value > 0:
-        return max(0.0, value - rate_dt)
-    return min(0.0, value + rate_dt)
+        return max(0.0, value - step)
+    return min(0.0, value + step)
 
 
 def update(
-    throttle: float,
-    steer: float,
+    params: ManualDriveParams,
+    command: ControlCommand,
     dt: float,
-    fwd: bool,
-    rev: bool,
-    left: bool,
-    right: bool,
-) -> tuple[float, float]:
-    """
-    One frame of game-style control given which keys are currently held.
-    Held throttle ramps up; released throttle coasts down. Steer returns to
-    center when released. Returns clamped (throttle, steer).
-    """
-    if fwd:
-        throttle += THROTTLE.accel * dt
-    elif rev:
-        throttle -= THROTTLE.accel * dt
-    else:
-        throttle = _toward(throttle, THROTTLE.coast * dt)
+    pedal: Pedal,
+    steer_key: SteerKey,
+) -> ControlCommand:
+    """The command for the next frame, from the command of this frame, the
+    frame time dt (s) and the held keys. The throttle (N·m) and the steer (rad)
+    stay within the limits in params."""
+    tp, sp = params.throttle, params.steering
+    match pedal:
+        case "forward":
+            throttle = command.throttle + tp.accel * dt
+        case "reverse":
+            throttle = command.throttle - tp.accel * dt
+        case "coast":
+            throttle = _toward_zero(command.throttle, tp.coast * dt)
+        case _:
+            assert_never(pedal)
 
-    if left:
-        steer += STEER.rate * dt
-    elif right:
-        steer -= STEER.rate * dt
-    else:
-        steer = _toward(steer, STEER.return_ * dt)
+    match steer_key:
+        case "left":
+            steer = command.steer + sp.rate * dt
+        case "right":
+            steer = command.steer - sp.rate * dt
+        case "center":
+            steer = _toward_zero(command.steer, sp.return_ * dt)
+        case _:
+            assert_never(steer_key)
 
-    throttle = max(-THROTTLE.max, min(THROTTLE.max, throttle))
-    steer = max(-STEER.max, min(STEER.max, steer))
-    return throttle, steer
-
-
-def _selftest() -> None:
-    """Smallest runnable check of the control math (no window needed)."""
-    dt = 0.01
-    # holding forward ramps up and clamps at the cap
-    t = 0.0
-    for _ in range(1000):
-        t, _ = update(t, 0.0, dt, fwd=True, rev=False, left=False, right=False)
-    assert t == THROTTLE.max, t
-    # releasing coasts back to a full stop (not instant, not stuck)
-    half = t
-    t, _ = update(t, 0.0, dt, fwd=False, rev=False, left=False, right=False)
-    assert 0 < t < half, t
-    while t > 0:
-        t, _ = update(t, 0.0, dt, fwd=False, rev=False, left=False, right=False)
-    assert t == 0.0
-    # steer holds toward the limit, then returns to exactly center
-    s = 0.0
-    for _ in range(1000):
-        _, s = update(0.0, s, dt, fwd=False, rev=False, left=True, right=False)
-    assert s == STEER.max, s
-    while s > 0:
-        _, s = update(0.0, s, dt, fwd=False, rev=False, left=False, right=False)
-    assert s == 0.0
-    print("selftest OK")
+    return ControlCommand(
+        throttle=max(-tp.max, min(tp.max, throttle)),
+        steer=max(-sp.max, min(sp.max, steer)),
+    )
 
 
-def print_sensors(s: SensorReadings) -> None:
+def print_sensors(s: sensors.SensorReadings) -> None:
     """Print a one-line summary of the most useful sensor values."""
     print(
-        f"spd={estimated_linear_speed_ms(motor_encoder_rad_s(s)):+5.2f}m/s  "
+        f"spd={sensors.estimated_linear_speed_ms(sensors.motor_encoder_rad_s(s)):+5.2f}m/s  "
         f"steer={s.steer_cmd_pos:+.3f}({s.fl_steer_pos:+.3f}/{s.fr_steer_pos:+.3f})  "
         f"susp=[{s.fl_susp_pos:+.3f} {s.fr_susp_pos:+.3f} "
         f"{s.rl_susp_pos:+.3f} {s.rr_susp_pos:+.3f}]m  "
@@ -154,34 +142,43 @@ def print_sensors(s: SensorReadings) -> None:
     )
 
 
-def load_model(xml: str | None):
-    """
-    No arg -> compose the ramp course + car at runtime, so the track XML never
-    names (or depends on) the car file. A path -> load it as-is (e.g. the bare
-    car on a plane). The car is its own spec, so it carries its own meshdir;
-    no path juggling needed.
-    """
-    import os
-
-    import mujoco
-
-    from neoracer_mujoco import assets
-
-    if xml:
-        return mujoco.MjModel.from_xml_path(xml)
-
-    return assets.compose(
-        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "ramp_course.xml"))
-    )
+# The glfw keys that the script reads in each frame.
+_KEYS = (
+    glfw.KEY_UP,
+    glfw.KEY_W,
+    glfw.KEY_DOWN,
+    glfw.KEY_S,
+    glfw.KEY_LEFT,
+    glfw.KEY_A,
+    glfw.KEY_RIGHT,
+    glfw.KEY_D,
+    glfw.KEY_SPACE,
+    glfw.KEY_BACKSPACE,
+    glfw.KEY_ESCAPE,
+)
 
 
-def main(xml: str | None = None) -> None:
-    import glfw
-    import mujoco
+def parse_pedal(held: frozenset[int]) -> Pedal:
+    """The pedal from the set of held glfw keys. Forward wins over reverse."""
+    if glfw.KEY_UP in held or glfw.KEY_W in held:
+        return "forward"
+    if glfw.KEY_DOWN in held or glfw.KEY_S in held:
+        return "reverse"
+    return "coast"
 
-    from neoracer_mujoco import collision, sensors
 
-    model = load_model(xml)
+def parse_steer_key(held: frozenset[int]) -> SteerKey:
+    """The steer key from the set of held glfw keys. Left wins over right."""
+    if glfw.KEY_LEFT in held or glfw.KEY_A in held:
+        return "left"
+    if glfw.KEY_RIGHT in held or glfw.KEY_D in held:
+        return "right"
+    return "center"
+
+
+def drive(model: mujoco.MjModel, params: ManualDriveParams) -> None:
+    """Open a window and drive the car in model with the keyboard until the
+    window closes or Esc is pressed."""
     data = mujoco.MjData(model)
     car_id = model.body("car").id
     walls = collision.wall_geom_ids(model)
@@ -189,67 +186,60 @@ def main(xml: str | None = None) -> None:
 
     if not glfw.init():
         raise RuntimeError("glfw.init() failed")
-    window = glfw.create_window(900, 600, "NeoRacer — manual drive", None, None)
+    width, height = params.window_px
+    window = glfw.create_window(width, height, "NeoRacer — manual drive", None, None)
     glfw.make_context_current(window)
     glfw.swap_interval(1)  # vsync
 
     cam = mujoco.MjvCamera()
     cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
     cam.trackbodyid = car_id
-    cam.distance = CAM.distance
-    cam.elevation = CAM.elevation
-    # azimuth is updated every frame from the car's yaw (see loop below)
+    cam.distance = params.cam.distance
+    cam.elevation = params.cam.elevation
+    # The loop sets cam.azimuth in each frame from the car yaw.
 
     opt = mujoco.MjvOption()
-    scene = mujoco.MjvScene(model, maxgeom=10000)
+    scene = mujoco.MjvScene(model, maxgeom=params.max_scene_geoms)
     ctx = mujoco.MjrContext(model, mujoco.mjtFontScale.mjFONTSCALE_150)
 
     print(__doc__)
 
-    def held(*keys):
-        return any(glfw.get_key(window, k) == glfw.PRESS for k in keys)
-
-    throttle, steer = 0.0, 0.0
+    stopped = ControlCommand(throttle=0.0, steer=0.0)
+    command = stopped
     last = glfw.get_time()
-    hud_accum = 0.0
+    hud_accum = 0.0  # s since the last sensor print line
 
     while not glfw.window_should_close(window):
-        if held(glfw.KEY_ESCAPE):
+        held = frozenset(k for k in _KEYS if glfw.get_key(window, k) == glfw.PRESS)
+        if glfw.KEY_ESCAPE in held:
             break
-        if held(glfw.KEY_BACKSPACE):
+        if glfw.KEY_BACKSPACE in held:
             mujoco.mj_resetData(model, data)
-            throttle, steer = 0.0, 0.0
+            command = stopped
 
         now = glfw.get_time()
         dt = now - last
         last = now
 
-        if held(glfw.KEY_SPACE):
-            throttle, steer = 0.0, 0.0
+        if glfw.KEY_SPACE in held:
+            command = stopped
         else:
-            throttle, steer = update(
-                throttle,
-                steer,
-                dt,
-                fwd=held(glfw.KEY_UP, glfw.KEY_W),
-                rev=held(glfw.KEY_DOWN, glfw.KEY_S),
-                left=held(glfw.KEY_LEFT, glfw.KEY_A),
-                right=held(glfw.KEY_RIGHT, glfw.KEY_D),
+            command = update(
+                params, command, dt, parse_pedal(held), parse_steer_key(held)
             )
 
-        data.ctrl[0:4] = throttle
-        data.ctrl[4] = steer
+        sim.apply_command(data, command)
 
-        # step physics to catch up to real (wall-clock) time
+        # Step the physics until the simulation time catches up with real time.
         target = data.time + dt
         while data.time < target:
             mujoco.mj_step(model, data)
             if collision.car_touches_wall(model, data, car_id, walls):
                 collision.reset_car(model, data)
-                throttle, steer = 0.0, 0.0
+                command = stopped
                 break
 
-        cam.azimuth = CAM.azimuth + _yaw_deg(data.xquat[car_id])
+        cam.azimuth = params.cam.azimuth + _yaw_deg(data.xquat[car_id])
 
         w, h = glfw.get_framebuffer_size(window)
         viewport = mujoco.MjrRect(0, 0, w, h)
@@ -261,16 +251,34 @@ def main(xml: str | None = None) -> None:
         glfw.poll_events()
 
         hud_accum += dt
-        if hud_accum >= 0.1:
+        if hud_accum >= params.hud_period_s:
             print_sensors(sensors.read_layout(layout, data))
             hud_accum = 0.0
 
     glfw.terminate()
 
 
-if __name__ == "__main__":
-    if "--selftest" in sys.argv:
-        _selftest()
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
+        "--track",
+        default=os.path.join(assets.TRACK_DIR, "ramp_course.xml"),
+        help="a track XML; the script puts the car on it (default: the ramp course)",
+    )
+    source.add_argument(
+        "--bare", action="store_true", help="the car alone on its own plane"
+    )
+    args = parser.parse_args()
+
+    if args.bare:
+        model = assets.load()
     else:
-        args = [a for a in sys.argv[1:] if not a.startswith("-")]
-        main(args[0] if args else None)
+        model = assets.compose(mujoco.MjSpec.from_file(args.track))
+    drive(model, ManualDriveParams())
+
+
+if __name__ == "__main__":
+    main()

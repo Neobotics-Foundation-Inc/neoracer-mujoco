@@ -1,46 +1,56 @@
 """
-Bounded random-agent smoke test for neoracer_mujoco.envs.NeoRacerEnv
-(issue #7).
+Run random actions in neoracer_mujoco.envs.NeoRacerEnv for a fixed number of episodes.
 
-This is NOT a performance benchmark and does not train anything -- it exists
-to prove the environment interface itself holds up under repeated use:
-reset/step work across many episodes back to back, no NaNs appear, actions
-and observations stay valid, and termination/truncation both actually fire.
-A random policy is not expected to complete a lap.
+This script is a smoke test of the environment interface. It does not train
+a policy, and it does not measure performance.
+The script runs many episodes, one after the other, with reset() and step().
+It checks that no NaN appears and that each observation is in the observation space.
+The output shows if each episode ended by termination, truncation or the step limit.
+A random policy does not complete a lap.
 
 Usage:
     python3 -m examples.gymnasium_random_smoke
 """
 
-from __future__ import annotations
+from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 
 from neoracer_mujoco.envs import NeoRacerEnv
+from neoracer_mujoco.envs.neoracer_env import TerminationReason
 
-N_EPISODES = 10
-MAX_STEPS_PER_EPISODE = 600  # bounded -- not the env's full max_episode_steps
+type Outcome = TerminationReason | Literal["truncated", "max_steps"]
+
+
+@dataclass(frozen=True)
+class SmokeParams:
+    episodes: int = 10
+    # The limit of this script. It is smaller than max_episode_steps of the env.
+    max_steps_per_episode: int = 600
 
 
 def main() -> None:
+    params = SmokeParams()
     env = NeoRacerEnv()
 
     print(
-        f"[gymnasium_random_smoke] {N_EPISODES} episodes, "
-        f"<= {MAX_STEPS_PER_EPISODE} steps each, random actions"
+        f"[gymnasium_random_smoke] {params.episodes} episodes, "
+        f"<= {params.max_steps_per_episode} steps each, random actions"
     )
 
-    for ep in range(N_EPISODES):
+    for ep in range(params.episodes):
         obs, info = env.reset(seed=ep)
+        env.action_space.seed(ep)  # the same random actions on every run
         assert env.observation_space.contains(obs), (
             "reset obs outside observation_space"
         )
 
         ep_return = 0.0
-        outcome = "max_steps_reached"
+        outcome: Outcome = "max_steps"
         step_count = 0
 
-        for step_count in range(1, MAX_STEPS_PER_EPISODE + 1):
+        for step_count in range(1, params.max_steps_per_episode + 1):
             action = env.action_space.sample()
             obs, reward, terminated, truncated, info = env.step(action)
 

@@ -1,104 +1,60 @@
 """
-Acceptance test for issue #28: the canonical racecar_core wall-following
-example must run against MuJoCo with no changes to its controller logic.
+The example racecar_core wall follower runs against MuJoCo with no changes to its controller code.
 
-Uses the vendored, byte-for-byte copy of neoracer-labs/ultimate-wall-follower
-(see testdata/ultimate_wall_follower/SOURCE.md) -- not a rewritten imitation.
-wall_follower.py's own `import racecar_core` is satisfied by injecting a
-fake `racecar_core` module into sys.modules whose create_racecar() returns a
-MujocoRacecar; the vendored files themselves are never touched.
+The test uses the byte-for-byte copy of neoracer-labs/ultimate-wall-follower
+in testdata/ultimate_wall_follower/ (see its SOURCE.md).
+wall_follower.py runs `import racecar_core`. The test gives it a fake
+`racecar_core` module whose create_racecar() returns a MujocoRacecar.
+The test does not change the copied files.
 
-Additional MuJoCo validation (see PR #27 discussion) independently verified
-steering sign, LiDAR ordering/winding, and units through the adapter against
-real physical geometry, confirming the compatibility interface itself is
-correct. This test (and that validation) assert compatibility only --
-neither claims that any given controller will autonomously wall-follow
-successfully in every environment.
+This test checks only that the controller runs on the adapter.
+It does not check that every controller follows a wall in every scene.
 """
 
-import importlib.util
 import os
-import sys
-import types
+import runpy
+from pathlib import Path
 
-import mujoco
 import numpy as np
 
-from neoracer_mujoco import assets
-from neoracer_mujoco import sim as _sim
-from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
+from examples import run_racecar_core
+from neoracer_mujoco import contract
 
-_FIXTURE_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "testdata", "ultimate_wall_follower"
-)
+_FIXTURE_DIR = Path(__file__).resolve().parent / "testdata" / "ultimate_wall_follower"
 
 
-def _load_corridor_model() -> mujoco.MjModel:
-    """Car centered in a walled corridor -- see assets/tracks/straight_corridor.xml
-    -- so the side LiDAR beams the wall follower reads get real returns."""
-    return assets.compose(
-        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "straight_corridor.xml"))
-    )
-
-
-def _import_vendored_wall_follower(rc, monkeypatch):
-    """Load the vendored wall_follower.py as a real module and let it run
-    its own top-level code (`rc = racecar_core.create_racecar()`), backed
-    by a fake racecar_core module that just returns `rc`. This is the only
-    seam: everything downstream (control.py, wall_follower.py) runs
-    unmodified."""
-    shim = types.ModuleType("racecar_core")
-    shim.__dict__["create_racecar"] = lambda *args, **kwargs: rc
-    monkeypatch.setitem(sys.modules, "racecar_core", shim)
-    # wall_follower.py does `import control`, resolved by bare module name
-    # from whatever directory it lives in -- put that directory on sys.path
-    # exactly as running it from its own folder would.
-    monkeypatch.syspath_prepend(_FIXTURE_DIR)
-
-    path = os.path.join(_FIXTURE_DIR, "wall_follower.py")
-    spec = importlib.util.spec_from_file_location("_vendored_wall_follower", path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-        sys.modules.pop("control", None)
-    return module
-
-
-def test_canonical_wall_follower_runs_unmodified_against_mujoco(monkeypatch):
-    model = _load_corridor_model()
-    data = _sim.settle(model)
+def test_canonical_wall_follower_runs_unmodified_against_mujoco():
+    model = run_racecar_core.load_scene()
+    data, rc = run_racecar_core.build_racecar(model, steps=400)
     x0 = float(data.body("car").xpos[0])
 
-    rc = MujocoRacecar(model, data, max_steps=400)
-
-    # rc.drive / rc.lidar / rc.controller / rc.display each work before the
-    # canonical controller ever touches them.
+    # rc.drive, rc.lidar, rc.controller and rc.display work before the
+    # controller uses them.
     assert rc.lidar.get_samples().shape == (8,)
     rc.drive.stop()
     assert rc.controller.is_down(rc.controller.Button.RB) is True
     rc.display.show_text("ok")  # no-op; must not raise
 
-    wf = _import_vendored_wall_follower(rc, monkeypatch)
+    # Run the top-level code of wall_follower.py (`rc = racecar_core.create_racecar()`),
+    # but not its __main__ block. wf holds the globals of the module.
+    with run_racecar_core.controller_imports(rc, _FIXTURE_DIR):
+        wf = runpy.run_path(
+            os.path.join(_FIXTURE_DIR, "wall_follower.py"), run_name="wall_follower"
+        )
 
-    # set_start_update() + go() run the callbacks: no MuJoCo-specific code
-    # inside start/update/update_slow, nor inside control.py.
-    rc.set_start_update(wf.start, wf.update, wf.update_slow)
+    # set_start_update() and go() run the callbacks of the controller.
+    # start, update, update_slow and control.py contain no MuJoCo code.
+    rc.set_start_update(wf["start"], wf["update"], wf["update_slow"])
     rc.go()
 
     scan = rc.lidar.get_samples()
     assert np.all(np.isfinite(scan))
     assert np.all(scan >= 0.0)
 
+    limits = contract.actuator_limits(model)
     assert np.isfinite(data.ctrl).all()
-    torque_limit = model.actuator("fl_motor").ctrlrange[1]
-    steer_limit = model.actuator("steer_servo").ctrlrange[1]
-    assert np.all(np.abs(data.ctrl[0:4]) <= torque_limit + 1e-6)
-    assert abs(data.ctrl[4]) <= steer_limit + 1e-6
+    assert np.all(np.abs(data.ctrl[contract.DRIVE]) <= limits.torque_nm + 1e-6)
+    assert abs(data.ctrl[contract.STEER]) <= limits.steer_rad + 1e-6
 
     x1 = float(data.body("car").xpos[0])
     assert x1 - x0 > 0.2, (

@@ -7,12 +7,13 @@ Usage:
     mjpython -m examples.track_generation --drive        # drive it in the viewer
     mjpython -m examples.track_generation --drive --seed 7 --difficulty 3
 
-Two calls are the whole API: generate_track gives you geometry, assets.compose
-puts the car on it. Everything below is reporting and a control loop around
-those.
+generate_track makes the track geometry. assets.compose attaches the car to it.
+The rest of this script prints reports and runs a control loop.
 
-NOTE: --drive needs mjpython on macOS, not plain python3 (the passive viewer
-must own the main thread). The default headless mode runs under either.
+On macOS, --drive needs mjpython, not plain python3, because the passive
+viewer must use the main thread. The default headless mode runs with either.
+
+Frame: +X forward, +Y left, +Z up.
 """
 
 import argparse
@@ -23,8 +24,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from neoracer_mujoco import assets, collision, sensors
-from neoracer_mujoco.contract import DRIVE, STEER
+from neoracer_mujoco import assets, collision, sensors, sim
 from neoracer_mujoco.control import wall_following
 from neoracer_mujoco.control.steering import PDState
 from neoracer_mujoco.track_generation import (
@@ -91,15 +91,14 @@ def drive(seed: int, difficulty: Difficulty) -> None:
     with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
         viewer.cam.trackbodyid = car_id
-        viewer.cam.distance = 2.5
-        viewer.cam.elevation = -35
+        viewer.cam.distance = 2.5  # m from the car
+        viewer.cam.elevation = -35  # deg; negative = the camera looks down
 
         while viewer.is_running():
             step_start = time.time()
             readings = sensors.read_layout(layout, data)
             state, command = wall_following.step(DRIVE_CONFIG, state, readings, dt)
-            data.ctrl[DRIVE] = command.throttle
-            data.ctrl[STEER] = command.steer
+            sim.apply_command(data, command)
             mujoco.mj_step(model, data)
 
             # Touching a wall resets the car to its spawn pose. Clear the
