@@ -1,7 +1,10 @@
 """Procedural racetracks.
 
-    track = generate_track(7, settings_for_difficulty(2))
-    model = assets.compose(to_spec(track))
+    match generate_track(7, settings_for_difficulty(2)):
+        case Track() as track:
+            model = assets.compose(to_spec(track))
+        case NoValidTrack():
+            ...  # loosen the settings
 
 Read track.py first -- it holds the Track and the loop that makes one. That
 loop draws a candidate (shape.py), checks it and nudges it (reject.py), and
@@ -10,15 +13,24 @@ into scenery.
 """
 
 from .config import Difficulty, TrackSettings, settings_for_difficulty
-from .mjcf import to_mjcf, to_spec
+from .mjcf import WallParams, to_mjcf, to_spec
 from .shape import shortest_loop_distance
-from .track import Track, TrackGenerationError, generate_track, left_edge, right_edge
+from .track import (
+    Generated,
+    NoValidTrack,
+    Track,
+    generate_track,
+    left_edge,
+    right_edge,
+)
 
 __all__ = [
     "Difficulty",
+    "Generated",
+    "NoValidTrack",
     "Track",
-    "TrackGenerationError",
     "TrackSettings",
+    "WallParams",
     "generate_track",
     "left_edge",
     "right_edge",

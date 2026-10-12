@@ -15,18 +15,6 @@ from .config import TrackSettings
 type Points = npt.NDArray[np.float64]  # shape (N, 2), meters
 type Samples = npt.NDArray[np.float64]  # shape (N,), one value per sample
 
-# --- control point scatter -------------------------------------------------
-# Only draw_control_points reads these, so they live here rather than in the
-# shared TrackSettings.
-CONTROL_POINTS_MIN = 10
-CONTROL_POINTS_MAX = 17
-RING_RADIUS_MIN = 6.0  # control points start on a ring of this radius...
-RING_RADIUS_MAX = 9.0  # ...before being jittered
-RADIUS_SMOOTHING_ROUNDS = 2  # blur the radii so neighbors don't jump
-POINT_JITTER_METERS = 6.0  # std dev of the random shove per point
-POINT_SMOOTHING_ROUNDS = 2  # blur the points to soften sharp corners
-MIN_ANGLE_BETWEEN_POINTS = 0.15  # radians, stops points stacking up
-
 
 def spread_out_angles(angles: Samples, min_gap: float) -> Samples:
     """Sort `angles` and push each one forward until it is at least `min_gap`
@@ -56,7 +44,7 @@ def smooth_around_loop(
     return values
 
 
-def draw_control_points(random: np.random.Generator) -> Points:
+def draw_control_points(random: np.random.Generator, settings: TrackSettings) -> Points:
     """Scatter the (n, 2) control points a track is drawn through, in loop order.
 
     Polar, not cartesian: each point is an angle plus a radius, so sorting by
@@ -69,16 +57,17 @@ def draw_control_points(random: np.random.Generator) -> Points:
     This is the only randomness in a track's shape -- everything downstream is
     deterministic given these points.
     """
-    count = int(random.integers(CONTROL_POINTS_MIN, CONTROL_POINTS_MAX + 1))
+    s = settings
+    count = int(random.integers(s.control_points_min, s.control_points_max + 1))
     angles = spread_out_angles(
-        random.uniform(0, 2 * np.pi, count), MIN_ANGLE_BETWEEN_POINTS
+        random.uniform(0, 2 * np.pi, count), s.min_angle_between_points
     )
-    radii = random.uniform(RING_RADIUS_MIN, RING_RADIUS_MAX, count)
-    radii = smooth_around_loop(radii, RADIUS_SMOOTHING_ROUNDS)
+    radii = random.uniform(s.ring_radius_min, s.ring_radius_max, count)
+    radii = smooth_around_loop(radii, s.radius_smoothing_rounds)
 
     points = np.stack([radii * np.cos(angles), radii * np.sin(angles)], axis=1)
-    points += random.normal(0.0, POINT_JITTER_METERS, points.shape)
-    return smooth_around_loop(points, POINT_SMOOTHING_ROUNDS)
+    points += random.normal(0.0, s.point_jitter, points.shape)
+    return smooth_around_loop(points, s.point_smoothing_rounds)
 
 
 # --- the centerline --------------------------------------------------------

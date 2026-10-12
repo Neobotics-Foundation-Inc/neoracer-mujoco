@@ -17,6 +17,7 @@ must own the main thread). The default headless mode runs under either.
 
 import argparse
 import time
+from typing import assert_never
 
 import mujoco
 import mujoco.viewer
@@ -29,13 +30,15 @@ from neoracer_mujoco.control import wall_following
 from neoracer_mujoco.control.steering import PDState
 from neoracer_mujoco.track_generation import (
     Difficulty,
+    NoValidTrack,
+    Track,
     generate_track,
     settings_for_difficulty,
     to_mjcf,
     to_spec,
 )
 
-DIFFICULTIES: dict[str, Difficulty] = {"0": 0, "1": 1, "2": 2, "3": 3}
+DIFFICULTIES: frozendict[str, Difficulty] = frozendict({"0": 0, "1": 1, "2": 2, "3": 3})
 
 # Follow the right-hand wall at roughly a quarter of the corridor width, so the
 # car has room on both sides even on the narrowest stretches (half_width_min is
@@ -45,9 +48,20 @@ DRIVE_CONFIG = wall_following.WallFollowingConfig(
 )
 
 
+def make_track(seed: int, difficulty: Difficulty) -> Track:
+    """The generated track, or exit with a message if there is none."""
+    match generate_track(seed, settings_for_difficulty(difficulty)):
+        case Track() as track:
+            return track
+        case NoValidTrack(attempts=n):
+            raise SystemExit(f"no valid track for seed {seed} after {n} attempts")
+        case other:
+            assert_never(other)
+
+
 def describe(seed: int, difficulty: Difficulty) -> None:
     """Generate one track and print what came out."""
-    track = generate_track(seed, settings_for_difficulty(difficulty))
+    track = make_track(seed, difficulty)
     model = assets.compose(to_spec(track))
     # Curvature is 1/m, so its reciprocal is the radius of the tightest corner.
     tightest_radius = 1.0 / np.abs(track.curvature).max()
@@ -62,7 +76,7 @@ def describe(seed: int, difficulty: Difficulty) -> None:
 
 def drive(seed: int, difficulty: Difficulty) -> None:
     """Put the car on a generated track and let the wall follower run it."""
-    track = generate_track(seed, settings_for_difficulty(difficulty))
+    track = make_track(seed, difficulty)
     model = assets.compose(to_spec(track))
     data = mujoco.MjData(model)
     layout = sensors.sensor_layout(model)
@@ -110,7 +124,7 @@ def main() -> None:
         return
 
     if args.save:
-        track = generate_track(args.seed, settings_for_difficulty(difficulty))
+        track = make_track(args.seed, difficulty)
         with open(args.save, "w") as handle:
             handle.write(to_mjcf(track))
         print(f"wrote {args.save} ({track.total_length:.1f} m loop)")

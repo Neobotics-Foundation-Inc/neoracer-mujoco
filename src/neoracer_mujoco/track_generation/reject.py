@@ -18,11 +18,6 @@ from .shape import Centerline, Points, Samples, shortest_loop_distance
 type Indices = npt.NDArray[np.intp]  # shape (K,), sample indices
 type Pairs = npt.NDArray[np.intp]  # shape (K, 2), (i, j) sample index pairs
 
-# Cap on how far one repair pass may move a control point, so one bad pair
-# cannot fling the loop into a new shape. Larger corrections arrive over
-# several passes. Only push_apart_near_touches reads it.
-MAX_REPAIR_SHIFT = 0.3
-
 
 @dataclass(frozen=True)
 class Problems:
@@ -35,15 +30,6 @@ class Problems:
     too_curvy: Indices  # samples that are too tight to drive
     too_close: Pairs  # sample pairs that nearly touch in space
     length_ok: bool
-
-
-def is_valid(problems: Problems) -> bool:
-    """True when the track has no problem at all."""
-    return (
-        len(problems.too_curvy) == 0
-        and len(problems.too_close) == 0
-        and problems.length_ok
-    )
 
 
 # --- finding the problems --------------------------------------------------
@@ -149,7 +135,7 @@ def push_apart_near_touches(
     settings: TrackSettings,
 ) -> Points:
     """Push the control points behind near-touching samples directly away from
-    each other, by half the missing clearance each (capped at MAX_REPAIR_SHIFT).
+    each other, by half the missing clearance each (at most settings.max_repair_shift).
 
     One near touch is hundreds of sample pairs that map to the same two control
     points, so the pairs are grouped by control point pair first, and each group
@@ -176,7 +162,7 @@ def push_apart_near_touches(
         distance = float(np.linalg.norm(separation))
         if distance < 1e-9:
             continue  # no direction to push along
-        shift = min(0.5 * gap, MAX_REPAIR_SHIFT) * separation / distance
+        shift = min(0.5 * gap, settings.max_repair_shift) * separation / distance
         pushed[a] += shift
         pushed[b] -= shift
     return pushed

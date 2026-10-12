@@ -21,9 +21,10 @@ from neoracer_mujoco import assets, sim
 from neoracer_mujoco.collision import car_hit_wall, wall_geom_ids
 from neoracer_mujoco.track_generation import (
     Difficulty,
+    NoValidTrack,
     Track,
-    TrackGenerationError,
     TrackSettings,
+    WallParams,
     generate_track,
     left_edge,
     right_edge,
@@ -44,9 +45,17 @@ MAX_GEOMS = 600
 # (seed, difficulty) one. Caching keeps this file's runtime in seconds rather
 # than minutes; it is safe precisely because generation is deterministic, which
 # test_same_seed_gives_the_same_track independently checks.
+def _generate(seed: int, settings: TrackSettings) -> Track:
+    match generate_track(seed, settings):
+        case Track() as track:
+            return track
+        case NoValidTrack() as none:
+            pytest.fail(f"no track: {none}")
+
+
 @functools.cache
 def _track(seed: int, difficulty: Difficulty) -> Track:
-    return generate_track(seed, settings_for_difficulty(difficulty))
+    return _generate(seed, settings_for_difficulty(difficulty))
 
 
 @functools.cache
@@ -87,10 +96,10 @@ def test_generated_track_is_valid(seed, difficulty):
 
 def test_same_seed_gives_the_same_track():
     settings = settings_for_difficulty(0)
-    a, b = generate_track(3, settings), generate_track(3, settings)
+    a, b = _generate(3, settings), _generate(3, settings)
     assert np.array_equal(a.center, b.center)
     assert np.array_equal(a.half_width, b.half_width)
-    assert not np.array_equal(a.center, generate_track(4, settings).center)
+    assert not np.array_equal(a.center, _generate(4, settings).center)
 
 
 def test_harder_difficulty_allows_tighter_turns():
@@ -102,8 +111,7 @@ def test_harder_difficulty_allows_tighter_turns():
 
 def test_impossible_limits_raise_rather_than_hang():
     impossible = TrackSettings(max_curvature=0.0, max_attempts=2)
-    with pytest.raises(TrackGenerationError):
-        generate_track(0, impossible)
+    assert generate_track(0, impossible) == NoValidTrack(seed=0, attempts=2)
 
 
 # --- the MJCF layer -----------------------------------------------------------
@@ -159,11 +167,11 @@ def test_walls_track_the_generated_edges_closely(difficulty):
     """The decimated wall polyline must not bow away from the fine edge by more
     than the tolerance to_mjcf was asked for."""
     track = _track(0, difficulty)
-    tolerance = 0.01
+    tolerance = WallParams().max_deviation
 
     for edge in (left_edge(track), right_edge(track)):
         edge = to_start_frame(track, edge)
-        kept = decimate_closed(edge, 0.5, tolerance)
+        kept = decimate_closed(edge, WallParams().segment_length, tolerance)
         for i, j in itertools.pairwise(kept):
             first, last = edge[i], edge[j % len(edge)]
             chord = last - first
@@ -180,10 +188,10 @@ def test_same_seed_gives_byte_identical_mjcf():
     the decimation both run on the generated geometry, and either one drifting
     would make two runs of the same seed different scenes."""
     settings = settings_for_difficulty(3)
-    first = to_mjcf(generate_track(5, settings))
-    second = to_mjcf(generate_track(5, settings))
+    first = to_mjcf(_generate(5, settings))
+    second = to_mjcf(_generate(5, settings))
     assert first == second
-    assert first != to_mjcf(generate_track(6, settings))
+    assert first != to_mjcf(_generate(6, settings))
 
 
 @pytest.mark.parametrize("seed", range(2))

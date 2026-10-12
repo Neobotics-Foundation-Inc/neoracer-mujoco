@@ -19,6 +19,16 @@ class TrackSettings:
     samples: int = 2048
     oversample_factor: int = 4  # extra spline samples used to measure length
 
+    # --- control point scatter (see shape.draw_control_points) ---
+    control_points_min: int = 10
+    control_points_max: int = 17
+    ring_radius_min: float = 6.0  # m; the control points start on a ring
+    ring_radius_max: float = 9.0  # m
+    radius_smoothing_rounds: int = 2  # smooths the radii, so neighbors do not jump
+    point_jitter: float = 6.0  # m; std dev of the random move of each point
+    point_smoothing_rounds: int = 2  # smooths the points, to soften sharp corners
+    min_angle_between_points: float = 0.15  # rad; keeps points from stacking up
+
     # --- what makes a candidate track invalid (see reject.py) ---
     max_curvature: float = 1.0  # 1/m; settings_for_difficulty lowers this
     max_width_times_curvature: float = 0.8  # corridor must not fold onto itself
@@ -40,13 +50,20 @@ class TrackSettings:
     # seeds, 20 attempts leaves 9 of them with no valid track, 60 leaves none.
     max_attempts: int = 60  # fresh random tracks before giving up
     max_repairs_per_attempt: int = 5  # nudge-and-recheck passes per track
+    # m; the most that one repair pass moves a control point pair apart, so one
+    # bad pair cannot change the whole loop. Larger moves take several passes.
+    max_repair_shift: float = 0.3
 
 
 # Easy tracks are gentle and wide, hard tracks are tight and narrow. Only these
 # two knobs change with difficulty; everything else stays fixed so tracks across
 # a curriculum stay recognizably the same family.
-_MAX_CURVATURE: dict[Difficulty, float] = {0: 0.4, 1: 0.6, 2: 0.8, 3: 1.0}  # 1/m
-_MIN_HALF_WIDTH: dict[Difficulty, float] = {0: 0.60, 1: 0.50, 2: 0.40, 3: 0.35}  # m
+_MAX_CURVATURE: frozendict[Difficulty, float] = frozendict(
+    {0: 0.4, 1: 0.6, 2: 0.8, 3: 1.0}
+)  # 1/m
+_MIN_HALF_WIDTH: frozendict[Difficulty, float] = frozendict(
+    {0: 0.60, 1: 0.50, 2: 0.40, 3: 0.35}
+)  # m
 
 
 def settings_for_difficulty(difficulty: Difficulty) -> TrackSettings:

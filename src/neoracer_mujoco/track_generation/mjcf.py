@@ -4,7 +4,7 @@ The scene around the walls -- assets, materials, floor, compiler settings --
 lives in scene_template.xml next door, not in this file. This module computes
 the wall boxes and fills the template's placeholders in.
 
-Output follows the convention in assets/tracks/*.xml -- scenery that never
+Frame: +X forward from the start, +Y left, +Z up. Output follows the convention in assets/tracks/*.xml -- scenery that never
 names the car -- so `assets.compose` can attach the car to it at runtime:
 
     assets.compose(to_spec(generate_track(7, settings_for_difficulty(2))))
@@ -12,7 +12,8 @@ names the car -- so `assets.compose` can attach the car to it at runtime:
 
 import itertools
 import string
-from pathlib import Path
+from dataclasses import dataclass
+from importlib import resources
 
 import mujoco
 import numpy as np
@@ -20,9 +21,18 @@ import numpy as np
 from .shape import Points
 from .track import Track, left_edge, right_edge
 
-_TEMPLATE = Path(__file__).parent / "scene_template.xml"
 
-_FLOOR_MARGIN = 1.0  # meters of floor plane beyond the outermost wall
+@dataclass(frozen=True)
+class WallParams:
+    """Sizes of the generated walls and floor."""
+
+    height: float = 0.30  # m; the height of the walls in assets/tracks/*.xml
+    thickness: float = 0.05  # m
+    # m; the longest wall box. A lower value follows the edges more closely,
+    # with proportionally more geoms.
+    segment_length: float = 0.5
+    max_deviation: float = 0.01  # m; how far an edge may bow away from a wall box
+    floor_margin: float = 1.0  # m of floor beyond the outermost wall
 
 
 def to_start_frame(track: Track, points: Points) -> Points:
@@ -94,21 +104,15 @@ def decimate_closed(
     return kept
 
 
-def _wall_boxes(
-    edge: Points,
-    name_prefix: str,
-    segment_length: float,
-    max_deviation: float,
-    thickness: float,
-    height: float,
-) -> list[str]:
+def _wall_boxes(edge: Points, name_prefix: str, walls: WallParams) -> list[str]:
     """MJCF <geom> lines for one wall: one box per decimated segment, centred on
     its midpoint and yawed to lie along it.
 
     Each box is over-long by `thickness` at both ends so consecutive boxes
     overlap at their corners instead of leaving a notch for a wheel to catch in.
     """
-    kept = decimate_closed(edge, segment_length, max_deviation)
+    kept = decimate_closed(edge, walls.segment_length, walls.max_deviation)
+    thickness, height = walls.thickness, walls.height
     lines = []
     for n, (i, j) in enumerate(itertools.pairwise(kept)):
         first, last = edge[i], edge[j % len(edge)]
@@ -128,23 +132,8 @@ def _wall_boxes(
     return lines
 
 
-def to_mjcf(
-    track: Track,
-    *,
-    wall_height: float = 0.30,
-    wall_thickness: float = 0.05,
-    segment_length: float = 0.5,
-    max_deviation: float = 0.01,
-) -> str:
+def to_mjcf(track: Track, walls: WallParams = WallParams()) -> str:
     """MJCF text for `track` as scenery: two walls of boxes and a floor, no car.
-
-    wall_height/wall_thickness  box dimensions, meters. 0.30 m tall matches the
-                                wall convention in assets/tracks/*.xml.
-    segment_length              longest wall box, meters. Lower it for walls
-                                that hug the generated edges more closely, at a
-                                proportional cost in geom count.
-    max_deviation               how far the true edge may bow away from a wall
-                                box, meters. See decimate_closed.
 
     Walls come straight off left_edge(track) / right_edge(track), which already
     carry the loop's varying half-width, moved by the start transform so the
@@ -153,32 +142,22 @@ def to_mjcf(
     left = to_start_frame(track, left_edge(track))
     right = to_start_frame(track, right_edge(track))
 
-    geoms = _wall_boxes(
-        left,
-        "track_wall_left",
-        segment_length,
-        max_deviation,
-        wall_thickness,
-        wall_height,
-    )
-    geoms += _wall_boxes(
-        right,
-        "track_wall_right",
-        segment_length,
-        max_deviation,
-        wall_thickness,
-        wall_height,
-    )
+    geoms = _wall_boxes(left, "track_wall_left", walls)
+    geoms += _wall_boxes(right, "track_wall_right", walls)
 
     corners = np.vstack([left, right])
-    low = corners.min(axis=0) - _FLOOR_MARGIN
-    high = corners.max(axis=0) + _FLOOR_MARGIN
+    low = corners.min(axis=0) - walls.floor_margin
+    high = corners.max(axis=0) + walls.floor_margin
     floor_size = 0.5 * (high - low)
     floor_pos = 0.5 * (high + low)
 
     # substitute() rather than safe_substitute(): a typo'd placeholder should
     # fail loudly here, not silently emit a "$name" into the MJCF.
-    template = string.Template(_TEMPLATE.read_text())
+    template = string.Template(
+        resources.files("neoracer_mujoco.track_generation")
+        .joinpath("scene_template.xml")
+        .read_text()
+    )
     return template.substitute(
         seed=track.seed,
         total_length=f"{track.total_length:.2f}",
@@ -192,6 +171,6 @@ def to_mjcf(
 
 
 def to_spec(track: Track) -> mujoco.MjSpec:
-    """The scenery of to_mjcf, with the default wall sizes, as an MjSpec for
+    """The scenery of to_mjcf, with the default WallParams, as an MjSpec for
     assets.compose."""
     return mujoco.MjSpec.from_string(to_mjcf(track))

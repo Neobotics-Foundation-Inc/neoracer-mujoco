@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .config import TrackSettings
-from .reject import find_problems, is_valid, repair
+from .reject import find_problems, repair
 from .shape import (
     Points,
     Samples,
@@ -20,10 +20,6 @@ from .shape import (
     half_width_from_waves,
     sample_evenly_by_distance,
 )
-
-
-class TrackGenerationError(RuntimeError):
-    """Every attempt was rejected. Loosen the thresholds in TrackSettings."""
 
 
 @dataclass(frozen=True)
@@ -42,6 +38,18 @@ class Track:
     seed: int
 
 
+@dataclass(frozen=True)
+class NoValidTrack:
+    """generate_track rejected every attempt. The limits in TrackSettings ask
+    for a track that the generator cannot draw. Loosen them."""
+
+    seed: int
+    attempts: int
+
+
+type Generated = Track | NoValidTrack
+
+
 def left_edge(track: Track) -> Points:
     """Points on the left-hand boundary of the corridor."""
     return track.center + track.half_width[:, None] * track.left_normal
@@ -52,7 +60,7 @@ def right_edge(track: Track) -> Points:
     return track.center - track.half_width[:, None] * track.left_normal
 
 
-def generate_track(seed: int, settings: TrackSettings) -> Track:
+def generate_track(seed: int, settings: TrackSettings) -> Generated:
     """Generate one closed-loop racetrack.
 
         generate_track(7, settings_for_difficulty(2))
@@ -63,7 +71,7 @@ def generate_track(seed: int, settings: TrackSettings) -> Track:
 
     Draws a fresh random track, repairs it up to max_repairs_per_attempt times,
     and starts over with a new random track if the repairs do not converge.
-    Raises TrackGenerationError once max_attempts is spent.
+    Returns NoValidTrack once max_attempts is spent.
 
     Reproducible: one random generator per call, drawn from in a fixed order,
     and repair uses no randomness at all.
@@ -74,7 +82,7 @@ def generate_track(seed: int, settings: TrackSettings) -> Track:
     for _ in range(settings.max_attempts):
         # Scatter a ring of random points for the loop to be drawn through.
         # This is the only place a track's shape is decided at random.
-        points = draw_control_points(random)
+        points = draw_control_points(random, settings)
 
         # Pick how wide the corridor is at every point around the loop. Drawn
         # once per attempt, not once per repair pass below, so a track that
@@ -96,7 +104,11 @@ def generate_track(seed: int, settings: TrackSettings) -> Track:
             problems = find_problems(line, half_width, settings)
 
             # Nothing wrong with it -- this is the track.
-            if is_valid(problems):
+            if (
+                len(problems.too_curvy) == 0
+                and len(problems.too_close) == 0
+                and problems.length_ok
+            ):
                 return Track(
                     center=line.center,
                     tangent=line.tangent,
@@ -115,6 +127,4 @@ def generate_track(seed: int, settings: TrackSettings) -> Track:
 
     # Every attempt was rejected, each after its repairs failed to save it.
     # The limits are asking for something this generator cannot draw.
-    raise TrackGenerationError(
-        f"no valid track after {settings.max_attempts} attempts (seed {seed}, {settings})"
-    )
+    return NoValidTrack(seed=seed, attempts=settings.max_attempts)

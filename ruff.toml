@@ -10,4 +10,5 @@ extend-exclude = ["users", "validation/testdata", "examples/ultimate_wall_follow
 extend-immutable-calls = [
   "neoracer_mujoco.control.steering.ShapingConfig",
   "neoracer_mujoco.envs.neoracer_env.NeoRacerEnvConfig",
+  "neoracer_mujoco.track_generation.mjcf.WallParams",
 ]
