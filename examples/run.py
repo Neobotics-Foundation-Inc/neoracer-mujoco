@@ -46,6 +46,17 @@ class DriveParams:
     print_every_steps: int = 20  # physics steps between two log lines
     roll_warn_deg: float = 25.0  # deg; the log line shows a warning above this roll
 
+    def __post_init__(self) -> None:
+        # main() logs at every print_every_steps-th step, so it must be >= 1.
+        if self.print_every_steps < 1:
+            raise ValueError(
+                f"print_every_steps must be >= 1, got {self.print_every_steps}"
+            )
+        if self.speed_limit_ms is not None and not self.speed_limit_ms > 0:
+            raise ValueError(
+                f"speed_limit_ms must be > 0 or None, got {self.speed_limit_ms}"
+            )
+
 
 MODES: frozendict[Mode, DriveParams] = frozendict(
     {
