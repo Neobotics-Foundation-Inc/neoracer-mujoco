@@ -82,7 +82,7 @@ class SensorReadings:
 
 def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
     """Read every named sensor into a SensorReadings struct."""
-    # ponytail: fields are coupled to neoracer.xml's sensor set — a car XML with
+    # Limit: fields are coupled to neoracer.xml's sensor set — a car XML with
     # a different sensor list fails here loudly. Add fields if the contract grows.
     return SensorReadings(**read_raw(model, data))
 

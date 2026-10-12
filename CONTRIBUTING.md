@@ -35,7 +35,7 @@ Read it before you open a pull request.
 - Prefer a library's functional API when it has one (for example gymnasium's `FuncEnv`): state goes in, state comes out.
 - Give every physical constant its unit, and its source if it is estimated:
   `WHEEL_RADIUS = 0.050  # m, ESTIMATED from the STL bounding box`.
-- Mark a known limit with `# ponytail:` and say what to do when the limit matters.
+- Mark a known limit with `# Limit:` and say when it matters and what to do then.
 - Keep a helper small until a second use needs more.
 
 ## Names

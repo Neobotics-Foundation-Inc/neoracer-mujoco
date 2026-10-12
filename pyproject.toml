@@ -22,7 +22,7 @@ rl = ["gymnasium>=1.0"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/neoracer_mujoco"]
 
-# ponytail: assets/ deliberately stays at the repo root (the XML is the product,
+# Limit: assets/ deliberately stays at the repo root (the XML is the product,
 # drag-droppable into other MuJoCo tools), so it is NOT bundled as package data.
 # load() resolves it relative to the source checkout. If this ever needs to work
 # from a pip install into a different tree, add assets to the wheel here.
