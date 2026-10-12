@@ -9,7 +9,7 @@ from neoracer_mujoco.sensors import SensorReadings
 _ZERO = SensorReadings(
     imu_accel=np.zeros(3),
     imu_gyro=np.zeros(3),
-    imu_quat=np.zeros(4),
+    imu_quat=np.array([1.0, 0.0, 0.0, 0.0]),  # level, no rotation
     imu_linvel=np.zeros(3),
     steer_cmd_pos=0.0,
     fl_steer_pos=0.0,
@@ -34,6 +34,7 @@ _ZERO = SensorReadings(
 
 
 def fake_readings(**overrides: float) -> SensorReadings:
-    """Return a SensorReadings with every field zero, except the scalar
-    fields named in overrides, which get the given value."""
+    """Return the reading of a level car at rest: every field is zero, except
+    imu_quat, which is the identity, and the scalar fields named in
+    overrides, which get the given value."""
     return replace(_ZERO, **overrides)

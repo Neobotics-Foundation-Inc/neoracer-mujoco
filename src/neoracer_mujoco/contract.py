@@ -55,15 +55,30 @@ MASS_MIN, MASS_MAX = 1.0, 8.0  # kg
 
 @dataclass(frozen=True)
 class ActuatorLimits:
-    """The upper ctrlrange limits of the drive and steer actuators."""
+    """The ctrlrange limits of the drive and steer actuators. Each range is
+    symmetric, so a command in [-1, 1] scales by one limit."""
 
-    torque_nm: float  # N·m per wheel; fl_motor ctrlrange
-    steer_rad: float  # rad; steer_servo ctrlrange
+    torque_nm: float  # N·m per wheel; ctrlrange is [-torque_nm, torque_nm]
+    steer_rad: float  # rad; ctrlrange is [-steer_rad, steer_rad]
 
 
 def actuator_limits(model: mujoco.MjModel) -> ActuatorLimits:
-    """Read the actuator limits from a compiled car model, once per model."""
-    return ActuatorLimits(
-        torque_nm=float(model.actuator("fl_motor").ctrlrange[1]),
-        steer_rad=float(model.actuator("steer_servo").ctrlrange[1]),
-    )
+    """Read the actuator limits from a compiled car model, once per model.
+    Raise ValueError if the four drive ranges differ, or a range is not
+    symmetric about 0: the env and MujocoDrive send one torque to all four
+    wheels and negate the limit for a negative command."""
+    drive = [tuple(model.actuator(name).ctrlrange) for name in EXPECTED_ACTUATORS[:4]]
+    low, high = drive[0]
+    steer_low, steer_high = model.actuator("steer_servo").ctrlrange
+    problems = []
+    if any(r != drive[0] for r in drive):
+        problems.append(f"the drive ctrlranges differ: {drive}")
+    if not (high > 0 and low == -high):
+        problems.append(f"the drive ctrlrange is not [-a, a] with a > 0: {drive[0]}")
+    if not (steer_high > 0 and steer_low == -steer_high):
+        problems.append(
+            f"the steer ctrlrange is not [-a, a] with a > 0: {(steer_low, steer_high)}"
+        )
+    if problems:
+        raise ValueError("; ".join(problems))
+    return ActuatorLimits(torque_nm=float(high), steer_rad=float(steer_high))

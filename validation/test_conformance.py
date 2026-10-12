@@ -6,6 +6,7 @@ exploited by an RL agent. If one fails, the message tells you which failure mode
 Run:  pytest validation/ -v
 """
 
+import copy
 from dataclasses import fields
 
 import numpy as np
@@ -17,6 +18,26 @@ from neoracer_mujoco import sim as _sim
 from neoracer_mujoco.contract import DRIVE, STEER
 
 # --- it exists and is wired the way the contract says ------------------------
+
+
+def test_actuator_limits_parse_every_car(car):
+    """Every car has the same symmetric range on its four drive actuators,
+    and a symmetric steer range."""
+    limits = contract.actuator_limits(car)
+    assert limits.torque_nm > 0 and limits.steer_rad > 0
+
+
+@pytest.mark.parametrize(
+    ("actuator", "ctrlrange"),
+    [("rr_motor", (-0.5, 0.5)), ("fl_motor", (-0.5, 1.0)), ("steer_servo", (0.0, 0.4))],
+)
+def test_actuator_limits_reject_ranges_that_one_limit_cannot_scale(
+    car, actuator, ctrlrange
+):
+    model = copy.copy(car)  # an independent MjModel; car is shared
+    model.actuator(actuator).ctrlrange[:] = ctrlrange
+    with pytest.raises(ValueError, match="ctrlrange"):
+        contract.actuator_limits(model)
 
 
 def test_actuator_contract(car):

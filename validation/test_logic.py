@@ -25,11 +25,21 @@ def test_read_returns_every_sensor(car):
     assert isinstance(out.lidar_000, float) and isinstance(out.steer_cmd_pos, float)
 
 
-def test_sensor_layout_rejects_a_model_without_the_sensors():
-    """sensor_layout parses the model once and names each missing sensor."""
-    bare = mujoco.MjModel.from_xml_string("<mujoco><worldbody/></mujoco>")
-    with pytest.raises(ValueError, match="imu_accel is missing"):
-        sl.sensor_layout(bare)
+def test_sensor_layout_names_every_missing_or_wrong_size_sensor():
+    """sensor_layout parses the model once, and one ValueError names each
+    problem: every missing sensor and every sensor with the wrong size."""
+    model = mujoco.MjModel.from_xml_string(
+        """<mujoco><worldbody><body><site name="s"/></body></worldbody>
+        <sensor><framepos name="steer_cmd_pos" objtype="site" objname="s"/></sensor>
+        </mujoco>"""
+    )
+    with pytest.raises(ValueError) as error:
+        sl.sensor_layout(model)
+    message = str(error.value)
+    assert "steer_cmd_pos has 3 values, not 1" in message
+    for f in fields(sl.SensorReadings):
+        if f.name != "steer_cmd_pos":
+            assert f"{f.name} is missing" in message
 
 
 def test_motor_encoder_is_mean_of_wheel_vel():

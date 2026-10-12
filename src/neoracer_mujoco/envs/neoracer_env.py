@@ -293,9 +293,13 @@ class NeoRacerEnv(gym.Env):
         self.data = mujoco.MjData(self.model)
         self._car_body = self.model.body("car").id
         # qpos address of the car's freejoint: (x, y, z, qw, qx, qy, qz).
-        self._car_qpos = int(
-            self.model.jnt_qposadr[self.model.body_jntadr[self._car_body]]
-        )
+        joint = int(self.model.body_jntadr[self._car_body])
+        if (
+            self.model.body_jntnum[self._car_body] != 1
+            or self.model.jnt_type[joint] != mujoco.mjtJoint.mjJNT_FREE
+        ):
+            raise ValueError(f"the car body in {config.car_path} needs one free joint")
+        self._car_qpos = int(self.model.jnt_qposadr[joint])
         self._walls = collision.wall_geom_ids(self.model)
         self._sensor_layout = sensors.sensor_layout(self.model)
 
