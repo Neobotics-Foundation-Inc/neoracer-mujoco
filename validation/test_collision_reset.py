@@ -10,27 +10,22 @@ import os
 
 import mujoco
 
+from neoracer_mujoco import assets
 from neoracer_mujoco.collision import car_hit_wall, reset_if_wall_hit, wall_geom_ids
 
 
-def _load_corridor_model() -> mujoco.MjModel:
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(repo, "assets", "tracks", "straight_corridor.xml")
+def _compose(track: str) -> mujoco.MjModel:
+    return assets.compose(
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, track))
     )
-    car = mujoco.MjSpec.from_file(os.path.join(repo, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
+
+
+def _load_corridor_model() -> mujoco.MjModel:
+    return _compose("straight_corridor.xml")
 
 
 def _load_ramp_model() -> mujoco.MjModel:
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(repo, "assets", "tracks", "ramp_course.xml")
-    )
-    car = mujoco.MjSpec.from_file(os.path.join(repo, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
+    return _compose("ramp_course.xml")
 
 
 def _settle(model: mujoco.MjModel) -> mujoco.MjData:
@@ -56,6 +51,18 @@ def test_wall_geom_ids_excludes_ramp_and_floor():
     model = _load_ramp_model()
     names = {model.geom(i).name for i in wall_geom_ids(model)}
     assert names == {"turn1", "turn2"}
+
+
+def test_wall_geom_ids_counts_wall_prefixed_materials():
+    """f1_track.xml colors its walls with materials wall_outer and wall_inner.
+    Every panel and post is a wall; the floor is not."""
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    model = mujoco.MjModel.from_xml_path(
+        os.path.join(repo, "assets", "tracks", "f1_track.xml")
+    )
+    names = {model.geom(i).name for i in wall_geom_ids(model)}
+    assert len(names) == model.ngeom - 1
+    assert "floor" not in names
 
 
 def test_wall_geom_ids_empty_when_no_walls():

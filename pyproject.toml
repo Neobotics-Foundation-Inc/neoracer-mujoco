@@ -16,6 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "gymnasium>=1.0",
+    "pygame-ce>=2.5.8",
     "pytest>=7.4",
     "ruff==0.17.0",
     "ty==0.0.86",
@@ -24,6 +25,9 @@ dev = [
 # Optional: only needed for src/neoracer_mujoco/envs/ (issue #7). The base
 # package must stay importable without gymnasium installed.
 rl = ["gymnasium>=1.0"]
+# Optional: only needed for the pygame driving demo (examples/pygame_drive/).
+# pygame-ce, not pygame: pygame has no wheels for Python 3.15.
+demo = ["pygame-ce>=2.5.8"]
 
 [tool.ty.environment]
 # typings/ holds mujoco stubs from `pybind11-stubgen mujoco mujoco.viewer -o typings`.

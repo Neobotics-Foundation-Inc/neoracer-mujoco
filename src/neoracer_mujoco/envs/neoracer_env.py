@@ -101,22 +101,6 @@ class EnvInfo(TypedDict, closed=True):
     termination_reason: TerminationReason | None
 
 
-def _compose_scene(car_path: str) -> mujoco.MjModel:
-    """Compose the car onto loop_corridor.xml at _LOOP_SPAWN_OFFSET, with
-    the MjSpec.attach_body pattern of examples/track_centering_demo.py.
-
-    Limit: examples/wall_follower_vs/scene_utils.py has a copy of this.
-    If a second module in the package needs it, move it to
-    neoracer_mujoco.assets.
-    """
-    scene = mujoco.MjSpec.from_file(_TRACK)
-    car = mujoco.MjSpec.from_file(car_path)
-    frame = scene.worldbody.add_frame()
-    frame.pos = np.array(_LOOP_SPAWN_OFFSET)
-    frame.attach_body(car.body("car"), "", "")
-    return scene.compile()
-
-
 def _compose_yaw_perturbation(q: np.ndarray, yaw: float) -> np.ndarray:
     """q * dq, where dq is a rotation of yaw (rad) about +Z. q and the
     result are quaternions (w, x, y, z)."""
@@ -303,7 +287,9 @@ class NeoRacerEnv(gym.Env):
             raise ValueError(f"Unsupported render_mode: {render_mode!r}")
         self.render_mode = render_mode
 
-        self.model = _compose_scene(config.car_path)
+        self.model = assets.compose(
+            mujoco.MjSpec.from_file(_TRACK), config.car_path, _LOOP_SPAWN_OFFSET
+        )
         self.data = mujoco.MjData(self.model)
         self._car_body = self.model.body("car").id
         self._walls = collision.wall_geom_ids(self.model)

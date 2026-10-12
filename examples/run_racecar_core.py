@@ -29,6 +29,7 @@ Example:
 """
 
 import argparse
+import os
 import runpy
 import sys
 import types
@@ -36,10 +37,9 @@ from pathlib import Path
 
 import mujoco
 
+from neoracer_mujoco import assets
 from neoracer_mujoco import sim as _sim
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
-
-_PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 # 1.2s of sim time at the model's 0.002s timestep. straight_corridor.xml is
 # only ~16m long and the vendored wall_follower.yaml drives at speed=1.0 (its
@@ -55,12 +55,9 @@ def load_scene() -> mujoco.MjModel:
     """Car centered in a walled corridor (assets/tracks/straight_corridor.xml)
     so a wall-following controller's side LiDAR beams get real returns --
     the same composition validation/test_wall_follower_example.py uses."""
-    scene = mujoco.MjSpec.from_file(
-        str(_PROJECT_DIR / "assets" / "tracks" / "straight_corridor.xml")
+    return assets.compose(
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "straight_corridor.xml"))
     )
-    car = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
 
 
 def build_racecar(

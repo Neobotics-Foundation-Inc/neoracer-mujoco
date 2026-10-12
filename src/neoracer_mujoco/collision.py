@@ -2,8 +2,9 @@
 Detects when the car touches a wall and resets the simulation, so a driving
 demo can recover automatically instead of requiring a manual reset key.
 
-A geom counts as a wall if its MuJoCo material is named "wall" — the
-convention assets/tracks/*.xml already use to mark real walls (e.g.
+A geom counts as a wall if its MuJoCo material is named "wall" or starts
+with "wall_" (f1_track.xml colors its walls with wall_outer and wall_inner) —
+the convention assets/tracks/*.xml use to mark real walls (e.g.
 straight_corridor.xml's corridor_wall_left/right, ramp_course.xml's
 turn1/turn2), as opposed to the floor plane or ramp_course.xml's drivable
 ramp, which use different materials. Tracks with no wall-material geoms
@@ -20,13 +21,17 @@ import mujoco
 WALL_MATERIAL = "wall"
 
 
+def _is_wall_material(name: str) -> bool:
+    return name == WALL_MATERIAL or name.startswith(WALL_MATERIAL + "_")
+
+
 def wall_geom_ids(model: mujoco.MjModel) -> frozenset[int]:
-    """Geom ids whose material is named WALL_MATERIAL (see module docstring)."""
+    """Geom ids whose material is a wall material (see module docstring)."""
     return frozenset(
         geom_id
         for geom_id in range(model.ngeom)
         if model.geom_matid[geom_id] != -1
-        and model.material(model.geom_matid[geom_id]).name == WALL_MATERIAL
+        and _is_wall_material(model.material(model.geom_matid[geom_id]).name)
     )
 
 
