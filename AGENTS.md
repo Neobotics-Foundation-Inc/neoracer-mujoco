@@ -9,6 +9,9 @@ CONTRIBUTING.md has the workflow and the rules for written English.
 Follow "Before you push" in CONTRIBUTING.md.
 It gives the checks to run and the directories that you must not change.
 
+The code requires Python 3.15. Use a feature from Python 3.13 to 3.15 where it removes a check,
+a class of bugs or a copy of code (rule 9), not only because it is new.
+
 The rules below come from typed functional programming.
 Each rule removes a class of bugs or a class of checks.
 When two rules disagree, the simpler code wins (rule 9).
@@ -21,6 +24,9 @@ Then no code has to check for an invalid state, because it cannot exist.
 - Put parameters in a frozen dataclass with defaults: `params = WallFollowingParams()`.
   Do not use module constants or loose arguments for them.
 - Use a frozen dataclass for a record, not a `dict` or a tuple of unnamed fields.
+  If an outside API requires a dict with fixed keys (gymnasium's `info`), use a closed `TypedDict`:
+  `class EnvInfo(TypedDict, closed=True)`. The type checker then checks each key and value.
+- A constant mapping is a `frozendict`, not a `dict`.
 - A fixed set of names is a `Literal`:
 
   ```python
@@ -167,7 +173,7 @@ def reward(term: RewardTerm, step: StepInfo) -> float:
 
 ## 7. Generic functions
 
-Use the Python 3.12 syntax for type parameters:
+Use the type parameter syntax (Python 3.12 and later):
 
 ```python
 type Pair[T] = tuple[T, T]  # (left, right)

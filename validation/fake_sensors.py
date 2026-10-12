@@ -6,7 +6,7 @@ import numpy as np
 
 from neoracer_mujoco.sensors import SensorReadings
 
-_WIDTH = {"imu_accel": 3, "imu_gyro": 3, "imu_quat": 4, "imu_linvel": 3}
+_WIDTH = frozendict(imu_accel=3, imu_gyro=3, imu_quat=4, imu_linvel=3)
 
 
 def fake_readings(**overrides: float) -> SensorReadings:
