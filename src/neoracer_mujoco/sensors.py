@@ -14,14 +14,9 @@ Sensor map (matches neoracer.xml):
 """
 
 from dataclasses import dataclass, field
-from typing import Generic, TypeVar
 
 import mujoco
 import numpy as np
-
-# Unconstrained so LidarScan can later be retargeted to another array type
-# (e.g. a JAX array) without changing the dataclass itself.
-ArrayT = TypeVar("ArrayT")
 
 # Shadows the wheel geom size in assets/neoracer.xml — keep in sync if the XML changes.
 WHEEL_RADIUS = 0.050  # ESTIMATED: 50 mm radius consistent with STL bbox and URDF CoM
@@ -225,12 +220,13 @@ REAR_RIGHT_BEAM = "lidar_225"
 
 
 @dataclass(frozen=True)
-class LidarScan(Generic[ArrayT]):
+class LidarScan[A]:
     """8-beam LiDAR ring as one ordered scan (see LIDAR_BEAM_ORDER).
-    angles[i] and ranges[i] refer to the same beam."""
+    angles[i] and ranges[i] refer to the same beam. The array type A is free,
+    so a scan can also hold another array type, for example a JAX array."""
 
-    angles: ArrayT  # radians
-    ranges: ArrayT  # meters; -1 = no hit within cutoff
+    angles: A  # radians
+    ranges: A  # meters; -1 = no hit within cutoff
 
 
 def lidar_scan(sensors: SensorReadings) -> LidarScan[np.ndarray]:
