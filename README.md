@@ -18,7 +18,7 @@ conda activate neoracer-mujoco
 ### uv
 
 ```sh
-uv venv --python 3.13
+uv venv --python 3.15
 uv pip install -r requirements.txt
 source .venv/bin/activate
 ```
@@ -40,7 +40,7 @@ and stay at the repo root, so `load()` resolves them from your checkout.
 # Run the model in the viewer (macOS needs mjpython for the passive viewer):
 mjpython -m examples.run
 
-# Run the validation suite (any Python with mujoco + pytest installed):
+# Run the validation suite (Python 3.15 or newer, with the steps above done):
 python3 -m pytest validation/ -v
 ```
 

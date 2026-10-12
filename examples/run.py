@@ -91,7 +91,7 @@ def _log(
     car_id: int,
     throttle: float,
     steer: float,
-    sensors: "sl.SensorReadings",
+    sensors: sl.SensorReadings,
     avg_spd: float,
 ) -> None:
     """Print one diagnostic line per PRINT_HZ steps."""

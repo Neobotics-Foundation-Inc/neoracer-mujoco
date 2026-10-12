@@ -5,8 +5,7 @@ environment interface itself, not RL training (none exists yet).
 Gymnasium is an optional `rl` dependency (pyproject.toml's
 [project.optional-dependencies]) -- pytest.importorskip below means this
 file is skipped, not failed, on a plain `pip install -e .` checkout without
-it, matching README.md's "any Python with mujoco + pytest installed" claim
-for `pytest validation/`.
+it.
 
 Several tests deliberately manipulate the env's internal progress/history
 state directly (documented at each call site) rather than physically
