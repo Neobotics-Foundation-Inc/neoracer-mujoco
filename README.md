@@ -102,7 +102,7 @@ it into the correct inner/outer front-wheel angles automatically.
 
 ## Track generation (`src/neoracer_mujoco/track_generation/`)
 
-Two calls are the whole API. One makes the geometry, the other puts the car on it:
+`generate_track` makes the track geometry. `assets.compose` attaches the car to it:
 
 ```python
 from neoracer_mujoco import assets

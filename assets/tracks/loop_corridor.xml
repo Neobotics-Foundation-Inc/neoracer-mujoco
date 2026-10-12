@@ -1,8 +1,8 @@
 <mujoco model="loop_corridor">
     <!--
-    Closed rectangular-ring corridor, built for visually evaluating
-    examples/run_racecar_core.py's --viewer path against a wall-following
-    controller (e.g. examples/ultimate_wall_follower/wall_follower.py).
+    Closed rectangular-ring corridor, for the evaluation of a wall-following
+    controller (for example examples/ultimate_wall_follower/wall_follower.py
+    with examples/run_racecar_core.py, or the Gymnasium env).
 
     straight_corridor.xml is a dead end: a controller running its full-speed,
     untouched config exits the far end in ~1-2s of sim time, well before any

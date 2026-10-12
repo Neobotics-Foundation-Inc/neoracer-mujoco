@@ -41,6 +41,7 @@ def main() -> None:
 
     for ep in range(params.episodes):
         obs, info = env.reset(seed=ep)
+        env.action_space.seed(ep)  # the same random actions on every run
         assert env.observation_space.contains(obs), (
             "reset obs outside observation_space"
         )
