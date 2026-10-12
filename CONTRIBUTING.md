@@ -1,7 +1,7 @@
 # Contributing
 
-This file describes how we write code and text in this repository.
-Read it before you open a pull request.
+Thank you for helping with the NeoRacer simulator. This page explains how to make a change and what reviewers look for.
+Coding agents read AGENTS.md instead.
 
 ## Before you push
 
@@ -14,37 +14,25 @@ Read it before you open a pull request.
   If a change alters behavior, change its test in the same commit.
 - `users/` holds personal experiments.
   `validation/testdata/` and `examples/ultimate_wall_follower/` hold copies of outside code.
-  Do not change these directories unless the task names them.
+  Do not change these directories unless your change is about them.
 - Keep one change in one pull request.
 
-## Code style
+## What reviewers look for
 
-Read AGENTS.md. It is the technical style guide, for people and for coding agents.
-Review a pull request against its rules.
+The code follows a few ideas from typed functional programming. Each one removes a kind of bug, or a kind of check that someone must remember to write.
 
-## Written English
+- **Bad values cannot be built.** Parameters and records are frozen dataclasses.
+  A fixed set of names is a `Literal`, such as `Side = Literal["left", "right"]`.
+  Cases that carry different data are a union of frozen dataclasses. We do not use `Enum`.
+- **Input is parsed once, at the edge.** Sensor arrays, files and the command line become typed values where they enter the code.
+  After that, the code trusts the types and does not check the values again.
+- **Every function answers every input it accepts.** If some input has no answer, the input type or the output type changes, so the case is explicit.
+- **Every case is handled.** A `match` over a `Literal` or a union covers each case and ends with `assert_never`, so the type checker shows each place to update when a case is added.
+- **Logic is pure, and state is explicit.** Controllers, rewards and termination are functions of their inputs.
+  State that lasts from one step to the next is a value that goes in and comes out, not a hidden field.
+- **Simple, not simpler.** A plain `float` or array is fine when nothing inspects it. A helper is extracted when a second use needs it, not before.
+- **Physical numbers carry their units**, and estimated numbers say where they come from.
+  A known limit is marked with `# Limit:`, with when it matters and what to do then.
+- **Comments say what the code does.** The commit message gives the history and the reasons.
 
-Write comments, docstrings, commit messages and pull request descriptions in simple technical English
-(close to [ASD-STE100](https://www.asd-ste100.org)):
-
-- Write short sentences: 20 words or fewer for an instruction, 25 or fewer for a description.
-- Put one topic in each sentence.
-- Use the active voice and simple tenses: "The sweep deletes the key", not "The key is deleted".
-- Write an instruction in the imperative, and put the condition first: "If the lock is held, stop."
-- Use one word for one thing. When you choose a term, use it everywhere.
-- Keep "the" and "a". Do not remove words to make a sentence short.
-- Use plain words. Do not use idioms or figures of speech.
-- Give each sentence a concrete subject, a plain verb and an explicit object. Say who does what to what.
-- Only people and programs act. Data, files and documents do not "promise", "say", "plan" or "know".
-- Do not write riddles or slogans. State the fact plainly.
-- If you use a technical term, define it in one plain sentence where it first appears, or link to its definition.
-  Do not put two technical terms in one short phrase.
-- Write for a reader who does not know the code yet, not as notes to yourself.
-
-Examples (compressed → plain):
-
-- "The sensor parse keeps what it checked." → "The sensor parser returns a typed reading, so later code does not check the values again."
-- "The rollout is a fold over step." → "The rollout calls `step` in a loop and passes each new state to the next call."
-- "What the contract promises." → "What `contract.py` requires of every car model."
-- A comment says what the code does. It does not give the history or the motivation; the commit message does that.
-- A docstring describes the contract (inputs, outputs, units) in as few lines as it can.
+If you are not sure how to apply one of these, open the pull request and ask. A reviewer will help.
