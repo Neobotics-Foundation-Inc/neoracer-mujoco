@@ -24,10 +24,8 @@ import vehicle_space_controller as vsc
 from math_utils import compose_yaw_perturbation
 from report_utils import outcome_header
 
-from neoracer_mujoco import collision
+from neoracer_mujoco import assets, collision
 from neoracer_mujoco import sim as _sim
-
-_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 @dataclass(frozen=True)
@@ -45,12 +43,9 @@ _DEFAULT_TRIAL_PARAMS = TrialParams()
 
 
 def _load_model() -> mujoco.MjModel:
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(_REPO, "assets", "tracks", "straight_corridor.xml")
+    return assets.compose(
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "straight_corridor.xml"))
     )
-    car = mujoco.MjSpec.from_file(os.path.join(_REPO, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
 
 
 @dataclass

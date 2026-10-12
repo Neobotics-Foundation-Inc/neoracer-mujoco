@@ -24,10 +24,10 @@ import types
 import mujoco
 import numpy as np
 
+from neoracer_mujoco import assets
 from neoracer_mujoco import sim as _sim
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
 
-_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _FIXTURE_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "testdata", "ultimate_wall_follower"
 )
@@ -36,12 +36,9 @@ _FIXTURE_DIR = os.path.join(
 def _load_corridor_model() -> mujoco.MjModel:
     """Car centered in a walled corridor -- see assets/tracks/straight_corridor.xml
     -- so the side LiDAR beams the wall follower reads get real returns."""
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(_REPO, "assets", "tracks", "straight_corridor.xml")
+    return assets.compose(
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "straight_corridor.xml"))
     )
-    car = mujoco.MjSpec.from_file(os.path.join(_REPO, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
 
 
 def _import_vendored_wall_follower(rc, monkeypatch):

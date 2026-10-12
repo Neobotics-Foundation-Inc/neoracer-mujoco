@@ -7,11 +7,14 @@ pure-logic tests (fast, no compiled model), one physics test against the
 real straight_corridor.xml car for an end-to-end sanity check.
 """
 
+import os
+
 import mujoco
 import numpy as np
 import pytest
 from fake_sensors import fake_readings
 
+from neoracer_mujoco import assets
 from neoracer_mujoco import sensors as sl
 from neoracer_mujoco.control import PDState, ShapingConfig
 from neoracer_mujoco.control.wall_following import (
@@ -165,15 +168,9 @@ def test_reset_clears_derivative_and_slew_history():
 
 
 def _load_corridor_model() -> mujoco.MjModel:
-    import os
-
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(repo, "assets", "tracks", "straight_corridor.xml")
+    return assets.compose(
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "straight_corridor.xml"))
     )
-    car = mujoco.MjSpec.from_file(os.path.join(repo, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
 
 
 def test_controller_converges_to_target_distance_on_corridor():

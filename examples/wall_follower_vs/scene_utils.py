@@ -25,9 +25,8 @@ from __future__ import annotations
 import os
 
 import mujoco
-import numpy as np
 
-_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from neoracer_mujoco import assets
 
 DEFAULT_TRACK = "straight_corridor.xml"
 
@@ -45,9 +44,7 @@ def load_track_scene(track: str = DEFAULT_TRACK) -> mujoco.MjModel:
     _TRACK_SPAWN_OFFSET so it spawns centered in that track's own corridor,
     facing +X. Tracks not listed use no offset (straight_corridor.xml's
     convention)."""
-    scene = mujoco.MjSpec.from_file(os.path.join(_REPO, "assets", "tracks", track))
-    car = mujoco.MjSpec.from_file(os.path.join(_REPO, "assets", "neoracer.xml"))
-    frame = scene.worldbody.add_frame()
-    frame.pos = np.array(_TRACK_SPAWN_OFFSET.get(track, (0.0, 0.0, 0.0)))
-    frame.attach_body(car.body("car"), "", "")
-    return scene.compile()
+    return assets.compose(
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, track)),
+        pos=_TRACK_SPAWN_OFFSET.get(track, (0.0, 0.0, 0.0)),
+    )

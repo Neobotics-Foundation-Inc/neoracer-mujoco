@@ -2,9 +2,9 @@
 Drive neoracer.xml by hand, video-game style — a feel-test for the physics.
 
 Usage:
-    python3 scripts/manual_drive.py                       # drive the ramp course
-    python3 scripts/manual_drive.py assets/neoracer.xml   # bare car on a plane
-    python3 scripts/manual_drive.py --selftest            # check math, no window
+    python3 -m examples.manual_drive                       # drive the ramp course
+    python3 -m examples.manual_drive assets/neoracer.xml   # bare car on a plane
+    python3 -m examples.manual_drive --selftest            # check math, no window
 
 NOTE: use plain python3, NOT mjpython. mjpython runs the script on a secondary
 thread (it keeps the main thread for the passive viewer's Cocoa loop), but a glfw
@@ -30,9 +30,6 @@ Actuator mapping (from assets/neoracer.xml):
 
 import sys
 from dataclasses import dataclass
-from pathlib import Path
-
-_PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 # ── tuning knobs (feel is physical — turn these while driving) ─────────────────
 # Rates are per second, so the feel is the same regardless of frame rate.
@@ -146,17 +143,18 @@ def load_model(xml: str | None):
     car on a plane). The car is its own spec, so it carries its own meshdir;
     no path juggling needed.
     """
+    import os
+
     import mujoco
+
+    from neoracer_mujoco import assets
 
     if xml:
         return mujoco.MjModel.from_xml_path(xml)
 
-    scene = mujoco.MjSpec.from_file(
-        str(_PROJECT_DIR / "assets" / "tracks" / "ramp_course.xml")
+    return assets.compose(
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "ramp_course.xml"))
     )
-    car = mujoco.MjSpec.from_file(str(_PROJECT_DIR / "assets" / "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
 
 
 def main(xml: str | None = None) -> None:

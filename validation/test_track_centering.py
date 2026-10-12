@@ -10,11 +10,14 @@ real simulator (finite values, steering clamped, stays upright, doesn't
 immediately hit a wall).
 """
 
+import os
+
 import mujoco
 import numpy as np
 import pytest
 from fake_sensors import fake_readings
 
+from neoracer_mujoco import assets
 from neoracer_mujoco import sensors as sl
 from neoracer_mujoco.control import PDState
 from neoracer_mujoco.control.track_centering import (
@@ -170,15 +173,9 @@ def test_reset_clears_derivative_and_slew_history():
 
 
 def _load_corridor_model() -> mujoco.MjModel:
-    import os
-
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(repo, "assets", "tracks", "straight_corridor.xml")
+    return assets.compose(
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "straight_corridor.xml"))
     )
-    car = mujoco.MjSpec.from_file(os.path.join(repo, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
 
 
 def test_controller_stable_on_corridor():

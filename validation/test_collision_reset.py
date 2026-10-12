@@ -10,27 +10,22 @@ import os
 
 import mujoco
 
+from neoracer_mujoco import assets
 from neoracer_mujoco.collision import car_hit_wall, reset_if_wall_hit, wall_geom_ids
 
 
-def _load_corridor_model() -> mujoco.MjModel:
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(repo, "assets", "tracks", "straight_corridor.xml")
+def _compose(track: str) -> mujoco.MjModel:
+    return assets.compose(
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, track))
     )
-    car = mujoco.MjSpec.from_file(os.path.join(repo, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
+
+
+def _load_corridor_model() -> mujoco.MjModel:
+    return _compose("straight_corridor.xml")
 
 
 def _load_ramp_model() -> mujoco.MjModel:
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    scene = mujoco.MjSpec.from_file(
-        os.path.join(repo, "assets", "tracks", "ramp_course.xml")
-    )
-    car = mujoco.MjSpec.from_file(os.path.join(repo, "assets", "neoracer.xml"))
-    scene.worldbody.add_frame().attach_body(car.body("car"), "", "")
-    return scene.compile()
+    return _compose("ramp_course.xml")
 
 
 def _settle(model: mujoco.MjModel) -> mujoco.MjData:
