@@ -143,15 +143,17 @@ stable API.
 
 - **`run.py`** — launches the MuJoCo viewer and drives the car with a built-in
   demo controller (constant throttle + sinusoidal steering) so you can watch it
-  move. Flip `SAFE_MODE` at the top: `True` caps speed and warns on rollover,
-  `False` uses aggressive inputs. Run with `mjpython -m examples.run`.
+  move. Run with `mjpython -m examples.run`. Safe mode (the default) uses a low
+  throttle and a speed limit. `--mode full` uses a high throttle and no speed limit,
+  so the car rolls over at high speed. `DriveParams` holds the values of each mode.
 - **`manual_drive.py`** — drive the car yourself with the arrow keys, video-game
   style: it owns a glfw window and polls held keys each frame, so you hold to build
   speed, release to coast down, and let the wheel re-center. A back-top chase camera
   follows the car's heading. Use this to *feel* the physics — grip, rollover,
   suspension, wall contacts. Run with plain `python3 -m examples.manual_drive` (NOT
-  mjpython — the glfw window must be created on the main thread). Camera and control
-  feel are tunable via the constants at the top of the file.
+  mjpython — the glfw window must be created on the main thread). Add `--bare` for
+  the car alone, or `--track PATH` for another track. To change the camera and how
+  the car responds to the keys, change the defaults in `ManualDriveParams`.
 - **`pygame_drive/`** — drive the car with WASD or a gamepad in a pygame window,
   with a chase camera, a LiDAR radar, the held keys and a lap timer. The throttle is
   a DC-motor model (back-EMF drag and rolling friction), so the car has a top speed
