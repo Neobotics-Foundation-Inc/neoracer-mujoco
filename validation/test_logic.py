@@ -1,7 +1,8 @@
 """
-Pure-logic tests: math that has a correct answer independent of the physics sim.
-These catch silent numerical bugs (wrong unit conversion, a polyfit that's the
-right shape but a few percent off) that the behavioral conformance tests miss.
+Pure-logic tests: math with a correct answer that does not depend on the
+physics simulation. These tests find numerical errors that the behavior
+tests in test_conformance.py do not find, for example a wrong unit
+conversion or a polynomial fit that is a few percent wrong.
 """
 
 from dataclasses import fields
@@ -11,15 +12,15 @@ import numpy as np
 import pytest
 from fake_sensors import fake_readings
 
-from neoracer_mujoco import sensors as sl
+from neoracer_mujoco import contract, sensors
 
 
 def test_read_returns_every_sensor(car):
-    """sensor_logger.read must surface all sensors with correctly-sliced widths."""
+    """sensors.read returns every sensor of the model, each with its size."""
     d = mujoco.MjData(car)
     mujoco.mj_step(car, d)
-    out = sl.read(car, d)
-    assert len(fields(sl.SensorReadings)) == car.nsensor
+    out = sensors.read(car, d)
+    assert len(fields(sensors.SensorReadings)) == car.nsensor
     assert out.imu_accel.shape == (3,) and out.imu_gyro.shape == (3,)
     assert out.imu_quat.shape == (4,)
     assert isinstance(out.lidar_000, float) and isinstance(out.steer_cmd_pos, float)
@@ -34,10 +35,10 @@ def test_sensor_layout_names_every_missing_or_wrong_size_sensor():
         </mujoco>"""
     )
     with pytest.raises(ValueError) as error:
-        sl.sensor_layout(model)
+        sensors.sensor_layout(model)
     message = str(error.value)
     assert "steer_cmd_pos has 3 values, not 1" in message
-    for f in fields(sl.SensorReadings):
+    for f in fields(sensors.SensorReadings):
         if f.name != "steer_cmd_pos":
             assert f"{f.name} is missing" in message
 
@@ -50,33 +51,38 @@ def test_motor_encoder_is_mean_of_wheel_vel():
             fl_wheel_vel=fl, fr_wheel_vel=fr, rl_wheel_vel=rl, rr_wheel_vel=rr
         )
         mean = (fl + fr + rl + rr) / 4
-        assert sl.motor_encoder_rad_s(readings) == pytest.approx(mean)
+        assert sensors.motor_encoder_rad_s(readings) == pytest.approx(mean)
 
 
-def test_estimated_linear_speed_ms():
-    """Wheel-radius speed estimate, on known input."""
-    assert sl.estimated_linear_speed_ms(2.0) == pytest.approx(2.0 * sl.WHEEL_RADIUS)
+def test_estimated_linear_speed_is_linear_in_the_motor_speed():
+    """The speed estimate (m/s) is the motor speed (rad/s) times
+    WHEEL_RADIUS (m), for every motor speed, also a negative one."""
+    rng = np.random.default_rng(1)
+    for motor_rad_s in rng.uniform(-500.0, 500.0, 200):
+        assert sensors.estimated_linear_speed_ms(motor_rad_s) == pytest.approx(
+            motor_rad_s * sensors.WHEEL_RADIUS
+        )
 
 
-def test_ackermann_polycoef_matches_exact_geometry(car):
-    """
-    The steering polycoef baked into the XML must reproduce exact Ackermann for
-    this car's own wheelbase/track. Validates the model's CALCULATED coefficients
-    against the analytic arctan formula.
-    """
-    try:
-        eq = car.eq("ackermann_left")
-        fl = car.body("fl_wheel_body")
-    except KeyError:
-        pytest.skip("car has no Ackermann steering")
-
-    L = 2 * abs(float(fl.pos[0]))  # wheelbase
-    W = 2 * abs(float(fl.pos[1]))  # track
+@pytest.mark.parametrize(
+    ("constraint", "side"),
+    [("ackermann_left", -1.0), ("ackermann_right", 1.0)],
+)
+def test_ackermann_polycoef_matches_exact_geometry(car, constraint, side):
+    """The steering polycoef in the car XML gives the exact Ackermann angle
+    for the wheelbase and track of the car, to 0.01 rad. A + steer turns
+    left, so the left wheel is the inner wheel (side -1) and the right wheel
+    is the outer wheel (side +1)."""
+    eq = car.eq(constraint)
+    fl = car.body("fl_wheel_body")
+    wheelbase = 2 * abs(float(fl.pos[0]))  # m
+    track = 2 * abs(float(fl.pos[1]))  # m
     coef = np.array(eq.data[:5])  # a0..a4
 
-    delta = np.linspace(-0.4, 0.4, 41)
-    delta = delta[delta != 0]
-    exact = np.arctan(L / (L / np.tan(delta) - W / 2))  # inner (left) wheel
+    limit = contract.actuator_limits(car).steer_rad  # rad
+    # An even count of angles leaves out 0, where 1 / tan is not defined.
+    delta = np.linspace(-limit, limit, 40)  # rad
+    exact = np.arctan(wheelbase / (wheelbase / np.tan(delta) + side * track / 2))
     poly = np.polyval(coef[::-1], delta)
     err = float(np.max(np.abs(poly - exact)))
     assert err < 0.01, f"Ackermann polyfit off by {err:.4f} rad vs exact geometry"

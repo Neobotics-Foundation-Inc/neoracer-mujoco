@@ -85,10 +85,18 @@ def test_car_tops_out_then_brakes_when_the_throttle_is_released():
     spin = float(np.mean(data.qvel[drive_wheel_dofs(model)]))
     assert spin < 1.1 * P.max_torque / P.motor_damping  # the back-EMF balance point
     v_release = _speed(data)
-    state = _drive(model, data, state, 0.0, 0.0, 200)  # 4 s hands off
+    _drive(model, data, state, 0.0, 0.0, 200)  # 4 s hands off
     assert _speed(data) < 0.1 * v_release
-    _drive(model, data, state, 0.0, 1.0, 50)
-    assert data.ctrl[contract.STEER] == P.max_steer
+
+
+@pytest.mark.parametrize("steer", [-1.0, -0.5, 0.5, 1.0])
+def test_held_steer_input_sets_the_steer_ctrl(steer):
+    """A steer input in [-1, 1], held for 1 s, writes steer * max_steer (rad)
+    to the steer servo."""
+    model = assets.load()
+    data = mujoco.MjData(model)
+    _drive(model, data, DriveState(), 0.0, steer, 50)  # 1 s
+    assert data.ctrl[contract.STEER] == pytest.approx(steer * P.max_steer)
 
 
 @pytest.mark.parametrize("track", assets.tracks(), ids=os.path.basename)
