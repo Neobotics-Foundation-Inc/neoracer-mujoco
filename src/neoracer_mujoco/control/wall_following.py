@@ -43,7 +43,7 @@ from ..sensors import (
     SensorReadings,
     beam_distance,
     is_corrupt,
-    lidar_scan,
+    lidar_ranges,
     parse_beam,
 )
 from . import steering
@@ -77,7 +77,7 @@ class WallFollowingSignals:
 
 @dataclass(frozen=True)
 class SideBeams:
-    """The beams that watch one wall, as indices into LidarScan.ranges."""
+    """The beams that watch one wall, as indices into lidar_ranges()."""
 
     side: int  # points perpendicular to the wall
     front: int
@@ -100,7 +100,7 @@ def compute_signals(
 ) -> WallFollowingSignals:
     """Pure function: SensorReadings -> WallFollowingSignals."""
     sb = _side_beams(cfg.follow_side)
-    ranges = lidar_scan(sensors).ranges
+    ranges = lidar_ranges(sensors)
     beams = {
         i: parse_beam(float(ranges[i]))
         for i in (sb.side, sb.front, sb.rear, *FRONT_CONE_BEAMS)

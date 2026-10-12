@@ -27,7 +27,7 @@ Action space -- Box([-1,-1],[1,1]), float32:
 
 Observation space -- Box(20,), float32, built only from sensors.SensorReadings
 (no raw qpos/qvel):
-    [0:8]   lidar_ranges   m, -1 = no hit (sensors.lidar_scan)
+    [0:8]   lidar_ranges   m, -1 = no hit (sensors.lidar_ranges)
     [8:11]  imu_accel      m/s^2, body frame, gravity included
     [11:14] imu_gyro       rad/s, body frame
     [14:18] imu_quat       orientation quaternion (w,x,y,z), world frame
@@ -352,7 +352,7 @@ class NeoRacerEnv(gym.Env):
 
     def _build_observation(self) -> np.ndarray:
         readings = sensors.read_layout(self._sensor_layout, self.data)
-        lidar = sensors.lidar_scan(readings).ranges.astype(np.float32)
+        lidar = sensors.lidar_ranges(readings).astype(np.float32)
         accel = readings.imu_accel.astype(np.float32)
         gyro = readings.imu_gyro.astype(np.float32)
         quat = readings.imu_quat.astype(np.float32)

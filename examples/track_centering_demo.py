@@ -75,7 +75,7 @@ def _side_clearance(
     (does not modify) the controller's no-hit-as-open convention. The
     controller's own internal beam handling lives entirely in
     track_centering.py; this is a read-only echo of it for the overlay."""
-    ranges = sl.lidar_scan(sensors).ranges
+    ranges = sl.lidar_ranges(sensors)
     values = []
     for i in beams:
         raw = float(ranges[i])

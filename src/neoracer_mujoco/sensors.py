@@ -26,6 +26,7 @@ WHEEL_RADIUS = 0.050  # m, ESTIMATED: consistent with STL bbox and URDF CoM
 type Vec1 = npt.NDArray[np.float64]  # shape (1,), a scalar sensor
 type Vec3 = npt.NDArray[np.float64]  # shape (3,)
 type Quat = npt.NDArray[np.float64]  # shape (4,), (w, x, y, z)
+type Vec8 = npt.NDArray[np.float64]  # shape (8,), one value per LiDAR beam
 
 
 type SensorLayout = tuple[tuple[str, slice], ...]  # (name, slice of sensordata)
@@ -233,11 +234,10 @@ LIDAR_BEAM_ORDER = (
     "lidar_270",
     "lidar_315",
 )
-LIDAR_ANGLES_DEG = (0, 45, 90, 135, 180, 225, 270, 315)
 
 # Beam groups shared by the LiDAR controllers (track_centering.py,
 # wall_following.py). Each value is an index into LIDAR_BEAM_ORDER and into
-# LidarScan.ranges.
+# lidar_ranges().
 LEFT_BEAMS = (1, 2, 3)  # lidar_045, lidar_090, lidar_135
 RIGHT_BEAMS = (7, 6, 5)  # lidar_315, lidar_270, lidar_225
 # Only lidar_000, not a wider cone: lidar_045/lidar_315 are already in
@@ -252,20 +252,10 @@ FRONT_RIGHT_BEAM = 7  # lidar_315
 REAR_RIGHT_BEAM = 5  # lidar_225
 
 
-@dataclass(frozen=True)
-class LidarScan[A]:
-    """8-beam LiDAR ring as one ordered scan (see LIDAR_BEAM_ORDER).
-    angles[i] and ranges[i] refer to the same beam. The array type A is free,
-    so a scan can also hold another array type, for example a JAX array."""
-
-    angles: A  # radians
-    ranges: A  # meters; -1 = no hit within cutoff
-
-
-def lidar_scan(sensors: SensorReadings) -> LidarScan[np.ndarray]:
-    """Pack the 8 named lidar_* fields into one ordered LidarScan."""
+def lidar_ranges(sensors: SensorReadings) -> Vec8:
+    """The 8 lidar_* ranges (m; -1 = no hit) in LIDAR_BEAM_ORDER."""
     s = sensors
-    ranges = np.array(
+    return np.array(
         [
             s.lidar_000[0],
             s.lidar_045[0],
@@ -277,8 +267,6 @@ def lidar_scan(sensors: SensorReadings) -> LidarScan[np.ndarray]:
             s.lidar_315[0],
         ]
     )
-    angles = np.deg2rad(LIDAR_ANGLES_DEG)
-    return LidarScan(angles=angles, ranges=ranges)
 
 
 @dataclass(frozen=True)

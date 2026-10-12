@@ -55,7 +55,7 @@ python3 -m pytest validation/ -v
 ├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
 │   ├── contract.py        — the car contract (single source of truth)
 │   ├── assets.py          — cars() / load() model discovery + compile
-│   ├── sensors.py         — SensorReadings/IMUReading/LidarScan + read()
+│   ├── sensors.py         — SensorReadings/IMUReading + read()
 │   ├── sim.py             — compile/settle/run + physics probes
 │   └── control/           — classical controllers (track_centering)
 ├── examples/
@@ -122,7 +122,7 @@ stable API.
 
 Sensor reading lives in the package, not the examples: import from
 `neoracer_mujoco.sensors` (`read`, `wheel_speed_ms`, `print_sensors`,
-`lidar_scan`) to log IMU / wheel / steer / suspension / LiDAR off a compiled model.
+`lidar_ranges`) to log IMU / wheel / steer / suspension / LiDAR off a compiled model.
 
 Add your own demos here — a pure-pursuit follower, a data recorder, etc. — using
 `run.py` as the template for the load → step → control loop.

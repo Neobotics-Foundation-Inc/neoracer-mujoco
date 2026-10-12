@@ -93,7 +93,7 @@ from ..sensors import (
     SensorReadings,
     beam_distance,
     is_corrupt,
-    lidar_scan,
+    lidar_ranges,
     parse_beam,
 )
 from . import steering
@@ -128,7 +128,7 @@ def compute_signals(
     sensors: SensorReadings, cfg: TrackCenteringConfig
 ) -> CenteringSignals:
     """Pure function: SensorReadings -> CenteringSignals."""
-    beams = [parse_beam(float(r)) for r in lidar_scan(sensors).ranges]
+    beams = [parse_beam(float(r)) for r in lidar_ranges(sensors)]
     d = [beam_distance(b, cfg.max_beam_range) for b in beams]
 
     left_mean = float(np.mean([d[i] for i in LEFT_BEAMS]))

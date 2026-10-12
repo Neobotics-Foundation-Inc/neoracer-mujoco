@@ -19,22 +19,20 @@ from . import contract
 from .assets import cars, load
 from .sensors import (
     IMUReading,
-    LidarScan,
     SensorReadings,
     calibrate_imu,
-    lidar_scan,
+    lidar_ranges,
     read,
     wheel_speed_ms,
 )
 
 __all__ = [
     "IMUReading",
-    "LidarScan",
     "SensorReadings",
     "calibrate_imu",
     "cars",
     "contract",
-    "lidar_scan",
+    "lidar_ranges",
     "load",
     "read",
     "wheel_speed_ms",
