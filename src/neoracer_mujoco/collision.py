@@ -20,14 +20,30 @@ import mujoco
 WALL_MATERIAL = "wall"
 
 
-def wall_geom_ids(model: mujoco.MjModel) -> set[int]:
+def wall_geom_ids(model: mujoco.MjModel) -> frozenset[int]:
     """Geom ids whose material is named WALL_MATERIAL (see module docstring)."""
-    ids = set()
-    for geom_id in range(model.ngeom):
-        mat_id = model.geom_matid[geom_id]
-        if mat_id != -1 and model.material(mat_id).name == WALL_MATERIAL:
-            ids.add(geom_id)
-    return ids
+    return frozenset(
+        geom_id
+        for geom_id in range(model.ngeom)
+        if model.geom_matid[geom_id] != -1
+        and model.material(model.geom_matid[geom_id]).name == WALL_MATERIAL
+    )
+
+
+def car_touches_wall(
+    model: mujoco.MjModel, data: mujoco.MjData, car_root: int, walls: frozenset[int]
+) -> bool:
+    """True if a geom of the body tree with root body id car_root touches a
+    geom in walls. It does no name lookup, so use it in a control loop: get
+    car_root and walls once, from model.body(name).id and wall_geom_ids()."""
+    for i in range(data.ncon):
+        contact = data.contact[i]
+        g1, g2 = contact.geom1, contact.geom2
+        g1_is_car = model.body_rootid[model.geom_bodyid[g1]] == car_root
+        g2_is_car = model.body_rootid[model.geom_bodyid[g2]] == car_root
+        if (g1_is_car and g2 in walls) or (g2_is_car and g1 in walls):
+            return True
+    return False
 
 
 def car_hit_wall(
@@ -38,16 +54,7 @@ def car_hit_wall(
     walls = wall_geom_ids(model)
     if not walls:
         return False
-
-    car_root = model.body(car_body_name).id
-    for i in range(data.ncon):
-        contact = data.contact[i]
-        g1, g2 = contact.geom1, contact.geom2
-        g1_is_car = model.body_rootid[model.geom_bodyid[g1]] == car_root
-        g2_is_car = model.body_rootid[model.geom_bodyid[g2]] == car_root
-        if (g1_is_car and g2 in walls) or (g2_is_car and g1 in walls):
-            return True
-    return False
+    return car_touches_wall(model, data, model.body(car_body_name).id, walls)
 
 
 def reset_if_wall_hit(

@@ -7,43 +7,32 @@ higher-level Sim object; keep it small until that need is real.
 """
 
 import mujoco
-
-from . import sensors as _sensors
+import numpy as np
 
 SETTLE_STEPS = 400  # zero-ctrl steps to reach static equilibrium
 
 
-def compile(path):
-    return mujoco.MjModel.from_xml_path(path)
-
-
-def settle(model, data=None, steps=SETTLE_STEPS):
-    """Run `steps` with zero control so the car rests on the ground."""
-    if data is None:
-        data = mujoco.MjData(model)
-    data.ctrl[:] = 0
-    for _ in range(steps):
-        mujoco.mj_step(model, data)
-    return data
-
-
-def run(model, data, ctrl, steps):
+def run(
+    model: mujoco.MjModel, data: mujoco.MjData, ctrl: float | np.ndarray, steps: int
+) -> None:
+    """Set data.ctrl to ctrl and step data forward `steps` times."""
     data.ctrl[:] = ctrl
     for _ in range(steps):
         mujoco.mj_step(model, data)
+
+
+def settle(model: mujoco.MjModel) -> mujoco.MjData:
+    """New MjData, stepped SETTLE_STEPS with zero control so the car rests
+    on the ground."""
+    data = mujoco.MjData(model)
+    run(model, data, 0.0, SETTLE_STEPS)
     return data
 
 
-def sensors(model, data):
-    """Flat {name: ndarray} of all sensor readings. For the typed struct form,
-    use neoracer_mujoco.read()."""
-    return _sensors.read_raw(model, data)
-
-
-def car_mass(model):
+def car_mass(model: mujoco.MjModel) -> float:
     return float(model.body_subtreemass[model.body("car").id])
 
 
-def car_upright_cos(data):
+def car_upright_cos(data: mujoco.MjData) -> float:
     """cos(tilt): body z-axis · world z-axis. 1.0 = perfectly level, <0 = flipped."""
     return float(data.body("car").xmat[8])

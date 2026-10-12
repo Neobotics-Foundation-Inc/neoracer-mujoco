@@ -13,28 +13,44 @@ Sensor map (matches neoracer.xml):
   lidar_000..315 — rangefinder distances (m; -1 = no hit)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import assert_never
 
 import mujoco
 import numpy as np
+import numpy.typing as npt
 
 # Shadows the wheel geom size in assets/neoracer.xml — keep in sync if the XML changes.
-WHEEL_RADIUS = 0.050  # ESTIMATED: 50 mm radius consistent with STL bbox and URDF CoM
+WHEEL_RADIUS = 0.050  # m, ESTIMATED: consistent with STL bbox and URDF CoM
+
+type Vec1 = npt.NDArray[np.float64]  # shape (1,), a scalar sensor
+type Vec3 = npt.NDArray[np.float64]  # shape (3,)
+type Quat = npt.NDArray[np.float64]  # shape (4,), (w, x, y, z)
 
 
-def _empty() -> np.ndarray:
-    return np.array([])
+type SensorLayout = tuple[tuple[str, slice], ...]  # (name, slice of sensordata)
 
 
-def read_raw(model: mujoco.MjModel, data: mujoco.MjData) -> dict:
-    """Every named sensor as a flat {name: ndarray} dict. The shared read loop
-    behind both read() (typed struct) and the dict form used by validation."""
-    out = {}
-    for i in range(model.nsensor):
-        adr = model.sensor_adr[i]
-        dim = model.sensor_dim[i]
-        out[model.sensor(i).name] = data.sensordata[adr : adr + dim].copy()
-    return out
+def sensor_layout(model: mujoco.MjModel) -> SensorLayout:
+    """The name and the sensordata slice of each sensor. Get it once per
+    model: a control loop then reads with read_layout, without name lookups."""
+    return tuple(
+        (
+            model.sensor(i).name,
+            slice(model.sensor_adr[i], model.sensor_adr[i] + model.sensor_dim[i]),
+        )
+        for i in range(model.nsensor)
+    )
+
+
+def _raw(layout: SensorLayout, data: mujoco.MjData) -> dict[str, np.ndarray]:
+    return {name: data.sensordata[s].copy() for name, s in layout}
+
+
+def read_raw(model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, np.ndarray]:
+    """Every named sensor as a flat {name: ndarray} dict, the form used by
+    validation."""
+    return _raw(sensor_layout(model), data)
 
 
 @dataclass(frozen=True)
@@ -42,44 +58,49 @@ class SensorReadings:
     """
     One named field per sensor in neoracer.xml. Each value is the raw sensordata
     slice (a numpy array), so scalars come back as length-1 arrays — read [0].
-    Defaults let tests build partial instances; read() always fills them all.
     """
 
     # IMU at the chassis centre
-    imu_accel: np.ndarray = field(default_factory=_empty)  # linear accel (m/s²)
-    imu_gyro: np.ndarray = field(default_factory=_empty)  # angular vel (rad/s)
-    imu_quat: np.ndarray = field(default_factory=_empty)  # orientation (w,x,y,z)
-    imu_linvel: np.ndarray = field(default_factory=_empty)  # world linear vel (m/s)
+    imu_accel: Vec3  # linear accel (m/s²)
+    imu_gyro: Vec3  # angular vel (rad/s)
+    imu_quat: Quat  # orientation (w,x,y,z)
+    imu_linvel: Vec3  # world linear vel (m/s)
     # steering angles (rad)
-    steer_cmd_pos: np.ndarray = field(default_factory=_empty)  # virtual command
-    fl_steer_pos: np.ndarray = field(default_factory=_empty)  # actual front-left
-    fr_steer_pos: np.ndarray = field(default_factory=_empty)  # actual front-right
+    steer_cmd_pos: Vec1  # virtual command
+    fl_steer_pos: Vec1  # actual front-left
+    fr_steer_pos: Vec1  # actual front-right
     # wheel angular velocity (rad/s)
-    fl_wheel_vel: np.ndarray = field(default_factory=_empty)
-    fr_wheel_vel: np.ndarray = field(default_factory=_empty)
-    rl_wheel_vel: np.ndarray = field(default_factory=_empty)
-    rr_wheel_vel: np.ndarray = field(default_factory=_empty)
+    fl_wheel_vel: Vec1
+    fr_wheel_vel: Vec1
+    rl_wheel_vel: Vec1
+    rr_wheel_vel: Vec1
     # suspension travel (m; + = compressed)
-    fl_susp_pos: np.ndarray = field(default_factory=_empty)
-    fr_susp_pos: np.ndarray = field(default_factory=_empty)
-    rl_susp_pos: np.ndarray = field(default_factory=_empty)
-    rr_susp_pos: np.ndarray = field(default_factory=_empty)
+    fl_susp_pos: Vec1
+    fr_susp_pos: Vec1
+    rl_susp_pos: Vec1
+    rr_susp_pos: Vec1
     # 8-beam lidar ring (m; -1 = no hit)
-    lidar_000: np.ndarray = field(default_factory=_empty)
-    lidar_045: np.ndarray = field(default_factory=_empty)
-    lidar_090: np.ndarray = field(default_factory=_empty)
-    lidar_135: np.ndarray = field(default_factory=_empty)
-    lidar_180: np.ndarray = field(default_factory=_empty)
-    lidar_225: np.ndarray = field(default_factory=_empty)
-    lidar_270: np.ndarray = field(default_factory=_empty)
-    lidar_315: np.ndarray = field(default_factory=_empty)
+    lidar_000: Vec1
+    lidar_045: Vec1
+    lidar_090: Vec1
+    lidar_135: Vec1
+    lidar_180: Vec1
+    lidar_225: Vec1
+    lidar_270: Vec1
+    lidar_315: Vec1
 
 
-def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
+def read_layout(layout: SensorLayout, data: mujoco.MjData) -> SensorReadings:
     """Read every named sensor into a SensorReadings struct."""
     # Limit: fields are coupled to neoracer.xml's sensor set — a car XML with
     # a different sensor list fails here loudly. Add fields if the contract grows.
-    return SensorReadings(**read_raw(model, data))
+    return SensorReadings(**_raw(layout, data))
+
+
+def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
+    """Read every named sensor into a SensorReadings struct. In a control
+    loop, use read_layout with a layout from sensor_layout(model)."""
+    return read_layout(sensor_layout(model), data)
 
 
 @dataclass(frozen=True)
@@ -108,9 +129,9 @@ class IMUReading:
     calibrate_imu() (calibrated) below.
     """
 
-    acceleration: np.ndarray
-    angular_velocity: np.ndarray
-    orientation: np.ndarray
+    acceleration: Vec3
+    angular_velocity: Vec3
+    orientation: Quat
 
 
 # No hardware bench-calibration data (bias, scale-factor, axis misalignment)
@@ -134,14 +155,27 @@ def calibrate_imu(raw: IMUReading) -> IMUReading:
     )
 
 
-def wheel_speed_ms(sensors: SensorReadings) -> dict:
+@dataclass(frozen=True)
+class WheelSpeeds:
+    """Surface speed of each wheel (m/s, + = forward)."""
+
+    fl: float
+    fr: float
+    rl: float
+    rr: float
+
+    def mean(self) -> float:
+        return (self.fl + self.fr + self.rl + self.rr) / 4
+
+
+def wheel_speed_ms(sensors: SensorReadings) -> WheelSpeeds:
     """Convert each wheel's angular velocity (rad/s) to surface speed (m/s)."""
-    return {
-        "fl_wheel_speed_ms": float(sensors.fl_wheel_vel[0]) * WHEEL_RADIUS,
-        "fr_wheel_speed_ms": float(sensors.fr_wheel_vel[0]) * WHEEL_RADIUS,
-        "rl_wheel_speed_ms": float(sensors.rl_wheel_vel[0]) * WHEEL_RADIUS,
-        "rr_wheel_speed_ms": float(sensors.rr_wheel_vel[0]) * WHEEL_RADIUS,
-    }
+    return WheelSpeeds(
+        fl=float(sensors.fl_wheel_vel[0]) * WHEEL_RADIUS,
+        fr=float(sensors.fr_wheel_vel[0]) * WHEEL_RADIUS,
+        rl=float(sensors.rl_wheel_vel[0]) * WHEEL_RADIUS,
+        rr=float(sensors.rr_wheel_vel[0]) * WHEEL_RADIUS,
+    )
 
 
 @dataclass(frozen=True)
@@ -200,23 +234,22 @@ LIDAR_BEAM_ORDER = (
     "lidar_315",
 )
 LIDAR_ANGLES_DEG = (0, 45, 90, 135, 180, 225, 270, 315)
-ALL_BEAMS = LIDAR_BEAM_ORDER
 
-# Named beam groupings shared by LiDAR-based controllers (track_centering.py,
-# wall_following.py) so they agree on which beam is "front-left" etc. without
-# each controller re-deriving it.
-LEFT_BEAMS = ("lidar_045", "lidar_090", "lidar_135")
-RIGHT_BEAMS = ("lidar_315", "lidar_270", "lidar_225")
-# Deliberately lidar_000 ONLY, not a wider cone: lidar_045/lidar_315 already
-# do double duty in LEFT_BEAMS/RIGHT_BEAMS. Including them here too would
-# couple a forward-obstacle slowdown to side-wall proximity during a lateral
-# correction (a wall picked up obliquely by a diagonal beam would look like
-# a forward obstacle and cut throttle when nothing is ahead).
-FRONT_CONE_BEAMS = ("lidar_000",)
-FRONT_LEFT_BEAM = "lidar_045"
-REAR_LEFT_BEAM = "lidar_135"
-FRONT_RIGHT_BEAM = "lidar_315"
-REAR_RIGHT_BEAM = "lidar_225"
+# Beam groups shared by the LiDAR controllers (track_centering.py,
+# wall_following.py). Each value is an index into LIDAR_BEAM_ORDER and into
+# LidarScan.ranges.
+LEFT_BEAMS = (1, 2, 3)  # lidar_045, lidar_090, lidar_135
+RIGHT_BEAMS = (7, 6, 5)  # lidar_315, lidar_270, lidar_225
+# Only lidar_000, not a wider cone: lidar_045/lidar_315 are already in
+# LEFT_BEAMS/RIGHT_BEAMS. In the cone, a side wall seen by a diagonal beam
+# would look like a forward obstacle and cut the throttle.
+FRONT_CONE_BEAMS = (0,)  # lidar_000
+LEFT_BEAM = 2  # lidar_090
+RIGHT_BEAM = 6  # lidar_270
+FRONT_LEFT_BEAM = 1  # lidar_045
+REAR_LEFT_BEAM = 3  # lidar_135
+FRONT_RIGHT_BEAM = 7  # lidar_315
+REAR_RIGHT_BEAM = 5  # lidar_225
 
 
 @dataclass(frozen=True)
@@ -231,40 +264,83 @@ class LidarScan[A]:
 
 def lidar_scan(sensors: SensorReadings) -> LidarScan[np.ndarray]:
     """Pack the 8 named lidar_* fields into one ordered LidarScan."""
-    ranges = np.array([getattr(sensors, name)[0] for name in LIDAR_BEAM_ORDER])
+    s = sensors
+    ranges = np.array(
+        [
+            s.lidar_000[0],
+            s.lidar_045[0],
+            s.lidar_090[0],
+            s.lidar_135[0],
+            s.lidar_180[0],
+            s.lidar_225[0],
+            s.lidar_270[0],
+            s.lidar_315[0],
+        ]
+    )
     angles = np.deg2rad(LIDAR_ANGLES_DEG)
     return LidarScan(angles=angles, ranges=ranges)
 
 
+@dataclass(frozen=True)
+class Hit:
+    distance: float  # m
+
+
+@dataclass(frozen=True)
+class NoHit: ...
+
+
+@dataclass(frozen=True)
+class Corrupt: ...
+
+
+type Beam = Hit | NoHit | Corrupt
+
+
+def parse_beam(value: float) -> Beam:
+    """Classify one rangefinder value (m). MuJoCo gives -1 when no geom is
+    within the cutoff. NaN and Inf are corrupt."""
+    if not np.isfinite(value):
+        return Corrupt()
+    if value < 0:
+        return NoHit()
+    return Hit(value)
+
+
+def beam_distance(beam: Beam, max_range: float) -> float:
+    """Distance (m) for a controller. A beam with no hit or a corrupt value
+    reads as max_range, so that bad data never looks like a close wall."""
+    match beam:
+        case Hit(distance=d):
+            return min(d, max_range)
+        case NoHit() | Corrupt():
+            return max_range
+        case _:
+            assert_never(beam)
+
+
+def is_corrupt(beam: Beam) -> bool:
+    """True for a NaN or Inf value. A controller counts these beams to
+    decide on its fallback command."""
+    match beam:
+        case Corrupt():
+            return True
+        case Hit() | NoHit():
+            return False
+        case _:
+            assert_never(beam)
+
+
 def print_sensors(sensors: SensorReadings) -> None:
     """Print a one-line summary of the most useful sensor values."""
-
-    def f(name, idx=0):
-        v = getattr(sensors, name)
-        return float(v[idx]) if len(v) > idx else float("nan")
-
-    speeds = wheel_speed_ms(sensors)
-    avg_speed = sum(speeds.values()) / max(len(speeds), 1)
-
-    steer_cmd = f("steer_cmd_pos")
-    fl_steer = f("fl_steer_pos")
-    fr_steer = f("fr_steer_pos")
-    fl_susp = f("fl_susp_pos")
-    fr_susp = f("fr_susp_pos")
-    rl_susp = f("rl_susp_pos")
-    rr_susp = f("rr_susp_pos")
-
-    accel_z = f("imu_accel", 2)
-    gyro_z = f("imu_gyro", 2)
-
-    lidar_fwd = f("lidar_000")
-    lidar_l = f("lidar_090")
-    lidar_r = f("lidar_270")
-
+    s = sensors
     print(
-        f"spd={avg_speed:+5.2f}m/s  "
-        f"steer={steer_cmd:+.3f}({fl_steer:+.3f}/{fr_steer:+.3f})  "
-        f"susp=[{fl_susp:+.3f} {fr_susp:+.3f} {rl_susp:+.3f} {rr_susp:+.3f}]m  "
-        f"az={accel_z:+5.1f}  gz={gyro_z:+.3f}  "
-        f"lidar[fwd={lidar_fwd:.2f} L={lidar_l:.2f} R={lidar_r:.2f}]"
+        f"spd={wheel_speed_ms(s).mean():+5.2f}m/s  "
+        f"steer={s.steer_cmd_pos[0]:+.3f}"
+        f"({s.fl_steer_pos[0]:+.3f}/{s.fr_steer_pos[0]:+.3f})  "
+        f"susp=[{s.fl_susp_pos[0]:+.3f} {s.fr_susp_pos[0]:+.3f} "
+        f"{s.rl_susp_pos[0]:+.3f} {s.rr_susp_pos[0]:+.3f}]m  "
+        f"az={s.imu_accel[2]:+5.1f}  gz={s.imu_gyro[2]:+.3f}  "
+        f"lidar[fwd={s.lidar_000[0]:.2f} L={s.lidar_090[0]:.2f} "
+        f"R={s.lidar_270[0]:.2f}]"
     )

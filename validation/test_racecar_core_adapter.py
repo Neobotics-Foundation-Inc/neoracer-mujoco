@@ -19,6 +19,7 @@ from neoracer_mujoco.racecar_core_adapter import (
     RACECAR_CORE_BEAM_ORDER,
     MujocoDrive,
     MujocoLidar,
+    MujocoRacecar,
 )
 
 
@@ -150,7 +151,7 @@ def test_forward_beam_is_index_zero(car):
 
 
 def test_right_side_beam_lands_clockwise_quarter_turn(car):
-    """lidar_270 is this sim's right-side beam (see wall_following.SIDE_BEAM).
+    """lidar_270 is this sim's right-side beam (see sensors.RIGHT_BEAM).
     racecar_core's clockwise scan must place the right side one quarter-turn
     (index 2 of 8) after front, matching its own angle convention where
     right = +90 deg clockwise."""
@@ -207,3 +208,15 @@ def test_get_samples_is_deterministic(car):
     _set_beam(car, data, "lidar_045", 0.75)
     lidar = MujocoLidar(car, data)
     assert np.array_equal(lidar.get_samples(), lidar.get_samples())
+
+
+# --- Racecar: event loop --------------------------------------------------
+
+
+def test_go_before_set_start_update_raises(car):
+    """go() without callbacks fails with a clear error and steps nothing."""
+    data = mujoco.MjData(car)
+    rc = MujocoRacecar(car, data, max_steps=5)
+    with pytest.raises(RuntimeError, match="set_start_update"):
+        rc.go()
+    assert data.time == 0.0

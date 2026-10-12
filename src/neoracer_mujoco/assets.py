@@ -21,11 +21,11 @@ ASSET_DIR = os.path.join(_REPO, "assets")
 DEFAULT_CAR = os.path.join(ASSET_DIR, "neoracer.xml")
 
 
-def cars():
+def cars() -> list[str]:
     """Every car XML in assets/, sorted. New XML in assets/ -> discovered here."""
     return sorted(glob.glob(os.path.join(ASSET_DIR, "*.xml")))
 
 
-def load(path=None):
+def load(path: str | os.PathLike[str] = DEFAULT_CAR) -> mujoco.MjModel:
     """Compile a car XML into an MjModel. Defaults to assets/neoracer.xml."""
-    return mujoco.MjModel.from_xml_path(str(path or DEFAULT_CAR))
+    return mujoco.MjModel.from_xml_path(str(path))

@@ -1,5 +1,5 @@
 """
-Gymnasium environments for the NeoRacer car (issue #7).
+Gymnasium environments for the NeoRacer car.
 
 Not imported by neoracer_mujoco/__init__.py: gymnasium is an optional `rl`
 dependency (see pyproject.toml's [project.optional-dependencies]), so

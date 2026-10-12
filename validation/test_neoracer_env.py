@@ -17,6 +17,8 @@ exercise the termination CONDITION logic directly; the physics themselves
 own conformance tests elsewhere in this suite.
 """
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -253,9 +255,8 @@ def test_lap_completion_terminates_successfully(env):
     cumulative angle -- see test_negative_full_lap_progress_does_not_
     complete_lap for the negative-direction counterpart)."""
     env.reset(seed=0)
-    env._cum_angle = 2.0 * np.pi + 0.5  # already past the 2*pi threshold
-    env._angle_history.clear()
-    env._angle_history.append(env._cum_angle)
+    total = 2.0 * np.pi + 0.5  # already past the 2*pi threshold
+    env._progress = replace(env._progress, total=total, window=(total,))
 
     _obs, reward, terminated, truncated, info = env.step(
         np.array([1.0, 0.0], dtype=np.float32)
@@ -272,9 +273,8 @@ def test_negative_full_lap_progress_does_not_complete_lap(env):
     angle -- the empirically-confirmed forward-travel direction from the
     loop_corridor spawn -- counts (see module docstring)."""
     env.reset(seed=0)
-    env._cum_angle = -(2.0 * np.pi + 0.5)  # full lap of NEGATIVE progress
-    env._angle_history.clear()
-    env._angle_history.append(env._cum_angle)
+    total = -(2.0 * np.pi + 0.5)  # full lap of NEGATIVE progress
+    env._progress = replace(env._progress, total=total, window=(total,))
 
     _obs, _reward, terminated, truncated, info = env.step(
         np.array([1.0, 0.0], dtype=np.float32)
