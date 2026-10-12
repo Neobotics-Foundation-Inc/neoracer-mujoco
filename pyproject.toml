@@ -32,6 +32,11 @@ rl = ["gymnasium>=1.0"]
 # pygame-ce, not pygame: pygame has no wheels for Python 3.15.
 demo = ["pygame-ce>=2.5.8"]
 
+[tool.pytest.ini_options]
+# A bare `pytest` runs only the test suite. users/ holds experiments that are
+# not tests; `pytest users/<name>` still runs a folder on purpose.
+testpaths = ["validation"]
+
 [tool.ty.environment]
 # typings/ holds mujoco stubs from `pybind11-stubgen mujoco mujoco.viewer -o typings`.
 # The examples directories are on sys.path at runtime for the scripts and tests
