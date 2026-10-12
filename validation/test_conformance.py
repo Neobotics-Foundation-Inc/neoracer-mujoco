@@ -74,13 +74,8 @@ def test_imu_stationary_accel_matches_gravity(car):
     """
     d = _sim.settle(car)
     sensors = sl.read(car, d)
-    imu = sl.IMUReading(
-        acceleration=sensors.imu_accel,
-        angular_velocity=sensors.imu_gyro,
-        orientation=sensors.imu_quat,
-    )
     g = float(np.linalg.norm(car.opt.gravity))
-    accel_mag = float(np.linalg.norm(imu.acceleration))
+    accel_mag = float(np.linalg.norm(sensors.imu_accel))
     assert abs(accel_mag - g) < 0.5, (
         f"stationary |accel|={accel_mag:.2f} m/s^2, expected ~{g:.2f}"
     )
@@ -90,12 +85,7 @@ def test_imu_stationary_gyro_near_zero(car):
     """No rotation at rest -> gyro should read ~0 rad/s."""
     d = _sim.settle(car)
     sensors = sl.read(car, d)
-    imu = sl.IMUReading(
-        acceleration=sensors.imu_accel,
-        angular_velocity=sensors.imu_gyro,
-        orientation=sensors.imu_quat,
-    )
-    gyro_mag = float(np.linalg.norm(imu.angular_velocity))
+    gyro_mag = float(np.linalg.norm(sensors.imu_gyro))
     assert gyro_mag < 0.05, f"stationary |gyro|={gyro_mag:.4f} rad/s, expected ~0"
 
 
@@ -198,27 +188,22 @@ def test_motor_encoder_finite_under_load(car):
     assert np.isfinite(sl.estimated_linear_speed_ms(motor_rad_s))
 
 
-def test_imu_reading_finite_under_load(car):
-    """The typed IMUReading must stay finite while driving + steering hard."""
+def test_imu_finite_under_load(car):
+    """The IMU readings must stay finite while driving + steering hard."""
     d = _sim.settle(car)
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
     ctrl[STEER] = 0.4
     _sim.run(car, d, ctrl, 500)
     sensors = sl.read(car, d)
-    imu = sl.IMUReading(
-        acceleration=sensors.imu_accel,
-        angular_velocity=sensors.imu_gyro,
-        orientation=sensors.imu_quat,
+    assert np.all(np.isfinite(sensors.imu_accel)), (
+        f"non-finite acceleration: {sensors.imu_accel}"
     )
-    assert np.all(np.isfinite(imu.acceleration)), (
-        f"non-finite acceleration: {imu.acceleration}"
+    assert np.all(np.isfinite(sensors.imu_gyro)), (
+        f"non-finite angular_velocity: {sensors.imu_gyro}"
     )
-    assert np.all(np.isfinite(imu.angular_velocity)), (
-        f"non-finite angular_velocity: {imu.angular_velocity}"
-    )
-    assert np.all(np.isfinite(imu.orientation)), (
-        f"non-finite orientation: {imu.orientation}"
+    assert np.all(np.isfinite(sensors.imu_quat)), (
+        f"non-finite orientation: {sensors.imu_quat}"
     )
 
 

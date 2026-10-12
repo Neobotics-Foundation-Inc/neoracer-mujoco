@@ -18,18 +18,14 @@ car XML must satisfy (actuator/sensor names, ctrl layout, mass band).
 from . import contract
 from .assets import cars, load
 from .sensors import (
-    IMUReading,
     SensorReadings,
-    calibrate_imu,
     lidar_ranges,
     read,
     wheel_speed_ms,
 )
 
 __all__ = [
-    "IMUReading",
     "SensorReadings",
-    "calibrate_imu",
     "cars",
     "contract",
     "lidar_ranges",

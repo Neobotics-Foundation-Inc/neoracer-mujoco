@@ -55,7 +55,7 @@ python3 -m pytest validation/ -v
 ├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
 │   ├── contract.py        — the car contract (single source of truth)
 │   ├── assets.py          — cars() / load() model discovery + compile
-│   ├── sensors.py         — SensorReadings/IMUReading + read()
+│   ├── sensors.py         — SensorReadings + read()
 │   ├── sim.py             — compile/settle/run + physics probes
 │   └── control/           — classical controllers (track_centering)
 ├── examples/
