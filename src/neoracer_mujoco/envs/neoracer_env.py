@@ -61,7 +61,7 @@ Termination (terminated=True) vs. truncation (truncated=True):
 """
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal, assert_never
 
 import gymnasium as gym
@@ -142,7 +142,7 @@ class NeoRacerEnvConfig:
     stuck_window_s: float = 4.0  # s
     stuck_progress_rad: float = 0.05  # rad, min net progress over the window
     lidar_high_m: float = 50.0  # observation_space upper bound -- see module docstring
-    reward: RewardConfig = field(default_factory=RewardConfig)
+    reward: RewardConfig = RewardConfig()
 
     def __post_init__(self):
         # The spawn offset, the progress around the world origin, the lap
@@ -157,8 +157,6 @@ class NeoRacerEnvConfig:
                 "see the module docstring. Other tracks are not supported."
             )
 
-
-_DEFAULT_CONFIG = NeoRacerEnvConfig()
 
 # Observation bounds, with margin over the peaks seen in 80 adversarial
 # episodes (full throttle, hard steering, wall crashes) on loop_corridor.xml:
@@ -282,7 +280,7 @@ class NeoRacerEnv(gym.Env):
 
     def __init__(
         self,
-        config: NeoRacerEnvConfig = _DEFAULT_CONFIG,
+        config: NeoRacerEnvConfig = NeoRacerEnvConfig(),
         render_mode: str | None = None,
     ):
         super().__init__()
