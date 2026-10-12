@@ -58,6 +58,18 @@ def test_wall_geom_ids_excludes_ramp_and_floor():
     assert names == {"turn1", "turn2"}
 
 
+def test_wall_geom_ids_counts_wall_prefixed_materials():
+    """f1_track.xml colors its walls with materials wall_outer and wall_inner.
+    Every panel and post is a wall; the floor is not."""
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    model = mujoco.MjModel.from_xml_path(
+        os.path.join(repo, "assets", "tracks", "f1_track.xml")
+    )
+    names = {model.geom(i).name for i in wall_geom_ids(model)}
+    assert len(names) == model.ngeom - 1
+    assert "floor" not in names
+
+
 def test_wall_geom_ids_empty_when_no_walls():
     """The bare car on its own plane (no track attached) has no wall
     material at all, so this must return empty rather than error."""
