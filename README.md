@@ -61,6 +61,7 @@ python3 -m pytest validation/ -v
 ├── examples/
 │   ├── run.py                  — viewer launch script (mjpython entry point)
 │   ├── manual_drive.py         — arrow-key teleop (game-style, python3 entry point)
+│   ├── pygame_drive/           — WASD or gamepad driving with a LiDAR radar (pygame)
 │   └── track_centering_demo.py — PD centering controller on the corridor track
 ├── validation/            — pytest physics + logic conformance suite
 └── docs/                  — (reserved) design notes and parameter log
@@ -113,6 +114,13 @@ stable API.
   suspension, wall contacts. Run with plain `python3 -m examples.manual_drive` (NOT
   mjpython — the glfw window must be created on the main thread). Camera and control
   feel are tunable via the constants at the top of the file.
+- **`pygame_drive/`** — drive the car with WASD or a gamepad in a pygame window,
+  with a chase camera, a LiDAR radar, the held keys and a lap timer. The throttle is
+  a DC-motor model (back-EMF drag and rolling friction), so the car has a top speed
+  and slows down when you let go. `drive_sim.py` is the physics, `drive.py` the UI.
+  Install pygame-ce with `pip install -e ".[demo]"`, then run
+  `python3 -m examples.pygame_drive.drive` (the F1 track),
+  `--track ramp_course.xml` for another track, or `--bare` for the car alone.
 - **`track_centering_demo.py`** — runs the classical PD track-centering controller (`control.track_centering.step`)
   on the straight corridor track, headless by default or with an interactive
   viewer. Composes `neoracer.xml` onto `assets/tracks/straight_corridor.xml` at
