@@ -34,7 +34,7 @@ Observation space -- Box(20,), float32, built only from sensors.SensorReadings
 Control rate: 30 Hz, the target LiDAR scan rate of the real hardware.
 __init__ computes the physics steps per action from model.opt.timestep.
 
-Reward (RewardConfig, all weights explicit and UNTUNED, see _reward):
+Reward (RewardConfig, all weights explicit and UNTUNED, see reward):
     r_t = progress_weight * delta_theta_t  -  contact_penalty * contact_t
     plus one-time terminal adjustments:
         + lap_bonus        on successful lap completion
@@ -46,7 +46,7 @@ Reward (RewardConfig, all weights explicit and UNTUNED, see _reward):
 Termination (terminated=True) vs. truncation (truncated=True):
     terminated: rollover (upright_cos below the threshold), stuck (no net
     progress in a window of time), or a full lap (cumulative angle >= 2 pi
-    in the forward direction of the track, which is +). See _termination.
+    in the forward direction of the track, which is +). See termination.
     truncated: the episode reached max_episode_steps.
     A wall contact does not end the episode. The env records it in info and
     the reward has a penalty for it. If the car is stuck against a wall, the
@@ -133,7 +133,7 @@ class SpawnRange:
 
 @dataclass(frozen=True)
 class TerminationConfig:
-    """Thresholds that end an episode. See _termination."""
+    """Thresholds that end an episode. See termination."""
 
     upright_rollover_cos: float = 0.5  # cos(tilt) below this = rolled over
     stuck_window_s: float = 4.0  # s
@@ -206,11 +206,11 @@ class Progress:
     window: tuple[float, ...]  # total at each of the last steps, oldest first
 
 
-def _start_progress(angle: float) -> Progress:
+def start_progress(angle: float) -> Progress:
     return Progress(angle=angle, total=0.0, delta=0.0, window=(0.0,))
 
 
-def _advance(p: Progress, angle: float, window_len: int) -> Progress:
+def advance(p: Progress, angle: float, window_len: int) -> Progress:
     """Progress after the car moved to angle (rad). Keeps the last
     window_len totals."""
     delta = angle - p.angle
@@ -224,13 +224,13 @@ def _advance(p: Progress, angle: float, window_len: int) -> Progress:
     )
 
 
-def _is_stuck(p: Progress, window_len: int, min_progress: float) -> bool:
+def is_stuck(p: Progress, window_len: int, min_progress: float) -> bool:
     if len(p.window) < window_len:
         return False
     return abs(p.total - p.window[0]) < min_progress
 
 
-def _termination(
+def termination(
     cfg: TerminationConfig, upright_cos: float, stuck: bool, total_progress: float
 ) -> TerminationReason | None:
     """The reason the episode ends at this step, or None if it continues."""
@@ -243,7 +243,7 @@ def _termination(
     return None
 
 
-def _reward(
+def reward(
     cfg: RewardConfig, delta: float, contact: bool, reason: TerminationReason | None
 ) -> float:
     r = cfg.progress_weight * delta
@@ -327,7 +327,7 @@ class NeoRacerEnv(gym.Env):
         # Episode state. gymnasium requires reset() before step(), and
         # reset() sets these values again.
         self._step_count = 0
-        self._progress = _start_progress(0.0)
+        self._progress = start_progress(0.0)
 
     # --- internal helpers -----------------------------------------------
 
@@ -392,7 +392,7 @@ class NeoRacerEnv(gym.Env):
             mujoco.mj_step(self.model, self.data)
 
         self._step_count = 0
-        self._progress = _start_progress(self._angle_around_center())
+        self._progress = start_progress(self._angle_around_center())
 
         obs, speed = self._build_observation()
         upright_cos = sim.car_upright_cos(self.data, self._car_body)
@@ -423,15 +423,15 @@ class NeoRacerEnv(gym.Env):
 
         self._step_count += 1
         window_len = self._stuck_window_ticks + 1
-        self._progress = _advance(
+        self._progress = advance(
             self._progress, self._angle_around_center(), window_len
         )
 
         upright_cos = sim.car_upright_cos(self.data, self._car_body)
-        stuck = _is_stuck(
+        stuck = is_stuck(
             self._progress, window_len, self.config.termination.stuck_progress_rad
         )
-        reason = _termination(
+        reason = termination(
             self.config.termination, upright_cos, stuck, self._progress.total
         )
         terminated = reason is not None
@@ -439,13 +439,13 @@ class NeoRacerEnv(gym.Env):
             not terminated
         ) and self._step_count >= self.config.max_episode_steps
 
-        reward = _reward(
+        step_reward = reward(
             self.config.reward, self._progress.delta, contact_this_tick, reason
         )
         obs, speed = self._build_observation()
         info = self._build_info(speed, contact_this_tick, upright_cos, reason)
 
-        return obs, reward, terminated, truncated, info
+        return obs, step_reward, terminated, truncated, info
 
     def render(self):
         if self.render_mode != "human":

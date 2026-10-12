@@ -19,16 +19,17 @@ from gymnasium import spaces
 from gymnasium.utils.env_checker import check_env
 
 from neoracer_mujoco import assets, sim
-from neoracer_mujoco.envs import NeoRacerEnv, NeoRacerEnvConfig
-from neoracer_mujoco.envs.neoracer_env import (
+from neoracer_mujoco.envs import (
+    NeoRacerEnv,
+    NeoRacerEnvConfig,
     RewardConfig,
     TerminationConfig,
     TerminationReason,
-    _advance,
-    _is_stuck,
-    _reward,
-    _start_progress,
-    _termination,
+    advance,
+    is_stuck,
+    reward,
+    start_progress,
+    termination,
 )
 
 STEER_CMD_POS = 18  # observation index of steer_cmd_pos (rad)
@@ -228,11 +229,11 @@ def _wrap(angle: float) -> float:
 
 
 def test_advance_gives_a_step_in_minus_pi_to_pi():
-    """For any two angles, _advance gives a delta in [-pi, pi]. The delta
+    """For any two angles, advance gives a delta in [-pi, pi]. The delta
     differs from the plain difference only by a full turn."""
     rng = np.random.default_rng(0)
     for old, new in rng.uniform(-np.pi, np.pi, (2000, 2)):
-        p = _advance(_start_progress(old), new, window_len=5)
+        p = advance(start_progress(old), new, window_len=5)
         assert -np.pi <= p.delta <= np.pi
         turns = (p.delta - (new - old)) / LAP
         assert turns == pytest.approx(round(turns), abs=1e-9)
@@ -241,34 +242,34 @@ def test_advance_gives_a_step_in_minus_pi_to_pi():
 
 def test_advance_adds_up_the_true_progress():
     """If the car moves less than half a turn per step, the total of
-    _advance is the true change of angle, although each angle wraps."""
+    advance is the true change of angle, although each angle wraps."""
     rng = np.random.default_rng(1)
     window_len = 7
     for _ in range(50):
         steps = rng.uniform(-0.9 * np.pi, 0.9 * np.pi, 40)  # rad per step
         start = float(rng.uniform(-np.pi, np.pi))
-        p = _start_progress(start)
+        p = start_progress(start)
         for true_angle in start + np.cumsum(steps):
-            p = _advance(p, _wrap(true_angle), window_len)
+            p = advance(p, _wrap(true_angle), window_len)
             assert len(p.window) <= window_len
             assert p.window[-1] == p.total
         assert p.total == pytest.approx(float(steps.sum()), abs=1e-9)
 
 
 def test_is_stuck_only_with_a_full_window_and_little_progress():
-    """_is_stuck is False until the window has window_len totals. Then it is
+    """is_stuck is False until the window has window_len totals. Then it is
     True if and only if the progress over the window is below min_progress."""
     rng = np.random.default_rng(2)
     window_len, min_progress = 6, 0.05
     for _ in range(200):
-        p = _start_progress(0.0)
+        p = start_progress(0.0)
         scale = rng.choice([0.001, 0.01, 0.1])  # rad per step
         for step, angle in enumerate(np.cumsum(rng.normal(0.0, scale, 15))):
-            p = _advance(p, _wrap(angle), window_len)
-            full = step + 2 >= window_len  # _start_progress puts one total in
+            p = advance(p, _wrap(angle), window_len)
+            full = step + 2 >= window_len  # start_progress puts one total in
             progress = abs(p.total - p.window[0])
             expected = full and progress < min_progress
-            assert _is_stuck(p, window_len, min_progress) == expected
+            assert is_stuck(p, window_len, min_progress) == expected
 
 
 def test_termination_reason_follows_the_priority():
@@ -281,7 +282,7 @@ def test_termination_reason_follows_the_priority():
     for total in totals:
         for upright_cos in (-1.0, cfg.upright_rollover_cos - 1e-9, 0.9, 1.0):
             for stuck in (False, True):
-                reason = _termination(cfg, upright_cos, stuck, total)
+                reason = termination(cfg, upright_cos, stuck, total)
                 if upright_cos < cfg.upright_rollover_cos:
                     assert reason == "rollover"
                 elif stuck:
@@ -307,13 +308,11 @@ def test_reward_adds_the_terminal_term():
     rng = np.random.default_rng(4)
     for delta in rng.uniform(-np.pi, np.pi, 200):
         for contact in (False, True):
-            base = _reward(cfg, delta, contact, None)
+            base = reward(cfg, delta, contact, None)
             expected = cfg.progress_weight * delta - cfg.contact_penalty * contact
             assert base == pytest.approx(expected)
             for reason, term in terminal.items():
-                assert _reward(cfg, delta, contact, reason) == pytest.approx(
-                    base + term
-                )
+                assert reward(cfg, delta, contact, reason) == pytest.approx(base + term)
 
 
 # --- termination and truncation in the env ------------------------------------

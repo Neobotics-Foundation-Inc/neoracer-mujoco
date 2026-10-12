@@ -12,15 +12,31 @@ this subpackage explicitly:
 from .neoracer_env import (
     NeoRacerEnv,
     NeoRacerEnvConfig,
+    ObservationBounds,
+    Progress,
     RewardConfig,
     SpawnRange,
     TerminationConfig,
+    TerminationReason,
+    advance,
+    is_stuck,
+    reward,
+    start_progress,
+    termination,
 )
 
 __all__ = [
     "NeoRacerEnv",
     "NeoRacerEnvConfig",
+    "ObservationBounds",
+    "Progress",
     "RewardConfig",
     "SpawnRange",
     "TerminationConfig",
+    "TerminationReason",
+    "advance",
+    "is_stuck",
+    "reward",
+    "start_progress",
+    "termination",
 ]
