@@ -168,6 +168,26 @@ def test_out_of_range_actions_are_clamped_not_rejected():
     env_b.close()
 
 
+def test_wall_crash_observations_stay_in_space(env):
+    """A recorded wall crash pushes steer_cmd_pos to about 1.2 rad, past its
+    soft 0.45 rad joint limit. Every observation must still be inside
+    observation_space. The actions are episode 23 of a full-throttle random
+    run: default_rng(0), which is PCG64(0), advanced past the 3480 steps
+    (2 draws each) before it."""
+    bits = np.random.PCG64(0)
+    bits.advance(2 * 3480)
+    rng = np.random.Generator(bits)
+    env.reset(seed=23)
+    peak = 0.0
+    for _ in range(46):
+        action = rng.uniform(-1, 1, size=2).astype(np.float32)
+        action[0] = 1.0
+        obs, _reward, _terminated, _truncated, _info = env.step(action)
+        assert env.observation_space.contains(obs)
+        peak = max(peak, abs(float(obs[18])))
+    assert peak > 1.0, "the recorded crash no longer happens; record a new one"
+
+
 def test_repeated_random_actions_produce_no_nans(env):
     env.reset(seed=0)
     rng = np.random.default_rng(123)

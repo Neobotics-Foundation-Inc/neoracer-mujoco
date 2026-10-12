@@ -84,7 +84,6 @@
 
     <worldbody>
         <!-- Ground plane; friction matches the wheels. -->
-        <!-- Ground plane; friction matches the wheels. -->
         <geom type="plane" size="5 5 .01" material="grid" friction="1.5 0.1 0.1"/>
 
         <!--
