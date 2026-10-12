@@ -1,14 +1,10 @@
 """
-Tests for the production runtime bootstrap, examples/run_racecar_core.py.
+Tests for examples/run_racecar_core.py.
 
-test_wall_follower_example.py already proves the racecar_core_adapter
-contract inside a pytest fixture (a hand-rolled sys.modules injection local
-to that test file). This file instead exercises the actual runner a user
-invokes with `python3 examples/run_racecar_core.py <controller.py>`:
-run_controller()/main() themselves, plus the real CLI subprocess for the
-canonical vendored example. No real racecar_core package is installed
-anywhere in this environment -- these tests are the proof that none is
-needed.
+These tests call run_controller() and run the command line as a subprocess,
+with the example wall follower in examples/ultimate_wall_follower/.
+No real racecar_core package is installed, so the tests show that none is needed.
+test_wall_follower_example.py tests the controller callbacks on the adapter directly.
 """
 
 import subprocess
@@ -17,13 +13,12 @@ from pathlib import Path
 
 import pytest
 
+from examples import run_racecar_core
+
 _REPO = Path(__file__).resolve().parent.parent
 _EXAMPLES_DIR = _REPO / "examples"
 _CANONICAL_DIR = _EXAMPLES_DIR / "ultimate_wall_follower"
 _TESTDATA_DIR = _REPO / "validation" / "testdata" / "ultimate_wall_follower"
-
-sys.path.insert(0, str(_EXAMPLES_DIR))
-import run_racecar_core
 
 
 @pytest.mark.parametrize(
@@ -31,37 +26,36 @@ import run_racecar_core
     ["wall_follower.py", "control.py", "config/wall_follower.yaml"],
 )
 def test_canonical_example_matches_testdata_fixture_byte_for_byte(relpath):
-    """examples/ultimate_wall_follower/ must stay a byte-for-byte copy of the
-    vendored fixture under validation/testdata/ -- see both SOURCE.md files.
-    Catches accidental edits to either copy going out of sync."""
+    """examples/ultimate_wall_follower/ is a byte-for-byte copy of the fixture
+    in validation/testdata/. This test fails if one copy changes."""
     canonical = (_CANONICAL_DIR / relpath).read_bytes()
     fixture = (_TESTDATA_DIR / relpath).read_bytes()
     assert canonical == fixture
 
 
-def test_run_controller_reaches_wall_follower_start(capsys):
-    """run_controller() -- the function main() calls -- must run the
-    unmodified wall_follower.py far enough to hit its start() lifecycle
-    (its own ">> Ultimate Wall Follower ready." print), with no real
-    racecar_core package installed."""
-    assert "racecar_core" not in sys.modules
+def test_run_controller_reaches_wall_follower_start(capsys, monkeypatch):
+    """run_controller() runs wall_follower.py until its start() prints its ready
+    line. Afterwards, the fake module, the controller's own control module and
+    the sys.path entry are gone."""
+    monkeypatch.delitem(sys.modules, "racecar_core", raising=False)
+    monkeypatch.delitem(sys.modules, "control", raising=False)
 
     run_racecar_core.run_controller(str(_CANONICAL_DIR / "wall_follower.py"), steps=10)
 
     out = capsys.readouterr().out
     assert ">> Ultimate Wall Follower ready." in out
-    # the shim must not leak into the rest of the test session
     assert "racecar_core" not in sys.modules
+    assert "control" not in sys.modules
     assert str(_CANONICAL_DIR) not in sys.path
 
 
-def test_run_controller_drives_the_car(capsys):
-    """End-to-end: after run_controller() returns, the car must have
-    actually moved -- proof the go() loop stepped physics and update()
-    fed real drive commands, not just that start() printed."""
-    run_racecar_core.run_controller(str(_CANONICAL_DIR / "wall_follower.py"), steps=300)
-    out = capsys.readouterr().out
-    assert "steps done" in out
+def test_run_controller_drives_the_car_forward():
+    """The go() loop steps the physics with the drive commands of update(),
+    so the car moves forward along +X."""
+    dx = run_racecar_core.run_controller(
+        str(_CANONICAL_DIR / "wall_follower.py"), steps=300
+    )
+    assert dx > 0.1, f"expected forward progress, got dx={dx:.3f} m"
 
 
 def test_run_controller_rejects_missing_path():
@@ -75,9 +69,8 @@ def test_run_controller_rejects_non_python_file():
 
 
 def test_cli_runs_canonical_wall_follower_end_to_end():
-    """The exact user-facing command, as a subprocess -- proves the CLI
-    entry point (argparse, error handling, exit code) works, not just the
-    library function it wraps."""
+    """The command line as a subprocess: argparse, the error handling and the
+    exit code, not only run_controller()."""
     result = subprocess.run(
         [
             sys.executable,
