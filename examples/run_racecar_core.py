@@ -73,24 +73,38 @@ def controller_imports(rc: MujocoRacecar, controller_dir: Path) -> Generator[Non
 
     In the block, `import racecar_core` gives a fake module whose
     create_racecar() returns rc, and controller_dir is first on sys.path.
-    On exit, the function removes the fake module and the sys.path entry.
-    It also removes each module that the block imported from controller_dir,
-    so a later controller cannot get it by mistake.
+
+    A cached module in sys.modules wins over sys.path. So before the block,
+    the function moves aside every cached module that has the name of a
+    module in controller_dir, and racecar_core. On exit, it removes the fake
+    module, the sys.path entry and each module that the block imported from
+    controller_dir. Then it puts back the modules that it moved aside, so the
+    import state of the caller is the same as before.
     """
+    local = {p.stem for p in controller_dir.glob("*.py")} | {
+        p.name for p in controller_dir.iterdir() if (p / "__init__.py").is_file()
+    }
+    hidden = {
+        name: module
+        for name, module in sys.modules.items()
+        if name == "racecar_core" or name.split(".")[0] in local
+    }
+    for name in hidden:
+        del sys.modules[name]
     shim = types.ModuleType("racecar_core")
     shim.__dict__["create_racecar"] = lambda *args, **kwargs: rc
-    before = set(sys.modules)
     sys.modules["racecar_core"] = shim
     sys.path.insert(0, str(controller_dir))
     try:
         yield
     finally:
         sys.path.remove(str(controller_dir))
-        del sys.modules["racecar_core"]
-        for name in set(sys.modules) - before:
+        sys.modules.pop("racecar_core", None)
+        for name in list(sys.modules):
             file = getattr(sys.modules[name], "__file__", None)
             if file is not None and Path(file).is_relative_to(controller_dir):
                 del sys.modules[name]
+        sys.modules.update(hidden)
 
 
 def run_controller(controller_path: str, steps: int = DEFAULT_STEPS) -> float:

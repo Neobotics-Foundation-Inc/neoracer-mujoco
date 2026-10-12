@@ -7,8 +7,10 @@ No real racecar_core package is installed, so the tests show that none is needed
 test_wall_follower_example.py tests the controller callbacks on the adapter directly.
 """
 
+import importlib
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -103,3 +105,25 @@ def test_cli_fails_clearly_on_missing_controller():
     )
     assert result.returncode != 0
     assert "error:" in result.stderr
+
+
+def test_controller_imports_restores_the_import_state(tmp_path, monkeypatch):
+    """Inside the block, the controller's own files and the fake racecar_core
+    win over cached modules with the same names. After the block, the
+    caller's modules are back, and nothing from the controller stays."""
+    (tmp_path / "control.py").write_text("WHO = 'controller'\n")
+    cached_control = types.ModuleType("control")
+    cached_racecar_core = types.ModuleType("racecar_core")
+    monkeypatch.setitem(sys.modules, "control", cached_control)
+    monkeypatch.setitem(sys.modules, "racecar_core", cached_racecar_core)
+    _data, rc = run_racecar_core.build_racecar(run_racecar_core.load_scene(), 1)
+
+    with run_racecar_core.controller_imports(rc, tmp_path):
+        control = importlib.import_module("control")
+        racecar_core = importlib.import_module("racecar_core")
+        assert control.WHO == "controller"
+        assert racecar_core.create_racecar() is rc
+
+    assert sys.modules["control"] is cached_control
+    assert sys.modules["racecar_core"] is cached_racecar_core
+    assert str(tmp_path) not in sys.path

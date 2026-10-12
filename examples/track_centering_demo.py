@@ -60,6 +60,20 @@ class DemoParams:
     # The car is upright while the cosine of its tilt is above this value.
     min_upright_cos: float = 0.7
 
+    def __post_init__(self) -> None:
+        # The report compares the first and the last quarter of the run, so
+        # each quarter needs at least one step.
+        if self.steps < 4:
+            raise ValueError(f"steps must be >= 4, got {self.steps}")
+        if self.print_every_steps < 1:
+            raise ValueError(
+                f"print_every_steps must be >= 1, got {self.print_every_steps}"
+            )
+        if not self.viewer_duration_s > 0:
+            raise ValueError(
+                f"viewer_duration_s must be > 0, got {self.viewer_duration_s}"
+            )
+
 
 @dataclass(frozen=True)
 class CenteringReport:
