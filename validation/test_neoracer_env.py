@@ -1,35 +1,38 @@
 """
-Tests for neoracer_mujoco.envs.NeoRacerEnv (issue #7): the Gymnasium
-environment interface itself, not RL training (none exists yet).
+Tests for neoracer_mujoco.envs.NeoRacerEnv: the Gymnasium environment
+interface. No RL training exists yet, so no test trains a policy.
 
-Gymnasium is an optional `rl` dependency (pyproject.toml's
-[project.optional-dependencies]) -- pytest.importorskip below means this
-file is skipped, not failed, on a plain `pip install -e .` checkout without
-it.
-
-Several tests deliberately manipulate the env's internal progress/history
-state directly (documented at each call site) rather than physically
-driving a full lap or a real rollover through random actions: no trained
-policy exists yet to complete a lap, and waiting on random actions to
-stumble into a rollover would make the test slow and flaky. These tests
-exercise the termination CONDITION logic directly; the physics themselves
-(rollover detection, collision detection, settle/step) already have their
-own conformance tests elsewhere in this suite.
+No policy can drive a full lap yet, and random actions rarely roll the car
+over. So the tests call the pure progress and termination functions
+directly, with laws over many random inputs. Two env tests then check that
+step() uses them.
 """
 
 import os
-from dataclasses import replace
+import pickle
 from pathlib import Path
 
+import mujoco
 import numpy as np
 import pytest
-
-gym = pytest.importorskip("gymnasium")
 from gymnasium import spaces
 from gymnasium.utils.env_checker import check_env
 
-from neoracer_mujoco import assets
+from neoracer_mujoco import assets, sim
 from neoracer_mujoco.envs import NeoRacerEnv, NeoRacerEnvConfig
+from neoracer_mujoco.envs.neoracer_env import (
+    RewardConfig,
+    TerminationConfig,
+    TerminationReason,
+    _advance,
+    _is_stuck,
+    _reward,
+    _start_progress,
+    _termination,
+)
+
+STEER_CMD_POS = 18  # observation index of steer_cmd_pos (rad)
+LAP = 2.0 * np.pi  # rad, one full lap of progress
 
 
 @pytest.fixture
@@ -55,10 +58,6 @@ def test_env_rejects_a_car_without_a_free_joint(tmp_path):
         NeoRacerEnv(NeoRacerEnvConfig(car_path=str(car)))
 
 
-def test_env_constructs(env):
-    assert isinstance(env, gym.Env)
-
-
 def test_action_space_is_valid_box(env):
     assert isinstance(env.action_space, spaces.Box)
     assert env.action_space.shape == (2,)
@@ -76,7 +75,8 @@ def test_observation_space_is_valid_box(env):
 
 
 def test_gymnasium_check_env_passes(env):
-    """Gymnasium's own env checker -- API shape, dtypes, spaces, seeding."""
+    """Gymnasium's env checker checks the API, the dtypes, the spaces and the
+    seeding."""
     check_env(env, skip_render_check=True)
 
 
@@ -126,8 +126,8 @@ def test_full_bounded_episode_runs_without_crashing(env):
 
 
 def test_deterministic_reset_same_seed():
-    """Two independent envs, same seed => bit-identical reset observation
-    and identical trajectory under the same action sequence."""
+    """Two envs with the same seed give the same reset observation. With the
+    same actions, they give the same step results."""
     env1, env2 = NeoRacerEnv(), NeoRacerEnv()
     obs1, _ = env1.reset(seed=42)
     obs2, _ = env2.reset(seed=42)
@@ -153,27 +153,30 @@ def test_different_seeds_produce_different_spawns():
     env.close()
 
 
-def test_reset_does_not_use_global_numpy_random(env, monkeypatch):
-    """Seeding two envs from Gymnasium's own generator, not global
-    np.random, means poisoning global np.random must not change the
-    result."""
-    obs1, _ = env.reset(seed=7)
+def _global_random_state() -> bytes:
+    """The state of the global np.random generator, as bytes that compare
+    with ==."""
+    return pickle.dumps(np.random.get_state())
 
-    def _boom(*args, **kwargs):
-        raise AssertionError("global np.random was used")
 
-    monkeypatch.setattr(np.random, "uniform", _boom)
-    monkeypatch.setattr(np.random, "seed", _boom)
-    obs2, _ = env.reset(seed=7)
-    np.testing.assert_array_equal(obs1, obs2)
+def test_reset_and_step_do_not_use_global_numpy_random(env):
+    """The env takes its random numbers from env.np_random only. So reset()
+    and step() do not change the state of the global np.random generator."""
+    before = _global_random_state()
+    env.reset(seed=7)
+    rng = np.random.default_rng(0)
+    for _ in range(10):
+        env.step(rng.uniform(-1, 1, size=2).astype(np.float32))
+    env.reset()
+    assert _global_random_state() == before
 
 
 # --- action handling ----------------------------------------------------------
 
 
 def test_out_of_range_actions_are_clamped_not_rejected():
-    """action=[5, -5] must behave identically to the clamped action
-    [1, -1], not raise, not silently do something else."""
+    """step() clamps the action to [-1, 1]. So action [5, -5] writes the
+    same ctrl as action [1, -1], and does not raise an error."""
     env_a, env_b = NeoRacerEnv(), NeoRacerEnv()
     env_a.reset(seed=3)
     env_b.reset(seed=3)
@@ -200,7 +203,7 @@ def test_wall_crash_observations_stay_in_space(env):
         action[0] = 1.0
         obs, _reward, _terminated, _truncated, _info = env.step(action)
         assert env.observation_space.contains(obs)
-        peak = max(peak, abs(float(obs[18])))
+        peak = max(peak, abs(float(obs[STEER_CMD_POS])))
     assert peak > 1.0, "the recorded crash no longer happens; record a new one"
 
 
@@ -216,26 +219,117 @@ def test_repeated_random_actions_produce_no_nans(env):
             env.reset(seed=0)
 
 
-# --- termination / truncation -------------------------------------------------
+# --- progress, termination and reward: pure functions -------------------------
+
+
+def _wrap(angle: float) -> float:
+    """angle (rad) in [-pi, pi), the range of the env's angle around the center."""
+    return float(np.remainder(angle + np.pi, 2.0 * np.pi) - np.pi)
+
+
+def test_advance_gives_a_step_in_minus_pi_to_pi():
+    """For any two angles, _advance gives a delta in [-pi, pi]. The delta
+    differs from the plain difference only by a full turn."""
+    rng = np.random.default_rng(0)
+    for old, new in rng.uniform(-np.pi, np.pi, (2000, 2)):
+        p = _advance(_start_progress(old), new, window_len=5)
+        assert -np.pi <= p.delta <= np.pi
+        turns = (p.delta - (new - old)) / LAP
+        assert turns == pytest.approx(round(turns), abs=1e-9)
+        assert p.total == p.delta and p.angle == new
+
+
+def test_advance_adds_up_the_true_progress():
+    """If the car moves less than half a turn per step, the total of
+    _advance is the true change of angle, although each angle wraps."""
+    rng = np.random.default_rng(1)
+    window_len = 7
+    for _ in range(50):
+        steps = rng.uniform(-0.9 * np.pi, 0.9 * np.pi, 40)  # rad per step
+        start = float(rng.uniform(-np.pi, np.pi))
+        p = _start_progress(start)
+        for true_angle in start + np.cumsum(steps):
+            p = _advance(p, _wrap(true_angle), window_len)
+            assert len(p.window) <= window_len
+            assert p.window[-1] == p.total
+        assert p.total == pytest.approx(float(steps.sum()), abs=1e-9)
+
+
+def test_is_stuck_only_with_a_full_window_and_little_progress():
+    """_is_stuck is False until the window has window_len totals. Then it is
+    True if and only if the progress over the window is below min_progress."""
+    rng = np.random.default_rng(2)
+    window_len, min_progress = 6, 0.05
+    for _ in range(200):
+        p = _start_progress(0.0)
+        scale = rng.choice([0.001, 0.01, 0.1])  # rad per step
+        for step, angle in enumerate(np.cumsum(rng.normal(0.0, scale, 15))):
+            p = _advance(p, _wrap(angle), window_len)
+            full = step + 2 >= window_len  # _start_progress puts one total in
+            progress = abs(p.total - p.window[0])
+            expected = full and progress < min_progress
+            assert _is_stuck(p, window_len, min_progress) == expected
+
+
+def test_termination_reason_follows_the_priority():
+    """Rollover comes first, then stuck, then a lap. A lap is complete if
+    and only if the total progress is at least +2 pi. Progress in the
+    negative direction never completes a lap."""
+    cfg = TerminationConfig()
+    rng = np.random.default_rng(3)
+    totals = [*rng.uniform(-2.0 * LAP, 2.0 * LAP, 500), LAP, -LAP, 0.0]
+    for total in totals:
+        for upright_cos in (-1.0, cfg.upright_rollover_cos - 1e-9, 0.9, 1.0):
+            for stuck in (False, True):
+                reason = _termination(cfg, upright_cos, stuck, total)
+                if upright_cos < cfg.upright_rollover_cos:
+                    assert reason == "rollover"
+                elif stuck:
+                    assert reason == "stuck"
+                elif total >= LAP:
+                    assert reason == "lap_complete"
+                else:
+                    assert reason is None
+
+
+def test_reward_adds_the_terminal_term():
+    """Without a termination, the reward is progress_weight * delta minus
+    contact_penalty for a contact. A termination adds lap_bonus or subtracts
+    its penalty."""
+    cfg = RewardConfig()
+    terminal: frozendict[TerminationReason, float] = frozendict(
+        {
+            "lap_complete": cfg.lap_bonus,
+            "rollover": -cfg.rollover_penalty,
+            "stuck": -cfg.stuck_penalty,
+        }
+    )
+    rng = np.random.default_rng(4)
+    for delta in rng.uniform(-np.pi, np.pi, 200):
+        for contact in (False, True):
+            base = _reward(cfg, delta, contact, None)
+            expected = cfg.progress_weight * delta - cfg.contact_penalty * contact
+            assert base == pytest.approx(expected)
+            for reason, term in terminal.items():
+                assert _reward(cfg, delta, contact, reason) == pytest.approx(
+                    base + term
+                )
+
+
+# --- termination and truncation in the env ------------------------------------
 
 
 def test_rollover_terminates(env):
-    """Directly tips the car past the upright_cos threshold (see module
-    docstring for why this isn't driven via random actions) and confirms
-    the very next step reports terminated with reason 'rollover'."""
-    import mujoco
-
+    """Tip the car onto its side. The next step ends the episode with the
+    reason "rollover" and a negative reward."""
     env.reset(seed=0)
-    # 90-degree rotation about the body X axis: the car's z-axis rotates
-    # to point along world -Y, so upright_cos (z-axis . world z) becomes 0,
-    # well under the 0.5 threshold.
-    half = np.pi / 4.0
+    # A 90 degree rotation about the body X axis turns the car +Z axis to
+    # world -Y. So upright_cos becomes 0, below upright_rollover_cos.
+    half = np.pi / 4.0  # rad, half of the rotation angle
     env.data.qpos[3:7] = [np.cos(half), np.sin(half), 0.0, 0.0]
     mujoco.mj_forward(env.model, env.data)
-    from neoracer_mujoco import sim as _sim
-
     assert (
-        _sim.car_upright_cos(env.data, env.model.body("car").id)
+        sim.car_upright_cos(env.data, env.model.body("car").id)
         < env.config.termination.upright_rollover_cos
     )
 
@@ -248,80 +342,36 @@ def test_rollover_terminates(env):
     assert reward < 0
 
 
-def test_stuck_terminates():
-    """Physically drives the sim with zero throttle -- the car should not
-    make meaningful progress, so the stuck detector should fire on its
-    own within stuck_window_s, with no white-box state injection needed."""
-    env = NeoRacerEnv()
+def test_stuck_terminates(env):
+    """With zero throttle, the car makes no progress. So the stuck check
+    ends the episode after stuck_window_s."""
     env.reset(seed=0)
-    terminated = truncated = False
+    cfg = env.config
+    window_steps = round(cfg.termination.stuck_window_s * cfg.control_hz)
     reason = None
-    max_ticks = env._stuck_window_ticks + 20
-    for _ in range(max_ticks):
+    for _ in range(window_steps + 20):
         _obs, _reward, terminated, truncated, info = env.step(
             np.array([0.0, 0.0], dtype=np.float32)
         )
         if terminated or truncated:
             reason = info["termination_reason"]
             break
-    assert terminated, "expected the stuck detector to fire on zero throttle"
     assert reason == "stuck"
-    env.close()
-
-
-def test_lap_completion_terminates_successfully(env):
-    """Directly sets cumulative progress past the lap threshold (see
-    module docstring: no trained policy exists yet to actually complete a
-    lap) and confirms the next step reports terminated/'lap_complete' with
-    a positive (bonus-dominated) reward.
-
-    +2*pi is the empirically-confirmed intended forward-travel direction
-    (positive throttle from the loop_corridor spawn produces positive
-    cumulative angle -- see test_negative_full_lap_progress_does_not_
-    complete_lap for the negative-direction counterpart)."""
-    env.reset(seed=0)
-    total = 2.0 * np.pi + 0.5  # already past the 2*pi threshold
-    env._progress = replace(env._progress, total=total, window=(total,))
-
-    _obs, reward, terminated, truncated, info = env.step(
-        np.array([1.0, 0.0], dtype=np.float32)
-    )
-    assert terminated
-    assert not truncated
-    assert info["termination_reason"] == "lap_complete"
-    assert reward > 0
-
-
-def test_negative_full_lap_progress_does_not_complete_lap(env):
-    """A full lap's worth of progress in the WRONG (negative) direction
-    must not be treated as a successful lap: only positive cumulative
-    angle -- the empirically-confirmed forward-travel direction from the
-    loop_corridor spawn -- counts (see module docstring)."""
-    env.reset(seed=0)
-    total = -(2.0 * np.pi + 0.5)  # full lap of NEGATIVE progress
-    env._progress = replace(env._progress, total=total, window=(total,))
-
-    _obs, _reward, terminated, truncated, info = env.step(
-        np.array([1.0, 0.0], dtype=np.float32)
-    )
-    assert info["termination_reason"] != "lap_complete"
-    # A single step with a fresh angle_history can't trigger rollover or
-    # stuck either -- so a fixed-up condition should simply not terminate.
-    assert not terminated
-    assert not truncated
 
 
 def test_timeout_truncates():
-    env = NeoRacerEnv(config=NeoRacerEnvConfig(max_episode_steps=5))
+    config = NeoRacerEnvConfig(max_episode_steps=5)
+    env = NeoRacerEnv(config=config)
     env.reset(seed=0)
-    terminated = truncated = False
-    for i in range(5):
-        _obs, _reward, terminated, truncated, info = env.step(
-            np.array([0.0, 0.0], dtype=np.float32)
-        )
+    results = [
+        env.step(np.array([0.0, 0.0], dtype=np.float32))
+        for _ in range(config.max_episode_steps)
+    ]
+    _obs, _reward, terminated, truncated, info = results[-1]
     assert truncated
     assert not terminated
     assert info["termination_reason"] is None
+    assert not any(r[3] for r in results[:-1]), "truncated before the last step"
     env.close()
 
 
@@ -329,8 +379,7 @@ def test_timeout_truncates():
 
 
 def test_model_state_does_not_leak_between_episodes(env):
-    """The MjModel is compiled once and never written to by reset()/step()
-    -- a regression guard, not just a design claim."""
+    """reset() and step() write only env.data. They do not change env.model."""
     body_pos_before = env.model.body_pos.copy()
     geom_size_before = env.model.geom_size.copy()
     env.reset(seed=0)
