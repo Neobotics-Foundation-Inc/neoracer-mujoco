@@ -6,12 +6,8 @@ CONTRIBUTING.md has the workflow and the rules for written English.
 
 ## Before you push
 
-- Run `ruff check .`, `ruff format --check .` and `python -m pytest validation`.
-- Keep the tests green after each commit.
-  If a change alters behavior, change its test in the same commit.
-- `users/` holds personal experiments.
-  `validation/testdata/` and `examples/ultimate_wall_follower/` hold copies of outside code.
-  Do not change these directories unless the task names them.
+Follow "Before you push" in CONTRIBUTING.md.
+It gives the checks to run and the directories that you must not change.
 
 The rules below come from typed functional programming.
 Each rule removes a class of bugs or a class of checks.
@@ -67,7 +63,7 @@ Then no code has to check for an invalid state, because it cannot exist.
   If a test needs a partial value, the test builds it with a helper.
 - Use a tuple for a value of fixed length: `tuple[float, float, float]` for a position.
 - Do not use `Enum`.
-  An enum adds integer values, iteration and identity rules that this code does not use.
+  An enum adds member values, iteration and identity rules that this code does not use.
 - Use `NewType` only when two values of the same type get mixed up in practice.
 
 ## 2. Parse, do not validate

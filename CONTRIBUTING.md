@@ -5,8 +5,13 @@ Read it before you open a pull request.
 
 ## Before you push
 
-- Run `ruff check .` and `ruff format .`. CI runs both.
-- Run `pytest validation`. Put a new test in `validation/test_<module>.py`, never in the module it tests.
+- Run `ruff check .` and `ruff format .`. CI runs `ruff check .` and `ruff format --check .`.
+- Run `python -m pytest validation`. Put a new test in `validation/test_<module>.py`, never in the module it tests.
+- Keep the tests green after each commit.
+  If a change alters behavior, change its test in the same commit.
+- `users/` holds personal experiments.
+  `validation/testdata/` and `examples/ultimate_wall_follower/` hold copies of outside code.
+  Do not change these directories unless the task names them.
 - Keep one change in one pull request.
 
 ## Code style
