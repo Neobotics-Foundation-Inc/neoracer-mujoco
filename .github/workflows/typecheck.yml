@@ -27,8 +27,13 @@ jobs:
           pip install -e .
 
       # mujoco ships no type stubs. Generate them from the installed version.
+      # --exit-code fails the step on a stub error. The ignore patterns are
+      # the known errors: C++ types that mujoco's bindings do not expose.
       - name: Generate mujoco stubs
-        run: pybind11-stubgen mujoco mujoco.viewer -o typings
+        run: >-
+          pybind11-stubgen mujoco mujoco.viewer -o typings --exit-code
+          --ignore-invalid-expressions '^(mujoco::python::.*|std::byte)$'
+          --ignore-unresolved-names '^(NoneType|_abc\._abc_data|mjs[A-Za-z]+_)$'
 
       - name: ty
         run: ty check --output-format github
