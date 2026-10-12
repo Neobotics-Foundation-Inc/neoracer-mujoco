@@ -111,7 +111,7 @@ def main() -> None:
 
     # --- NO_PATH analysis ----------------------------------------------------
     with_no_path = [r for r in results if r.no_path_events > 0]
-    all_durations = [d for r in results for d in r.no_path_durations_ticks]
+    all_durations = [*r.no_path_durations_ticks for r in results]
     print("\n=== NO_PATH ===")
     print(
         f"trials with NO_PATH: {len(with_no_path)}/{N_TRIALS} ({100 * len(with_no_path) / N_TRIALS:.1f}%)"

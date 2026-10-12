@@ -62,7 +62,7 @@ Termination (terminated=True) vs. truncation (truncated=True):
 
 import os
 from dataclasses import dataclass
-from typing import Any, Literal, assert_never
+from typing import Any, Literal, TypedDict, assert_never
 
 import gymnasium as gym
 import mujoco
@@ -86,6 +86,18 @@ _ACTION_LOW = np.array([-1.0, -1.0], dtype=np.float32)
 _ACTION_HIGH = np.array([1.0, 1.0], dtype=np.float32)
 
 type TerminationReason = Literal["rollover", "stuck", "lap_complete"]
+
+
+class EnvInfo(TypedDict, closed=True):
+    """The info dict of reset() and step(). gymnasium requires a dict."""
+
+    progress_rad: float  # rad; cumulative signed progress in this episode
+    lap_frac: float  # laps; abs(progress_rad) / 2 pi
+    speed_ms: float  # m/s; estimated_speed, observation [19]
+    upright_cos: float  # cos(tilt) of the car body
+    contact: bool  # a car geom touched a wall in this step
+    episode_time_s: float  # s
+    termination_reason: TerminationReason | None
 
 
 def _compose_scene(track_path: str, car_path: str) -> mujoco.MjModel:
@@ -355,7 +367,7 @@ class NeoRacerEnv(gym.Env):
         contact: bool,
         upright_cos: float,
         reason: TerminationReason | None,
-    ) -> dict:
+    ) -> EnvInfo:
         return {
             "progress_rad": self._progress.total,
             "lap_frac": abs(self._progress.total) / (2.0 * np.pi),
