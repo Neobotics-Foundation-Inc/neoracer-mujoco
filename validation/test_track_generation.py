@@ -11,21 +11,27 @@ clearance, geom budget) that the rest of the toolbox silently depends on.
 
 import functools
 import itertools
+import warnings
 
 import mujoco
 import numpy as np
 import pytest
 
-from neoracer_mujoco import compose
+from neoracer_mujoco import assets, sim
 from neoracer_mujoco.collision import car_hit_wall, wall_geom_ids
 from neoracer_mujoco.track_generation import (
+    Difficulty,
+    Track,
     TrackGenerationError,
     TrackSettings,
     generate_track,
+    left_edge,
+    right_edge,
     settings_for_difficulty,
     to_mjcf,
+    to_spec,
 )
-from neoracer_mujoco.track_generation.mjcf import _decimate_closed, _start_transform
+from neoracer_mujoco.track_generation.mjcf import decimate_closed, to_start_frame
 
 # Every geom in a composed scene: walls, floor, and the car's own. Generated
 # walls dominate it. Measured across difficulties 0-3, seeds 0-7: 305 worst
@@ -39,15 +45,14 @@ MAX_GEOMS = 600
 # than minutes; it is safe precisely because generation is deterministic, which
 # test_same_seed_gives_the_same_track independently checks.
 @functools.cache
-def _track(seed, difficulty):
-    return generate_track(seed, difficulty=difficulty)
+def _track(seed: int, difficulty: Difficulty) -> Track:
+    return generate_track(seed, settings_for_difficulty(difficulty))
 
 
 @functools.cache
-def _scene(seed, difficulty):
-    """(mjcf_text, compiled model) for one generated track."""
-    text = to_mjcf(_track(seed, difficulty))
-    return text, compose(text)
+def _scene(seed: int, difficulty: Difficulty) -> mujoco.MjModel:
+    """The compiled scene, car included, for one generated track."""
+    return assets.compose(to_spec(_track(seed, difficulty)))
 
 
 # --- the generator: pure geometry ---------------------------------------------
@@ -77,14 +82,15 @@ def test_generated_track_is_valid(seed, difficulty):
     assert np.allclose(
         np.sum(track.tangent * track.left_normal, axis=1), 0.0, atol=1e-9
     )
-    assert track.left_edge.shape == track.center.shape
+    assert left_edge(track).shape == track.center.shape
 
 
 def test_same_seed_gives_the_same_track():
-    a, b = generate_track(3), generate_track(3)
+    settings = settings_for_difficulty(0)
+    a, b = generate_track(3, settings), generate_track(3, settings)
     assert np.array_equal(a.center, b.center)
     assert np.array_equal(a.half_width, b.half_width)
-    assert not np.array_equal(a.center, generate_track(4).center)
+    assert not np.array_equal(a.center, generate_track(4, settings).center)
 
 
 def test_harder_difficulty_allows_tighter_turns():
@@ -92,14 +98,12 @@ def test_harder_difficulty_allows_tighter_turns():
     hard = settings_for_difficulty(3)
     assert hard.max_curvature > easy.max_curvature
     assert hard.half_width_min < easy.half_width_min
-    with pytest.raises(ValueError):
-        settings_for_difficulty(4)
 
 
 def test_impossible_limits_raise_rather_than_hang():
     impossible = TrackSettings(max_curvature=0.0, max_attempts=2)
     with pytest.raises(TrackGenerationError):
-        generate_track(0, settings=impossible)
+        generate_track(0, impossible)
 
 
 # --- the MJCF layer -----------------------------------------------------------
@@ -107,7 +111,7 @@ def test_impossible_limits_raise_rather_than_hang():
 
 @pytest.mark.parametrize("seed", range(3))
 def test_generated_track_compiles_with_the_car_on_it(seed):
-    _, model = _scene(seed, 3)
+    model = _scene(seed, 3)
     assert model.body("car").id > 0
     assert model.ngeom > 10
 
@@ -116,7 +120,7 @@ def test_generated_track_compiles_with_the_car_on_it(seed):
 def test_generated_walls_use_the_wall_material(seed):
     """collision.py finds walls by material name, so a rename in mjcf.py would
     silently disable car_hit_wall/reset_if_wall_hit on generated tracks."""
-    _, model = _scene(seed, 3)
+    model = _scene(seed, 3)
     assert len(wall_geom_ids(model)) > 0
 
 
@@ -126,7 +130,7 @@ def test_car_spawns_clear_of_the_walls(seed, difficulty):
     """The start transform must put the car on sample 0 facing +X, not clipped
     into a wall or squeezed against one."""
     track = _track(seed, difficulty)
-    _, model = _scene(seed, difficulty)
+    model = _scene(seed, difficulty)
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
 
@@ -146,7 +150,7 @@ def test_geom_count_stays_within_budget(seed, difficulty):
     """Decimation regression guard -- see MAX_GEOMS. One static box per
     centerline sample would be thousands, and every one of them is broadphase
     cost on every step of every RL rollout."""
-    _, model = _scene(seed, difficulty)
+    model = _scene(seed, difficulty)
     assert model.ngeom < MAX_GEOMS
 
 
@@ -155,11 +159,11 @@ def test_walls_track_the_generated_edges_closely(difficulty):
     """The decimated wall polyline must not bow away from the fine edge by more
     than the tolerance to_mjcf was asked for."""
     track = _track(0, difficulty)
-    transform = _start_transform(track)
     tolerance = 0.01
 
-    for edge in (transform(track.left_edge), transform(track.right_edge)):
-        kept = _decimate_closed(edge, 0.5, tolerance)
+    for edge in (left_edge(track), right_edge(track)):
+        edge = to_start_frame(track, edge)
+        kept = decimate_closed(edge, 0.5, tolerance)
         for i, j in itertools.pairwise(kept):
             first, last = edge[i], edge[j % len(edge)]
             chord = last - first
@@ -171,17 +175,35 @@ def test_walls_track_the_generated_edges_closely(difficulty):
             assert np.abs(across).max() / length <= tolerance + 1e-9
 
 
-def test_hand_written_tracks_compose_through_the_same_function():
-    for name in ("straight_corridor", "ramp_course"):
-        model = compose(name)
-        assert model.body("car").id > 0
-
-
 def test_same_seed_gives_byte_identical_mjcf():
     """Determinism has to survive the MJCF layer too -- the start transform and
     the decimation both run on the generated geometry, and either one drifting
     would make two runs of the same seed different scenes."""
-    first = to_mjcf(generate_track(5, difficulty=3))
-    second = to_mjcf(generate_track(5, difficulty=3))
+    settings = settings_for_difficulty(3)
+    first = to_mjcf(generate_track(5, settings))
+    second = to_mjcf(generate_track(5, settings))
     assert first == second
-    assert first != to_mjcf(generate_track(6, difficulty=3))
+    assert first != to_mjcf(generate_track(6, settings))
+
+
+@pytest.mark.parametrize("seed", range(2))
+def test_generated_track_keeps_the_car_solver_options(seed):
+    """The same law as test_assets.py for the hand-written tracks: when the car
+    is attached, MuJoCo keeps the track's <option>, so it must match the car's."""
+    car = assets.load()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        model = assets.compose(to_spec(_track(seed, 1)))
+    assert [str(w.message) for w in caught] == []
+    assert model.opt.cone == car.opt.cone
+    assert model.opt.impratio == car.opt.impratio
+
+
+@pytest.mark.parametrize("seed", range(2))
+def test_car_comes_to_rest_on_a_generated_track(seed):
+    model = _scene(seed, 1)
+    data = mujoco.MjData(model)
+    sim.run(model, data, 0.0, sim.SETTLE_STEPS)
+    car = data.body("car")
+    assert 0.05 < float(car.xpos[2]) < 0.2, f"car z = {car.xpos[2]:.3f} m"
+    assert float(np.linalg.norm(data.qvel[:3])) < 0.05

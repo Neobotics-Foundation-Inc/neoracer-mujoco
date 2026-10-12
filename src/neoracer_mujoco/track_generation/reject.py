@@ -9,10 +9,14 @@ in the package needs that type.
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.spatial import cKDTree
+import numpy.typing as npt
+from scipy.spatial import KDTree
 
 from .config import TrackSettings
-from .shape import shortest_loop_distance
+from .shape import Centerline, Points, Samples, shortest_loop_distance
+
+type Indices = npt.NDArray[np.intp]  # shape (K,), sample indices
+type Pairs = npt.NDArray[np.intp]  # shape (K, 2), (i, j) sample index pairs
 
 # Cap on how far one repair pass may move a control point, so one bad pair
 # cannot fling the loop into a new shape. Larger corrections arrive over
@@ -20,20 +24,26 @@ from .shape import shortest_loop_distance
 MAX_REPAIR_SHIFT = 0.3
 
 
-@dataclass
+@dataclass(frozen=True)
 class Problems:
-    """What is wrong with a candidate track. Falsy when nothing is.
+    """What is wrong with a candidate track.
 
     Indices rather than a bool verdict, so a repair can nudge exactly the
     control points behind a failure instead of redrawing the whole track.
     """
 
-    too_curvy: np.ndarray  # sample indices that are too tight to drive
-    too_close: list  # (i, j) sample pairs that nearly touch in space
+    too_curvy: Indices  # samples that are too tight to drive
+    too_close: Pairs  # sample pairs that nearly touch in space
     length_ok: bool
 
-    def __bool__(self):
-        return len(self.too_curvy) > 0 or len(self.too_close) > 0 or not self.length_ok
+
+def is_valid(problems: Problems) -> bool:
+    """True when the track has no problem at all."""
+    return (
+        len(problems.too_curvy) == 0
+        and len(problems.too_close) == 0
+        and problems.length_ok
+    )
 
 
 # --- finding the problems --------------------------------------------------
@@ -41,7 +51,9 @@ class Problems:
 # ring of control points still splines into a hairpin now and then.
 
 
-def find_too_curvy_samples(curvature, half_width, settings: TrackSettings):
+def find_too_curvy_samples(
+    curvature: Samples, half_width: Samples, settings: TrackSettings
+) -> Indices:
     """Sample indices failing either curvature rule.
 
     1. Too tight to drive: |curvature| over the limit. A cap on how sharp a
@@ -58,8 +70,8 @@ def find_too_curvy_samples(curvature, half_width, settings: TrackSettings):
 
 
 def find_near_self_touches(
-    center, half_width, distance_along, total_length, settings: TrackSettings
-):
+    line: Centerline, half_width: Samples, settings: TrackSettings
+) -> Pairs:
     """(i, j) sample pairs far apart travelling around the loop but close
     together in space -- the loop nearly touching itself, meaning two corridors
     overlap or the gap between them is too thin to fit walls into.
@@ -68,33 +80,30 @@ def find_near_self_touches(
     close in space and perfectly fine, so pairs near each other along the loop
     are dropped.
 
-    A cKDTree radius query rather than the O(N^2) pairwise distance matrix --
+    A KDTree radius query rather than the O(N^2) pairwise distance matrix --
     N is 2048 samples and this runs on every repair pass of every attempt.
     """
     needed_clearance = 2 * half_width.max() + settings.extra_separation_margin
-    pairs = cKDTree(center).query_pairs(r=needed_clearance, output_type="ndarray")
-    if len(pairs) > 0:
-        loop_gap = np.abs(
-            shortest_loop_distance(
-                distance_along[pairs[:, 1]] - distance_along[pairs[:, 0]], total_length
-            )
+    pairs = KDTree(line.center).query_pairs(r=needed_clearance, output_type="ndarray")
+    along = line.distance_along
+    loop_gap = np.abs(
+        shortest_loop_distance(
+            along[pairs[:, 1]] - along[pairs[:, 0]], line.total_length
         )
-        pairs = pairs[loop_gap > settings.min_separation_along_loop]
-    return [(int(i), int(j)) for i, j in pairs]
+    )
+    return pairs[loop_gap > settings.min_separation_along_loop]
 
 
 def find_problems(
-    center, curvature, half_width, distance_along, total_length, settings: TrackSettings
-):
+    line: Centerline, half_width: Samples, settings: TrackSettings
+) -> Problems:
     """Run every rejection rule over a candidate track: curvature, near
     self-touch, and total length inside the requested range."""
     return Problems(
-        too_curvy=find_too_curvy_samples(curvature, half_width, settings),
-        too_close=find_near_self_touches(
-            center, half_width, distance_along, total_length, settings
-        ),
+        too_curvy=find_too_curvy_samples(line.curvature, half_width, settings),
+        too_close=find_near_self_touches(line, half_width, settings),
         length_ok=(
-            settings.min_total_length <= total_length <= settings.max_total_length
+            settings.min_total_length <= line.total_length <= settings.max_total_length
         ),
     )
 
@@ -105,13 +114,15 @@ def find_problems(
 # here at all, so a seed that needed three repair passes reproduces exactly.
 
 
-def nearest_control_point(points, position):
+def nearest_control_point(points: Points, position: npt.NDArray[np.float64]) -> int:
     """Index of the control point closest to a position on the centerline --
     the one whose movement most affects that stretch of track."""
     return int(np.argmin(np.linalg.norm(points - position, axis=1)))
 
 
-def smooth_sharp_corners(points, too_curvy_samples, center):
+def smooth_sharp_corners(
+    points: Points, too_curvy_samples: Indices, center: Points
+) -> Points:
     """Blend each control point behind a too-curvy sample toward its two
     neighbors, which opens the corner up.
 
@@ -130,8 +141,12 @@ def smooth_sharp_corners(points, too_curvy_samples, center):
 
 
 def push_apart_near_touches(
-    points, too_close_pairs, center, half_width, settings: TrackSettings
-):
+    points: Points,
+    too_close_pairs: Pairs,
+    center: Points,
+    half_width: Samples,
+    settings: TrackSettings,
+) -> Points:
     """Push the control points behind each near-touching pair of samples
     directly away from each other, by half the missing clearance each (capped
     at MAX_REPAIR_SHIFT)."""
@@ -144,10 +159,10 @@ def push_apart_near_touches(
         if first == second:
             continue  # one control point governs both; pushing it apart is a no-op
         separation = points[first] - points[second]
-        distance = np.linalg.norm(separation)
+        distance = float(np.linalg.norm(separation))
         if distance < 1e-9:
             continue  # no direction to push along
-        shortfall = needed_clearance - np.linalg.norm(center[i] - center[j])
+        shortfall = needed_clearance - float(np.linalg.norm(center[i] - center[j]))
         shift = min(0.5 * shortfall, MAX_REPAIR_SHIFT)
         if shift <= 0:
             continue
@@ -158,7 +173,13 @@ def push_apart_near_touches(
     return points
 
 
-def repair(points, problems: Problems, center, half_width, settings: TrackSettings):
+def repair(
+    points: Points,
+    problems: Problems,
+    center: Points,
+    half_width: Samples,
+    settings: TrackSettings,
+) -> Points:
     """Return a new set of control points with each reported problem nudged at.
 
     Corners first, then near-touches: smoothing a corner also drags the track

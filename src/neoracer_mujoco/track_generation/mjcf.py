@@ -5,44 +5,43 @@ lives in scene_template.xml next door, not in this file. This module computes
 the wall boxes and fills the template's placeholders in.
 
 Output follows the convention in assets/tracks/*.xml -- scenery that never
-names the car -- so `assets.compose` can attach the car to it at runtime.
+names the car -- so `assets.compose` can attach the car to it at runtime:
+
+    assets.compose(to_spec(generate_track(7, settings_for_difficulty(2))))
 """
 
 import itertools
 import string
 from pathlib import Path
 
+import mujoco
 import numpy as np
 
-from .track import Track
+from .shape import Points
+from .track import Track, left_edge, right_edge
 
 _TEMPLATE = Path(__file__).parent / "scene_template.xml"
 
 _FLOOR_MARGIN = 1.0  # meters of floor plane beyond the outermost wall
 
 
-def _start_transform(track: Track):
-    """Build the rigid transform putting sample 0 at the origin facing +X.
+def to_start_frame(track: Track, points: Points) -> Points:
+    """points moved by the rigid transform that puts sample 0 at the origin
+    facing +X.
 
     Attaching a car drops it at the origin facing +X, but a Track's sample 0 is
     somewhere out on the loop pointing anywhere. Moving the walls to meet the
     car (rather than the car to meet the walls) keeps Track pure geometry, with
     every field it carries -- distance_along, curvature -- valid as written.
-
-    Returns a function mapping (N, 2) points to (N, 2) transformed points.
     """
     origin = track.center[0]
     heading = np.arctan2(track.tangent[0, 1], track.tangent[0, 0])
     cos, sin = np.cos(-heading), np.sin(-heading)
     rotation = np.array([[cos, -sin], [sin, cos]])
-
-    def transform(points):
-        return (points - origin) @ rotation.T
-
-    return transform
+    return (points - origin) @ rotation.T
 
 
-def _max_deviation(points, start, end):
+def _max_deviation(points: Points, start: int, end: int) -> float:
     """Farthest any point strictly between `start` and `end` sits from the
     straight chord joining them. `end` may be len(points), meaning the wrap
     back to index 0."""
@@ -59,7 +58,9 @@ def _max_deviation(points, start, end):
     return float(np.abs(across).max() / length)
 
 
-def _decimate_closed(points, segment_length, max_deviation):
+def decimate_closed(
+    points: Points, segment_length: float, max_deviation: float
+) -> list[int]:
     """Split a closed polyline into as few chords as the two caps allow.
 
     A track has 2048 samples, so one wall box per sample would be 4096 static
@@ -93,14 +94,21 @@ def _decimate_closed(points, segment_length, max_deviation):
     return kept
 
 
-def _wall_boxes(edge, name_prefix, segment_length, max_deviation, thickness, height):
+def _wall_boxes(
+    edge: Points,
+    name_prefix: str,
+    segment_length: float,
+    max_deviation: float,
+    thickness: float,
+    height: float,
+) -> list[str]:
     """MJCF <geom> lines for one wall: one box per decimated segment, centred on
     its midpoint and yawed to lie along it.
 
     Each box is over-long by `thickness` at both ends so consecutive boxes
     overlap at their corners instead of leaving a notch for a wheel to catch in.
     """
-    kept = _decimate_closed(edge, segment_length, max_deviation)
+    kept = decimate_closed(edge, segment_length, max_deviation)
     lines = []
     for n, (i, j) in enumerate(itertools.pairwise(kept)):
         first, last = edge[i], edge[j % len(edge)]
@@ -136,15 +144,14 @@ def to_mjcf(
                                 that hug the generated edges more closely, at a
                                 proportional cost in geom count.
     max_deviation               how far the true edge may bow away from a wall
-                                box, meters. See _decimate_closed.
+                                box, meters. See decimate_closed.
 
-    Walls come straight off track.left_edge / track.right_edge, which already
+    Walls come straight off left_edge(track) / right_edge(track), which already
     carry the loop's varying half-width, moved by the start transform so the
     car spawns at sample 0 facing +X.
     """
-    transform = _start_transform(track)
-    left = transform(track.left_edge)
-    right = transform(track.right_edge)
+    left = to_start_frame(track, left_edge(track))
+    right = to_start_frame(track, right_edge(track))
 
     geoms = _wall_boxes(
         left,
@@ -182,3 +189,9 @@ def to_mjcf(
         floor_pos_y=f"{floor_pos[1]:.5f}",
         walls="\n".join(geoms),
     )
+
+
+def to_spec(track: Track) -> mujoco.MjSpec:
+    """The scenery of to_mjcf, with the default wall sizes, as an MjSpec for
+    assets.compose."""
+    return mujoco.MjSpec.from_string(to_mjcf(track))

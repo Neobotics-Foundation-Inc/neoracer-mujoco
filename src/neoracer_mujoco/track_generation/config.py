@@ -4,6 +4,10 @@ Numbers used by exactly one stage live in that stage's module, not here.
 """
 
 from dataclasses import dataclass, replace
+from typing import Literal
+
+# 0 is gentle and wide, 3 is tight and narrow.
+type Difficulty = Literal[0, 1, 2, 3]
 
 
 @dataclass(frozen=True)
@@ -16,7 +20,7 @@ class TrackSettings:
     oversample_factor: int = 4  # extra spline samples used to measure length
 
     # --- what makes a candidate track invalid (see reject.py) ---
-    max_curvature: float = 1.0  # 1/m; the difficulty table below lowers this
+    max_curvature: float = 1.0  # 1/m; settings_for_difficulty lowers this
     max_width_times_curvature: float = 0.8  # corridor must not fold onto itself
     min_total_length: float = 25.0
     max_total_length: float = 90.0
@@ -28,7 +32,7 @@ class TrackSettings:
 
     # --- corridor width band (see shape.py) ---
     half_width_base: float = 0.50
-    half_width_min: float = 0.35  # the difficulty table below raises this
+    half_width_min: float = 0.35  # settings_for_difficulty raises this
     half_width_max: float = 0.80
 
     # --- retry budget ---
@@ -41,17 +45,15 @@ class TrackSettings:
 # Easy tracks are gentle and wide, hard tracks are tight and narrow. Only these
 # two knobs change with difficulty; everything else stays fixed so tracks across
 # a curriculum stay recognizably the same family.
-_MAX_CURVATURE_BY_DIFFICULTY = (0.4, 0.6, 0.8, 1.0)
-_MIN_HALF_WIDTH_BY_DIFFICULTY = (0.60, 0.50, 0.40, 0.35)
+_MAX_CURVATURE: dict[Difficulty, float] = {0: 0.4, 1: 0.6, 2: 0.8, 3: 1.0}  # 1/m
+_MIN_HALF_WIDTH: dict[Difficulty, float] = {0: 0.60, 1: 0.50, 2: 0.40, 3: 0.35}  # m
 
 
-def settings_for_difficulty(difficulty: int, base=None) -> TrackSettings:
-    """`base` (default: stock TrackSettings) with the curvature and width limits
-    set for difficulty 0 (easiest) through 3 (hardest)."""
-    if difficulty not in (0, 1, 2, 3):
-        raise ValueError(f"difficulty must be 0-3, got {difficulty}")
+def settings_for_difficulty(difficulty: Difficulty) -> TrackSettings:
+    """Stock TrackSettings with the curvature and width limits of difficulty.
+    To change other knobs too, use dataclasses.replace on the result."""
     return replace(
-        base if base is not None else TrackSettings(),
-        max_curvature=_MAX_CURVATURE_BY_DIFFICULTY[difficulty],
-        half_width_min=_MIN_HALF_WIDTH_BY_DIFFICULTY[difficulty],
+        TrackSettings(),
+        max_curvature=_MAX_CURVATURE[difficulty],
+        half_width_min=_MIN_HALF_WIDTH[difficulty],
     )

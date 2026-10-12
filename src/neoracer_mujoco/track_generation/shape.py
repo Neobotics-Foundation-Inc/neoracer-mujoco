@@ -4,10 +4,16 @@ them sampled evenly in meters, and a corridor half-width around it.
 Everything here is geometry. reject.py decides whether the result is usable.
 """
 
+from dataclasses import dataclass
+
 import numpy as np
+import numpy.typing as npt
 import scipy.interpolate
 
 from .config import TrackSettings
+
+type Points = npt.NDArray[np.float64]  # shape (N, 2), meters
+type Samples = npt.NDArray[np.float64]  # shape (N,), one value per sample
 
 # --- control point scatter -------------------------------------------------
 # Only draw_control_points reads these, so they live here rather than in the
@@ -22,7 +28,7 @@ POINT_SMOOTHING_ROUNDS = 2  # blur the points to soften sharp corners
 MIN_ANGLE_BETWEEN_POINTS = 0.15  # radians, stops points stacking up
 
 
-def spread_out_angles(angles, min_gap):
+def spread_out_angles(angles: Samples, min_gap: float) -> Samples:
     """Sort `angles` and push each one forward until it is at least `min_gap`
     past the previous.
 
@@ -36,7 +42,9 @@ def spread_out_angles(angles, min_gap):
     return angles
 
 
-def smooth_around_loop(values, rounds):
+def smooth_around_loop(
+    values: npt.NDArray[np.float64], rounds: int
+) -> npt.NDArray[np.float64]:
     """Blur a periodic sequence `rounds` times: each entry becomes half itself
     plus a quarter of each neighbor, wrapping at the ends.
 
@@ -48,7 +56,7 @@ def smooth_around_loop(values, rounds):
     return values
 
 
-def draw_control_points(random):
+def draw_control_points(random: np.random.Generator) -> Points:
     """Scatter the (n, 2) control points a track is drawn through, in loop order.
 
     Polar, not cartesian: each point is an angle plus a radius, so sorting by
@@ -76,7 +84,7 @@ def draw_control_points(random):
 # --- the centerline --------------------------------------------------------
 
 
-def shortest_loop_distance(distance, total_length):
+def shortest_loop_distance(distance: Samples, total_length: float) -> Samples:
     """Distance around a loop taken the short way: a value in
     (-total_length/2, total_length/2].
 
@@ -86,7 +94,7 @@ def shortest_loop_distance(distance, total_length):
     return ((distance + total_length / 2) % total_length) - total_length / 2
 
 
-def fit_closed_spline(points):
+def fit_closed_spline(points: Points) -> scipy.interpolate.CubicSpline:
     """Cubic spline through every control point, joining back up smoothly.
 
     Parameterized by a dimensionless 0..1 that runs once around the loop, NOT
@@ -98,7 +106,9 @@ def fit_closed_spline(points):
     return scipy.interpolate.CubicSpline(knots, closed_points, bc_type="periodic")
 
 
-def measure_distance_along_spline(spline, sample_count):
+def measure_distance_along_spline(
+    spline: scipy.interpolate.CubicSpline, sample_count: int
+) -> tuple[Samples, Samples]:
     """Walk the spline in `sample_count` equal parameter steps, adding up the
     straight-line hops between them.
 
@@ -112,7 +122,22 @@ def measure_distance_along_spline(spline, sample_count):
     return parameter, np.concatenate([[0.0], np.cumsum(hop_lengths)])
 
 
-def sample_evenly_by_distance(spline, samples, oversample_factor):
+@dataclass(frozen=True)
+class Centerline:
+    """A closed loop sampled every total_length / N meters. Index N-1 wraps
+    around to index 0."""
+
+    center: Points  # positions
+    tangent: Points  # unit vector pointing forward along the loop
+    left_normal: Points  # unit vector 90 degrees left of the tangent
+    curvature: Samples  # 1/m, positive where the loop turns left
+    distance_along: Samples  # m from sample 0, travelling forward
+    total_length: float  # m around the whole loop
+
+
+def sample_evenly_by_distance(
+    spline: scipy.interpolate.CubicSpline, samples: int, oversample_factor: int
+) -> Centerline:
     """Sample the spline so consecutive samples are equally spaced *in meters*.
 
     Sampled directly, a spline bunches up in the corners. Rather than
@@ -120,15 +145,6 @@ def sample_evenly_by_distance(spline, samples, oversample_factor):
     numerically at oversample_factor times the output density and interpolates
     the parameter back out -- one table lookup instead of a solve, with error
     bounded by the dense spacing.
-
-    Returns (center, tangent, left_normal, curvature, distance_along,
-    total_length):
-      center        (N, 2) positions
-      tangent       (N, 2) unit vector pointing forward along the loop
-      left_normal   (N, 2) unit vector 90 degrees left of the tangent
-      curvature     (N,) 1/meters, positive where the loop turns left
-      distance_along(N,) meters from sample 0, travelling forward
-      total_length  meters around the whole loop
     """
     dense_parameter, distance_at_dense = measure_distance_along_spline(
         spline, samples * oversample_factor
@@ -151,7 +167,9 @@ def sample_evenly_by_distance(spline, samples, oversample_factor):
     spacing = total_length / samples
     tangent_change = (np.roll(tangent, -1, 0) - np.roll(tangent, 1, 0)) / (2 * spacing)
     curvature = np.sum(tangent_change * left_normal, axis=1)
-    return center, tangent, left_normal, curvature, distance_along, total_length
+    return Centerline(
+        center, tangent, left_normal, curvature, distance_along, total_length
+    )
 
 
 # --- corridor width --------------------------------------------------------
@@ -159,10 +177,18 @@ def sample_evenly_by_distance(spline, samples, oversample_factor):
 # reject.py is what throws out a width the corners cannot take.
 
 
-def draw_width_waves(random):
+@dataclass(frozen=True)
+class WidthWaves:
+    """Sine wave w completes w+1 cycles around the loop."""
+
+    phases: Samples  # rad, one per wave
+    amplitudes: Samples  # m, one per wave
+
+
+def draw_width_waves(random: np.random.Generator) -> WidthWaves:
     """Draw the random ingredients of the width profile: a few sine waves, each
     with a random phase and an amplitude that shrinks as the wave gets faster,
-    so the width drifts slowly and never flickers. Returns (phases, amplitudes).
+    so the width drifts slowly and never flickers.
 
     Separate from half_width_from_waves because the two have different
     lifetimes: waves are drawn once per attempt and reused across every repair
@@ -171,10 +197,10 @@ def draw_width_waves(random):
     wave_count = int(random.integers(2, 6))
     phases = random.uniform(0, 2 * np.pi, wave_count)
     amplitudes = random.uniform(0.03, 0.12, wave_count) / np.arange(1, wave_count + 1)
-    return phases, amplitudes
+    return WidthWaves(phases, amplitudes)
 
 
-def half_width_from_waves(waves, settings: TrackSettings):
+def half_width_from_waves(waves: WidthWaves, settings: TrackSettings) -> Samples:
     """Sum the width waves onto the base half-width and clamp to the allowed
     band, giving one half-width per sample.
 
@@ -182,10 +208,11 @@ def half_width_from_waves(waves, settings: TrackSettings):
     over the loop, so the profile closes on itself exactly -- no seam to patch
     where sample N-1 meets sample 0.
     """
-    phases, amplitudes = waves
     angle_around_loop = np.linspace(0, 2 * np.pi, settings.samples, endpoint=False)
     half_width = settings.half_width_base + sum(
         amplitude * np.sin((wave + 1) * angle_around_loop + phase)
-        for wave, (amplitude, phase) in enumerate(zip(amplitudes, phases))
+        for wave, (amplitude, phase) in enumerate(
+            zip(waves.amplitudes, waves.phases, strict=True)
+        )
     )
     return np.clip(half_width, settings.half_width_min, settings.half_width_max)

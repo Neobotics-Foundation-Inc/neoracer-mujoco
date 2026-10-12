@@ -10,7 +10,7 @@
     the track geometry, so those live in mjcf.py.
 
     Generated tracks are scenery ONLY -- this does not name the car. Attach
-    neoracer.xml at runtime (neoracer_mujoco.compose does it), the same pattern
+    neoracer.xml at runtime (neoracer_mujoco.assets.compose does it), the same pattern
     the hand-written tracks in assets/tracks/ use.
 
     Filled in below: seed $seed, loop length $total_length m, $wall_count wall
@@ -22,6 +22,10 @@
          every euler in the generated walls is radians. -->
     <compiler angle="radian"/>
 
+    <!-- The same solver options as assets/neoracer.xml. When the car is attached
+         to this scene, MuJoCo keeps the scene's <option>, so they must match. -->
+    <option cone="elliptic" impratio="10"/>
+
     <asset>
         <!-- Prefixed names: attaching the car merges its assets in, and a
              repeated name there is a compile-time ValueError, not a merge.
@@ -30,8 +34,8 @@
                  rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
         <material name="track_floor" texture="track_grid" texrepeat="1 1"
                   texuniform="true" reflectance=".2"/>
-        <!-- Must stay named "wall": collision.py identifies walls by material
-             name, and that is what makes car_hit_wall / reset_if_wall_hit work
+        <!-- Must stay named "wall" (or "wall_..."): collision.py identifies
+             walls by material name, and that is what makes car_hit_wall / reset_if_wall_hit work
              on a generated track with no extra code on either side. -->
         <material name="wall" rgba=".55 .57 .60 1"/>
     </asset>
