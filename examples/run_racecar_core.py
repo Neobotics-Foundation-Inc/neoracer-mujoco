@@ -56,7 +56,7 @@ def load_scene() -> mujoco.MjModel:
 
 
 def build_racecar(
-    model: mujoco.MjModel, steps: int = DEFAULT_STEPS
+    model: mujoco.MjModel, steps: int
 ) -> tuple[mujoco.MjData, MujocoRacecar]:
     """Settle the car in model, and make a MujocoRacecar that stops after steps.
 
@@ -67,24 +67,20 @@ def build_racecar(
     return data, MujocoRacecar(model, data, max_steps=steps)
 
 
-def racecar_core_shim(rc: MujocoRacecar) -> types.ModuleType:
-    """A fake `racecar_core` module whose create_racecar() returns rc."""
-    shim = types.ModuleType("racecar_core")
-    shim.__dict__["create_racecar"] = lambda *args, **kwargs: rc
-    return shim
-
-
 @contextlib.contextmanager
 def controller_imports(rc: MujocoRacecar, controller_dir: Path) -> Generator[None]:
     """Make a controller in controller_dir importable with rc in the with block.
 
-    In the block, `import racecar_core` gives racecar_core_shim(rc), and
-    controller_dir is first on sys.path. On exit, the function removes the fake
-    module and the sys.path entry. It also removes each module that the block
-    imported from controller_dir, so a later controller cannot get it by mistake.
+    In the block, `import racecar_core` gives a fake module whose
+    create_racecar() returns rc, and controller_dir is first on sys.path.
+    On exit, the function removes the fake module and the sys.path entry.
+    It also removes each module that the block imported from controller_dir,
+    so a later controller cannot get it by mistake.
     """
+    shim = types.ModuleType("racecar_core")
+    shim.__dict__["create_racecar"] = lambda *args, **kwargs: rc
     before = set(sys.modules)
-    sys.modules["racecar_core"] = racecar_core_shim(rc)
+    sys.modules["racecar_core"] = shim
     sys.path.insert(0, str(controller_dir))
     try:
         yield
