@@ -13,8 +13,7 @@ import pytest
 from fake_sensors import fake_readings
 
 from neoracer_mujoco import sensors as sl
-from neoracer_mujoco.control import PDState
-from neoracer_mujoco.control.steering import ShapingConfig
+from neoracer_mujoco.control import PDState, ShapingConfig
 from neoracer_mujoco.control.wall_following import (
     WallFollowingConfig,
     compute_signals,
