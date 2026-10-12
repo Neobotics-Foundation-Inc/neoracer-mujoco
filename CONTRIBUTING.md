@@ -13,11 +13,13 @@ Read it before you open a pull request.
 
 - Put parameters in a frozen dataclass with defaults: `params = WallFollowingParams()`, not module constants or loose arguments.
 - Use a frozen dataclass for a record, not a `dict` or a tuple.
-- Use an `Enum` or a `Literal` for a fixed set of choices, not a string or a `bool` flag.
-  Two flags that cannot both be true are one `Enum`.
+- Use a `Literal` for a fixed set of names: `Side = Literal["left", "right"]`.
+  Use a union of frozen dataclasses when each case has its own data: `Mode = Idle | Driving`.
+  Do not use a free string or a `bool` flag. Two flags that cannot both be true are one `Literal` or one union.
+  Do not use `Enum`.
 - Parse input once, at the edge (a file, a sensor, the command line), into a typed value.
   After that, the code trusts the type and does not check it again.
-- Match every case of an `Enum`. End the `match` with `case _: assert_never(x)`, so a new case fails type checking.
+- Match every case of a `Literal` or a union. End the `match` with `case _: assert_never(x)`, so a new case fails type checking.
 - Make a function return a value for every input it accepts.
   If an input is not valid, change the input type. Do not add a check deep inside the function.
 - Do not wrap a value in a class if no code looks inside it. A plain `float` or `list` is correct then.
