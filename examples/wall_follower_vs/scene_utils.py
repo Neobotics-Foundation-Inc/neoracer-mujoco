@@ -1,50 +1,89 @@
 """
-Scene loader for the vehicle-space wall follower's own trial harnesses --
-narrowly scoped to the tracks this feature drives on (straight_corridor.xml,
-loop_corridor.xml).
+Scene loading and spawn perturbation for the trial scripts of the
+vehicle-space wall follower.
 
-run_racecar_core.load_scene() is zero-argument (always straight_corridor.xml,
-no spawn offset) on both `main` and this PR branch. The per-track,
-spawn-offset version this feature was actually developed and Stage-D-
-validated against -- load_scene(track), with loop_corridor.xml's
-(0.0, -2.5, 0.0) bottom-straight offset -- exists only on the separate,
-unmerged aeh961/racecar-core-adapter-experiments branch (examples/
-run_racecar_core.py, commit b23cc48) and was never merged into main. PR #29's
-loop_corridor.xml harnesses (loop_trials.py, watch_loop.py,
-stage_d_100trial.py) were carried over assuming that API, so a clean checkout
-of this PR branch could not reproduce its own loop_corridor.xml runs.
-
-This module ports that behavior verbatim (same offset value, same
-frame-based placement mechanism) so PR #29 stays reproducible from a clean
-checkout without modifying run_racecar_core.py or depending on the
-experimental branch. Not independently redesigned.
+Frame: +X forward, +Y left, +Z up.
 """
 
-from __future__ import annotations
-
 import os
+from dataclasses import dataclass
+from typing import Literal, assert_never
 
 import mujoco
+import numpy as np
 
 from neoracer_mujoco import assets
 
-DEFAULT_TRACK = "straight_corridor.xml"
-
-# Ported verbatim from aeh961/racecar-core-adapter-experiments's
-# _TRACK_SPAWN_OFFSET (examples/run_racecar_core.py, commit b23cc48):
-# loop_corridor.xml's bottom straight sits at y=-2.5, midway between its
-# inner (y=-2) and outer (y=-3) walls -- see that file's own docstring.
-_TRACK_SPAWN_OFFSET = {
-    "loop_corridor.xml": (0.0, -2.5, 0.0),
-}
+type TrackName = Literal["straight_corridor.xml", "loop_corridor.xml"]
 
 
-def load_track_scene(track: str = DEFAULT_TRACK) -> mujoco.MjModel:
-    """Car centered in a walled corridor (assets/tracks/<track>), offset per
-    _TRACK_SPAWN_OFFSET so it spawns centered in that track's own corridor,
-    facing +X. Tracks not listed use no offset (straight_corridor.xml's
-    convention)."""
+def _spawn_offset(track: TrackName) -> assets.Position:
+    """World position (m) of the car at the start of track."""
+    match track:
+        case "straight_corridor.xml":
+            return (0.0, 0.0, 0.0)
+        case "loop_corridor.xml":
+            # The bottom straight is at y = -2.5 m, midway between the inner
+            # wall (y = -2 m) and the outer wall (y = -3 m).
+            return (0.0, -2.5, 0.0)
+        case _:
+            assert_never(track)
+
+
+def load_track_scene(track: TrackName) -> mujoco.MjModel:
+    """Compile assets/tracks/<track> with the car at the center of the
+    corridor, facing +X."""
     return assets.compose(
         mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, track)),
-        pos=_TRACK_SPAWN_OFFSET.get(track, (0.0, 0.0, 0.0)),
+        pos=_spawn_offset(track),
     )
+
+
+@dataclass(frozen=True)
+class SpawnParams:
+    """Range of the random spawn perturbation. Each value is uniform in
+    [-bound, +bound]."""
+
+    lateral_m: float = 0.15  # m; bound of the shift along world Y
+    yaw_rad: float = 0.15  # rad; bound of the rotation about +Z
+    resettle_steps: int = 50  # physics steps after the shift, to settle the suspension
+
+
+def _compose_yaw(q: np.ndarray, yaw: float) -> np.ndarray:
+    """q * dq, where dq is a rotation of yaw (rad) about +Z. q and the result
+    are quaternions (w, x, y, z).
+
+    This function writes out the product. mujoco.mju_mulQuat gives a result
+    that differs in the last bit, and the seeded trial results must not
+    change.
+    """
+    half = yaw / 2.0
+    w0, x0, y0, z0 = q
+    w1, x1, y1, z1 = np.cos(half), 0.0, 0.0, np.sin(half)
+    return np.array(
+        [
+            w0 * w1 - x0 * x1 - y0 * y1 - z0 * z1,
+            w0 * x1 + x0 * w1 + y0 * z1 - z0 * y1,
+            w0 * y1 - x0 * z1 + y0 * w1 + z0 * x1,
+            w0 * z1 + x0 * y1 - y0 * x1 + z0 * w1,
+        ]
+    )
+
+
+def perturb_spawn(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    rng: np.random.Generator,
+    params: SpawnParams = SpawnParams(),
+) -> None:
+    """Shift the car along world Y and turn it about +Z by random amounts
+    from rng. Then step data resettle_steps times."""
+    lateral = float(rng.uniform(-params.lateral_m, params.lateral_m))
+    yaw = float(rng.uniform(-params.yaw_rad, params.yaw_rad))
+    # qpos of the car freejoint: (x, y, z, qw, qx, qy, qz).
+    q = int(model.jnt_qposadr[model.body_jntadr[model.body("car").id]])
+    data.qpos[q + 1] += lateral
+    data.qpos[q + 3 : q + 7] = _compose_yaw(data.qpos[q + 3 : q + 7], yaw)
+    mujoco.mj_forward(model, data)
+    for _ in range(params.resettle_steps):
+        mujoco.mj_step(model, data)
