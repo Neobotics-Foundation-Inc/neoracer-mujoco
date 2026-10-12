@@ -66,6 +66,7 @@ python3 -m pytest validation/ -v
 │   ├── track_centering_demo.py — PD centering controller on the corridor track
 │   └── track_generation.py     — generate procedural tracks, describe or drive one
 ├── validation/            — pytest physics + logic conformance suite
+├── users/<name>/          — personal experiments; not checked by ruff, ty, tests or CI
 └── docs/                  — (reserved) design notes and parameter log
 ```
 

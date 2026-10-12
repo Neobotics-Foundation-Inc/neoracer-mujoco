@@ -12,7 +12,10 @@ Coding agents read AGENTS.md instead.
 - Run `python -m pytest validation`. Put a new test in `validation/test_<module>.py`, never in the module it tests.
 - Keep the tests green after each commit.
   If a change alters behavior, change its test in the same commit.
-- `users/` holds personal experiments.
-  `validation/testdata/` and `examples/ultimate_wall_follower/` hold copies of outside code.
+- `users/` is the place to experiment. Make your own folder, `users/<your-github-name>/`, and put anything there: scripts, notes, XML, your own environment files.
+  ruff, ty, the tests and CI do not check `users/`, and nobody else changes your folder.
+  Do not change the folder of another person.
+  Code outside `users/` never imports from it. When an experiment is ready to share, copy it to `src/` or `examples/` in its own pull request and make it follow the rules there.
+- `validation/testdata/` and `examples/ultimate_wall_follower/` hold copies of outside code.
   Do not change these directories unless your change is about them.
 - Keep one change in one pull request.
