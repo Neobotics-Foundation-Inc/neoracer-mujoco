@@ -98,14 +98,14 @@ _KEY_ACTIONS: frozendict[int, Action] = frozendict(
 )
 
 
-def event_action(pad: GamepadParams, event: pygame.event.Event) -> Action:
+def event_action(gamepad: GamepadParams, event: pygame.event.Event) -> Action:
     """What a pygame event asks for. Held keys (WASD, Space) are read each
     frame instead, with pygame.key.get_pressed."""
     if event.type == pygame.QUIT:
         return "quit"
     if event.type == pygame.KEYDOWN:
         return _KEY_ACTIONS.get(event.key, "none")
-    if event.type == pygame.JOYBUTTONDOWN and event.button == pad.reset_button:
+    if event.type == pygame.JOYBUTTONDOWN and event.button == gamepad.reset_button:
         return "reset_car"
     return "none"
 
