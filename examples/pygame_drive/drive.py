@@ -54,8 +54,9 @@ class ViewParams:
 class GamepadParams:
     """SDL axis and button numbers of the gamepad.
 
-    Limit: the numbers are for an Xbox-style pad. If a pad drives wrong,
-    print pad.get_axis for each axis and change the numbers here.
+    Limit: the numbers are for an Xbox-style pad. If a pad drives wrong, print
+    pad.get_axis(i) for each i in range(pad.get_numaxes()) while you move one
+    control at a time. Then change the numbers here.
     """
 
     steer_axis: int = 0  # left stick X, +1 = right
