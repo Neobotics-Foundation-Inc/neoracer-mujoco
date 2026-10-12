@@ -9,6 +9,18 @@ this subpackage explicitly:
     from neoracer_mujoco.envs import NeoRacerEnv
 """
 
-from .neoracer_env import NeoRacerEnv, NeoRacerEnvConfig, RewardConfig
+from .neoracer_env import (
+    NeoRacerEnv,
+    NeoRacerEnvConfig,
+    RewardConfig,
+    SpawnRange,
+    TerminationConfig,
+)
 
-__all__ = ["NeoRacerEnv", "NeoRacerEnvConfig", "RewardConfig"]
+__all__ = [
+    "NeoRacerEnv",
+    "NeoRacerEnvConfig",
+    "RewardConfig",
+    "SpawnRange",
+    "TerminationConfig",
+]
