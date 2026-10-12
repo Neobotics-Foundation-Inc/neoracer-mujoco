@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from neoracer_mujoco import assets, sim
-from neoracer_mujoco.collision import car_hit_wall, wall_geom_ids
+from neoracer_mujoco.collision import car_touches_wall, wall_geom_ids
 from neoracer_mujoco.track_generation import (
     Difficulty,
     NoValidTrack,
@@ -148,7 +148,7 @@ def test_generated_track_compiles_with_the_car_on_it(seed):
 @pytest.mark.parametrize("seed", range(3))
 def test_generated_walls_use_the_wall_material(seed):
     """collision.py finds walls by material name, so a rename in mjcf.py would
-    silently disable car_hit_wall/reset_if_wall_hit on generated tracks."""
+    silently disable car_touches_wall on generated tracks."""
     model = _scene(seed, 3)
     assert len(wall_geom_ids(model)) > 0
 
@@ -163,7 +163,7 @@ def test_car_spawns_clear_of_the_walls(seed, difficulty):
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
 
-    assert not car_hit_wall(model, data)
+    assert not car_touches_wall(model, data, model.body("car").id, wall_geom_ids(model))
 
     corridor_width = 2 * track.half_width[0]
     nearest = min(
@@ -232,7 +232,7 @@ def test_generated_track_keeps_the_car_solver_options(seed):
 def test_car_comes_to_rest_on_a_generated_track(seed):
     model = _scene(seed, 1)
     data = mujoco.MjData(model)
-    sim.run(model, data, 0.0, sim.SETTLE_STEPS)
+    sim.apply_ctrl_and_step(model, data, 0.0, sim.SETTLE_STEPS)
     car = data.body("car")
     assert 0.05 < float(car.xpos[2]) < 0.2, f"car z = {car.xpos[2]:.3f} m"
     assert float(np.linalg.norm(data.qvel[:3])) < 0.05

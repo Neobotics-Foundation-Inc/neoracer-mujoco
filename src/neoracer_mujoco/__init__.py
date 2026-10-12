@@ -1,28 +1,25 @@
 """
 NeoRacer MuJoCo toolbox.
 
-Reusable pieces for loading, stepping, and reading the NeoRacer car model.
-The car XML in assets/ is the product; this package is the Python around it.
+This package loads, steps and reads the NeoRacer car model in
+assets/neoracer.xml.
 
 Common entry points::
 
+    import mujoco
     from neoracer_mujoco import load, read
-    model = load()                 # compile assets/neoracer.xml
-    data = model_step_loop(...)    # your own step loop, see examples/
-    readings = read(model, data)   # typed SensorReadings
+    model = load()                  # compile assets/neoracer.xml
+    data = mujoco.MjData(model)
+    mujoco.mj_step(model, data)     # your own step loop, see examples/
+    readings = read(model, data)    # typed SensorReadings
 
-The `contract` module is the single source of truth for what every NeoRacer
-car XML must satisfy (actuator/sensor names, ctrl layout, mass band).
+The `contract` module is the one source of truth for the requirements of a
+NeoRacer car XML: actuator and sensor names, ctrl layout and mass band.
 """
 
 from . import contract
 from .assets import cars, load
-from .sensors import (
-    SensorReadings,
-    lidar_ranges,
-    read,
-    wheel_speed_ms,
-)
+from .sensors import SensorReadings, lidar_ranges, read
 
 __all__ = [
     "SensorReadings",
@@ -31,5 +28,4 @@ __all__ = [
     "lidar_ranges",
     "load",
     "read",
-    "wheel_speed_ms",
 ]

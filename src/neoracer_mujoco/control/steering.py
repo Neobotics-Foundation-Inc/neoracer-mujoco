@@ -9,6 +9,9 @@ Each controller computes one error signal (m) and a raw steer command (rad).
 command() then clamps the steer, limits its rate of change, and reduces the
 throttle for a large steer or a close obstacle ahead. fallback() is the
 command for a step with too many corrupt beams.
+
+Every dt in this package is the control step (s), and it must be positive.
+The caller makes it once, from the model timestep or the env config.
 """
 
 from dataclasses import dataclass
@@ -40,25 +43,38 @@ class ShapingConfig:
     steer_limit: float = 0.4  # rad; matches ctrl[4] ctrlrange in neoracer.xml
     steer_slew_limit: float = 3.0  # rad/s max steering rate of change
     steer_slowdown_gain: float = 0.6  # throttle cut fraction at full steer deflection
-    min_safe_forward_distance: float = 0.25  # m; front clearance -> throttle 0
-    slowdown_threshold: float = (
-        0.8  # m; front clearance below which throttle ramps down
-    )
+    # m; at this front clearance or less, the throttle is 0
+    min_safe_forward_distance: float = 0.25
+    # m; below this front clearance, the throttle ramps down
+    slowdown_threshold: float = 0.8
     safe_fallback_throttle_fraction: float = 0.3  # of target_throttle, during fallback
+
+    def __post_init__(self) -> None:
+        # command() divides by steer_limit and by the slowdown span, so these
+        # invariants are checked once here (AGENTS.md rule 2).
+        if not self.steer_limit > 0:
+            raise ValueError(f"steer_limit must be > 0, got {self.steer_limit}")
+        if not self.steer_slew_limit >= 0:
+            raise ValueError(
+                f"steer_slew_limit must be >= 0, got {self.steer_slew_limit}"
+            )
+        if not self.slowdown_threshold > self.min_safe_forward_distance:
+            raise ValueError(
+                "slowdown_threshold must be > min_safe_forward_distance, got "
+                f"{self.slowdown_threshold} <= {self.min_safe_forward_distance}"
+            )
 
 
 def _slew(p: ShapingConfig, prev_steer: float, target: float, dt: float) -> float:
-    max_delta = p.steer_slew_limit * max(dt, 0.0)
+    max_delta = p.steer_slew_limit * dt
     delta = max(-max_delta, min(max_delta, target - prev_steer))
     steer = prev_steer + delta
     return max(-p.steer_limit, min(p.steer_limit, steer))
 
 
 def error_rate(state: PDState, error: float, dt: float) -> float:
-    """Rate of change of the error signal (m/s). Zero if dt is not positive."""
-    if dt > 0:
-        return (error - state.prev_error) / dt
-    return 0.0
+    """Rate of change of the error signal (m/s)."""
+    return (error - state.prev_error) / dt
 
 
 def command(
@@ -72,10 +88,9 @@ def command(
     """Shape a raw steer command (rad) into the next state and command.
     error (m) is kept for the next D term. front_distance (m) is the
     clearance straight ahead."""
-    steer_raw = max(-p.steer_limit, min(p.steer_limit, steer_raw))
     steer = _slew(p, state.prev_steer, steer_raw, dt)
 
-    steer_severity = abs(steer) / p.steer_limit if p.steer_limit > 0 else 0.0
+    steer_severity = abs(steer) / p.steer_limit
     throttle = p.target_throttle * (1.0 - p.steer_slowdown_gain * steer_severity)
 
     if front_distance <= p.min_safe_forward_distance:

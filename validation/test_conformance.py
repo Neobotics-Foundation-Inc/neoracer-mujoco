@@ -6,6 +6,9 @@ exploited by an RL agent. If one fails, the message tells you which failure mode
 Run:  pytest validation/ -v
 """
 
+import copy
+from dataclasses import fields
+
 import numpy as np
 import pytest
 
@@ -17,9 +20,29 @@ from neoracer_mujoco.contract import DRIVE, STEER
 # --- it exists and is wired the way the contract says ------------------------
 
 
+def test_actuator_limits_parse_every_car(car):
+    """Every car has the same symmetric range on its four drive actuators,
+    and a symmetric steer range."""
+    limits = contract.actuator_limits(car)
+    assert limits.torque_nm > 0 and limits.steer_rad > 0
+
+
+@pytest.mark.parametrize(
+    ("actuator", "ctrlrange"),
+    [("rr_motor", (-0.5, 0.5)), ("fl_motor", (-0.5, 1.0)), ("steer_servo", (0.0, 0.4))],
+)
+def test_actuator_limits_reject_ranges_that_one_limit_cannot_scale(
+    car, actuator, ctrlrange
+):
+    model = copy.copy(car)  # an independent MjModel; car is shared
+    model.actuator(actuator).ctrlrange[:] = ctrlrange
+    with pytest.raises(ValueError, match="ctrlrange"):
+        contract.actuator_limits(model)
+
+
 def test_actuator_contract(car):
     """5 actuators in the agreed ctrl order; agent code indexes ctrl[0:4]+ctrl[4]."""
-    names = [car.actuator(i).name for i in range(car.nu)]
+    names = tuple(car.actuator(i).name for i in range(car.nu))
     assert names == contract.EXPECTED_ACTUATORS, f"got {names}"
 
 
@@ -68,7 +91,8 @@ def test_rests_on_ground(car):
 
 
 def test_stays_upright_at_rest(car):
-    assert _sim.car_upright_cos(_sim.settle(car)) > 0.95, "car tips over with no input"
+    upright = _sim.car_upright_cos(_sim.settle(car), car.body("car").id)
+    assert upright > 0.95, "car tips over with no input"
 
 
 def test_motor_encoder_near_zero_at_rest(car):
@@ -111,7 +135,7 @@ def test_throttle_drives_forward(car):
     x0 = d.body("car").xpos[0].copy()
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
-    _sim.run(car, d, ctrl, 400)
+    _sim.apply_ctrl_and_step(car, d, ctrl, 400)
     assert d.body("car").xpos[0] - x0 > 0.1, "full throttle produced no forward motion"
 
 
@@ -120,7 +144,7 @@ def test_motor_encoder_positive_under_forward_throttle(car):
     d = _sim.settle(car)
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
-    _sim.run(car, d, ctrl, 400)
+    _sim.apply_ctrl_and_step(car, d, ctrl, 400)
     motor_rad_s = sl.motor_encoder_rad_s(sl.read(car, d))
     assert motor_rad_s > 0.1, (
         f"expected motor encoder > 0 under forward throttle, got {motor_rad_s}"
@@ -133,7 +157,7 @@ def test_left_steer_yaws_left(car):
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 0.5
     ctrl[STEER] = 0.4
-    _sim.run(car, d, ctrl, 400)
+    _sim.apply_ctrl_and_step(car, d, ctrl, 400)
     assert d.qvel[5] > 0.1, f"left steer gave yaw rate {d.qvel[5]:.3f} (expected > 0)"
 
 
@@ -142,11 +166,9 @@ def test_ackermann_inner_exceeds_outer(car):
     d = _sim.settle(car)
     ctrl = np.zeros(car.nu)
     ctrl[STEER] = 0.4
-    _sim.run(car, d, ctrl, 400)
-    s = sl.read_raw(car, d)
-    assert s["fl_steer_pos"][0] > s["fr_steer_pos"][0], (
-        "Ackermann differential wrong/absent"
-    )
+    _sim.apply_ctrl_and_step(car, d, ctrl, 400)
+    s = sl.read(car, d)
+    assert s.fl_steer_pos > s.fr_steer_pos, "Ackermann differential wrong/absent"
 
 
 # --- it can't be exploited by an RL agent -----------------------------------
@@ -169,7 +191,7 @@ def test_top_speed_bounded(car):
     d = _sim.settle(car)
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
-    _sim.run(car, d, ctrl, 2000)
+    _sim.apply_ctrl_and_step(car, d, ctrl, 2000)
     v = np.linalg.norm(d.qvel[:3])
     assert np.isfinite(v) and v < 40.0, (
         f"top speed {v:.2f} m/s is a blow-up, not physics"
@@ -182,9 +204,9 @@ def test_sensors_finite_under_load(car):
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
     ctrl[STEER] = 0.4
-    _sim.run(car, d, ctrl, 500)
-    s = sl.read_raw(car, d)
-    bad = [k for k, v in s.items() if not np.all(np.isfinite(v))]
+    _sim.apply_ctrl_and_step(car, d, ctrl, 500)
+    s = sl.read(car, d)
+    bad = [f.name for f in fields(s) if not np.all(np.isfinite(getattr(s, f.name)))]
     assert not bad, f"non-finite sensors: {bad}"
 
 
@@ -194,7 +216,7 @@ def test_motor_encoder_finite_under_load(car):
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
     ctrl[STEER] = 0.4
-    _sim.run(car, d, ctrl, 500)
+    _sim.apply_ctrl_and_step(car, d, ctrl, 500)
     motor_rad_s = sl.motor_encoder_rad_s(sl.read(car, d))
     assert np.isfinite(motor_rad_s), (
         f"non-finite motor encoder angular velocity: {motor_rad_s}"
@@ -208,7 +230,7 @@ def test_imu_finite_under_load(car):
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
     ctrl[STEER] = 0.4
-    _sim.run(car, d, ctrl, 500)
+    _sim.apply_ctrl_and_step(car, d, ctrl, 500)
     sensors = sl.read(car, d)
     assert np.all(np.isfinite(sensors.imu_accel)), (
         f"non-finite acceleration: {sensors.imu_accel}"
@@ -229,7 +251,7 @@ def test_deterministic(car):
         ctrl = np.zeros(car.nu)
         ctrl[DRIVE] = 1.0
         ctrl[STEER] = 0.2
-        _sim.run(car, d, ctrl, 300)
+        _sim.apply_ctrl_and_step(car, d, ctrl, 300)
         return d.qpos.copy()
 
     assert np.array_equal(rollout(), rollout()), "trajectory not reproducible"

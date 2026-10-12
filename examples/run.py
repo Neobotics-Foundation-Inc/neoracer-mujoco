@@ -100,9 +100,14 @@ def _log(
     roll, pitch, _yaw = _quat_to_euler(q)  # yaw unused here; heading isn't printed
     yaw_rate = math.degrees(sensors.imu_gyro[2])  # deg/s
 
-    fl_s = sensors.fl_steer_pos[0]
-    fr_s = sensors.fr_steer_pos[0]
-    susp = [getattr(sensors, f"{w}_susp_pos")[0] for w in ("fl", "fr", "rl", "rr")]
+    fl_s = sensors.fl_steer_pos
+    fr_s = sensors.fr_steer_pos
+    susp = [
+        sensors.fl_susp_pos,
+        sensors.fr_susp_pos,
+        sensors.rl_susp_pos,
+        sensors.rr_susp_pos,
+    ]
 
     flag = ""
     if abs(roll) > _ROLL_WARN_DEG:

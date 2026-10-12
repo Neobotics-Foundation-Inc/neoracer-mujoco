@@ -85,6 +85,8 @@ def run_trial(
 
     x0_pos = float(data.body("car").xpos[0])
 
+    car_id = model.body("car").id
+    walls = collision.wall_geom_ids(model)
     ctrl = vsc.VehicleSpaceController()
     dt_control = 1.0 / vsc.CONTROL_HZ
     physics_dt = float(model.opt.timestep)
@@ -118,7 +120,7 @@ def run_trial(
 
         for _ in range(ticks_per_control):
             mujoco.mj_step(model, data)
-            if collision.car_hit_wall(model, data):
+            if collision.car_touches_wall(model, data, car_id, walls):
                 contacts_ticks += 1
 
         sim_time_s = (tick + 1) * dt_control
@@ -138,7 +140,7 @@ def run_trial(
             region_switches += 1
         prev_region_key = region_key
 
-        upright = _sim.car_upright_cos(data)
+        upright = _sim.car_upright_cos(data, car_id)
         if upright < params.upright_rollover_cos:
             outcome = "rollover"
             break

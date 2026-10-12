@@ -14,16 +14,6 @@ from fake_sensors import fake_readings
 from neoracer_mujoco import sensors as sl
 
 
-def test_wheel_speed_conversion():
-    """rad/s -> m/s is angular velocity x wheel radius, per wheel."""
-    fake = fake_readings(
-        fl_wheel_vel=2.0, fr_wheel_vel=2.0, rl_wheel_vel=2.0, rr_wheel_vel=2.0
-    )
-    out = sl.wheel_speed_ms(fake)
-    assert out.fl == pytest.approx(2.0 * sl.WHEEL_RADIUS)
-    assert {f.name for f in fields(out)} == {"fl", "fr", "rl", "rr"}
-
-
 def test_read_returns_every_sensor(car):
     """sensor_logger.read must surface all sensors with correctly-sliced widths."""
     d = mujoco.MjData(car)
@@ -32,24 +22,35 @@ def test_read_returns_every_sensor(car):
     assert len(fields(sl.SensorReadings)) == car.nsensor
     assert out.imu_accel.shape == (3,) and out.imu_gyro.shape == (3,)
     assert out.imu_quat.shape == (4,)
+    assert isinstance(out.lidar_000, float) and isinstance(out.steer_cmd_pos, float)
 
 
-def test_motor_encoder_is_mean_of_wheel_vel(car):
-    """motor_encoder_rad_s() must return the single-motor mean, not per-wheel values."""
-    d = mujoco.MjData(car)
-    mujoco.mj_step(car, d)
-    sensors = sl.read(car, d)
-    motor_rad_s = sl.motor_encoder_rad_s(sensors)
-    expected = np.mean(
-        [
-            sensors.fl_wheel_vel[0],
-            sensors.fr_wheel_vel[0],
-            sensors.rl_wheel_vel[0],
-            sensors.rr_wheel_vel[0],
-        ]
+def test_sensor_layout_names_every_missing_or_wrong_size_sensor():
+    """sensor_layout parses the model once, and one ValueError names each
+    problem: every missing sensor and every sensor with the wrong size."""
+    model = mujoco.MjModel.from_xml_string(
+        """<mujoco><worldbody><body><site name="s"/></body></worldbody>
+        <sensor><framepos name="steer_cmd_pos" objtype="site" objname="s"/></sensor>
+        </mujoco>"""
     )
-    assert isinstance(motor_rad_s, float)
-    assert motor_rad_s == pytest.approx(expected)
+    with pytest.raises(ValueError) as error:
+        sl.sensor_layout(model)
+    message = str(error.value)
+    assert "steer_cmd_pos has 3 values, not 1" in message
+    for f in fields(sl.SensorReadings):
+        if f.name != "steer_cmd_pos":
+            assert f"{f.name} is missing" in message
+
+
+def test_motor_encoder_is_mean_of_wheel_vel():
+    """motor_encoder_rad_s() returns the mean of the four wheel speeds."""
+    rng = np.random.default_rng(0)
+    for fl, fr, rl, rr in rng.uniform(-100.0, 100.0, (50, 4)):
+        readings = fake_readings(
+            fl_wheel_vel=fl, fr_wheel_vel=fr, rl_wheel_vel=rl, rr_wheel_vel=rr
+        )
+        mean = (fl + fr + rl + rr) / 4
+        assert sl.motor_encoder_rad_s(readings) == pytest.approx(mean)
 
 
 def test_estimated_linear_speed_ms():

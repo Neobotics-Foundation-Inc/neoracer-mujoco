@@ -17,7 +17,9 @@ exercise the termination CONDITION logic directly; the physics themselves
 own conformance tests elsewhere in this suite.
 """
 
+import os
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -26,6 +28,7 @@ gym = pytest.importorskip("gymnasium")
 from gymnasium import spaces
 from gymnasium.utils.env_checker import check_env
 
+from neoracer_mujoco import assets
 from neoracer_mujoco.envs import NeoRacerEnv, NeoRacerEnvConfig
 
 
@@ -37,6 +40,19 @@ def env():
 
 
 # --- construction / spaces --------------------------------------------------
+
+
+def test_env_rejects_a_car_without_a_free_joint(tmp_path):
+    """__init__ parses the car's free joint once. A car without one fails
+    there with a clear error, not later in reset()."""
+    xml = Path(assets.DEFAULT_CAR).read_text()
+    xml = xml.replace("<freejoint/>", "").replace(
+        'file="meshes/', f'file="{os.path.join(assets.ASSET_DIR, "meshes")}/'
+    )
+    car = tmp_path / "no_freejoint.xml"
+    car.write_text(xml)
+    with pytest.raises(ValueError, match="needs one free joint"):
+        NeoRacerEnv(NeoRacerEnvConfig(car_path=str(car)))
 
 
 def test_env_constructs(env):
@@ -218,7 +234,10 @@ def test_rollover_terminates(env):
     mujoco.mj_forward(env.model, env.data)
     from neoracer_mujoco import sim as _sim
 
-    assert _sim.car_upright_cos(env.data) < env.config.termination.upright_rollover_cos
+    assert (
+        _sim.car_upright_cos(env.data, env.model.body("car").id)
+        < env.config.termination.upright_rollover_cos
+    )
 
     _obs, reward, terminated, truncated, info = env.step(
         np.array([0.0, 0.0], dtype=np.float32)
