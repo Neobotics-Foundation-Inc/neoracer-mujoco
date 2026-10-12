@@ -54,10 +54,46 @@ class TrackSettings:
     # bad pair cannot change the whole loop. Larger moves take several passes.
     max_repair_shift: float = 0.3
 
+    def __post_init__(self) -> None:
+        # These invariants have no Python type, so they are checked once here
+        # (AGENTS.md rule 2). The generation code then trusts them.
+        rules = {
+            "samples >= 3": self.samples >= 3,
+            "oversample_factor >= 1": self.oversample_factor >= 1,
+            "3 <= control_points_min <= control_points_max": (
+                3 <= self.control_points_min <= self.control_points_max
+            ),
+            "0 < ring_radius_min <= ring_radius_max": (
+                0 < self.ring_radius_min <= self.ring_radius_max
+            ),
+            "smoothing rounds >= 0": (
+                self.radius_smoothing_rounds >= 0 and self.point_smoothing_rounds >= 0
+            ),
+            "point_jitter >= 0": self.point_jitter >= 0,
+            "min_angle_between_points >= 0": self.min_angle_between_points >= 0,
+            "max_curvature >= 0": self.max_curvature >= 0,
+            "max_width_times_curvature > 0": self.max_width_times_curvature > 0,
+            "0 < min_total_length <= max_total_length": (
+                0 < self.min_total_length <= self.max_total_length
+            ),
+            "separation limits >= 0": (
+                self.min_separation_along_loop >= 0
+                and self.extra_separation_margin >= 0
+            ),
+            "0 < half_width_min <= half_width_max": (
+                0 < self.half_width_min <= self.half_width_max
+            ),
+            "max_attempts >= 1": self.max_attempts >= 1,
+            "max_repairs_per_attempt >= 1": self.max_repairs_per_attempt >= 1,
+            "max_repair_shift >= 0": self.max_repair_shift >= 0,
+        }
+        broken = [rule for rule, holds in rules.items() if not holds]
+        if broken:
+            raise ValueError(f"TrackSettings needs {', '.join(broken)}")
+
 
 # Easy tracks are gentle and wide, hard tracks are tight and narrow. Only these
-# two knobs change with difficulty; everything else stays fixed so tracks across
-# a curriculum stay recognizably the same family.
+# two knobs change with difficulty. All other knobs stay the same.
 _MAX_CURVATURE: frozendict[Difficulty, float] = frozendict(
     {0: 0.4, 1: 0.6, 2: 0.8, 3: 1.0}
 )  # 1/m

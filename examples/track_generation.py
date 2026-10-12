@@ -130,8 +130,9 @@ def main() -> None:
         print(f"wrote {args.save} ({track.total_length:.1f} m loop)")
         return
 
-    # Same seed, four difficulties: the loop keeps its family resemblance while
-    # the corners tighten and the corridor narrows.
+    # One seed at each difficulty. A harder difficulty allows tighter corners
+    # and a narrower corridor. It can also reject other attempts, so the
+    # loop shape can differ between difficulties.
     print(f"one seed across the difficulty range (seed {args.seed}):")
     for d in DIFFICULTIES.values():
         describe(args.seed, d)

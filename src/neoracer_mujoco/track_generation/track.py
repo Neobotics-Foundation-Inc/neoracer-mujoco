@@ -40,8 +40,8 @@ class Track:
 
 @dataclass(frozen=True)
 class NoValidTrack:
-    """generate_track rejected every attempt. The limits in TrackSettings ask
-    for a track that the generator cannot draw. Loosen them."""
+    """generate_track rejected all of its attempts. Another seed, a larger
+    max_attempts or looser limits in TrackSettings can give a track."""
 
     seed: int
     attempts: int
@@ -103,12 +103,12 @@ def generate_track(seed: int, settings: TrackSettings) -> Generated:
             # back onto itself, total length in range. See reject.py.
             problems = find_problems(line, half_width, settings)
 
+            # There is no repair for the total length, so a new attempt starts.
+            if not problems.length_ok:
+                break
+
             # Nothing wrong with it -- this is the track.
-            if (
-                len(problems.too_curvy) == 0
-                and len(problems.too_close) == 0
-                and problems.length_ok
-            ):
+            if len(problems.too_curvy) == 0 and len(problems.too_close) == 0:
                 return Track(
                     center=line.center,
                     tangent=line.tangent,
@@ -126,5 +126,4 @@ def generate_track(seed: int, settings: TrackSettings) -> Generated:
             points = repair(points, problems, line.center, half_width, settings)
 
     # Every attempt was rejected, each after its repairs failed to save it.
-    # The limits are asking for something this generator cannot draw.
     return NoValidTrack(seed=seed, attempts=settings.max_attempts)

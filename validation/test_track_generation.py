@@ -12,6 +12,7 @@ clearance, geom budget) that the rest of the toolbox silently depends on.
 import functools
 import itertools
 import warnings
+from typing import assert_never
 
 import mujoco
 import numpy as np
@@ -41,18 +42,20 @@ from neoracer_mujoco.track_generation.mjcf import decimate_closed, to_start_fram
 MAX_GEOMS = 600
 
 
-# Generating a track takes a second or so and several tests below want the same
-# (seed, difficulty) one. Caching keeps this file's runtime in seconds rather
-# than minutes; it is safe precisely because generation is deterministic, which
-# test_same_seed_gives_the_same_track independently checks.
 def _generate(seed: int, settings: TrackSettings) -> Track:
     match generate_track(seed, settings):
         case Track() as track:
             return track
         case NoValidTrack() as none:
             pytest.fail(f"no track: {none}")
+        case other:
+            assert_never(other)
 
 
+# Generating a track takes a second or so and several tests below want the same
+# (seed, difficulty) one. Caching keeps this file's runtime in seconds rather
+# than minutes; it is safe precisely because generation is deterministic, which
+# test_same_seed_gives_the_same_track independently checks.
 @functools.cache
 def _track(seed: int, difficulty: Difficulty) -> Track:
     return _generate(seed, settings_for_difficulty(difficulty))
@@ -109,7 +112,25 @@ def test_harder_difficulty_allows_tighter_turns():
     assert hard.half_width_min < easy.half_width_min
 
 
-def test_impossible_limits_raise_rather_than_hang():
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"samples": 0},
+        {"oversample_factor": 0},
+        {"control_points_min": 20},
+        {"ring_radius_min": 0.0},
+        {"min_total_length": 100.0},
+        {"half_width_min": 0.9},
+        {"max_attempts": 0},
+        {"max_repair_shift": -0.1},
+    ],
+)
+def test_settings_reject_values_that_make_no_track(bad):
+    with pytest.raises(ValueError, match="TrackSettings needs"):
+        TrackSettings(**bad)
+
+
+def test_impossible_limits_return_no_valid_track():
     impossible = TrackSettings(max_curvature=0.0, max_attempts=2)
     assert generate_track(0, impossible) == NoValidTrack(seed=0, attempts=2)
 

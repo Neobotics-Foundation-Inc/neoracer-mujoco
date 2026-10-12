@@ -75,7 +75,7 @@ def draw_control_points(random: np.random.Generator, settings: TrackSettings) ->
 
 def shortest_loop_distance(distance: Samples, total_length: float) -> Samples:
     """Distance around a loop taken the short way: a value in
-    (-total_length/2, total_length/2].
+    [-total_length/2, total_length/2).
 
     Going 99% of the way forward around a 100 m loop is the same as going 1 m
     backwards, and this returns -1.

@@ -7,7 +7,7 @@ the wall boxes and fills the template's placeholders in.
 Frame: +X forward from the start, +Y left, +Z up. Output follows the convention in assets/tracks/*.xml -- scenery that never
 names the car -- so `assets.compose` can attach the car to it at runtime:
 
-    assets.compose(to_spec(generate_track(7, settings_for_difficulty(2))))
+    assets.compose(to_spec(track))  # track: a Track from generate_track
 """
 
 import itertools

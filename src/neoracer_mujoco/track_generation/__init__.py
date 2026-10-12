@@ -4,7 +4,7 @@
         case Track() as track:
             model = assets.compose(to_spec(track))
         case NoValidTrack():
-            ...  # loosen the settings
+            ...  # try another seed or looser settings
 
 Read track.py first -- it holds the Track and the loop that makes one. That
 loop draws a candidate (shape.py), checks it and nudges it (reject.py), and

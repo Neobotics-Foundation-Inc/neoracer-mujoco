@@ -135,12 +135,14 @@ def push_apart_near_touches(
     settings: TrackSettings,
 ) -> Points:
     """Push the control points behind near-touching samples directly away from
-    each other, by half the missing clearance each (at most settings.max_repair_shift).
+    each other, by half the missing clearance each.
 
     One near touch is hundreds of sample pairs that map to the same two control
     points, so the pairs are grouped by control point pair first, and each group
     is pushed once, by its worst shortfall. All pushes start from the same
-    positions, like smooth_sharp_corners.
+    positions, like smooth_sharp_corners. A point can be in several groups, so
+    its pushes are added, and then its total move is capped at
+    settings.max_repair_shift.
     """
     needed_clearance = 2 * half_width.max() + settings.extra_separation_margin
     i, j = too_close_pairs[:, 0], too_close_pairs[:, 1]
@@ -155,17 +157,18 @@ def push_apart_near_touches(
     np.maximum.at(worst, (low, high), shortfall)
     np.fill_diagonal(worst, 0.0)
 
-    pushed = points.copy()
+    move = np.zeros_like(points)
     for a, b in np.argwhere(worst > 0).tolist():
-        gap = float(worst[a, b])
         separation = points[a] - points[b]
         distance = float(np.linalg.norm(separation))
         if distance < 1e-9:
             continue  # no direction to push along
-        shift = min(0.5 * gap, settings.max_repair_shift) * separation / distance
-        pushed[a] += shift
-        pushed[b] -= shift
-    return pushed
+        shift = 0.5 * float(worst[a, b]) * separation / distance
+        move[a] += shift
+        move[b] -= shift
+    length = np.linalg.norm(move, axis=1, keepdims=True)
+    scale = np.minimum(1.0, settings.max_repair_shift / np.maximum(length, 1e-12))
+    return points + move * scale
 
 
 def repair(
