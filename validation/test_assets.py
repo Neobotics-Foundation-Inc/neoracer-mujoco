@@ -1,0 +1,32 @@
+"""
+Laws for the car and track XML files in assets/.
+"""
+
+import glob
+import os
+import warnings
+
+import mujoco
+import pytest
+
+from neoracer_mujoco import assets
+
+TRACKS = sorted(glob.glob(os.path.join(assets.ASSET_DIR, "tracks", "*.xml")))
+
+
+@pytest.mark.parametrize("track", TRACKS, ids=os.path.basename)
+@pytest.mark.parametrize("car_path", assets.cars(), ids=os.path.basename)
+def test_car_on_track_keeps_the_car_solver_options(car_path, track):
+    """When a car is attached to a track, MuJoCo keeps the track's <option>.
+    So the composed scene must have the car's own friction cone and impratio,
+    and the attach must give no conflict warning."""
+    car = assets.load(car_path)
+    scene = mujoco.MjSpec.from_file(track)
+    car_spec = mujoco.MjSpec.from_file(car_path)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        scene.worldbody.add_frame().attach_body(car_spec.body("car"), "", "")
+        composed = scene.compile()
+    assert [str(w.message) for w in caught] == []
+    assert composed.opt.cone == car.opt.cone
+    assert composed.opt.impratio == car.opt.impratio

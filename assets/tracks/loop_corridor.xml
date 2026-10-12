@@ -61,6 +61,10 @@
     plus margin.
     -->
 
+    <!-- The same solver options as assets/neoracer.xml. When the car is attached
+         to this scene, MuJoCo keeps the scene's <option>, so they must match. -->
+    <option cone="elliptic" impratio="10"/>
+
     <asset>
         <texture name="loop_grid" type="2d" builtin="checker" width="512" height="512"
                  rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>

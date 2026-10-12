@@ -20,6 +20,10 @@
     Run it:  python3 scripts/manual_drive.py
     -->
 
+    <!-- The same solver options as assets/neoracer.xml. When the car is attached
+         to this scene, MuJoCo keeps the scene's <option>, so they must match. -->
+    <option cone="elliptic" impratio="10"/>
+
     <asset>
         <material name="wall" rgba=".55 .57 .60 1"/>
         <material name="ramp" rgba=".85 .45 .15 1"/>

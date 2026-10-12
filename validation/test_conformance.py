@@ -7,6 +7,7 @@ Run:  pytest validation/ -v
 """
 
 import numpy as np
+import pytest
 
 from neoracer_mujoco import contract
 from neoracer_mujoco import sensors as sl
@@ -26,6 +27,19 @@ def test_required_sensors_present(car):
     names = {car.sensor(i).name for i in range(car.nsensor)}
     missing = [s for s in contract.REQUIRED_SENSORS if s not in names]
     assert not missing, f"missing sensors: {missing}"
+
+
+def test_lidar_sits_on_chassis_top(car):
+    """The LiDAR mount and its 8 ray sites sit on the top face of the chassis
+    box, in the car body frame. The ray tests use horizontal distances only,
+    so they cannot see this height."""
+    chassis = car.geom("chassis")
+    top = float(chassis.pos[2] + chassis.size[2])
+    car_body = car.body("car").id
+    for name in ("lidar_mount", *sl.LIDAR_BEAM_ORDER):
+        site = car.site(name)
+        assert car.site_bodyid[site.id] == car_body, name
+        assert float(site.pos[2]) == pytest.approx(top), name
 
 
 def test_total_mass_plausible(car):

@@ -170,16 +170,18 @@ class NeoRacerEnvConfig:
     reward: RewardConfig = RewardConfig()
 
 
-# Observation bounds, with margin over the peaks seen in 80 adversarial
-# episodes (full throttle, hard steering, wall crashes) on loop_corridor.xml:
-#   imu_accel: ~511 m/s^2 peak in crashes
-#   imu_gyro: ~42 rad/s peak when tumbling
-#   steer_cmd_pos: ~0.87 rad peak; the 0.45 rad joint limit is soft in
-#     MuJoCo, so crashes can push past it
+# Observation bounds, with margin over the peaks seen in 160 random-action
+# episodes (full throttle, hard steering, wall crashes) on loop_corridor.xml,
+# with the elliptic friction cone and impratio=10:
+#   imu_accel: ~517 m/s^2 peak in crashes
+#   imu_gyro: ~39 rad/s peak when tumbling
+#   steer_cmd_pos: ~1.2 rad peak in a wall crash. The 0.45 rad joint limit is
+#     soft in MuJoCo, so a crash can push past it; without wall contact the
+#     peak is ~0.47 rad.
 # Re-check these if the track, spawn range, or car changes.
 _ACCEL_BOUND = 1000.0  # m/s^2
 _GYRO_BOUND = 100.0  # rad/s
-_STEER_BOUND = 1.0  # rad
+_STEER_BOUND = 2.0  # rad
 _SPEED_BOUND = 40.0  # m/s; matches validation/test_conformance.py's own top-speed
 # glitch ceiling (test_top_speed_bounded); observed max here was ~27.6 m/s.
 
