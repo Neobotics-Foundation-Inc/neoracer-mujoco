@@ -1,5 +1,5 @@
 """
-MuJoCo backend for the racecar_core controller interface (issue #8, #28).
+MuJoCo backend for the racecar_core controller interface.
 
 racecar_core (Neobotics-Foundation-Inc/racecar-neo-library) is the interface
 every NeoRacer controller is written against. This module duck-types it over
@@ -25,6 +25,7 @@ rather than by every controller that uses this adapter:
      re-sequences and rescales.
 """
 
+from collections.abc import Callable, Iterable
 from enum import IntEnum
 
 import mujoco
@@ -37,9 +38,8 @@ from . import contract, sensors
 # ring starting at the same beam (000, straight ahead), so reversing every
 # beam except the first re-sequences counterclockwise into clockwise without
 # changing which physical direction any beam points.
-RACECAR_CORE_BEAM_ORDER = (sensors.LIDAR_BEAM_ORDER[0],) + sensors.LIDAR_BEAM_ORDER[1:][
-    ::-1
-]
+_CLOCKWISE = [0, 7, 6, 5, 4, 3, 2, 1]  # indices into LIDAR_BEAM_ORDER
+RACECAR_CORE_BEAM_ORDER = tuple(sensors.LIDAR_BEAM_ORDER[i] for i in _CLOCKWISE)
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -57,7 +57,7 @@ class MujocoDrive:
     an RL policy or a noisy controller should not be able to crash a step.
     """
 
-    def __init__(self, model, data):
+    def __init__(self, model: mujoco.MjModel, data: mujoco.MjData):
         self._model = model
         self._data = data
         self._max_speed = 1.0
@@ -96,15 +96,13 @@ class MujocoLidar:
     count this sensor doesn't have.
     """
 
-    def __init__(self, model, data):
+    def __init__(self, model: mujoco.MjModel, data: mujoco.MjData):
         self._model = model
         self._data = data
 
     def get_samples(self) -> np.ndarray:
         readings = sensors.read(self._model, self._data)
-        meters = np.array(
-            [getattr(readings, name)[0] for name in RACECAR_CORE_BEAM_ORDER]
-        )
+        meters = sensors.lidar_scan(readings).ranges[_CLOCKWISE]
         cm = meters * 100.0
         # -1 (no hit) and any non-finite reading both mean "no return" (0.0)
         # in racecar_core; a real negative distance is never physical.
@@ -131,9 +129,9 @@ class MujocoController:
     controller.py also declares was_pressed/was_released/get_trigger/
     get_joystick, but nothing here has a real backend for those yet.
 
-    held: buttons treated as pressed for the whole run. Defaults to {RB} so
+    held: buttons treated as pressed for the whole run. Defaults to (RB,) so
     a deadman-gated controller drives immediately in headless simulation;
-    pass held=set() (or set_held(Button.RB, False)) to simulate it released.
+    pass held=() (or set_held(Button.RB, False)) to simulate it released.
     """
 
     class Button(IntEnum):
@@ -146,13 +144,13 @@ class MujocoController:
         LJOY = 6
         RJOY = 7
 
-    def __init__(self, held=None):
-        self._held = set(held) if held is not None else {self.Button.RB}
+    def __init__(self, held: Iterable[Button] = (Button.RB,)):
+        self._held = set(held)
 
-    def is_down(self, button) -> bool:
+    def is_down(self, button: Button) -> bool:
         return button in self._held
 
-    def set_held(self, button, is_held: bool) -> None:
+    def set_held(self, button: Button, is_held: bool) -> None:
         if is_held:
             self._held.add(button)
         else:
@@ -169,7 +167,7 @@ class MujocoDisplay:
 
 
 class MujocoRacecar:
-    """racecar_core.Racecar backend over MuJoCo (issue #28): wires
+    """racecar_core.Racecar backend over MuJoCo: wires
     MujocoDrive/MujocoLidar/MujocoController/MujocoDisplay to one
     MjModel/MjData and implements the start/update/update_slow/go event
     loop, so an unmodified racecar_core controller script -- e.g.
@@ -189,7 +187,13 @@ class MujocoRacecar:
     about it.
     """
 
-    def __init__(self, model, data, max_steps=None, held_buttons=None):
+    def __init__(
+        self,
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
+        max_steps: int | None = None,
+        held_buttons: Iterable[MujocoController.Button] = (MujocoController.Button.RB,),
+    ):
         self.drive = MujocoDrive(model, data)
         self.lidar = MujocoLidar(model, data)
         self.controller = MujocoController(held_buttons)
@@ -199,11 +203,16 @@ class MujocoRacecar:
         self._dt = float(model.opt.timestep)
         self._max_steps = max_steps
         self._update_slow_time = 1.0
-        self._start = None
-        self._update = None
-        self._update_slow = None
+        self._start: Callable[[], None] | None = None
+        self._update: Callable[[], None] | None = None
+        self._update_slow: Callable[[], None] | None = None
 
-    def set_start_update(self, start, update, update_slow=None) -> None:
+    def set_start_update(
+        self,
+        start: Callable[[], None],
+        update: Callable[[], None],
+        update_slow: Callable[[], None] | None = None,
+    ) -> None:
         self._start = start
         self._update = update
         self._update_slow = update_slow
@@ -215,12 +224,15 @@ class MujocoRacecar:
         self._update_slow_time = time
 
     def go(self) -> None:
-        self._start()
+        start, update = self._start, self._update
+        if start is None or update is None:
+            raise RuntimeError("call set_start_update() before go()")
+        start()
         slow_countdown = self._update_slow_time
         step = 0
         while self._max_steps is None or step < self._max_steps:
             mujoco.mj_step(self._model, self._data)
-            self._update()
+            update()
             if self._update_slow is not None:
                 slow_countdown -= self._dt
                 if slow_countdown < 0:
