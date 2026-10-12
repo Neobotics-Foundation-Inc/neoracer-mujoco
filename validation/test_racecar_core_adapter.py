@@ -19,6 +19,7 @@ from neoracer_mujoco.racecar_core_adapter import (
     RACECAR_CORE_BEAM_ORDER,
     MujocoDrive,
     MujocoLidar,
+    MujocoRacecar,
 )
 
 
@@ -207,3 +208,15 @@ def test_get_samples_is_deterministic(car):
     _set_beam(car, data, "lidar_045", 0.75)
     lidar = MujocoLidar(car, data)
     assert np.array_equal(lidar.get_samples(), lidar.get_samples())
+
+
+# --- Racecar: event loop --------------------------------------------------
+
+
+def test_go_before_set_start_update_raises(car):
+    """go() without callbacks fails with a clear error and steps nothing."""
+    data = mujoco.MjData(car)
+    rc = MujocoRacecar(car, data, max_steps=5)
+    with pytest.raises(RuntimeError, match="set_start_update"):
+        rc.go()
+    assert data.time == 0.0
