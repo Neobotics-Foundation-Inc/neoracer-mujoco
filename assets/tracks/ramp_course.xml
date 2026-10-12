@@ -17,7 +17,10 @@
     Walls are thin boxes 0.30 m tall. The ramp is a thin box pitched ~11° about
     Y, low edge near the floor (a small entry lip — fine for a feel-test).
 
-    Run it:  python3 scripts/manual_drive.py
+    The driver attaches only the car body (MjSpec.attach_body), which does not
+    bring neoracer.xml's floor, so this scene has its own floor.
+
+    Run it:  python3 -m examples.manual_drive
     -->
 
     <!-- The same solver options as assets/neoracer.xml. When the car is attached
@@ -25,6 +28,10 @@
     <option cone="elliptic" impratio="10"/>
 
     <asset>
+        <texture name="ramp_grid" type="2d" builtin="checker" width="512" height="512"
+                 rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+        <material name="ramp_floor" texture="ramp_grid" texrepeat="5 5" texuniform="true"
+                  reflectance=".2"/>
         <material name="wall" rgba=".55 .57 .60 1"/>
         <material name="ramp" rgba=".85 .45 .15 1"/>
     </asset>
@@ -37,6 +44,10 @@
     </default>
 
     <worldbody>
+        <!-- Floor; size and friction match neoracer.xml's own plane. -->
+        <geom name="floor" type="plane" size="5 5 .01" material="ramp_floor"
+              friction="1.5 0.1 0.1"/>
+
         <!-- ── ramp straight ahead of the start ──────────────────────────── -->
         <!-- pitch is NEGATIVE so the near edge is low and the far edge high:
              the car drives UP the slope (+.2 faces the tall edge at you). -->
