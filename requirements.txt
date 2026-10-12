@@ -2,3 +2,5 @@ mujoco>=3.9.0
 numpy>=1.26.4
 pytest>=7.4
 ruff==0.17.0
+pybind11-stubgen==3.0.0
+ty==0.0.86
