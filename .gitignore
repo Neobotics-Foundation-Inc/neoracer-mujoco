@@ -15,3 +15,6 @@ CLAUDE.md
 
 # Generated validation output (not source), e.g. Stage D trial results
 **/*.pkl
+
+# Generated mujoco type stubs (pybind11-stubgen, see the typecheck workflow)
+typings/

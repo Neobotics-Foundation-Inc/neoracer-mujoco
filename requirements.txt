@@ -1,4 +1,8 @@
 mujoco>=3.9.0
 numpy>=1.26.4
+# The rl extra (src/neoracer_mujoco/envs/). ty and the env tests need it.
+gymnasium>=1.0
 pytest>=7.4
 ruff==0.17.0
+pybind11-stubgen==3.0.0
+ty==0.0.86

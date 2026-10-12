@@ -48,7 +48,9 @@ def cast_dense_lidar(
 
     for i, theta in enumerate(angles):
         direction = math.cos(theta) * forward + math.sin(theta) * left
-        dist = mujoco.mj_ray(model, data, origin, direction, None, 1, body_id, geomid)
+        dist = mujoco.mj_ray(
+            model, data, origin, direction, None, True, body_id, geomid
+        )
         if 0.0 <= dist <= max_range:
             ranges[i] = dist
     return angles, ranges

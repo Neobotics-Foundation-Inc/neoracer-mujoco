@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 
 import mujoco
+import numpy as np
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -47,6 +48,6 @@ def load_track_scene(track: str = DEFAULT_TRACK) -> mujoco.MjModel:
     scene = mujoco.MjSpec.from_file(os.path.join(_REPO, "assets", "tracks", track))
     car = mujoco.MjSpec.from_file(os.path.join(_REPO, "assets", "neoracer.xml"))
     frame = scene.worldbody.add_frame()
-    frame.pos = _TRACK_SPAWN_OFFSET.get(track, (0.0, 0.0, 0.0))
+    frame.pos = np.array(_TRACK_SPAWN_OFFSET.get(track, (0.0, 0.0, 0.0)))
     frame.attach_body(car.body("car"), "", "")
     return scene.compile()
