@@ -37,7 +37,7 @@ class TrackSettings:
 
     # --- retry budget ---
     # 60 attempts because difficulty 0 is the strict end: measured over 20
-    # seeds, 20 attempts leaves 7 of them with no valid track, 60 leaves none.
+    # seeds, 20 attempts leaves 9 of them with no valid track, 60 leaves none.
     max_attempts: int = 60  # fresh random tracks before giving up
     max_repairs_per_attempt: int = 5  # nudge-and-recheck passes per track
 

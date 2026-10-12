@@ -114,10 +114,11 @@ def find_problems(
 # here at all, so a seed that needed three repair passes reproduces exactly.
 
 
-def nearest_control_point(points: Points, position: npt.NDArray[np.float64]) -> int:
-    """Index of the control point closest to a position on the centerline --
-    the one whose movement most affects that stretch of track."""
-    return int(np.argmin(np.linalg.norm(points - position, axis=1)))
+def nearest_control_points(points: Points, positions: Points) -> Indices:
+    """For each position on the centerline, the index of the closest control
+    point -- the one whose movement most affects that stretch of track."""
+    gaps = np.linalg.norm(positions[:, None, :] - points[None, :, :], axis=2)
+    return np.argmin(gaps, axis=1)
 
 
 def smooth_sharp_corners(
@@ -131,9 +132,9 @@ def smooth_sharp_corners(
     same corner do not smooth it twice.
     """
     count = len(points)
-    corners = {nearest_control_point(points, center[i]) for i in too_curvy_samples}
+    corners = np.unique(nearest_control_points(points, center[too_curvy_samples]))
     smoothed = points.copy()
-    for corner in corners:
+    for corner in corners.tolist():
         smoothed[corner] = 0.5 * points[corner] + 0.25 * (
             points[(corner - 1) % count] + points[(corner + 1) % count]
         )
@@ -147,30 +148,38 @@ def push_apart_near_touches(
     half_width: Samples,
     settings: TrackSettings,
 ) -> Points:
-    """Push the control points behind each near-touching pair of samples
-    directly away from each other, by half the missing clearance each (capped
-    at MAX_REPAIR_SHIFT)."""
-    points = points.copy()
-    needed_clearance = 2 * half_width.max() + settings.extra_separation_margin
+    """Push the control points behind near-touching samples directly away from
+    each other, by half the missing clearance each (capped at MAX_REPAIR_SHIFT).
 
-    for i, j in too_close_pairs:
-        first = nearest_control_point(points, center[i])
-        second = nearest_control_point(points, center[j])
-        if first == second:
-            continue  # one control point governs both; pushing it apart is a no-op
-        separation = points[first] - points[second]
+    One near touch is hundreds of sample pairs that map to the same two control
+    points, so the pairs are grouped by control point pair first, and each group
+    is pushed once, by its worst shortfall. All pushes start from the same
+    positions, like smooth_sharp_corners.
+    """
+    needed_clearance = 2 * half_width.max() + settings.extra_separation_margin
+    i, j = too_close_pairs[:, 0], too_close_pairs[:, 1]
+    owner = nearest_control_points(points, center)
+    low = np.minimum(owner[i], owner[j])
+    high = np.maximum(owner[i], owner[j])
+    shortfall = needed_clearance - np.linalg.norm(center[i] - center[j], axis=1)
+    # worst[a, b]: the largest shortfall between control points a < b. One
+    # control point that governs both samples cannot push them apart.
+    count = len(points)
+    worst = np.zeros((count, count))
+    np.maximum.at(worst, (low, high), shortfall)
+    np.fill_diagonal(worst, 0.0)
+
+    pushed = points.copy()
+    for a, b in np.argwhere(worst > 0).tolist():
+        gap = float(worst[a, b])
+        separation = points[a] - points[b]
         distance = float(np.linalg.norm(separation))
         if distance < 1e-9:
             continue  # no direction to push along
-        shortfall = needed_clearance - float(np.linalg.norm(center[i] - center[j]))
-        shift = min(0.5 * shortfall, MAX_REPAIR_SHIFT)
-        if shift <= 0:
-            continue
-        direction = separation / distance
-        points[first] += direction * shift
-        points[second] -= direction * shift
-
-    return points
+        shift = min(0.5 * gap, MAX_REPAIR_SHIFT) * separation / distance
+        pushed[a] += shift
+        pushed[b] -= shift
+    return pushed
 
 
 def repair(
