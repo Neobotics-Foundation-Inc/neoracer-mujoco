@@ -1,59 +1,69 @@
 """
-Vehicle kinematics verification (Stage: kinematic-trajectory revision).
+Compare the minimum turn radius of the bicycle model with the turn radius of
+the simulated car. The script reads the wheelbase and the steering limit from
+assets/neoracer.xml. It then drives the car at a low constant throttle and
+full steering lock, and fits a circle to the path of the car. Run it from the
+repository root:
 
-Computes the theoretical minimum turning radius from assets/neoracer.xml's
-actual wheelbase and steer_servo ctrlrange, then empirically measures it by
-driving the (untouched) production car model at low constant torque and full
-steering lock and least-squares fitting a circle to the resulting path.
-This is geometry validation, not tuning -- neoracer.xml is not modified.
+    python -m examples.wall_follower_vs.verify_kinematics
 
-Usage:
-    python3 examples/wall_follower_vs/verify_kinematics.py
+Frame: +X forward, +Y left, +Z up.
 """
 
 import math
+from dataclasses import dataclass
 
 import mujoco
 import numpy as np
 
-from neoracer_mujoco import sim as _sim
+from examples.wall_follower_vs.vehicle_space_controller import car_geometry
+from neoracer_mujoco import assets, sim
+from neoracer_mujoco.control.steering import ControlCommand
 
-WHEELBASE_M = 0.2878  # see vehicle_space_controller.py's own derivation
-STEER_ANGLE_MAX_RAD = 0.4
+
+@dataclass(frozen=True)
+class DriveParams:
+    throttle_nm: float = 0.03  # N·m per wheel
+    duration_s: float = 12.0  # s of sim time
+    sample_period_s: float = 0.04  # s between two path samples
 
 
 def main() -> None:
-    r_theory = WHEELBASE_M / math.tan(STEER_ANGLE_MAX_RAD)
+    params = DriveParams()
+    model = assets.load()
+    car = car_geometry(model)
+    r_theory = car.wheelbase_m / math.tan(car.steer_max_rad)
     print(
-        f"L={WHEELBASE_M}m  delta_max={STEER_ANGLE_MAX_RAD}rad "
-        f"({math.degrees(STEER_ANGLE_MAX_RAD):.3f}deg)  R_theory={r_theory:.4f}m"
+        f"L={car.wheelbase_m}m  delta_max={car.steer_max_rad}rad "
+        f"({math.degrees(car.steer_max_rad):.3f}deg)  R_theory={r_theory:.4f}m"
     )
 
-    model = mujoco.MjModel.from_xml_path("assets/neoracer.xml")
-    data = _sim.settle(model)
-    data.ctrl[0:4] = 0.03
-    data.ctrl[4] = STEER_ANGLE_MAX_RAD  # full lock
-
-    xs, ys = [], []
-    for i in range(6000):  # 12s sim time
+    car_id = model.body("car").id
+    data = sim.settle(model)
+    sim.apply_command(
+        data, ControlCommand(throttle=params.throttle_nm, steer=car.steer_max_rad)
+    )
+    timestep = float(model.opt.timestep)
+    n_steps = round(params.duration_s / timestep)
+    sample_every = round(params.sample_period_s / timestep)
+    xy = []
+    for i in range(n_steps):
         mujoco.mj_step(model, data)
-        if i % 20 == 0:
-            p = data.body("car").xpos
-            xs.append(float(p[0]))
-            ys.append(float(p[1]))
+        if i % sample_every == 0:
+            xy.append(data.xpos[car_id][:2].copy())
 
-    xs_arr, ys_arr = np.array(xs), np.array(ys)
-    a = np.c_[2 * xs_arr, 2 * ys_arr, np.ones(len(xs_arr))]
-    b = xs_arr**2 + ys_arr**2
-    sol, _, _, _ = np.linalg.lstsq(a, b, rcond=None)
-    cx, cy, c = sol
-    r_empirical = math.sqrt(c + cx**2 + cy**2)
+    path = np.array(xy)
+    xs, ys = path[:, 0], path[:, 1]
+    # Least-squares circle fit: x² + y² = 2·cx·x + 2·cy·y + c.
+    a = np.c_[2 * xs, 2 * ys, np.ones(len(xs))]
+    (cx, cy, c), *_ = np.linalg.lstsq(a, xs**2 + ys**2, rcond=None)
+    r_measured = math.sqrt(c + cx**2 + cy**2)
     print(
-        f"R_empirical (circle fit) = {r_empirical:.4f}m over path from "
-        f"({xs_arr[0]:.2f},{ys_arr[0]:.2f}) to ({xs_arr[-1]:.2f},{ys_arr[-1]:.2f}), "
-        f"n={len(xs_arr)} pts"
+        f"R_measured (circle fit) = {r_measured:.4f}m over the path from "
+        f"({xs[0]:.2f},{ys[0]:.2f}) to ({xs[-1]:.2f},{ys[-1]:.2f}), "
+        f"n={len(xs)} points"
     )
-    print(f"ratio empirical/theory = {r_empirical / r_theory:.3f}")
+    print(f"ratio measured/theory = {r_measured / r_theory:.3f}")
 
 
 if __name__ == "__main__":

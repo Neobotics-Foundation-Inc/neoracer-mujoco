@@ -1,277 +1,257 @@
 """
-Synthetic kinematic-trajectory tests for the vehicle-space wall follower
-(kinematic-trajectory revision, loop_corridor.xml Stage A/B follow-up).
-Pure logic + deterministic raycasting -- no MuJoCo, no randomness.
+Tests of the vehicle-space wall follower (examples/wall_follower_vs/) on
+synthetic scans. The tests use no physics and no unseeded random numbers.
 
-Replaces the earlier straight-heading-candidate test suite: candidates now
-represent physical STEERING ANGLES (Ackermann arcs), not instantaneous
-headings, so the old assertions (built against a straight-ray/tube model)
-no longer describe what the controller does. See
-examples/wall_follower_vs/vehicle_space_controller.py's module docstring
-for the full architecture change and why it was made.
-
-Experimental -- NOT part of PR #27, does not touch racecar_core_adapter.py,
-assets/neoracer.xml, or examples/ultimate_wall_follower/.
+Frame: +X forward, +Y left. A steering angle is + = left.
 """
 
-import os
-import sys
 import time
+from typing import assert_never
 
 import numpy as np
 import pytest
 
-sys.path.insert(
-    0,
-    os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "examples", "wall_follower_vs"
-    ),
+from examples.wall_follower_vs.dense_lidar import DenseLidarParams, Scan
+from examples.wall_follower_vs.synthetic_scenes import (
+    Segment,
+    cast_scan,
+    corridor_walls,
+    gap_ring_scan,
 )
+from examples.wall_follower_vs.vehicle_space_controller import (
+    Driving,
+    NoPath,
+    VsParams,
+    VsState,
+    arc_table,
+    car_geometry,
+    extract_regions,
+    safe_arc_lengths,
+    score_region,
+    step,
+)
+from neoracer_mujoco import assets
+from neoracer_mujoco.control.wall_following import Side
 
-import synthetic_scenes as scenes
-import vehicle_space_controller as vsc
-
+PARAMS = VsParams(car=car_geometry(assets.load()))
+TABLE = arc_table(PARAMS)
+DT = 1.0 / 30.0  # s; one tick at 30 Hz
 RESOLUTIONS = [24, 270, 540, 1080]
-STRAIGHT_IDX = int(np.argmin(np.abs(vsc.CANDIDATE_HEADINGS_DEG)))
 
 
-def _raw_target_deg(angles_rad, ranges_m):
-    """Selected steering angle with NO temporal/hysteresis state -- the raw
-    geometric answer for one isolated scan."""
-    safe_dist = vsc.safe_arc_lengths(angles_rad, ranges_m)
-    regions = vsc.extract_regions(safe_dist)
-    assert regions, "expected at least one feasible arc"
-    best = max(regions, key=lambda r: r["mean_safe_m"] + 0.05 * r["n_candidates"])
-    return vsc._region_center_deg(
-        best, safe_dist, vsc.CANDIDATE_HEADINGS_DEG
-    ), safe_dist
+def _scan(walls: list[Segment], n: int) -> Scan:
+    return cast_scan(walls, DenseLidarParams(n_beams=n))
 
 
-# --- A: straight corridor -> straight trajectory wins -----------------------
+def _mirror(walls: list[Segment]) -> list[Segment]:
+    """The same walls, mirrored about the X axis (y -> -y)."""
+    return [((x1, -y1), (x2, -y2)) for (x1, y1), (x2, y2) in walls]
 
 
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_a_straight_corridor_prefers_straight(n):
-    angles, ranges = scenes.cast_scan(scenes.corridor_walls(), n)
-    target, _ = _raw_target_deg(angles, ranges)
-    assert abs(target) < 2.0, f"N={n}: expected ~0deg steering, got {target:.2f}deg"
+def _random_walls(rng: np.random.Generator) -> list[Segment]:
+    """Three wall segments with random end points in front of and beside the car."""
+
+    def point() -> tuple[float, float]:
+        return float(rng.uniform(-1.0, 4.0)), float(rng.uniform(-2.0, 2.0))
+
+    return [(point(), point()) for _ in range(3)]
 
 
-# --- B/C: wall ahead with an opening to one side -----------------------------
+def _best_center_deg(angles: np.ndarray, ranges: np.ndarray) -> float:
+    """Center (deg) of the region with the best score_region() for a
+    controller whose last target is 0 deg."""
+    regions = extract_regions(PARAMS, safe_arc_lengths(PARAMS, angles, ranges))
+    assert regions, "expected at least one usable arc"
+    best = max(regions, key=lambda r: score_region(PARAMS, r, prev_target_deg=0.0))
+    return best.center_deg
 
 
-def _forward_blocked_side_open(open_side: str, wall_x: float = 1.0) -> list:
-    """A wall spanning dead-ahead and the CLOSED side, leaving open_side
-    clear -- e.g. open_side="right" blocks y in [-0.1, 2.0] (ahead + left),
-    leaving y < -0.1 (right) open for a curving arc to sweep into."""
-    assert open_side in ("left", "right")
-    if open_side == "right":
-        return [((wall_x, -0.1), (wall_x, 2.0))]
-    return [((wall_x, 0.1), (wall_x, -2.0))]
-
-
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_b_right_opening_prefers_right_arc_before_critical(n):
-    angles, ranges = scenes.cast_scan(_forward_blocked_side_open("right"), n)
-    safe_dist = vsc.safe_arc_lengths(angles, ranges)
-    straight_clear = safe_dist[STRAIGHT_IDX]
-    best_idx = int(np.argmax(safe_dist))
-    best_clear = safe_dist[best_idx]
-    assert straight_clear < 1.5, f"N={n}: expected straight to be blocked near the wall"
-    assert best_clear > straight_clear + 0.5, (
-        f"N={n}: expected a curving arc to clear substantially farther than "
-        f"straight ({best_clear:.2f}m vs {straight_clear:.2f}m)"
-    )
-    # right turn = negative steering degrees in this module's convention
-    # (+ = left, see lidar_to_points()'s docstring).
-    assert vsc.CANDIDATE_HEADINGS_DEG[best_idx] < 0, (
-        f"N={n}: best arc should curve right (negative), got "
-        f"{vsc.CANDIDATE_HEADINGS_DEG[best_idx]:.2f}deg"
-    )
+def _forward_blocked_side_open(open_side: Side, wall_x_m: float = 1.0) -> list[Segment]:
+    """A wall at x = wall_x_m in front of the car and on one side. The side
+    open_side stays open, so an arc can turn into it."""
+    match open_side:
+        case "right":
+            return [((wall_x_m, -0.1), (wall_x_m, 2.0))]
+        case "left":
+            return _mirror(_forward_blocked_side_open("right", wall_x_m))
+        case _:
+            assert_never(open_side)
 
 
 @pytest.mark.parametrize("n", RESOLUTIONS)
-def test_c_left_opening_prefers_left_arc_before_critical(n):
-    angles, ranges = scenes.cast_scan(_forward_blocked_side_open("left"), n)
-    safe_dist = vsc.safe_arc_lengths(angles, ranges)
-    straight_clear = safe_dist[STRAIGHT_IDX]
-    best_idx = int(np.argmax(safe_dist))
-    best_clear = safe_dist[best_idx]
-    assert straight_clear < 1.5
-    assert best_clear > straight_clear + 0.5
-    assert vsc.CANDIDATE_HEADINGS_DEG[best_idx] > 0, (
-        f"N={n}: best arc should curve left (positive), got "
-        f"{vsc.CANDIDATE_HEADINGS_DEG[best_idx]:.2f}deg"
+def test_straight_corridor_prefers_straight(n):
+    target_deg = _best_center_deg(*_scan(corridor_walls(), n))
+    assert abs(target_deg) < 2.0, (
+        f"N={n}: expected about 0 deg, got {target_deg:.2f} deg"
     )
 
 
-# --- D: corner where a turn is physically possible ---------------------------
+@pytest.mark.parametrize("open_side", ["left", "right"])
+@pytest.mark.parametrize("n", RESOLUTIONS)
+def test_side_opening_prefers_arc_toward_it(n, open_side: Side):
+    safe_m = safe_arc_lengths(PARAMS, *_scan(_forward_blocked_side_open(open_side), n))
+    straight_m = safe_m[TABLE.straight_index]
+    best = int(np.argmax(safe_m))
+    assert straight_m < 1.5, f"N={n}: expected the wall to block the straight arc"
+    assert safe_m[best] > straight_m + 0.5, (
+        f"N={n}: expected a turning arc to go at least 0.5 m farther than straight "
+        f"({safe_m[best]:.2f} m vs {straight_m:.2f} m)"
+    )
+    sign = 1.0 if open_side == "left" else -1.0
+    assert sign * TABLE.steer_deg[best] > 0, (
+        f"N={n}: the best arc turns away from the {open_side} opening "
+        f"({TABLE.steer_deg[best]:.2f} deg)"
+    )
 
 
 @pytest.mark.parametrize("n", RESOLUTIONS)
-def test_d_negotiable_corner_finds_feasible_arc(n):
-    # Forward wall at 0.8m with the whole right side open: farther than
-    # test E's 0.3m (physically inside the minimum turn radius, see below)
-    # but close enough that straight is clearly blocked. A moderate-
-    # curvature arc (not necessarily max lock) should sweep clear through
-    # to the full horizon.
-    angles, ranges = scenes.cast_scan(
-        _forward_blocked_side_open("right", wall_x=0.8), n
-    )
-    safe_dist = vsc.safe_arc_lengths(angles, ranges)
-    assert safe_dist.max() > vsc.PLANNING_HORIZON_M - 0.1, (
-        f"N={n}: expected a feasible arc reaching the full horizon through "
-        f"a negotiable corner, best={safe_dist.max():.2f}m"
-    )
-
-
-# --- E: already inside the minimum turning radius ----------------------------
-
-
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_e_inside_min_turn_radius_no_arc_escapes(n):
-    # Replicates the traced loop_corridor.xml wedge geometry: a wall corner
-    # much tighter than MIN_TURN_RADIUS_M (~0.68m), positioned close enough
-    # that no candidate curvature -- including max lock -- can complete the
-    # turn within the clearance radius. No candidate should reach anywhere
-    # near the full planning horizon.
-    walls = [
-        ((0.3, -2.0), (0.3, 0.05)),  # wall almost dead ahead, very close
-        ((0.3, 0.05), (0.5, 2.0)),  # sharp corner immediately to the left
+def test_mirrored_scene_mirrors_safe_arc_lengths(n):
+    # Law: if the scene is mirrored in y, the safe arc lengths are mirrored
+    # over the candidate grid. The tolerance is one arc sample, for rounding
+    # at the clearance radius.
+    rng = np.random.default_rng(n)
+    scenes = [_forward_blocked_side_open("right")] + [
+        _random_walls(rng) for _ in range(10)
     ]
-    angles, ranges = scenes.cast_scan(walls, n)
-    safe_dist = vsc.safe_arc_lengths(angles, ranges)
-    assert safe_dist.max() < 1.0, (
-        f"N={n}: expected no arc to escape a sub-min-turn-radius corner, "
-        f"best={safe_dist.max():.2f}m"
-    )
-
-
-# --- F: side wall only -> straight remains safe ------------------------------
+    for walls in scenes:
+        safe_m = safe_arc_lengths(PARAMS, *_scan(walls, n))
+        mirrored_m = safe_arc_lengths(PARAMS, *_scan(_mirror(walls), n))
+        np.testing.assert_allclose(
+            mirrored_m, safe_m[::-1], atol=PARAMS.arc_sample_ds_m
+        )
 
 
 @pytest.mark.parametrize("n", RESOLUTIONS)
-def test_f_side_wall_only_keeps_straight_clear(n):
-    walls = [((-2.0, 0.5), (12.0, 0.5))]
-    angles, ranges = scenes.cast_scan(walls, n)
-    safe_dist = vsc.safe_arc_lengths(angles, ranges)
-    assert safe_dist[STRAIGHT_IDX] >= vsc.PLANNING_HORIZON_M - 1e-6, (
-        f"N={n}: a side-only wall must not reduce the straight arc's clearance, "
-        f"got {safe_dist[STRAIGHT_IDX]:.2f}m"
-    )
-
-
-# --- G: narrow corridor -> impossible-curvature candidates rejected ---------
+def test_mirrored_scene_mirrors_steer(n):
+    # Law: from the start state, a mirrored scene gives the same result case
+    # and a steer command of the opposite sign.
+    rng = np.random.default_rng(1000 + n)
+    for _ in range(10):
+        walls = _random_walls(rng)
+        _, result = step(PARAMS, VsState(), *_scan(walls, n), DT)
+        _, mirrored = step(PARAMS, VsState(), *_scan(_mirror(walls), n), DT)
+        assert type(mirrored) is type(result), f"walls={walls}"
+        assert mirrored.command.steer == pytest.approx(
+            -result.command.steer, abs=1e-3
+        ), f"walls={walls}"
 
 
 @pytest.mark.parametrize("n", RESOLUTIONS)
-def test_g_narrow_corridor_no_feasible_arc(n):
-    angles, ranges = scenes.cast_scan(scenes.narrow_unsafe_corridor(), n)
-    safe_dist = vsc.safe_arc_lengths(angles, ranges)
-    regions = vsc.extract_regions(safe_dist)
-    assert regions == [], (
-        f"N={n}: expected no feasible arc in a sub-clearance-width corridor"
+def test_negotiable_corner_finds_feasible_arc(n):
+    # A wall 0.8 m ahead with the right side open. The straight arc is
+    # blocked, but an arc of moderate curvature reaches the full horizon.
+    safe_m = safe_arc_lengths(
+        PARAMS, *_scan(_forward_blocked_side_open("right", wall_x_m=0.8), n)
+    )
+    assert safe_m.max() > PARAMS.planning_horizon_m - 0.1, (
+        f"N={n}: expected an arc within 0.1 m of the horizon, got {safe_m.max():.2f} m"
     )
 
 
-# --- H: resolution invariance ------------------------------------------------
-
-
-def test_h_resolution_invariance_steering_spread():
-    walls = _forward_blocked_side_open("right", wall_x=1.5)
-    targets = []
-    for n in RESOLUTIONS:
-        angles, ranges = scenes.cast_scan(walls, n)
-        target, _ = _raw_target_deg(angles, ranges)
-        targets.append(target)
-    spread = max(targets) - min(targets)
-    assert spread <= 3.0, (
-        f"selected steering-angle spread across N too large: {targets} (spread={spread:.2f}deg)"
+@pytest.mark.parametrize("n", RESOLUTIONS)
+def test_inside_min_turn_radius_no_arc_escapes(n):
+    # A corner 0.3 m ahead is much closer than the minimum turn radius
+    # (about 0.68 m). No arc, not even at full lock, can turn away in time.
+    walls = [
+        ((0.3, -2.0), (0.3, 0.05)),  # wall almost straight ahead
+        ((0.3, 0.05), (0.5, 2.0)),  # corner to the left
+    ]
+    safe_m = safe_arc_lengths(PARAMS, *_scan(walls, n))
+    assert safe_m.max() < 1.0, (
+        f"N={n}: expected every safe arc length below 1.0 m, got {safe_m.max():.2f} m"
     )
 
 
-# --- I: dense same-wall samples must not alter feasibility ------------------
+@pytest.mark.parametrize("n", RESOLUTIONS)
+def test_side_wall_only_keeps_straight_clear(n):
+    safe_m = safe_arc_lengths(PARAMS, *_scan([((-2.0, 0.5), (12.0, 0.5))], n))
+    assert safe_m[TABLE.straight_index] >= PARAMS.planning_horizon_m - 1e-6, (
+        f"N={n}: a side wall shortened the straight arc to "
+        f"{safe_m[TABLE.straight_index]:.2f} m"
+    )
 
 
-def test_i_dense_side_walls_do_not_reduce_straight_feasibility():
-    vals = []
-    for n in RESOLUTIONS:
-        angles, ranges = scenes.cast_scan(scenes.corridor_walls(half_width_m=0.4), n)
-        safe_dist = vsc.safe_arc_lengths(angles, ranges)
-        vals.append(safe_dist[STRAIGHT_IDX])
-    assert max(vals) - min(vals) < 1e-6, f"straight-arc clearance varied with N: {vals}"
-    assert vals[0] >= vsc.PLANNING_HORIZON_M - 1e-6
+@pytest.mark.parametrize("n", RESOLUTIONS)
+def test_narrow_corridor_has_no_region(n):
+    # The corridor half-width of 0.15 m is less than the clearance radius.
+    safe_m = safe_arc_lengths(PARAMS, *_scan(corridor_walls(half_width_m=0.15), n))
+    assert extract_regions(PARAMS, safe_m) == (), (
+        f"N={n}: expected no usable arc in a corridor narrower than the car"
+    )
 
 
-# --- J: one LiDAR outlier must not catastrophically change selection -------
+def test_target_changes_little_with_resolution():
+    walls = _forward_blocked_side_open("right", wall_x_m=1.5)
+    targets_deg = [_best_center_deg(*_scan(walls, n)) for n in RESOLUTIONS]
+    spread_deg = max(targets_deg) - min(targets_deg)
+    assert spread_deg <= 3.0, (
+        f"the target changed by {spread_deg:.2f} deg over N={RESOLUTIONS}: {targets_deg}"
+    )
+
+
+def test_dense_side_walls_do_not_shorten_straight_arc():
+    straight_m = [
+        safe_arc_lengths(PARAMS, *_scan(corridor_walls(half_width_m=0.4), n))[
+            TABLE.straight_index
+        ]
+        for n in RESOLUTIONS
+    ]
+    assert max(straight_m) - min(straight_m) < 1e-6, (
+        f"the straight safe arc length (m) changed with N: {straight_m}"
+    )
+    assert straight_m[0] >= PARAMS.planning_horizon_m - 1e-6
 
 
 @pytest.mark.parametrize("n", [270, 1080])
-def test_j_single_outlier_no_catastrophic_switch(n):
-    angles, ranges = scenes.cast_scan(scenes.corridor_walls(half_width_m=0.5), n)
-    mid = len(ranges) // 2
+def test_single_outlier_changes_target_at_most_one_slew_step(n):
+    angles, ranges = _scan(corridor_walls(half_width_m=0.5), n)
     ranges = ranges.copy()
-    ranges[mid] = 0.08  # spurious close spike
-    ctrl = vsc.VehicleSpaceController()
-    dt = 1.0 / vsc.CONTROL_HZ
-    first = ctrl.compute(angles, ranges, dt)
-    second = ctrl.compute(angles, ranges, dt)
-    max_step = vsc.MAX_SLEW_DEG_PER_S * dt
-    assert abs(second.target_heading_deg - first.target_heading_deg) <= max_step + 1e-6
+    ranges[len(ranges) // 2] = 0.08  # m; one false close return straight ahead
+    state, first = step(PARAMS, VsState(), angles, ranges, DT)
+    _, second = step(PARAMS, state, angles, ranges, DT)
+    max_step_deg = PARAMS.max_slew_deg_per_s * DT
+    assert abs(second.target_steer_deg - first.target_steer_deg) <= max_step_deg + 1e-6
 
 
-# --- no-path / recovery (state machine, unchanged logic) --------------------
-
-
-def test_no_path_then_recovery_prefers_closer_option():
-    # Gap centers rescaled into the new steering-angle range (+/-~22.9deg,
-    # was +/-80deg for the old heading grid) -- same "close vs far option"
-    # shape as the original design-spec example, just within the physically
-    # achievable steering range.
-    n = 270
-    dt = 1.0 / vsc.CONTROL_HZ
-    ctrl = vsc.VehicleSpaceController()
-
-    angles, ranges = scenes.gap_ring_scan(
-        n, gap_centers_deg=[-8.0], gap_half_width_deg=5.0
+def test_no_path_keeps_state_and_recovers_toward_closer_option():
+    lidar = DenseLidarParams(n_beams=270)
+    state = VsState()
+    angles, ranges = gap_ring_scan(
+        lidar, gap_centers_deg=[-8.0], gap_half_width_deg=5.0
     )
     for _ in range(15):
-        result = ctrl.compute(angles, ranges, dt)
-    prev_target = result.target_heading_deg
+        state, result = step(PARAMS, state, angles, ranges, DT)
+    prev_target_deg = result.target_steer_deg
 
-    blocked_angles, blocked_ranges = scenes.gap_ring_scan(
-        n, gap_centers_deg=[], barrier_range_m=0.03
+    # A barrier 0.03 m away in every direction blocks every arc.
+    blocked = gap_ring_scan(
+        lidar, gap_centers_deg=[], gap_half_width_deg=0.0, barrier_range_m=0.03
     )
     for _ in range(5):
-        result = ctrl.compute(blocked_angles, blocked_ranges, dt)
-        assert result.state == "NO_PATH"
-        assert result.speed == 0.0
+        new_state, result = step(PARAMS, state, *blocked, DT)
+        assert isinstance(result, NoPath)
+        assert result.command.throttle == 0.0
+        assert new_state == state, "a NoPath tick must not change the state"
 
-    reopen_angles, reopen_ranges = scenes.gap_ring_scan(
-        n, gap_centers_deg=[-9.0, 18.0], gap_half_width_deg=4.0
+    reopened = gap_ring_scan(
+        lidar, gap_centers_deg=[-9.0, 18.0], gap_half_width_deg=4.0
     )
-    result = ctrl.compute(reopen_angles, reopen_ranges, dt)
-    assert abs(result.target_heading_deg - (-9.0)) < abs(
-        result.target_heading_deg - 18.0
+    _, result = step(PARAMS, state, *reopened, DT)
+    assert isinstance(result, Driving)
+    assert abs(result.target_steer_deg - (-9.0)) < abs(
+        result.target_steer_deg - 18.0
     ), (
-        f"expected recovery toward -9deg (closer to prev {prev_target:.1f}), "
-        f"got {result.target_heading_deg:.1f}"
+        f"expected a target nearer to -9 deg (the last target was "
+        f"{prev_target_deg:.1f} deg), got {result.target_steer_deg:.1f} deg"
     )
-
-
-# --- performance --------------------------------------------------------------
 
 
 def test_performance_n1080_under_hard_budget():
-    angles, ranges = scenes.cast_scan(_forward_blocked_side_open("right"), 1080)
-    ctrl = vsc.VehicleSpaceController()
-    dt = 1.0 / vsc.CONTROL_HZ
-    ctrl.compute(angles, ranges, dt)  # warm up
+    angles, ranges = _scan(_forward_blocked_side_open("right"), 1080)
+    state, _ = step(PARAMS, VsState(), angles, ranges, DT)  # builds the arc table
     n_iters = 50
     t0 = time.perf_counter()
     for _ in range(n_iters):
-        ctrl.compute(angles, ranges, dt)
-    elapsed = time.perf_counter() - t0
-    mean_ms = (elapsed / n_iters) * 1000.0
-    print(f"\nN=1080 mean tick: {mean_ms:.3f} ms (hard budget 33.3ms, preferred <10ms)")
-    assert mean_ms < 33.3, f"exceeded the 30Hz hard budget: {mean_ms:.3f}ms"
+        state, _ = step(PARAMS, state, angles, ranges, DT)
+    mean_ms = (time.perf_counter() - t0) / n_iters * 1000.0
+    assert mean_ms < 1000.0 * DT, f"exceeded the 30 Hz budget: {mean_ms:.3f} ms"

@@ -41,7 +41,7 @@ testpaths = ["validation"]
 # typings/ holds mujoco stubs from `pybind11-stubgen mujoco mujoco.viewer -o typings`.
 # The examples directories are on sys.path at runtime for the scripts and tests
 # that import from them.
-extra-paths = ["typings", "examples", "examples/wall_follower_vs"]
+extra-paths = ["typings", "examples"]
 
 [tool.ty.src]
 exclude = ["users", "validation/testdata", "examples/ultimate_wall_follower", "typings"]
