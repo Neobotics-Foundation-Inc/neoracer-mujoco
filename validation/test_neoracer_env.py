@@ -64,20 +64,6 @@ def test_gymnasium_check_env_passes(env):
     check_env(env, skip_render_check=True)
 
 
-def test_unsupported_track_raises_clear_error():
-    """This first-pass env's progress/lap/reward semantics are specific to
-    loop_corridor.xml (no generic track abstraction exists yet) -- an
-    unsupported track_path must fail loudly at construction, not silently
-    apply loop-specific semantics to a track they don't fit."""
-    import os
-
-    from neoracer_mujoco import assets as _assets
-
-    other_track = os.path.join(_assets.ASSET_DIR, "tracks", "straight_corridor.xml")
-    with pytest.raises(ValueError, match="loop_corridor"):
-        NeoRacerEnv(config=NeoRacerEnvConfig(track_path=other_track))
-
-
 # --- reset() / step() basic contract ----------------------------------------
 
 
@@ -212,7 +198,7 @@ def test_rollover_terminates(env):
     mujoco.mj_forward(env.model, env.data)
     from neoracer_mujoco import sim as _sim
 
-    assert _sim.car_upright_cos(env.data) < env.config.upright_rollover_cos
+    assert _sim.car_upright_cos(env.data) < env.config.termination.upright_rollover_cos
 
     _obs, reward, terminated, truncated, info = env.step(
         np.array([0.0, 0.0], dtype=np.float32)

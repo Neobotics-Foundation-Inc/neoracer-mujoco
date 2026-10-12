@@ -102,7 +102,7 @@ class MujocoLidar:
 
     def get_samples(self) -> np.ndarray:
         readings = sensors.read_layout(self._layout, self._data)
-        meters = sensors.lidar_scan(readings).ranges[_CLOCKWISE]
+        meters = sensors.lidar_ranges(readings)[_CLOCKWISE]
         cm = meters * 100.0
         # -1 (no hit) and any non-finite reading both mean "no return" (0.0)
         # in racecar_core; a real negative distance is never physical.

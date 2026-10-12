@@ -75,7 +75,7 @@ def _side_clearance(
     (does not modify) the controller's no-hit-as-open convention. The
     controller's own internal beam handling lives entirely in
     track_centering.py; this is a read-only echo of it for the overlay."""
-    ranges = sl.lidar_scan(sensors).ranges
+    ranges = sl.lidar_ranges(sensors)
     values = []
     for i in beams:
         raw = float(ranges[i])
@@ -142,7 +142,9 @@ def run() -> dict:
         ),
         "mean_abs_steer": float(np.mean(np.abs(steers))),
         "max_abs_steer": float(np.max(np.abs(steers))),
-        "steer_within_limits": bool(np.all(np.abs(steers) <= cfg.steer_limit + 1e-9)),
+        "steer_within_limits": bool(
+            np.all(np.abs(steers) <= cfg.shaping.steer_limit + 1e-9)
+        ),
         "mean_throttle": float(np.mean(throttles)),
         "min_front_distance": float(np.min(front_dists)),
         "upright_throughout": upright_all,

@@ -27,12 +27,12 @@ Action space -- Box([-1,-1],[1,1]), float32:
 
 Observation space -- Box(20,), float32, built only from sensors.SensorReadings
 (no raw qpos/qvel):
-    [0:8]   lidar_ranges   m, -1 = no hit (sensors.lidar_scan)
+    [0:8]   lidar_ranges   m, -1 = no hit (sensors.lidar_ranges)
     [8:11]  imu_accel      m/s^2, body frame, gravity included
     [11:14] imu_gyro       rad/s, body frame
     [14:18] imu_quat       orientation quaternion (w,x,y,z), world frame
     [18]    steer_cmd_pos  rad, virtual steering input
-    [19]    estimated_speed  m/s, from motor_encoder_reading (mean of the 4
+    [19]    estimated_speed  m/s, from motor_encoder_rad_s (mean of the 4
             wheel encoders, matching the real car's single drive motor --
             NOT ground-truth imu_linvel)
 
@@ -72,8 +72,9 @@ from gymnasium import spaces
 
 from .. import assets, collision, contract, sensors, sim
 
-_SUPPORTED_TRACK_FILENAME = "loop_corridor.xml"
-_DEFAULT_TRACK = os.path.join(assets.ASSET_DIR, "tracks", _SUPPORTED_TRACK_FILENAME)
+# The spawn offset, the progress around the world origin, the lap and the
+# reward are specific to the geometry of this one track.
+_TRACK = os.path.join(assets.ASSET_DIR, "tracks", "loop_corridor.xml")
 
 # Spawn offset (m) on loop_corridor.xml: its outer wall is at y=-3 and its
 # inner wall at y=-2, so the 1.0 m wide bottom straight is centered at
@@ -100,7 +101,7 @@ class EnvInfo(TypedDict, closed=True):
     termination_reason: TerminationReason | None
 
 
-def _compose_scene(track_path: str, car_path: str) -> mujoco.MjModel:
+def _compose_scene(car_path: str) -> mujoco.MjModel:
     """Compose the car onto loop_corridor.xml at _LOOP_SPAWN_OFFSET, with
     the MjSpec.attach_body pattern of examples/track_centering_demo.py.
 
@@ -108,7 +109,7 @@ def _compose_scene(track_path: str, car_path: str) -> mujoco.MjModel:
     If a second module in the package needs it, move it to
     neoracer_mujoco.assets.
     """
-    scene = mujoco.MjSpec.from_file(track_path)
+    scene = mujoco.MjSpec.from_file(_TRACK)
     car = mujoco.MjSpec.from_file(car_path)
     frame = scene.worldbody.add_frame()
     frame.pos = np.array(_LOOP_SPAWN_OFFSET)
@@ -139,35 +140,34 @@ class RewardConfig:
 
 
 @dataclass(frozen=True)
-class NeoRacerEnvConfig:
-    """Environment configuration -- track/timing/termination/spawn knobs,
-    separate from RewardConfig so reward tuning doesn't touch physics/task
-    parameters and vice versa."""
+class SpawnRange:
+    """Bounds of the random spawn perturbation at reset(). Each value is
+    sampled uniformly in [-bound, +bound]."""
 
-    track_path: str = _DEFAULT_TRACK
-    car_path: str = assets.DEFAULT_CAR
-    control_hz: float = 30.0  # Hz
-    max_episode_steps: int = 1800  # 60 s at 30 Hz
-    spawn_lateral_range_m: float = 0.15  # m, +/- bound
-    spawn_yaw_range_rad: float = 0.15  # rad, +/- bound
+    lateral_m: float = 0.15  # m, along world Y
+    yaw_rad: float = 0.15  # rad, about +Z
+
+
+@dataclass(frozen=True)
+class TerminationConfig:
+    """Thresholds that end an episode. See _termination."""
+
     upright_rollover_cos: float = 0.5  # cos(tilt) below this = rolled over
     stuck_window_s: float = 4.0  # s
     stuck_progress_rad: float = 0.05  # rad, min net progress over the window
-    lidar_high_m: float = 50.0  # observation_space upper bound -- see module docstring
-    reward: RewardConfig = RewardConfig()
 
-    def __post_init__(self):
-        # The spawn offset, the progress around the world origin, the lap
-        # and the reward are specific to the geometry of this one track.
-        if not self.track_path.endswith(_SUPPORTED_TRACK_FILENAME):
-            raise ValueError(
-                "NeoRacerEnv currently only supports "
-                f"assets/tracks/{_SUPPORTED_TRACK_FILENAME} "
-                f"(got track_path={self.track_path!r}). The spawn offset, "
-                "angular-progress/lap-fraction/lap-completion logic, and "
-                "reward shaping are all specific to that track's geometry -- "
-                "see the module docstring. Other tracks are not supported."
-            )
+
+@dataclass(frozen=True)
+class NeoRacerEnvConfig:
+    """Environment configuration. The track is always loop_corridor.xml."""
+
+    car_path: str = assets.DEFAULT_CAR
+    control_hz: float = 30.0  # Hz
+    max_episode_steps: int = 1800  # 60 s at 30 Hz
+    lidar_high_m: float = 50.0  # observation_space upper bound -- see module docstring
+    spawn: SpawnRange = SpawnRange()
+    termination: TerminationConfig = TerminationConfig()
+    reward: RewardConfig = RewardConfig()
 
 
 # Observation bounds, with margin over the peaks seen in 80 adversarial
@@ -244,7 +244,7 @@ def _is_stuck(p: Progress, window_len: int, min_progress: float) -> bool:
 
 
 def _termination(
-    cfg: NeoRacerEnvConfig, upright_cos: float, stuck: bool, total_progress: float
+    cfg: TerminationConfig, upright_cos: float, stuck: bool, total_progress: float
 ) -> TerminationReason | None:
     """The reason the episode ends at this step, or None if it continues."""
     if upright_cos < cfg.upright_rollover_cos:
@@ -301,7 +301,7 @@ class NeoRacerEnv(gym.Env):
             raise ValueError(f"Unsupported render_mode: {render_mode!r}")
         self.render_mode = render_mode
 
-        self.model = _compose_scene(config.track_path, config.car_path)
+        self.model = _compose_scene(config.car_path)
         self.data = mujoco.MjData(self.model)
         self._car_body = self.model.body("car").id
         self._walls = collision.wall_geom_ids(self.model)
@@ -324,7 +324,7 @@ class NeoRacerEnv(gym.Env):
         self.observation_space = _observation_space(config)
 
         self._stuck_window_ticks = max(
-            1, round(config.stuck_window_s * config.control_hz)
+            1, round(config.termination.stuck_window_s * config.control_hz)
         )
 
         self._viewer = None
@@ -352,13 +352,15 @@ class NeoRacerEnv(gym.Env):
 
     def _build_observation(self) -> np.ndarray:
         readings = sensors.read_layout(self._sensor_layout, self.data)
-        lidar = sensors.lidar_scan(readings).ranges.astype(np.float32)
+        lidar = sensors.lidar_ranges(readings).astype(np.float32)
         accel = readings.imu_accel.astype(np.float32)
         gyro = readings.imu_gyro.astype(np.float32)
         quat = readings.imu_quat.astype(np.float32)
         steer_cmd = readings.steer_cmd_pos.astype(np.float32)
-        encoder = sensors.motor_encoder_reading(readings)
-        speed = np.array([sensors.estimated_linear_speed_ms(encoder)], dtype=np.float32)
+        motor_rad_s = sensors.motor_encoder_rad_s(readings)
+        speed = np.array(
+            [sensors.estimated_linear_speed_ms(motor_rad_s)], dtype=np.float32
+        )
         return np.concatenate([lidar, accel, gyro, quat, steer_cmd, speed])
 
     def _build_info(
@@ -388,12 +390,12 @@ class NeoRacerEnv(gym.Env):
 
         lateral = float(
             self.np_random.uniform(
-                -self.config.spawn_lateral_range_m, self.config.spawn_lateral_range_m
+                -self.config.spawn.lateral_m, self.config.spawn.lateral_m
             )
         )
         yaw = float(
             self.np_random.uniform(
-                -self.config.spawn_yaw_range_rad, self.config.spawn_yaw_range_rad
+                -self.config.spawn.yaw_rad, self.config.spawn.yaw_rad
             )
         )
         self.data.qpos[1] += lateral
@@ -434,8 +436,12 @@ class NeoRacerEnv(gym.Env):
         )
 
         upright_cos = self._upright_cos()
-        stuck = _is_stuck(self._progress, window_len, self.config.stuck_progress_rad)
-        reason = _termination(self.config, upright_cos, stuck, self._progress.total)
+        stuck = _is_stuck(
+            self._progress, window_len, self.config.termination.stuck_progress_rad
+        )
+        reason = _termination(
+            self.config.termination, upright_cos, stuck, self._progress.total
+        )
         terminated = reason is not None
         truncated = (
             not terminated

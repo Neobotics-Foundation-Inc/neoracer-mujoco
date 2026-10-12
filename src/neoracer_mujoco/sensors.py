@@ -26,6 +26,7 @@ WHEEL_RADIUS = 0.050  # m, ESTIMATED: consistent with STL bbox and URDF CoM
 type Vec1 = npt.NDArray[np.float64]  # shape (1,), a scalar sensor
 type Vec3 = npt.NDArray[np.float64]  # shape (3,)
 type Quat = npt.NDArray[np.float64]  # shape (4,), (w, x, y, z)
+type Vec8 = npt.NDArray[np.float64]  # shape (8,), one value per LiDAR beam
 
 
 type SensorLayout = tuple[tuple[str, slice], ...]  # (name, slice of sensordata)
@@ -60,10 +61,12 @@ class SensorReadings:
     slice (a numpy array), so scalars come back as length-1 arrays — read [0].
     """
 
-    # IMU at the chassis centre
-    imu_accel: Vec3  # linear accel (m/s²)
-    imu_gyro: Vec3  # angular vel (rad/s)
-    imu_quat: Quat  # orientation (w,x,y,z)
+    # IMU at the chassis centre. The imu site has no rotation relative to the
+    # car body, so the IMU frame is the body frame: +X forward, +Y left, +Z up.
+    # These are MuJoCo's raw values, with no calibration.
+    imu_accel: Vec3  # m/s², body frame; includes gravity: ~(0, 0, +9.81) at rest
+    imu_gyro: Vec3  # rad/s, body frame
+    imu_quat: Quat  # (w,x,y,z) of the IMU frame relative to the world frame
     imu_linvel: Vec3  # world linear vel (m/s)
     # steering angles (rad)
     steer_cmd_pos: Vec1  # virtual command
@@ -104,58 +107,6 @@ def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
 
 
 @dataclass(frozen=True)
-class IMUReading:
-    """
-    One IMU sample, packed from neoracer.xml's imu_accel/imu_gyro/imu_quat sensors.
-
-    Frame: the imu site has no rotation relative to its parent body (pos-only,
-    no euler/quat in the XML), so this IS the car body frame: +X forward,
-    +Y left, +Z up (per the coordinate frame documented in neoracer.xml's
-    header comment).
-
-    acceleration     — m/s^2, local (body) frame. GRAVITY IS INCLUDED: MuJoCo's
-                        accelerometer reports specific/proper force like a real
-                        accelerometer, so at rest this is NOT (0,0,0) — measured
-                        empirically at rest on this model as ~(0, 0, +9.81), norm
-                        equal to the model's configured gravity magnitude.
-    angular_velocity — rad/s, local (body) frame. Measured empirically as ~0
-                        (norm ~1e-9) at rest on this model.
-    orientation      — quaternion (w, x, y, z) of the IMU frame relative to the
-                        WORLD frame. Not body-relative and not zeroed to any
-                        hardware reference attitude.
-
-    These are MuJoCo's native readings with no axis/sign correction applied —
-    construct directly from SensorReadings (raw) and pass through
-    calibrate_imu() (calibrated) below.
-    """
-
-    acceleration: Vec3
-    angular_velocity: Vec3
-    orientation: Quat
-
-
-# No hardware bench-calibration data (bias, scale-factor, axis misalignment)
-# exists yet for the physical NeoRacer IMU. Note this is distinct from the IMU
-# *mount position* offset in osracer.urdf's imu_joint, which is an XML-geometry
-# concern tracked separately, not a reading-calibration one.
-#
-# TODO(hardware-calibration): once bench-characterized bias/misalignment values
-# exist for the real IMU, apply them here. Until then this returns a copy of
-# raw's values unchanged, so downstream code can be written against the
-# calibrated-reading interface now instead of waiting on unmeasured correction
-# values.
-def calibrate_imu(raw: IMUReading) -> IMUReading:
-    """Apply hardware IMU calibration to a raw IMUReading, returning a new
-    IMUReading. Currently a value-preserving copy — see the TODO above this
-    function."""
-    return IMUReading(
-        acceleration=raw.acceleration.copy(),
-        angular_velocity=raw.angular_velocity.copy(),
-        orientation=raw.orientation.copy(),
-    )
-
-
-@dataclass(frozen=True)
 class WheelSpeeds:
     """Surface speed of each wheel (m/s, + = forward)."""
 
@@ -163,9 +114,6 @@ class WheelSpeeds:
     fr: float
     rl: float
     rr: float
-
-    def mean(self) -> float:
-        return (self.fl + self.fr + self.rl + self.rr) / 4
 
 
 def wheel_speed_ms(sensors: SensorReadings) -> WheelSpeeds:
@@ -178,27 +126,15 @@ def wheel_speed_ms(sensors: SensorReadings) -> WheelSpeeds:
     )
 
 
-@dataclass(frozen=True)
-class MotorEncoderReading:
-    """
-    Single motor encoder reading: rad/s, + = forward.
+def motor_encoder_rad_s(sensors: SensorReadings) -> float:
+    """The single motor encoder reading: angular velocity (rad/s, + = forward).
 
     The real NeoRacer has one drive motor, not one per wheel -- neoracer.xml
     approximates that with four identically-driven wheel joints, so the
     mean of the four wheel_vel sensors is the correct single-encoder proxy.
     Angular velocity only, not ticks/position: the drive joints have no
-    <jointpos> sensor to derive that from.
-    """
-
-    angular_velocity: float
-
-
-def motor_encoder_reading(sensors: SensorReadings) -> MotorEncoderReading:
-    """
-    Derive the single motor encoder reading from the four wheel_vel jointvel
-    sensors (mean angular velocity across all driven wheels — see
-    MotorEncoderReading for why a mean is the correct single-motor proxy).
-    Raw simulator values — no calibration, filtering, or quantization applied.
+    <jointpos> sensor to derive that from. Raw simulator values -- no
+    calibration, filtering, or quantization applied.
     """
     wheel_velocities = np.array(
         [
@@ -208,18 +144,18 @@ def motor_encoder_reading(sensors: SensorReadings) -> MotorEncoderReading:
             sensors.rr_wheel_vel[0],
         ]
     )
-    return MotorEncoderReading(angular_velocity=float(np.mean(wheel_velocities)))
+    return float(np.mean(wheel_velocities))
 
 
-def estimated_linear_speed_ms(encoder: MotorEncoderReading) -> float:
+def estimated_linear_speed_ms(motor_rad_s: float) -> float:
     """
     ESTIMATE of vehicle speed from motor rotation (m/s) — NOT ground truth.
-    encoder.angular_velocity * WHEEL_RADIUS, i.e. it assumes zero wheel slip.
+    motor_rad_s * WHEEL_RADIUS, i.e. it assumes zero wheel slip.
     Will diverge from the true chassis speed (e.g. SensorReadings.imu_linvel)
     under wheelspin or lockup, exactly like a real wheel-speed-based
     speedometer would.
     """
-    return encoder.angular_velocity * WHEEL_RADIUS
+    return motor_rad_s * WHEEL_RADIUS
 
 
 # Beam order matches the rangefinder sensors in neoracer.xml, ascending 0deg..315deg.
@@ -233,11 +169,10 @@ LIDAR_BEAM_ORDER = (
     "lidar_270",
     "lidar_315",
 )
-LIDAR_ANGLES_DEG = (0, 45, 90, 135, 180, 225, 270, 315)
 
 # Beam groups shared by the LiDAR controllers (track_centering.py,
 # wall_following.py). Each value is an index into LIDAR_BEAM_ORDER and into
-# LidarScan.ranges.
+# lidar_ranges().
 LEFT_BEAMS = (1, 2, 3)  # lidar_045, lidar_090, lidar_135
 RIGHT_BEAMS = (7, 6, 5)  # lidar_315, lidar_270, lidar_225
 # Only lidar_000, not a wider cone: lidar_045/lidar_315 are already in
@@ -252,20 +187,10 @@ FRONT_RIGHT_BEAM = 7  # lidar_315
 REAR_RIGHT_BEAM = 5  # lidar_225
 
 
-@dataclass(frozen=True)
-class LidarScan[A]:
-    """8-beam LiDAR ring as one ordered scan (see LIDAR_BEAM_ORDER).
-    angles[i] and ranges[i] refer to the same beam. The array type A is free,
-    so a scan can also hold another array type, for example a JAX array."""
-
-    angles: A  # radians
-    ranges: A  # meters; -1 = no hit within cutoff
-
-
-def lidar_scan(sensors: SensorReadings) -> LidarScan[np.ndarray]:
-    """Pack the 8 named lidar_* fields into one ordered LidarScan."""
+def lidar_ranges(sensors: SensorReadings) -> Vec8:
+    """The 8 lidar_* ranges (m; -1 = no hit) in LIDAR_BEAM_ORDER."""
     s = sensors
-    ranges = np.array(
+    return np.array(
         [
             s.lidar_000[0],
             s.lidar_045[0],
@@ -277,8 +202,6 @@ def lidar_scan(sensors: SensorReadings) -> LidarScan[np.ndarray]:
             s.lidar_315[0],
         ]
     )
-    angles = np.deg2rad(LIDAR_ANGLES_DEG)
-    return LidarScan(angles=angles, ranges=ranges)
 
 
 @dataclass(frozen=True)
@@ -335,7 +258,7 @@ def print_sensors(sensors: SensorReadings) -> None:
     """Print a one-line summary of the most useful sensor values."""
     s = sensors
     print(
-        f"spd={wheel_speed_ms(s).mean():+5.2f}m/s  "
+        f"spd={estimated_linear_speed_ms(motor_encoder_rad_s(s)):+5.2f}m/s  "
         f"steer={s.steer_cmd_pos[0]:+.3f}"
         f"({s.fl_steer_pos[0]:+.3f}/{s.fr_steer_pos[0]:+.3f})  "
         f"susp=[{s.fl_susp_pos[0]:+.3f} {s.fr_susp_pos[0]:+.3f} "

@@ -185,9 +185,9 @@ def mirror[T](pair: Pair[T]) -> Pair[T]:
 
 
 @dataclass(frozen=True)
-class LidarScan[A]:
-    ranges: A
-    angles: A
+class Stamped[T]:
+    value: T
+    time: float  # s
 ```
 
 - Make a function generic when its body does not depend on the element type.
