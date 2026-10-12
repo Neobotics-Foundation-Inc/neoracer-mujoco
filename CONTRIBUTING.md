@@ -5,43 +5,19 @@ Read it before you open a pull request.
 
 ## Before you push
 
-- Run `ruff check .` and `ruff format .`. CI runs both.
-- Run `pytest validation`. Put a new test in `validation/test_<module>.py`, never in the module it tests.
+- Run `ruff check .` and `ruff format .`. CI runs `ruff check .` and `ruff format --check .`.
+- Run `python -m pytest validation`. Put a new test in `validation/test_<module>.py`, never in the module it tests.
+- Keep the tests green after each commit.
+  If a change alters behavior, change its test in the same commit.
+- `users/` holds personal experiments.
+  `validation/testdata/` and `examples/ultimate_wall_follower/` hold copies of outside code.
+  Do not change these directories unless the task names them.
 - Keep one change in one pull request.
 
-## Model the data so that bad values cannot exist
+## Code style
 
-- Put parameters in a frozen dataclass with defaults: `params = WallFollowingParams()`, not module constants or loose arguments.
-- Use a frozen dataclass for a record, not a `dict` or a tuple.
-- Use a `Literal` for a fixed set of names: `Side = Literal["left", "right"]`.
-  Use a union of frozen dataclasses when each case has its own data: `Mode = Idle | Driving`.
-  Do not use a free string or a `bool` flag. Two flags that cannot both be true are one `Literal` or one union.
-  Do not use `Enum`.
-- Parse input once, at the edge (a file, a sensor, the command line), into a typed value.
-  After that, the code trusts the type and does not check it again.
-- Match every case of a `Literal` or a union. End the `match` with `case _: assert_never(x)`, so a new case fails type checking.
-- Make a function return a value for every input it accepts.
-  If an input is not valid, change the input type. Do not add a check deep inside the function.
-- Do not wrap a value in a class if no code looks inside it. A plain `float` or `list` is correct then.
-
-## Structure
-
-- Keep one source of truth for an interface. `contract.py` is the example: code, examples and tests all read it.
-- Extract code that you use twice into a module (for example `math.py`).
-  Before you write a utility, check if mujoco, numpy or gymnasium already has one.
-- Inline a function that is one or two lines and has one caller.
-- Put imports at the top of the file. Import a module by its name (`from . import sensors`, not `as _sensors`).
-- Load package files with `importlib.resources`, not with paths built from `__file__`.
-- Prefer a library's functional API when it has one (for example gymnasium's `FuncEnv`): state goes in, state comes out.
-- Give every physical constant its unit, and its source if it is estimated:
-  `WHEEL_RADIUS = 0.050  # m, ESTIMATED from the STL bounding box`.
-- Mark a known limit with `# Limit:` and say when it matters and what to do then.
-- Keep a helper small until a second use needs more.
-
-## Names
-
-- Use the name of the real part: "motor encoder", not "wheel encoder", if the car has a motor encoder.
-- A name says what a thing does. A function that does not use `async` is not called `async`; call it `non_blocking`.
+Read AGENTS.md. It is the technical style guide, for people and for coding agents.
+Review a pull request against its rules.
 
 ## Written English
 
