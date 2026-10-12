@@ -7,14 +7,14 @@ name = "neoracer-mujoco"
 version = "0.1.0"
 description = "MuJoCo simulation baseline + reusable toolbox for the NeoRacer 1/12-scale RC car."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.15"
 dependencies = [
     "mujoco>=3.9.0",
     "numpy>=1.26.4",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.4", "ruff==0.16.0"]
+dev = ["pytest>=7.4", "ruff==0.17.0"]
 # Optional: only needed for src/neoracer_mujoco/envs/ (issue #7). The base
 # package must stay importable without gymnasium installed.
 rl = ["gymnasium>=1.0"]

@@ -18,7 +18,7 @@ conda activate neoracer-mujoco
 ### uv
 
 ```sh
-uv venv --python 3.13
+uv venv --python 3.15
 uv pip install -r requirements.txt
 source .venv/bin/activate
 ```
