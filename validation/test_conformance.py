@@ -116,7 +116,8 @@ def test_motor_encoder_positive_under_forward_throttle(car):
     d = _sim.settle(car)
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
-    encoder = sl.motor_encoder_reading(sl.read(car, _sim.run(car, d, ctrl, 400)))
+    _sim.run(car, d, ctrl, 400)
+    encoder = sl.motor_encoder_reading(sl.read(car, d))
     assert encoder.angular_velocity > 0.1, (
         f"expected motor encoder > 0 under forward throttle, got {encoder.angular_velocity}"
     )
@@ -137,7 +138,8 @@ def test_ackermann_inner_exceeds_outer(car):
     d = _sim.settle(car)
     ctrl = np.zeros(car.nu)
     ctrl[STEER] = 0.4
-    s = _sim.sensors(car, _sim.run(car, d, ctrl, 400))
+    _sim.run(car, d, ctrl, 400)
+    s = sl.read_raw(car, d)
     assert s["fl_steer_pos"][0] > s["fr_steer_pos"][0], (
         "Ackermann differential wrong/absent"
     )
@@ -176,7 +178,8 @@ def test_sensors_finite_under_load(car):
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
     ctrl[STEER] = 0.4
-    s = _sim.sensors(car, _sim.run(car, d, ctrl, 500))
+    _sim.run(car, d, ctrl, 500)
+    s = sl.read_raw(car, d)
     bad = [k for k, v in s.items() if not np.all(np.isfinite(v))]
     assert not bad, f"non-finite sensors: {bad}"
 
@@ -187,7 +190,8 @@ def test_motor_encoder_finite_under_load(car):
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
     ctrl[STEER] = 0.4
-    encoder = sl.motor_encoder_reading(sl.read(car, _sim.run(car, d, ctrl, 500)))
+    _sim.run(car, d, ctrl, 500)
+    encoder = sl.motor_encoder_reading(sl.read(car, d))
     assert np.isfinite(encoder.angular_velocity), (
         f"non-finite motor encoder angular velocity: {encoder.angular_velocity}"
     )
@@ -200,7 +204,8 @@ def test_imu_reading_finite_under_load(car):
     ctrl = np.zeros(car.nu)
     ctrl[DRIVE] = 1.0
     ctrl[STEER] = 0.4
-    sensors = sl.read(car, _sim.run(car, d, ctrl, 500))
+    _sim.run(car, d, ctrl, 500)
+    sensors = sl.read(car, d)
     imu = sl.IMUReading(
         acceleration=sensors.imu_accel,
         angular_velocity=sensors.imu_gyro,
@@ -225,6 +230,7 @@ def test_deterministic(car):
         ctrl = np.zeros(car.nu)
         ctrl[DRIVE] = 1.0
         ctrl[STEER] = 0.2
-        return _sim.run(car, d, ctrl, 300).qpos.copy()
+        _sim.run(car, d, ctrl, 300)
+        return d.qpos.copy()
 
     assert np.array_equal(rollout(), rollout()), "trajectory not reproducible"

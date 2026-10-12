@@ -378,7 +378,7 @@ class NeoRacerEnv(gym.Env):
         super().reset(seed=seed, options=options)
 
         mujoco.mj_resetData(self.model, self.data)
-        _sim.settle(self.model, self.data)
+        _sim.run(self.model, self.data, 0.0, _sim.SETTLE_STEPS)
 
         lateral = float(
             self.np_random.uniform(
