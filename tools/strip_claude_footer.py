@@ -15,7 +15,7 @@ token of the workflow, which does not go through the proxy:
 - On an event (an issue, comment, review or pull request that someone opens
   or edits), it removes the footer from that post.
 - On a manual run (workflow_dispatch), it removes the footer from every
-  issue, pull request, comment and review comment in the repository.
+  issue, pull request, review, comment and review comment in the repository.
 
 The script changes only a post that ends with the footer, and it removes only
 the footer.
@@ -102,9 +102,13 @@ def event_post(event_name: str, event: Json) -> Post | None:
 
 
 def all_posts(token: str, repo_url: str) -> Iterator[Post]:
-    """Every issue, pull request, issue comment and review comment."""
+    """Every issue, pull request, review, issue comment and review comment."""
     for issue in _pages(token, f"{repo_url}/issues"):
         yield Post(issue["url"], "PATCH", issue["body"] or "")
+    for pull in _pages(token, f"{repo_url}/pulls"):
+        for review in _pages(token, f"{pull['url']}/reviews"):
+            url = f"{pull['url']}/reviews/{review['id']}"
+            yield Post(url, "PUT", review["body"] or "")
     for comment in _pages(token, f"{repo_url}/issues/comments"):
         yield Post(comment["url"], "PATCH", comment["body"] or "")
     for comment in _pages(token, f"{repo_url}/pulls/comments"):
