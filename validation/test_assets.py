@@ -3,6 +3,8 @@ Laws for the car and track XML files in assets/.
 """
 
 import os
+import tomllib
+from pathlib import Path
 
 import mujoco
 import pytest
@@ -25,3 +27,16 @@ def test_car_comes_to_rest_on_every_track(track):
     attaches only the car body, so the floor of neoracer.xml is not in the
     scene."""
     assert_car_rests(assets.compose(mujoco.MjSpec.from_file(track)))
+
+
+def test_the_wheel_puts_assets_where_assets_py_looks():
+    """pyproject.toml copies assets/ into the wheel, and assets.py finds it
+    there by name. If one of them changes the name, an installed package
+    cannot find its car."""
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    wheel = tomllib.loads(pyproject.read_text())["tool"]["hatch"]["build"]["targets"][
+        "wheel"
+    ]
+    assert wheel["force-include"] == {
+        "assets": f"neoracer_mujoco/{assets.PACKAGED_DIR}"
+    }

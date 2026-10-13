@@ -1,26 +1,27 @@
 """
 Locating and loading the car and track XMLs, and putting the car on a track.
 
-assets/ stays at the repo root, so that users can open the XML files in
-other MuJoCo tools. assets/ is not package data, so this module cannot load
-it with importlib.resources (AGENTS.md rule 10). It finds assets/ from the
-path of this file in the source checkout.
-
-Limit: this module finds assets/ three directories above this file
-(repo/src/neoracer_mujoco/assets.py -> repo). This works from any working
-directory in a source checkout. It does not work if pip installs the package
-in a different tree. In that case, make assets/ package data (see
-pyproject.toml) and load it with importlib.resources.
+The XMLs and meshes live in assets/ at the repo root, so that users can open
+them in other MuJoCo tools. A wheel copies assets/ into the package as
+neoracer_mujoco/data (see pyproject.toml). In a source checkout or an
+editable install, the package has no data/ folder, and this module uses the
+repo's assets/ instead.
 """
 
 import glob
 import os
+from importlib import resources
 
 import mujoco
 import numpy as np
 
-_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-ASSET_DIR = os.path.join(_REPO, "assets")
+PACKAGED_DIR = "data"  # the name of assets/ inside an installed wheel
+
+_package = resources.files("neoracer_mujoco")
+_packaged = _package / PACKAGED_DIR
+# In a source checkout the package is repo/src/neoracer_mujoco.
+_checkout = os.path.normpath(os.path.join(str(_package), "..", "..", "assets"))
+ASSET_DIR = str(_packaged) if _packaged.is_dir() else _checkout
 TRACK_DIR = os.path.join(ASSET_DIR, "tracks")
 DEFAULT_CAR = os.path.join(ASSET_DIR, "neoracer.xml")
 

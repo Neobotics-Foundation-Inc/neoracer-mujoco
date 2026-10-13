@@ -54,7 +54,7 @@ exclude = ["users", "validation/testdata", "examples/ultimate_wall_follower", "t
 [tool.hatch.build.targets.wheel]
 packages = ["src/neoracer_mujoco"]
 
-# Limit: assets/ deliberately stays at the repo root (the XML is the product,
-# drag-droppable into other MuJoCo tools), so it is NOT bundled as package data.
-# load() resolves it relative to the source checkout. If this ever needs to work
-# from a pip install into a different tree, add assets to the wheel here.
+# assets/ stays at the repo root, so that users can open the XML files in other
+# MuJoCo tools. The wheel copies it into the package, where assets.py finds it.
+[tool.hatch.build.targets.wheel.force-include]
+"assets" = "neoracer_mujoco/data"

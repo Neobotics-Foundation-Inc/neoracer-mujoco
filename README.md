@@ -30,9 +30,10 @@ examples and the validation suite:
 pip install -e .
 ```
 
-Install from a clone, not PyPI: the package is intentionally not published, and
-the wheel does not bundle `assets/` — the model XML and meshes are the product
-and stay at the repo root, so `load()` resolves them from your checkout.
+The package is not on PyPI. To use it from another project, install a wheel
+from a GitHub Release. The wheel contains the car and track XMLs and the
+meshes, so it needs no Git LFS. In a clone, `load()` reads them from
+`assets/` at the repo root.
 
 ## Quick start
 
