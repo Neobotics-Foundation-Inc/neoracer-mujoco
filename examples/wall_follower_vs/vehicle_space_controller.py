@@ -34,6 +34,7 @@ from typing import assert_never
 import mujoco
 import numpy as np
 import numpy.typing as npt
+from scipy.spatial import KDTree
 
 from neoracer_mujoco import contract
 from neoracer_mujoco.control.steering import ControlCommand
@@ -157,6 +158,12 @@ class ArcTable:
     # m; arc length at which each arc turns 180 deg, or the horizon if less.
     cap_m: CandidateArray
     valid: npt.NDArray[np.bool_]  # shape (n_candidates, n_samples): s_m <= cap_m
+    # Flat index (candidate * n_samples + sample) of each valid sample, in the
+    # order of the rows of sample_tree. Shape (n_valid,).
+    valid_flat: npt.NDArray[np.intp]
+    # A k-d tree of the (x_m, y_m) points of the valid samples. A k-d tree is
+    # a search structure that finds all points within a radius quickly.
+    sample_tree: KDTree
     straight_index: int  # index of the candidate nearest to 0 deg
     window_deg: float  # deg; half-width of the window of target_path_clearance()
 
@@ -199,8 +206,9 @@ def arc_table(params: VsParams) -> ArcTable:
             arc_y[i] = (1.0 - np.cos(kappa * s)) / kappa
             cap_m[i] = min(horizon_m, math.pi / abs(kappa))
     valid = s[None, :] <= cap_m[:, None]
+    valid_flat = np.flatnonzero(valid)
     step_deg = (2.0 * steer_max_deg) / (params.n_candidates - 1)
-    for array in (steer_deg, s, arc_x, arc_y, cap_m, valid):
+    for array in (steer_deg, s, arc_x, arc_y, cap_m, valid, valid_flat):
         array.setflags(write=False)
     return ArcTable(
         steer_deg=steer_deg,
@@ -209,6 +217,10 @@ def arc_table(params: VsParams) -> ArcTable:
         y_m=arc_y,
         cap_m=cap_m,
         valid=valid,
+        valid_flat=valid_flat,
+        sample_tree=KDTree(
+            np.column_stack([arc_x.ravel()[valid_flat], arc_y.ravel()[valid_flat]])
+        ),
         straight_index=int(np.argmin(np.abs(steer_deg))),
         window_deg=params.path_window_candidates * step_deg,
     )
@@ -227,16 +239,21 @@ def _median_filter(
 ) -> FloatArray:
     """Replace each range with the median of the ranges within
     outlier_window_deg of its angle. The window is an angle, not a beam
-    count, so a sparse scan has fewer neighbors in the window."""
+    count, so a sparse scan has fewer neighbors in the window. A range with
+    no other range in its window does not change."""
     window_rad = math.radians(params.outlier_window_deg)
     out = ranges_m.copy()
     # Limit: searchsorted needs ascending angles. If a sensor gives another
     # order, sort the scan by angle before step().
     lo = np.searchsorted(angles_rad, angles_rad - window_rad, side="left")
-    hi = np.searchsorted(angles_rad, angles_rad + window_rad, side="right")
-    for i in range(len(ranges_m)):
-        if hi[i] - lo[i] > 1:
-            out[i] = np.median(ranges_m[lo[i] : hi[i]])
+    count = np.searchsorted(angles_rad, angles_rad + window_rad, side="right") - lo
+    # np.median works on rows of equal length, so the filter takes the beams
+    # with the same window length together. A scan has only a few window
+    # lengths: one or two in the middle, and shorter ones at the two ends.
+    for length in np.unique(count[count > 1]):
+        beams = np.flatnonzero(count == length)
+        windows = ranges_m[lo[beams, None] + np.arange(length)]
+        out[beams] = np.median(windows, axis=1)
     return out
 
 
@@ -272,28 +289,46 @@ def safe_arc_lengths(
     point does, the value is the cap of that arc (see arc_table())."""
     table = arc_table(params)
     x, y = obstacle_points(params, angles_rad, ranges_m)
-    out = table.cap_m.copy()
     # A point farther than the horizon plus the clearance radius cannot touch
-    # any arc, so the loop below does not test it.
+    # any arc, so the search below does not use it.
     reach = params.planning_horizon_m + params.clearance_radius_m
     keep = np.hypot(x, y) <= reach
     x, y = x[keep], y[keep]
     if len(x) == 0:
-        return out
-    n_s = len(table.s_m)
+        return table.cap_m.copy()
+    blocked = np.zeros(table.valid.size, dtype=bool)
+    blocked[_blocked_samples(params, table, x, y)] = True
+    blocked = blocked.reshape(table.valid.shape)
+    # argmax gives the first blocked sample of each arc, but it also gives 0
+    # for an arc with no blocked sample. np.where gives the cap to those arcs.
+    first = np.argmax(blocked, axis=1)
+    return np.where(blocked.any(axis=1), table.s_m[first], table.cap_m)
+
+
+def _blocked_samples(
+    params: VsParams, table: ArcTable, x: FloatArray, y: FloatArray
+) -> npt.NDArray[np.intp]:
+    """The flat index (see ArcTable.valid_flat) of each valid sample that
+    has an obstacle point (x, y) at a squared distance of at most
+    clearance_radius_m ** 2. An index can occur more than once.
+
+    The k-d trees find the candidate pairs with a radius that is 1e-9 larger
+    than clearance_radius_m. The tree can round a distance differently, so
+    the larger radius makes sure that it finds every pair. This function
+    then calculates the squared distance of each pair with the same float
+    operations as a direct test of all pairs, so it gives the same result,
+    bit for bit.
+    """
+    search_m = params.clearance_radius_m * (1.0 + 1e-9)
+    pairs = table.sample_tree.sparse_distance_matrix(
+        KDTree(np.column_stack([x, y])), search_m, output_type="ndarray"
+    )
+    sample, point = pairs["i"], pairs["j"]
+    flat = table.valid_flat[sample]
+    dx = table.x_m.ravel()[flat] - x[point]
+    dy = table.y_m.ravel()[flat] - y[point]
     clearance2 = params.clearance_radius_m * params.clearance_radius_m
-    for c in range(len(table.steer_deg)):
-        dx = table.x_m[c][:, None] - x[None, :]  # (samples, points)
-        dy = table.y_m[c][:, None] - y[None, :]
-        within = (dx * dx + dy * dy) <= clearance2
-        within &= table.valid[c][:, None]
-        # argmax gives the first True sample of each point, but it also gives
-        # 0 for a point with no True sample. np.where sets those points to n_s.
-        first_s_idx = np.where(within.any(axis=0), np.argmax(within, axis=0), n_s)
-        c_first = int(first_s_idx.min())
-        if c_first < n_s:
-            out[c] = table.s_m[c_first]
-    return out
+    return flat[dx * dx + dy * dy <= clearance2]
 
 
 @dataclass(frozen=True)
