@@ -180,13 +180,15 @@ stable API.
   ```
 
   Measured on one 4-core CPU: ~580 env steps/s, so 1M steps take ~29 min.
-  With seed 0, the policy completed its first lap after ~90k steps.
-  It completed a lap in every training episode after ~100k steps.
+  With seed 0, the policy completed its first lap after 70k to 90k steps, in two runs.
+  The runs do not give identical step counts.
+  After ~200k steps, almost every training episode was a lap.
   Evaluation on env seeds 10000 to 10019:
 
   | Policy | Mean return | Mean lap fraction | Outcomes |
   |---|---|---|---|
   | PPO, seed 0, 1M steps | +16.32 | +1.006 | 20 laps, 233 steps (7.8 s) each |
+  | PPO, seed 0, 400k steps | +16.31 | +1.004 | 20 laps |
   | PPO, seed 1, 600k steps | +16.32 | +1.005 | 20 laps, 239 to 243 steps |
   | Random actions | -9.08 | -0.022 | 20 stuck |
   | Zero action | -5.00 | 0.000 | 20 stuck |
