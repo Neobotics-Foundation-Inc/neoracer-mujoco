@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # gh release create, which also creates the tag
+  contents: write # create the tag (manual runs) and the GitHub Release
 
 jobs:
   wheel:
