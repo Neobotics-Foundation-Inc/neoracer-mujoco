@@ -7,7 +7,8 @@ name: Release
 # Start a release in one of two ways:
 # - Push a version tag such as v0.2.0. The tag must match the version in pyproject.toml.
 # - Click "Run workflow" on main in the Actions tab. The workflow then creates
-#   the tag v<version> from pyproject.toml itself, on the commit it built.
+#   the tag v<version> from pyproject.toml itself, on the commit it built, and
+#   stops if that tag already exists.
 
 on:
   push:
@@ -35,13 +36,9 @@ jobs:
         with:
           python-version: "3.15"
 
-      # A pushed tag must match the version. A manual run must start from main,
-      # and its tag must not exist yet: gh release create would reuse an existing
-      # tag, which can point at a different commit than the one this job builds.
+      # A pushed tag must match the version. A manual run must start from main.
       - name: Choose the tag from the version in pyproject.toml
         id: tag
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
           tag="v$version"
@@ -49,10 +46,6 @@ jobs:
             test "$GITHUB_REF_NAME" = "$tag" || { echo "tag $GITHUB_REF_NAME, version $version"; exit 1; }
           else
             test "$GITHUB_REF" = refs/heads/main || { echo "run the release from main, not $GITHUB_REF"; exit 1; }
-            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" > /dev/null 2>&1; then
-              echo "the tag $tag already exists; raise the version in pyproject.toml first"
-              exit 1
-            fi
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
@@ -70,12 +63,16 @@ jobs:
           cd /tmp
           /tmp/wheel-env/bin/python -c "import neoracer_mujoco; neoracer_mujoco.load()"
 
-      # For a manual run, gh creates the tag on the commit that this job built.
-      # It fails if the release already exists, so a second run cannot replace it.
+      # A manual run creates the tag on the commit that this job built. GitHub
+      # refuses to create a tag that already exists, so the run stops instead of
+      # publishing under a tag that points at another commit. --verify-tag stops
+      # gh from creating a tag itself.
       - name: Attach the wheel to a GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
-        run: >-
-          gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY"
-          --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > /dev/null
+          fi
+          gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --generate-notes
