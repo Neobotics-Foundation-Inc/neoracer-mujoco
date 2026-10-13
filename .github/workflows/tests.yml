@@ -44,13 +44,17 @@ jobs:
           python -m build --wheel
           python -m venv /tmp/wheel-env
           /tmp/wheel-env/bin/pip install dist/*.whl
+          export EXPECTED_TRACKS=$(ls assets/tracks/*.xml | wc -l)
           cd /tmp
           /tmp/wheel-env/bin/python -c "
+          import os
           import mujoco
           from neoracer_mujoco import assets, load
           assert 'site-packages' in assets.ASSET_DIR, assets.ASSET_DIR
+          tracks = assets.tracks()
+          assert len(tracks) == int(os.environ['EXPECTED_TRACKS']), tracks
           load()
-          for track in assets.tracks():
+          for track in tracks:
               assets.compose(mujoco.MjSpec.from_file(track))
-          print(len(assets.tracks()), 'tracks loaded from', assets.ASSET_DIR)
+          print(len(tracks), 'tracks loaded from', assets.ASSET_DIR)
           "
