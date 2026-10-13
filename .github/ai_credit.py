@@ -107,13 +107,16 @@ def credits_ai(line: str) -> bool:
 
 
 def clean(text: str) -> str:
-    """The text without the lines that credit an AI tool, and without the
-    separators and blank lines that those lines leave at the end."""
-    lines = [line for line in text.splitlines() if not credits_ai(line)]
-    if len(lines) == len(text.splitlines()):
+    """The text without the lines that credit an AI tool. If the credit was at
+    the end, the separators and blank lines that it leaves there go too."""
+    original = text.splitlines()
+    lines = [line for line in original if not credits_ai(line)]
+    if len(lines) == len(original):
         return text
-    while lines and (not lines[-1].strip() or SEPARATOR.match(lines[-1])):
-        lines.pop()
+    content = [line for line in original if line.strip() and not SEPARATOR.match(line)]
+    if content and credits_ai(content[-1]):
+        while lines and (not lines[-1].strip() or SEPARATOR.match(lines[-1])):
+            lines.pop()
     return "\n".join(lines) + "\n" if lines else ""
 
 

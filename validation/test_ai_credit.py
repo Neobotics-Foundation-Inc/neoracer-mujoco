@@ -76,6 +76,11 @@ def test_clean_removes_the_credit_and_the_separator_it_leaves():
     )
 
 
+def test_clean_keeps_the_end_when_the_credit_was_not_there():
+    text = "Fix the lap counter.\nCo-authored-by: Claude <noreply@anthropic.com>\n\nDetails\n\n---\n"
+    assert ai_credit.clean(text) == "Fix the lap counter.\n\nDetails\n\n---\n"
+
+
 def test_clean_leaves_text_without_credit_unchanged():
     text = "Fix the lap counter.\n\n---\n\nNo trailing newline"
     assert ai_credit.clean(text) == text
