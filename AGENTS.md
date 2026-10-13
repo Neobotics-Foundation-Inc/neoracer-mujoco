@@ -258,25 +258,21 @@ class Stamped[T]:
 
 ## 14. Written English
 
-Write comments, docstrings, commit messages and pull request descriptions in simple technical English,
-close to [ASD-STE100](https://www.asd-ste100.org).
-Short sentences are not enough. A reader must understand each sentence on the first read, without decoding it.
+Write comments, docstrings, commit messages and pull request descriptions for a reader who does not know the code yet.
+Many readers are students who are new to robotics.
 
-- Give each sentence a concrete subject, a plain verb and an explicit object. Say who does what to what.
-- Only people and programs act. Data, files and documents do not "promise", "say", "plan" or "know".
-- Do not write riddles, wordplay or slogans. State the fact plainly.
-- Use common words. Define a technical term in one plain sentence where it first appears, or link to its definition.
-  Do not put two technical terms in one short phrase.
-- Write an instruction in 20 words or fewer, and a description in 25 or fewer. Put one idea in each sentence.
-- Write an instruction in the imperative, and put the condition first: "If the lock is held, stop."
-- Use the active voice and the simple present: "The sweep deletes the key", not "The key is deleted".
-- Use one word for one thing: the name the code uses, everywhere.
-- Keep "the" and "a". Do not remove words to make a sentence short.
-- Write for a reader who does not know the code yet, not as notes to yourself.
+- Write natural prose in the active voice, the way a careful open-source maintainer writes. Vary the sentence length.
+- When you first use a project name, say what the thing is. For a quantity, say what it measures and give its unit.
+- Give a commit or pull request a title that names the behavior. Then say what was wrong, what you changed, and how a reader can see the change.
+- Keep it short. The diff shows which files and tests changed, and CI shows that the tests pass, so do not retell them. One example value is enough.
+- Do not use headings, slogans, sentence fragments or em dashes.
 
-Examples (compressed → plain):
+A good pull request reads like this (the change is invented):
 
-- "The sensor parse keeps what it checked." → "The sensor parser returns a typed reading, so later code does not check the values again."
-- "The rollout is a fold over step." → "The rollout calls `step` in a loop and passes each new state to the next call."
-- "What the contract promises." → "What `contract.py` requires of every car model."
-- "Reimplemented independently, not imported (see PR #29)." → Delete it from the comment. The commit message gives the history.
+```text
+Clamp the drive motor command to the battery voltage
+
+The controller sends the drive motor a voltage command. The simulator clamped this command to 12 V, but the car runs on a 7.4 V battery, so the simulated car could reach 4.1 m/s while the real car reaches at most 2.6 m/s.
+
+This change clamps the command to battery_voltage in MotorParams, the record that holds the motor settings. If you run examples/drive_straight.py at full throttle, the car now settles near 2.6 m/s.
+```
