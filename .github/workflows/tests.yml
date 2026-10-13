@@ -33,3 +33,24 @@ jobs:
 
       - name: Run the validation suite
         run: python -m pytest -q validation
+
+      # The suite above uses the editable install, which reads assets/ from the
+      # checkout. This step tests what pip users get: it builds the wheel,
+      # installs it in a fresh environment and loads the car and every track
+      # from outside the checkout.
+      - name: Load the car and the tracks from the installed wheel
+        run: |
+          pip install build
+          python -m build --wheel
+          python -m venv /tmp/wheel-env
+          /tmp/wheel-env/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/wheel-env/bin/python -c "
+          import mujoco
+          from neoracer_mujoco import assets, load
+          assert 'site-packages' in assets.ASSET_DIR, assets.ASSET_DIR
+          load()
+          for track in assets.tracks():
+              assets.compose(mujoco.MjSpec.from_file(track))
+          print(len(assets.tracks()), 'tracks loaded from', assets.ASSET_DIR)
+          "
