@@ -52,7 +52,11 @@ AI_DOMAINS = frozenset(
     }
 )
 
-AUTOMATED = re.compile(r"no-?reply|bot|agent", re.IGNORECASE)
+# The automated mailbox names at those domains: noreply, a name that ends in
+# -bot or -agent, cursoragent, or the bare name of a tool (codex@openai.com).
+AUTOMATED = re.compile(
+    r"(no-?reply|[\w.-]+[-_.](bot|agent)|cursoragent)(\+.*)?", re.IGNORECASE
+)
 # Co-authored-by, and the trailers that some tools use instead of it.
 TRAILER = re.compile(
     r"^\s*(co-authored|assisted|generated|co-developed|ai-assisted)-by:\s*(?P<value>.*)$",
@@ -86,7 +90,7 @@ def ai_email(email: str) -> bool:
         )
     local, _, domain = email.rpartition("@")
     return domain in AI_DOMAINS and (
-        AUTOMATED.search(local) is not None or AI_WORD.search(local) is not None
+        AUTOMATED.fullmatch(local) is not None or AI_WORD.fullmatch(local) is not None
     )
 
 

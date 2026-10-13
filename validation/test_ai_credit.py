@@ -39,6 +39,8 @@ PEOPLE_LINES = (
     "Co-authored-by: Devin <12345+devin@users.noreply.github.com>",
     "Co-authored-by: AEH <117328917+Abdallahelhamawi@users.noreply.github.com>",
     "Co-authored-by: Alice <alice@anthropic.com>",
+    "Co-authored-by: Claude Martin <claude.martin@anthropic.com>",
+    "Co-authored-by: Jo Talbot <talbot@openai.com>",
     "Co-developed-by: Claude Martin <claude.martin@gmail.com>",
     "Assisted-by: Devin Smith <devin@example.com>",
     "Co-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
