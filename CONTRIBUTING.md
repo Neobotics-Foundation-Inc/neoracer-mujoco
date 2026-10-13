@@ -19,3 +19,10 @@ Coding agents read AGENTS.md instead.
 - `validation/testdata/` and `examples/ultimate_wall_follower/` hold copies of outside code.
   Do not change these directories unless your change is about them.
 - Keep one change in one pull request.
+
+## You are responsible for your change
+
+You are responsible for every change you contribute, including code that an AI tool such as Claude or Copilot wrote for you.
+Read and understand all of it before you open a pull request, and be ready to explain any line in review.
+The commit is yours, so do not list an AI tool as a co-author: leave out `Co-authored-by:` lines and "Generated with" footers that name one.
+The `.claude/settings.json` in this repo stops Claude Code from adding them.
