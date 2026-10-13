@@ -3,7 +3,7 @@ Find and remove the lines that credit an AI tool in a commit message or a pull
 request description.
 
 People may credit an AI tool in their own commits and pull requests. The commit
-on main names only people: a pull request is squash-merged with its title and
+on main credits no AI tool: a pull request is squash-merged with its title and
 description as the commit message, and the AI credit workflow removes these
 lines from the description first.
 

@@ -1,7 +1,7 @@
 name: AI credit
 
 # People may credit AI tools in their own commits and pull requests, but the
-# commit on main names only people. A pull request is squash-merged with its
+# commit on main credits no AI tool. A pull request is squash-merged with its
 # title and description as the commit message (repo setting), so trailers in
 # the branch's commits do not reach main. This workflow removes AI credit from
 # the description each time it changes, and checks every commit that reaches
