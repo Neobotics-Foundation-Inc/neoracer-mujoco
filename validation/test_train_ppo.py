@@ -113,6 +113,27 @@ def test_policy_loss_is_zero_when_all_advantages_are_zero():
     assert float(info.policy_loss) == 0.0
 
 
+@pytest.mark.parametrize(
+    "field, bad",
+    [
+        ("gamma", 0.0),
+        ("gae_lambda", 1.5),
+        ("max_throttle", 0.0),
+        ("rollout_steps", 0),
+        ("minibatches", 300),  # more than rollout_steps (256)
+        ("clip_eps", 0.0),
+        ("learning_rate", -1e-4),
+        ("max_grad_norm", 0.0),
+        ("obs_clip", -1.0),
+        ("value_coef", -0.5),
+        ("entropy_coef", -0.01),
+    ],
+)
+def test_ppo_params_reject_values_outside_their_domain(field, bad):
+    with pytest.raises(ValueError, match=field):
+        PPOParams(**{field: bad})
+
+
 @pytest.mark.parametrize("max_throttle", [0.1, 0.2, 1.0])
 def test_env_action_stays_in_the_scaled_box_and_keeps_in_range_steer(max_throttle):
     rng = np.random.default_rng(0)

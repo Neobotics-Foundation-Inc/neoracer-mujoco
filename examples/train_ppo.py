@@ -82,6 +82,19 @@ class PPOParams:
             raise ValueError("max_throttle must be in (0, 1]")
         if self.rollout_steps < 1 or self.epochs < 1 or self.minibatches < 1:
             raise ValueError("rollout_steps, epochs and minibatches must be >= 1")
+        # A batch has rollout_steps * num_envs samples, so this check gives
+        # each minibatch at least one sample for any num_envs >= 1.
+        if self.minibatches > self.rollout_steps:
+            raise ValueError("minibatches must be <= rollout_steps")
+        if (
+            min(self.clip_eps, self.learning_rate, self.max_grad_norm, self.obs_clip)
+            <= 0
+        ):
+            raise ValueError(
+                "clip_eps, learning_rate, max_grad_norm and obs_clip must be > 0"
+            )
+        if self.value_coef < 0 or self.entropy_coef < 0:
+            raise ValueError("value_coef and entropy_coef must be >= 0")
 
 
 # --- Network -------------------------------------------------------------
