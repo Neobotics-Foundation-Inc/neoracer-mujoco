@@ -15,6 +15,7 @@ from neoracer_mujoco.contract import ActuatorLimits
 from neoracer_mujoco.control.steering import ControlCommand
 
 USED_BY_NEORACER_RL = (
+    "assets.ASSET_DIR",
     "assets.DEFAULT_CAR",
     "assets.TRACK_DIR",
     "assets.compose",
