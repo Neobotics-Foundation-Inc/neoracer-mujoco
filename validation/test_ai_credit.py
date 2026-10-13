@@ -45,6 +45,8 @@ PEOPLE_LINES = (
     "Generated with `python -m examples.train_ppo --seed 0`.",
     "The video was made with ffmpeg.",
     "See https://claude.ai/public/artifacts/abc for the plot.",
+    "https://cursor.com/agents",
+    "https://chatgpt.com/codex",
 )
 
 

@@ -13,6 +13,7 @@ A line credits an AI tool if it is one of these:
 - another trailer that names an AI tool, such as `Assisted-by: Copilot`;
 - a footer such as "Generated with Claude Code" or "Made with Cursor";
 - a link to an AI session, such as `https://claude.ai/code/session_...`.
+  A link to the product itself, such as `https://cursor.com/agents`, stays.
 
 A trailer of a person is kept, even if the person's name is Claude.
 
@@ -68,7 +69,7 @@ FOOTER = re.compile(
 )
 SESSION_LINK = re.compile(
     r"^\s*([\w-]+:\s*)?<?https?://(claude\.ai/code|chatgpt\.com/codex|cursor\.com/agents"
-    r"|app\.devin\.ai/sessions|jules\.google\.com)\S*\s*$",
+    r"|app\.devin\.ai/sessions|jules\.google\.com)/\S+\s*$",
     re.IGNORECASE,
 )
 SEPARATOR = re.compile(r"^\s*(-{3,}|\*{3,}|_{3,})\s*$")
