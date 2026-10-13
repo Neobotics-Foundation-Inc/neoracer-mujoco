@@ -75,7 +75,7 @@ def main() -> None:
 
         print(
             f"  episode {ep:2d}: steps={step_count:4d}  return={ep_return:+7.2f}  "
-            f"outcome={outcome:14s}  lap_frac={info['lap_frac']:.3f}  "
+            f"outcome={outcome:14s}  lap_frac={info['lap_frac']:+.3f}  "
             f"final_upright_cos={info['upright_cos']:+.3f}"
         )
 

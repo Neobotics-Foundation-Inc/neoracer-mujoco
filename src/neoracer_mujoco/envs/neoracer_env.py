@@ -89,7 +89,7 @@ class EnvInfo(TypedDict, closed=True):
     """The info dict of reset() and step(). gymnasium requires a dict."""
 
     progress_rad: float  # rad; cumulative signed progress in this episode
-    lap_frac: float  # laps; abs(progress_rad) / 2 pi
+    lap_frac: float  # laps; progress_rad / 2 pi, negative if the car drove backward
     speed_ms: float  # m/s; estimated_speed, observation [19]
     upright_cos: float  # cos(tilt) of the car body
     contact: bool  # a car geom touched a wall in this step
@@ -356,7 +356,7 @@ class NeoRacerEnv(gym.Env):
     ) -> EnvInfo:
         return {
             "progress_rad": self._progress.total,
-            "lap_frac": abs(self._progress.total) / (2.0 * np.pi),
+            "lap_frac": self._progress.total / (2.0 * np.pi),
             "speed_ms": speed,
             "upright_cos": upright_cos,
             "contact": contact,
