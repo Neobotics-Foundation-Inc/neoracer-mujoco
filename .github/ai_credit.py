@@ -33,7 +33,8 @@ AI_WORD = re.compile(
     re.IGNORECASE,
 )
 
-# Email domains that only AI tools use in Co-authored-by trailers.
+# Domains of AI tools. A person who works there keeps their credit: only an
+# automated address at one of these domains counts, such as noreply@anthropic.com.
 AI_DOMAINS = frozenset(
     {
         "anthropic.com",
@@ -50,16 +51,16 @@ AI_DOMAINS = frozenset(
     }
 )
 
+AUTOMATED = re.compile(r"no-?reply|bot|agent", re.IGNORECASE)
+# Co-authored-by, and the trailers that some tools use instead of it.
 TRAILER = re.compile(
-    r"^\s*co-authored-by:\s*(?P<name>[^<]*?)\s*<(?P<email>[^>]*)>\s*$", re.IGNORECASE
+    r"^\s*(co-authored|assisted|generated|co-developed|ai-assisted)-by:\s*(?P<value>.*)$",
+    re.IGNORECASE,
 )
+EMAIL = re.compile(r"<(?P<email>[^>]*)>")
 # A GitHub noreply address: 123+login@users.noreply.github.com or login@...
 GITHUB_NOREPLY = re.compile(
     r"^(\d+\+)?(?P<login>[^@]+)@users\.noreply\.github\.com$", re.IGNORECASE
-)
-# Trailers that some tools use instead of Co-authored-by.
-OTHER_TRAILER = re.compile(
-    r"^\s*(assisted|generated|co-developed|ai-assisted)-by:", re.IGNORECASE
 )
 FOOTER = re.compile(
     r"^[\W_]*(generated|created|made|written|built|authored|co-authored)\s+(with|by|using|in)\b",
@@ -82,14 +83,20 @@ def ai_email(email: str) -> bool:
         return login == "copilot" or (
             login.endswith("[bot]") and AI_WORD.search(login) is not None
         )
-    return email.rpartition("@")[2] in AI_DOMAINS
+    local, _, domain = email.rpartition("@")
+    return domain in AI_DOMAINS and (
+        AUTOMATED.search(local) is not None or AI_WORD.search(local) is not None
+    )
 
 
 def credits_ai(line: str) -> bool:
     """True if the line credits an AI tool."""
     if trailer := TRAILER.match(line):
-        return ai_email(trailer["email"])
-    if OTHER_TRAILER.match(line) or FOOTER.match(line):
+        # A trailer with an email is decided by the email, one without by its words.
+        if email := EMAIL.search(trailer["value"]):
+            return ai_email(email["email"])
+        return AI_WORD.search(trailer["value"]) is not None
+    if FOOTER.match(line):
         return AI_WORD.search(line) is not None
     return SESSION_LINK.match(line) is not None
 
