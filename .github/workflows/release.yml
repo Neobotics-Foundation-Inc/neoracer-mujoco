@@ -1,15 +1,21 @@
 name: Release
 
-# Builds the wheel when someone pushes a version tag such as v0.2.0, checks that
-# the installed wheel can load the car, and attaches the wheel to a GitHub Release.
-# Other repos, such as neoracer-rl, install neoracer-mujoco from that wheel.
+# Builds the wheel, checks that the installed wheel can load the car, and
+# attaches the wheel to a GitHub Release. Other repos, such as neoracer-rl,
+# install neoracer-mujoco from that wheel.
+#
+# Start a release in one of two ways:
+# - Push a version tag such as v0.2.0. The tag must match the version in pyproject.toml.
+# - Click "Run workflow" on main in the Actions tab. The workflow then creates
+#   the tag v<version> from pyproject.toml itself, on the commit it built.
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
-  contents: write # gh release create
+  contents: write # gh release create, which also creates the tag
 
 jobs:
   wheel:
@@ -29,10 +35,18 @@ jobs:
         with:
           python-version: "3.15"
 
-      - name: Check that the tag matches the version in pyproject.toml
+      # A pushed tag must match the version. A manual run must start from main.
+      - name: Choose the tag from the version in pyproject.toml
+        id: tag
         run: |
           version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
-          test "$GITHUB_REF_NAME" = "v$version" || { echo "tag $GITHUB_REF_NAME, version $version"; exit 1; }
+          tag="v$version"
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            test "$GITHUB_REF_NAME" = "$tag" || { echo "tag $GITHUB_REF_NAME, version $version"; exit 1; }
+          else
+            test "$GITHUB_REF" = refs/heads/main || { echo "run the release from main, not $GITHUB_REF"; exit 1; }
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Build the wheel
         run: |
@@ -48,7 +62,12 @@ jobs:
           cd /tmp
           /tmp/wheel-env/bin/python -c "import neoracer_mujoco; neoracer_mujoco.load()"
 
+      # For a manual run, gh creates the tag on the commit that this job built.
+      # It fails if the release already exists, so a second run cannot replace it.
       - name: Attach the wheel to a GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.whl --title "$GITHUB_REF_NAME" --generate-notes
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: >-
+          gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY"
+          --target "$GITHUB_SHA" --title "$TAG" --generate-notes
