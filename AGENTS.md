@@ -274,5 +274,5 @@ Clamp the drive motor command to the battery voltage
 
 The controller sends the drive motor a voltage command. The simulator clamped this command to 12 V, but the car runs on a 7.4 V battery, so the simulated car could reach 4.1 m/s while the real car reaches at most 2.6 m/s.
 
-This change clamps the command to MotorParams.battery_voltage. If you run examples/drive_straight.py at full throttle, the car now settles near 2.6 m/s.
+This change clamps the command to battery_voltage in MotorParams, the record that holds the motor settings. If you run examples/drive_straight.py at full throttle, the car now settles near 2.6 m/s.
 ```
