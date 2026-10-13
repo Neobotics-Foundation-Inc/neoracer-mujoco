@@ -57,9 +57,10 @@ AI_DOMAINS = frozenset(
 AUTOMATED = re.compile(
     r"(no-?reply|[\w.-]+[-_.](bot|agent)|cursoragent)(\+.*)?", re.IGNORECASE
 )
-# Co-authored-by, and the trailers that some tools use instead of it.
+# Co-authored-by, and the trailers that some tools use instead of it, also as
+# an item of a Markdown list.
 TRAILER = re.compile(
-    r"^\s*(co-authored|assisted|generated|co-developed|ai-assisted)-by:\s*(?P<value>.*)$",
+    r"^\s*([-*+]\s+)?(co-authored|assisted|generated|co-developed|ai-assisted)-by:\s*(?P<value>.*)$",
     re.IGNORECASE,
 )
 EMAIL = re.compile(r"<(?P<email>[^>]*)>")
