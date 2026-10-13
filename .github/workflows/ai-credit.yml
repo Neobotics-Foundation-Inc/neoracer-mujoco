@@ -20,6 +20,10 @@ jobs:
   clean-description:
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
+    # One run at a time per pull request, so that an older run cannot finish
+    # last and write back a description that the author has edited since.
+    concurrency:
+      group: ai-credit-${{ github.event.pull_request.number }}
     permissions:
       contents: read
       pull-requests: write
@@ -40,7 +44,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH" > body.txt
+          # Read the description now, not the copy in the event, which may be older.
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" --jq '.body // ""' > body.txt
           python .github/ai_credit.py clean < body.txt > cleaned.txt
           if ! cmp -s body.txt cleaned.txt; then
             jq -n --rawfile body cleaned.txt '{body: $body}' |
