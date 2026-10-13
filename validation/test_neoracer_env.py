@@ -1,11 +1,11 @@
 """
 Tests for neoracer_mujoco.envs.NeoRacerEnv: the Gymnasium environment
-interface. No RL training exists yet, so no test trains a policy.
+interface. These tests do not train a policy. validation/test_train_ppo.py
+tests the PPO baseline.
 
-No policy can drive a full lap yet, and random actions rarely roll the car
-over. So the tests call the pure progress and termination functions
-directly, with laws over many random inputs. Two env tests then check that
-step() uses them.
+Random actions rarely complete a lap or roll the car over. So the tests
+call the pure progress and termination functions directly, with laws over
+many random inputs. Two env tests then check that step() uses them.
 """
 
 import os

@@ -64,6 +64,7 @@ python3 -m pytest validation/ -v
 │   ├── manual_drive.py         — arrow-key teleop (game-style, python3 entry point)
 │   ├── pygame_drive/           — WASD or gamepad driving with a LiDAR radar (pygame)
 │   ├── track_centering_demo.py — PD centering controller on the corridor track
+│   ├── train_ppo.py            — PPO baseline for NeoRacerEnv (JAX + optax)
 │   └── track_generation.py     — generate procedural tracks, describe or drive one
 ├── validation/            — pytest physics + logic conformance suite
 ├── users/<name>/          — personal experiments; not checked by ruff, ty, tests or CI
@@ -168,6 +169,37 @@ stable API.
   runtime, settles, then drives the controller and reports centering performance.
   `python3 -m examples.track_centering_demo` (headless) or
   `mjpython -m examples.track_centering_demo --viewer`.
+- **`train_ppo.py`** — a small PPO baseline for the Gymnasium env (`NeoRacerEnv`,
+  `loop_corridor.xml`), in JAX and optax. `PPOParams` holds the hyperparameters.
+  Install with `pip install -e ".[train]"`. Then:
+
+  ```sh
+  python3 -m examples.train_ppo --total-steps 1000000 --seed 0 --out ppo.npz
+  python3 -m examples.train_ppo --eval ppo.npz --episodes 20     # mean action, env seeds 10000..
+  python3 -m examples.train_ppo --eval-baseline random --episodes 20   # or zero
+  ```
+
+  Measured on one 4-core CPU: ~580 env steps/s, so 1M steps take ~29 min.
+  With seed 0, the policy completed its first lap after 70k to 90k steps, in two runs.
+  The runs do not give identical step counts.
+  After ~200k steps, almost every training episode was a lap.
+  Evaluation on env seeds 10000 to 10019:
+
+  | Policy | Mean return | Mean lap fraction | Outcomes |
+  |---|---|---|---|
+  | PPO, seed 0, 1M steps | +16.32 | +1.006 | 20 laps, 233 steps (7.8 s) each |
+  | PPO, seed 0, 400k steps | +16.31 | +1.004 | 20 laps |
+  | PPO, seed 1, 600k steps | +16.32 | +1.005 | 20 laps, 239 to 243 steps |
+  | Random actions | -9.08 | -0.022 | 20 stuck |
+  | Zero action | -5.00 | 0.000 | 20 stuck |
+
+  The return of a lap has an upper bound of ~16.3 (2 pi of progress plus the lap bonus of 10).
+  The lap fraction here is signed: a negative value means that the car drove backward.
+  Two settings were necessary. With an initial action standard deviation of 0.6
+  (`init_log_std=-0.5`), the policy did not learn to turn at the first corner in 300k steps.
+  It stopped before the corner (return ~-4.2) or drove backward.
+  `max_throttle=0.1` scales the policy throttle, because the env maps throttle 1 to the full motor torque.
+  Without this scale, PPO also learns laps, but 3 of 20 evaluation episodes failed after 300k steps.
 
 The package reads the sensors, not the examples. To log the IMU, wheel, steer, suspension and LiDAR values of a compiled model, use `neoracer_mujoco.sensors`: call `sensor_layout(model)` once, then `read_layout(layout, data)` at each step. `lidar_ranges` and `motor_encoder_rad_s` read from the result.
 
