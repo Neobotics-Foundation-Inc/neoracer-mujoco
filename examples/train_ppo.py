@@ -354,9 +354,7 @@ type Outcome = TerminationReason | Literal["truncated"]
 @dataclass(frozen=True)
 class EpisodeResult:
     episode_return: float
-    # Signed laps: info["progress_rad"] / 2 pi at the last step. Negative means
-    # backward. info["lap_frac"] is the absolute value, so it hides the direction.
-    lap_frac: float
+    lap_frac: float  # laps at the last step; negative if the car drove backward
     outcome: Outcome
     steps: int  # env steps (30 Hz)
 
@@ -430,7 +428,7 @@ def collect_rollout(
                 finished.append(
                     EpisodeResult(
                         float(ep_ret[i]),
-                        info["progress_rad"] / (2.0 * np.pi),
+                        info["lap_frac"],
                         _outcome(info),
                         int(ep_steps[i]),
                     )
@@ -617,7 +615,7 @@ def evaluate(
                 results.append(
                     EpisodeResult(
                         ep_ret,
-                        info["progress_rad"] / (2.0 * np.pi),
+                        info["lap_frac"],
                         _outcome(info),
                         steps,
                     )

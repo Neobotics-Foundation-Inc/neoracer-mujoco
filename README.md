@@ -194,7 +194,7 @@ stable API.
   | Zero action | -5.00 | 0.000 | 20 stuck |
 
   The return of a lap has an upper bound of ~16.3 (2 pi of progress plus the lap bonus of 10).
-  The lap fraction here is signed: a negative value means that the car drove backward.
+  The lap fraction is signed: a negative value means that the car drove backward.
   Two settings were necessary. With an initial action standard deviation of 0.6
   (`init_log_std=-0.5`), the policy did not learn to turn at the first corner in 300k steps.
   It stopped before the corner (return ~-4.2) or drove backward.
