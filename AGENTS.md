@@ -17,8 +17,6 @@ Follow every rule here. If a task conflicts with a rule, say so in the pull requ
   The only exception: if a person asks you to work in their own folder, work only in that folder.
   Code in `src/`, `examples/` and `validation/` must never import from `users/`.
   To make experiment code part of the project, copy it to `src/` or `examples/` in its own pull request, and make it follow these rules there.
-- Do not add `Co-authored-by:` lines, "Generated with" footers or any other credit for an AI tool to a commit or pull request.
-  The person who opens the pull request is responsible for the change.
 - Keep one change in one pull request.
 
 The code requires Python 3.15. Use a feature from Python 3.13 to 3.15 where it removes a check,

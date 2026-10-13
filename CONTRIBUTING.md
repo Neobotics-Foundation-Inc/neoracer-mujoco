@@ -24,5 +24,7 @@ Coding agents read AGENTS.md instead.
 
 You are responsible for every change you contribute, including code that an AI tool such as Claude or Copilot wrote for you.
 Read and understand all of it before you open a pull request, and be ready to explain any line in review.
-The commit is yours, so do not list an AI tool as a co-author: leave out `Co-authored-by:` lines and "Generated with" footers that name one.
-The `.claude/settings.json` in this repo stops Claude Code from adding them.
+
+You may credit a tool in your own commits, but the commit that lands on main names only people.
+A pull request is squash-merged with its title and description as the commit message.
+The AI credit workflow removes the lines that credit an AI tool, such as `Co-authored-by: Claude` or "Generated with Claude Code", from the description.
