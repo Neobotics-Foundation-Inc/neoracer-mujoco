@@ -358,6 +358,19 @@ def test_stuck_terminates(env):
     assert reason == "stuck"
 
 
+def test_lap_frac_is_signed_progress_and_negative_in_reverse(env):
+    """info["lap_frac"] is progress_rad / 2 pi at every step. If the car
+    drives backward, both values are negative."""
+    env.reset(seed=0)
+    for _ in range(60):
+        _obs, _reward, terminated, truncated, info = env.step(
+            np.array([-0.1, 0.0], dtype=np.float32)
+        )
+        assert info["lap_frac"] == info["progress_rad"] / LAP
+        assert not (terminated or truncated)
+    assert info["lap_frac"] < 0.0
+
+
 def test_timeout_truncates():
     config = NeoRacerEnvConfig(max_episode_steps=5)
     env = NeoRacerEnv(config=config)
