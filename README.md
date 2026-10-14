@@ -146,6 +146,8 @@ A wall is a geom of the body named `walls`. The tracks in `assets/tracks/` and t
 
 `batch.py` steps many copies of one scene at once, for example to train a policy. Pick the version that fits your machine. Both have the same methods, and `batch.command` and `batch.read` build the controls and read a sensor out of the result on either one.
 
+Nothing renders a batch, so build its scene with `assets.compose(track, visuals=False)`. That leaves out the meshes that only show the car: the physics and the sensors stay the same, bit for bit, while the model shrinks from 35 MB to 1.6 MB on `loop_corridor`, compiles in 0.02 s instead of 0.3 s, and steps about 17% faster.
+
 #### Optimized for CPU
 
 `CpuBatch` steps the copies with `mujoco.rollout` on a pool of threads that run in C and use every core. It needs nothing beyond the package.
