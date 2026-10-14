@@ -40,10 +40,24 @@ def test_an_ai_tool_or_a_bot_is_not_an_author(identity):
     assert not citation.is_person(identity)
 
 
-def test_authors_are_ranked_by_credits_then_by_first_credit():
+def test_authors_are_ranked_by_credited_commits_then_by_first_credit():
     a, b, c = (f"{n} <{n.lower()}@example.com>" for n in ("Ann Lee", "Bo Kim", "Cy Wu"))
-    credits = [c, a, *NOT_PEOPLE, b, a, b, c, NOT_PEOPLE[0]]
-    assert citation.ranked_names(credits) == ["Cy Wu", "Ann Lee", "Bo Kim"]
+    commits = [[c], [a, *NOT_PEOPLE], [b], [a, NOT_PEOPLE[0]], [b], [c]]
+    assert citation.ranked_names(commits) == ["Cy Wu", "Ann Lee", "Bo Kim"]
+
+
+def test_a_person_counts_once_per_commit():
+    """Ann is the author and a co-author of one commit; Bo authored two."""
+    ann, bo = "Ann Lee <ann@example.com>", "Bo Kim <bo@example.com>"
+    assert citation.ranked_names([[ann, ann], [bo], [bo]]) == ["Bo Kim", "Ann Lee"]
+
+
+def test_two_people_with_one_name_are_two_authors():
+    """.mailmap keeps two Alex Smiths apart, so the citation does too."""
+    alex1, alex2 = "Alex Smith <a@one.org>", "Alex Smith <a@two.org>"
+    sam = "Sam Roe <sam@example.com>"
+    commits = [[alex1], [alex2], [sam], [sam], [sam]]
+    assert citation.ranked_names(commits) == ["Sam Roe", "Alex Smith", "Alex Smith"]
 
 
 @pytest.mark.parametrize(

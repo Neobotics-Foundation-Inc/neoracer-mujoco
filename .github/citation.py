@@ -37,12 +37,17 @@ def is_person(identity: str) -> bool:
     return not bot and not ai_credit.credits_ai(COAUTHOR + identity) and bool(name)
 
 
-def ranked_names(identities: list[str]) -> list[str]:
-    """The names of the people among identities, the most credits first. Two
-    people with the same count keep the order of their first credit."""
-    names = [i.partition(" <")[0] for i in identities if is_person(i)]
-    counts = Counter(names)
-    return sorted(dict.fromkeys(names), key=lambda n: -counts[n])
+def ranked_names(commits: list[list[str]]) -> list[str]:
+    """The names of the people credited in commits, the most credited commits
+    first. Each commit is the list of identities ("Name <email>") that it
+    credits. A person counts once per commit, and two identities with one
+    name are two people. A tie keeps the order of the first credit."""
+    people = [list(dict.fromkeys(i for i in c if is_person(i))) for c in commits]
+    counts = Counter(i for c in people for i in c)
+    ranked = sorted(
+        dict.fromkeys(i for c in people for i in c), key=lambda i: -counts[i]
+    )
+    return [i.partition(" <")[0] for i in ranked]
 
 
 # Words that start a family name, as in Abdallah El Hamawi or Guido van Rossum.
@@ -103,16 +108,25 @@ def git(*args: str, stdin: str = "") -> str:
     ).stdout
 
 
-def identities() -> list[str]:
-    """Every commit author and co-author on the current branch, oldest first,
-    after .mailmap."""
+def identities() -> list[list[str]]:
+    """The identities that each commit on the current branch credits, its
+    author and co-authors, oldest commit first, after .mailmap."""
     log = git(
         "log",
         "--reverse",
-        "--format=%aN <%aE>%n%(trailers:key=Co-authored-by,valueonly)",
+        "--format=%x1e%aN <%aE>%n%(trailers:key=Co-authored-by,valueonly)",
     )
-    lines = [line.strip() for line in log.splitlines() if line.strip()]
-    return git("check-mailmap", "--stdin", stdin="\n".join(lines) + "\n").splitlines()
+    commits = [
+        [line.strip() for line in c.splitlines() if line.strip()]
+        for c in log.split("\x1e")
+        if c.strip()
+    ]
+    # Trailers are not mapped by --use-mailmap, so map every identity.
+    flat = [i for c in commits for i in c]
+    mapped = iter(
+        git("check-mailmap", "--stdin", stdin="\n".join(flat) + "\n").splitlines()
+    )
+    return [[next(mapped) for _ in c] for c in commits]
 
 
 def main() -> int:
