@@ -78,9 +78,8 @@ SESSION_LINK = re.compile(
     re.IGNORECASE,
 )
 NOT_OWNED = (
-    "A change on main must be owned by a person, not credited to an AI tool. "
-    "The person who opens a pull request is responsible for every line of it. "
-    "See CONTRIBUTING.md."
+    "A change on main must be owned by a person, who takes responsibility for "
+    "every line of it, so it does not credit an AI tool. See CONTRIBUTING.md."
 )
 SEPARATOR = re.compile(r"^\s*(-{3,}|\*{3,}|_{3,})\s*$")
 
