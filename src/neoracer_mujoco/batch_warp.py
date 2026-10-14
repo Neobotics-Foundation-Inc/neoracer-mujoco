@@ -38,6 +38,8 @@ class WarpBatch:
         self.nbatch = nbatch
         self._mx = mjx.put_model(model, impl="warp")
         self._step = jax.jit(self._step_batch, static_argnames="nstep")
+        # Compiled once here, so that each call of initial reuses it.
+        self._initial = jax.jit(jax.vmap(self._one_env))
 
     def initial(self, datas: Sequence[mujoco.MjData]) -> mjx.Data:
         """A batched mjx.Data whose environment i has the physics state of
@@ -48,19 +50,18 @@ class WarpBatch:
         rows = {
             f: jnp.asarray(np.stack([getattr(d, f) for d in datas])) for f in fields
         }
+        return self._initial(rows)
 
-        def one_env(row: dict[str, jax.Array]) -> mjx.Data:
-            # Made inside vmap, as MJX requires: Warp keeps one contact and
-            # constraint buffer for all environments, not one per environment.
-            d = mjx.make_data(
-                self.model,
-                impl="warp",
-                naconmax=self.nbatch * CONTACTS_PER_ENV,
-                njmax=CONSTRAINTS_PER_ENV,
-            )
-            return d.replace(**row)
-
-        return jax.jit(jax.vmap(one_env))(rows)
+    def _one_env(self, row: dict[str, jax.Array]) -> mjx.Data:
+        # Made inside vmap, as MJX requires: Warp keeps one contact and
+        # constraint buffer for all environments, not one per environment.
+        d = mjx.make_data(
+            self.model,
+            impl="warp",
+            naconmax=self.nbatch * CONTACTS_PER_ENV,
+            njmax=CONSTRAINTS_PER_ENV,
+        )
+        return d.replace(**row)
 
     def _step_batch(
         self, state: mjx.Data, ctrl: jax.Array, nstep: int
