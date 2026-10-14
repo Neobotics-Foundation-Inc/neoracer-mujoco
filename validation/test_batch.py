@@ -220,3 +220,27 @@ def test_each_row_starts_from_its_own_data(make):
         sim_batch.initial(datas[:2])
     if isinstance(sim_batch, batch.CpuBatch):
         sim_batch.close()
+
+
+def test_the_warp_batch_compiles_initial_once(monkeypatch):
+    """A second call of initial reuses the compiled function, so JAX traces
+    mjx.make_data only once, and the second state holds the new datas."""
+    _, batch_warp = _warp_modules()
+    make_data = batch_warp.mjx.make_data
+    traces = []
+
+    def counted(*args, **kwargs):
+        traces.append(1)
+        return make_data(*args, **kwargs)
+
+    monkeypatch.setattr(batch_warp.mjx, "make_data", counted)
+    scene = assets.load()
+    warp = batch_warp.WarpBatch(scene.model, 2)
+    datas = [sim.settle(scene.model) for _ in range(2)]
+    warp.initial(datas)
+    for i, data in enumerate(datas):
+        data.bind_scalar(scene.car.joint).qpos[0] += 1.0 + i  # m, along +X
+    second = warp.initial(datas)
+    assert len(traces) == 1
+    expected = np.stack([d.qpos for d in datas]).astype(second.qpos.dtype)
+    np.testing.assert_array_equal(np.asarray(second.qpos), expected)
