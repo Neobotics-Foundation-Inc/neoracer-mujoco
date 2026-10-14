@@ -7,9 +7,9 @@ Frame: +X forward, +Y left, +Z up. The throttle and steer inputs are in
 [-1, 1]; + throttle = forward, + steer = left (contract.py).
 
     params, state = DriveParams(), DriveState()
-    wheels = drive_wheel_dofs(model)  # once per model
+    wheels = drive_wheel_dofs(scene)  # once per scene
     state = next_state(params, state, throttle, steer, dt)
-    apply_and_step(model, data, params, wheels, state, dt)
+    apply_and_step(scene, data, params, wheels, state, dt)
 """
 
 from dataclasses import dataclass
@@ -19,6 +19,7 @@ import numpy as np
 import numpy.typing as npt
 
 from neoracer_mujoco import contract
+from neoracer_mujoco.scene import Scene
 
 type WheelDofs = npt.NDArray[np.intp]  # shape (4,): qvel index of each drive wheel
 
@@ -55,12 +56,17 @@ class DriveState:
     steer: float = 0.0  # in [-1, 1]
 
 
-def drive_wheel_dofs(model: mujoco.MjModel) -> WheelDofs:
-    """qvel index of the wheel spin joint of each drive actuator (contract.DRIVE)."""
-    actuators = range(contract.DRIVE.start, contract.DRIVE.stop)
-    return np.array(
-        [model.jnt_dofadr[model.actuator_trnid[i, 0]] for i in actuators], dtype=np.intp
-    )
+def drive_wheel_dofs(scene: Scene) -> WheelDofs:
+    """qvel index of the wheel spin joint of each drive actuator, in the order
+    of contract.DRIVE_ACTUATORS and scene.car.drive."""
+    dofs = []
+    for name in contract.DRIVE_ACTUATORS:
+        actuator = scene.spec.actuator(name)
+        joint = None if actuator is None else scene.spec.joint(actuator.target)
+        if joint is None:
+            raise ValueError(f"actuator {name} drives no joint of the scene")
+        dofs.append(int(scene.model.bind_scalar(joint).dofadr[0]))
+    return np.array(dofs, dtype=np.intp)
 
 
 def frame_dt(p: DriveParams, dt: float) -> float:
@@ -100,7 +106,7 @@ def wheel_torque(
 
 
 def apply_and_step(
-    model: mujoco.MjModel,
+    scene: Scene,
     data: mujoco.MjData,
     p: DriveParams,
     wheels: WheelDofs,
@@ -108,8 +114,9 @@ def apply_and_step(
     dt: float,
 ) -> None:
     """Write the commands of state to data.ctrl and step the physics dt (s)."""
-    data.ctrl[contract.STEER] = state.steer * p.max_steer
-    data.ctrl[contract.DRIVE] = wheel_torque(p, state.throttle, data.qvel[wheels])
+    car = scene.car
+    data.ctrl[car.steer] = state.steer * p.max_steer
+    data.ctrl[list(car.drive)] = wheel_torque(p, state.throttle, data.qvel[wheels])
     end = data.time + frame_dt(p, dt)
     while data.time < end:
-        mujoco.mj_step(model, data)
+        mujoco.mj_step(scene.model, data)

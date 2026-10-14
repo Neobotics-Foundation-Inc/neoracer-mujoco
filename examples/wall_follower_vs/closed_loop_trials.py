@@ -36,6 +36,7 @@ from examples.wall_follower_vs.vehicle_space_controller import (
     step,
 )
 from neoracer_mujoco import collision, sim
+from neoracer_mujoco.scene import Scene
 
 
 @dataclass(frozen=True)
@@ -68,19 +69,20 @@ class TrialResult:
 
 
 def run_trial(
-    model: mujoco.MjModel,
+    scene: Scene,
     lidar: DenseLidarParams,
     seed: int,
     params: TrialParams = TrialParams(),
 ) -> TrialResult:
     """Drive one trial from a spawn pose that rng(seed) perturbs."""
+    model, car = scene.model, scene.car
     data = sim.settle(model)
-    perturb_spawn(model, data, np.random.default_rng(seed))
+    perturb_spawn(scene, data, np.random.default_rng(seed))
 
-    car_id = model.body("car").id
-    walls = collision.wall_geom_ids(model)
-    mount = lidar_mount(model)
-    vs_params = VsParams(car=car_geometry(model))
+    car_id = car.body
+    walls = collision.wall_geom_ids(scene.spec, model)
+    mount = lidar_mount(scene)
+    vs_params = VsParams(car=car_geometry(scene))
     dt = 1.0 / params.control_hz
     steps_per_tick = max(1, round(dt / float(model.opt.timestep)))
     max_ticks = int(params.max_sim_time_s / dt)
@@ -107,7 +109,7 @@ def run_trial(
         state, result = step(vs_params, state, angles, ranges, dt)
         tick_times_ms.append((time.perf_counter() - t0) * 1000.0)
 
-        sim.apply_command(data, result.command)
+        sim.apply_command(car, data, result.command)
         for _ in range(steps_per_tick):
             mujoco.mj_step(model, data)
             if collision.car_touches_wall(model, data, car_id, walls):
@@ -186,9 +188,9 @@ def main() -> None:
     parser.add_argument("--trials", type=int, default=10)
     parser.add_argument("--seed0", type=int, default=0, help="seed of the first trial")
     args = parser.parse_args()
-    model = load_track_scene("straight_corridor.xml")
+    scene = load_track_scene("straight_corridor.xml")
     lidar = DenseLidarParams(n_beams=args.n)
-    summarize([run_trial(model, lidar, args.seed0 + i) for i in range(args.trials)])
+    summarize([run_trial(scene, lidar, args.seed0 + i) for i in range(args.trials)])
 
 
 if __name__ == "__main__":

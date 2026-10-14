@@ -11,7 +11,7 @@ racecar_core_adapter.py gives the units and the sign conventions.
 The script does these steps:
   1. It puts the car in a corridor with walls and lets the car settle.
      The LiDAR of a wall follower needs walls to measure.
-  2. It makes a MujocoRacecar for the model and data.
+  2. It makes a MujocoRacecar for the scene and data.
   3. It adds a fake `racecar_core` module to sys.modules.
      The create_racecar() function of this module returns the MujocoRacecar.
   4. It puts the directory of the controller first on sys.path.
@@ -38,6 +38,7 @@ import mujoco
 
 from neoracer_mujoco import assets, sim
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
+from neoracer_mujoco.scene import Scene
 
 # 1.2 s of simulation time at the 0.002 s timestep of the model.
 # straight_corridor.xml is about 16 m long. The wall_follower.yaml config of the
@@ -47,7 +48,7 @@ from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
 DEFAULT_STEPS = 600
 
 
-def load_scene() -> mujoco.MjModel:
+def load_scene() -> Scene:
     """The car at the center of the corridor in assets/tracks/straight_corridor.xml.
     The side LiDAR beams of a wall follower then measure the walls."""
     return assets.compose(
@@ -55,16 +56,14 @@ def load_scene() -> mujoco.MjModel:
     )
 
 
-def build_racecar(
-    model: mujoco.MjModel, steps: int
-) -> tuple[mujoco.MjData, MujocoRacecar]:
-    """Settle the car in model, and make a MujocoRacecar that stops after steps.
+def build_racecar(scene: Scene, steps: int) -> tuple[mujoco.MjData, MujocoRacecar]:
+    """Settle the car in scene, and make a MujocoRacecar that stops after steps.
 
     The MujocoRacecar holds the RB button down by default. A controller that
     drives only while RB is held, like the wall follower, then drives at once.
     """
-    data = sim.settle(model)
-    return data, MujocoRacecar(model, data, max_steps=steps)
+    data = sim.settle(scene.model)
+    return data, MujocoRacecar(scene, data, max_steps=steps)
 
 
 @contextlib.contextmanager
@@ -121,13 +120,15 @@ def run_controller(controller_path: str, steps: int = DEFAULT_STEPS) -> float:
     if path.suffix != ".py":
         raise ValueError(f"controller path must be a .py file, got: {path}")
 
-    data, rc = build_racecar(load_scene(), steps)
-    x0 = float(data.body("car").xpos[0])
+    scene = load_scene()
+    data, rc = build_racecar(scene, steps)
+    car_id = scene.car.body
+    x0 = float(data.xpos[car_id][0])
 
     with controller_imports(rc, path.parent):
         runpy.run_path(str(path), run_name="__main__")
 
-    x1 = float(data.body("car").xpos[0])
+    x1 = float(data.xpos[car_id][0])
     print(
         f"[run_racecar_core] {steps} steps done -- car moved dx={x1 - x0:+.2f}m "
         f"(x: {x0:.2f} -> {x1:.2f})"

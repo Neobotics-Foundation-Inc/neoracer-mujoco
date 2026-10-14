@@ -230,12 +230,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    model = load_track_scene("loop_corridor.xml")
+    scene = load_track_scene("loop_corridor.xml")
     lidar = DenseLidarParams(n_beams=args.n)
     trial_params = LoopTrialParams()
     results: list[LoopTrialResult] = []
     for seed in range(args.seed0, args.seed0 + args.trials):
-        r = run_loop_trial(model, lidar, seed, trial_params)
+        r = run_loop_trial(scene, lidar, seed, trial_params)
         results.append(r)
         print(
             f"seed {seed:3d}: {r.outcome:9s} lap={r.lap_frac:5.2f} "

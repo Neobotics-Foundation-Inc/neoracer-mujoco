@@ -21,7 +21,9 @@ def _steps(model: mujoco.MjModel, seconds: float) -> int:
     return round(seconds / model.opt.timestep)
 
 
-def _drive(scene: Scene, throttle: float, steer: float, seconds: float) -> mujoco.MjData:
+def _drive(
+    scene: Scene, throttle: float, steer: float, seconds: float
+) -> mujoco.MjData:
     """Settle the car, then hold throttle (N·m per wheel) and steer (rad)
     for `seconds`. Return the MjData."""
     model, car = scene.model, scene.car

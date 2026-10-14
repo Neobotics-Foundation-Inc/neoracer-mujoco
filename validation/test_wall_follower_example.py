@@ -24,9 +24,10 @@ _FIXTURE_DIR = Path(__file__).resolve().parent / "testdata" / "ultimate_wall_fol
 
 
 def test_canonical_wall_follower_runs_unmodified_against_mujoco():
-    model = run_racecar_core.load_scene()
-    data, rc = run_racecar_core.build_racecar(model, steps=400)
-    x0 = float(data.body("car").xpos[0])
+    scene = run_racecar_core.load_scene()
+    car = scene.car
+    data, rc = run_racecar_core.build_racecar(scene, steps=400)
+    x0 = float(data.xpos[car.body][0])
 
     # rc.drive, rc.lidar, rc.controller and rc.display work before the
     # controller uses them.
@@ -51,12 +52,12 @@ def test_canonical_wall_follower_runs_unmodified_against_mujoco():
     assert np.all(np.isfinite(scan))
     assert np.all(scan >= 0.0)
 
-    limits = contract.actuator_limits(model)
+    limits = contract.actuator_limits(scene.model, car)
     assert np.isfinite(data.ctrl).all()
-    assert np.all(np.abs(data.ctrl[contract.DRIVE]) <= limits.torque_nm + 1e-6)
-    assert abs(data.ctrl[contract.STEER]) <= limits.steer_rad + 1e-6
+    assert np.all(np.abs(data.ctrl[list(car.drive)]) <= limits.torque_nm + 1e-6)
+    assert abs(data.ctrl[car.steer]) <= limits.steer_rad + 1e-6
 
-    x1 = float(data.body("car").xpos[0])
+    x1 = float(data.xpos[car.body][0])
     assert x1 - x0 > 0.2, (
         f"expected forward progress down the corridor, got dx={x1 - x0:.3f}"
     )

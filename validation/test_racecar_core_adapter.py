@@ -47,7 +47,9 @@ def test_drive_writes_clipped_and_scaled_commands(scene):
                 drive.set_speed_angle(speed, angle)
                 torque = np.clip(speed, -1.0, 1.0) * scale * limits.torque_nm
                 steer = -np.clip(angle, -1.0, 1.0) * limits.steer_rad
-                np.testing.assert_allclose(data.ctrl[list(scene.car.drive)], torque, atol=1e-12)
+                np.testing.assert_allclose(
+                    data.ctrl[list(scene.car.drive)], torque, atol=1e-12
+                )
                 assert data.ctrl[scene.car.steer] == pytest.approx(steer, abs=1e-12)
 
 
@@ -55,7 +57,10 @@ def test_new_drive_uses_the_full_torque(scene):
     """A new MujocoDrive has max_speed 1.0."""
     data = mujoco.MjData(scene.model)
     MujocoDrive(scene, data).set_speed_angle(1.0, 0.0)
-    assert np.all(data.ctrl[list(scene.car.drive)] == contract.actuator_limits(scene.model, scene.car).torque_nm)
+    assert np.all(
+        data.ctrl[list(scene.car.drive)]
+        == contract.actuator_limits(scene.model, scene.car).torque_nm
+    )
 
 
 def test_stop_zeros_drive_and_steer(scene):

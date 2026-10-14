@@ -30,18 +30,21 @@ class DriveParams:
 
 def main() -> None:
     params = DriveParams()
-    model = assets.load()
-    car = car_geometry(model)
+    scene = assets.load()
+    model = scene.model
+    car = car_geometry(scene)
     r_theory = car.wheelbase_m / math.tan(car.steer_max_rad)
     print(
         f"L={car.wheelbase_m}m  delta_max={car.steer_max_rad}rad "
         f"({math.degrees(car.steer_max_rad):.3f}deg)  R_theory={r_theory:.4f}m"
     )
 
-    car_id = model.body("car").id
+    car_id = scene.car.body
     data = sim.settle(model)
     sim.apply_command(
-        data, ControlCommand(throttle=params.throttle_nm, steer=car.steer_max_rad)
+        scene.car,
+        data,
+        ControlCommand(throttle=params.throttle_nm, steer=car.steer_max_rad),
     )
     timestep = float(model.opt.timestep)
     n_steps = round(params.duration_s / timestep)

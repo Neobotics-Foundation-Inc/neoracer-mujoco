@@ -31,13 +31,13 @@ import math
 from dataclasses import dataclass
 from typing import assert_never
 
-import mujoco
 import numpy as np
 import numpy.typing as npt
 from scipy.spatial import KDTree
 
 from neoracer_mujoco import contract
 from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco.scene import Scene
 
 type FloatArray = npt.NDArray[np.float64]  # shape (N,): one value per beam
 type CandidateArray = npt.NDArray[np.float64]  # shape (n_candidates,)
@@ -47,26 +47,32 @@ type ArcArray = npt.NDArray[np.float64]  # shape (n_candidates, n_samples)
 @dataclass(frozen=True)
 class CarGeometry:
     """The car dimensions that the bicycle model uses. Read them from the
-    model with car_geometry()."""
+    scene with car_geometry()."""
 
     wheelbase_m: float  # m; front axle to rear axle
     steer_max_rad: float  # rad; steer_servo ctrlrange upper limit
 
 
-def car_geometry(model: mujoco.MjModel) -> CarGeometry:
-    """Read the wheelbase and the steering limit from a compiled car model.
+def car_geometry(scene: Scene) -> CarGeometry:
+    """Read the wheelbase and the steering limit from a compiled car scene.
 
     The steer_servo command is the steering angle of the bicycle model.
     neoracer.xml converts it to the two front wheel angles (Ackermann
-    geometry), so R = wheelbase / tan(steer) applies directly to ctrl[4].
+    geometry), so R = wheelbase / tan(steer) applies directly to the
+    steer_servo command.
     At full lock this R is 0.68 m. verify_kinematics.py measures about
     0.76 m on the simulated car, probably because the tires slip.
     """
+    front = scene.spec.body("fl_wheel_body")
+    rear = scene.spec.body("rl_wheel_body")
+    if front is None or rear is None:
+        raise ValueError("the scene has no fl_wheel_body or rl_wheel_body")
+    model = scene.model
     return CarGeometry(
         wheelbase_m=float(
-            model.body("fl_wheel_body").pos[0] - model.body("rl_wheel_body").pos[0]
+            model.bind_scalar(front).pos[0] - model.bind_scalar(rear).pos[0]
         ),
-        steer_max_rad=contract.actuator_limits(model).steer_rad,
+        steer_max_rad=contract.actuator_limits(model, scene.car).steer_rad,
     )
 
 

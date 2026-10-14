@@ -168,8 +168,7 @@ def test_car_spawns_clear_of_the_walls(seed, difficulty):
 
     corridor_width = 2 * track.half_width[0]
     nearest = min(
-        float(np.linalg.norm(data.geom_xpos[geom_id][:2]))
-        for geom_id in walls
+        float(np.linalg.norm(data.geom_xpos[geom_id][:2])) for geom_id in walls
     )
     assert nearest >= 0.4 * corridor_width
 

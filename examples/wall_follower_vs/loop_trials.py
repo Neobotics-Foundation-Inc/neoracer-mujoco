@@ -41,6 +41,7 @@ from examples.wall_follower_vs.vehicle_space_controller import (
     turn_radius_m,
 )
 from neoracer_mujoco import collision, sim
+from neoracer_mujoco.scene import Scene
 
 
 @dataclass(frozen=True)
@@ -144,7 +145,7 @@ def _no_path_events(
 
 
 def run_loop_trial(
-    model: mujoco.MjModel,
+    scene: Scene,
     lidar: DenseLidarParams,
     seed: int,
     params: LoopTrialParams = LoopTrialParams(),
@@ -153,13 +154,14 @@ def run_loop_trial(
 ) -> LoopTrialResult:
     """Drive one trial from a spawn pose that rng(seed) perturbs. If verbose
     is true, print one line every log_every ticks."""
+    model, car = scene.model, scene.car
     data = sim.settle(model)
-    perturb_spawn(model, data, np.random.default_rng(seed))
+    perturb_spawn(scene, data, np.random.default_rng(seed))
 
-    car_id = model.body("car").id
-    walls = collision.wall_geom_ids(model)
-    mount = lidar_mount(model)
-    vs_params = VsParams(car=car_geometry(model))
+    car_id = car.body
+    walls = collision.wall_geom_ids(scene.spec, model)
+    mount = lidar_mount(scene)
+    vs_params = VsParams(car=car_geometry(scene))
     dt = 1.0 / params.control_hz
     steps_per_tick = max(1, round(dt / float(model.opt.timestep)))
     max_ticks = int(params.max_sim_time_s / dt)
@@ -198,7 +200,7 @@ def run_loop_trial(
         if len(valid_ranges) > 0:
             min_sensed_range_m = min(min_sensed_range_m, float(valid_ranges.min()))
 
-        sim.apply_command(data, result.command)
+        sim.apply_command(car, data, result.command)
         touched = False
         for _ in range(steps_per_tick):
             mujoco.mj_step(model, data)
@@ -394,12 +396,12 @@ def main() -> None:
     parser.add_argument("--log-every", type=int, default=1, help="ticks per line")
     args = parser.parse_args()
 
-    model = load_track_scene("loop_corridor.xml")
+    scene = load_track_scene("loop_corridor.xml")
     lidar = DenseLidarParams(n_beams=args.n)
     params = LoopTrialParams()
     results = [
         run_loop_trial(
-            model, lidar, args.seed0 + i, params, args.verbose, args.log_every
+            scene, lidar, args.seed0 + i, params, args.verbose, args.log_every
         )
         for i in range(args.trials)
     ]

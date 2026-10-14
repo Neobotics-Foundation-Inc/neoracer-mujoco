@@ -61,7 +61,7 @@ def make_track(seed: int, difficulty: Difficulty) -> Track:
 def describe(seed: int, difficulty: Difficulty) -> None:
     """Generate one track and print what came out."""
     track = make_track(seed, difficulty)
-    model = assets.compose(to_spec(track))
+    model = assets.compose(to_spec(track)).model
     # Curvature is 1/m, so its reciprocal is the radius of the tightest corner.
     tightest_radius = 1.0 / np.abs(track.curvature).max()
     print(
@@ -76,17 +76,17 @@ def describe(seed: int, difficulty: Difficulty) -> None:
 def drive(seed: int, difficulty: Difficulty) -> None:
     """Put the car on a generated track and let the wall follower run it."""
     track = make_track(seed, difficulty)
-    model = assets.compose(to_spec(track))
+    scene = assets.compose(to_spec(track))
+    model, car = scene.model, scene.car
     data = mujoco.MjData(model)
-    layout = sensors.sensor_layout(model)
     dt = model.opt.timestep
     print(
         f"seed {seed}, difficulty {difficulty}: {track.total_length:.1f} m loop, "
         f"{model.ngeom} geoms. Close the viewer window to exit."
     )
 
-    car_id = model.body("car").id
-    walls = collision.wall_geom_ids(model)
+    car_id = car.body
+    walls = collision.wall_geom_ids(scene.spec, model)
     state = PDState()
     with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
@@ -96,9 +96,9 @@ def drive(seed: int, difficulty: Difficulty) -> None:
 
         while viewer.is_running():
             step_start = time.time()
-            readings = sensors.read_layout(layout, data)
+            readings = sensors.read(car.sensors, data.sensordata)
             state, command = wall_following.step(DRIVE_CONFIG, state, readings, dt)
-            sim.apply_command(data, command)
+            sim.apply_command(car, data, command)
             mujoco.mj_step(model, data)
 
             # Touching a wall resets the car to its spawn pose. Clear the

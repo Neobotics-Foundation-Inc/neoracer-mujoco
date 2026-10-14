@@ -38,6 +38,7 @@ from examples.pygame_drive.drive_sim import (
     next_state,
 )
 from neoracer_mujoco import assets, sensors
+from neoracer_mujoco.scene import Scene
 
 
 @dataclass(frozen=True)
@@ -110,7 +111,7 @@ def event_action(gamepad: GamepadParams, event: pygame.event.Event) -> Action:
     return "none"
 
 
-def load_model(track: str, bare: bool) -> mujoco.MjModel:
+def load_model(track: str, bare: bool) -> Scene:
     """The car on a track from assets/tracks/, or the car alone on the
     plane in neoracer.xml."""
     if bare:
@@ -191,12 +192,12 @@ def draw_wasd(
 
 def main(track: str, bare: bool) -> None:
     view, gamepad, hud = ViewParams(), GamepadParams(), HudParams()
-    model = load_model(track, bare)
+    scene = load_model(track, bare)
+    model, car = scene.model, scene.car
     data = mujoco.MjData(model)
     params, state = DriveParams(), DriveState()
-    wheels = drive_wheel_dofs(model)
-    layout = sensors.sensor_layout(model)
-    car_id = model.body("car").id
+    wheels = drive_wheel_dofs(scene)
+    car_id = car.body
 
     # The offscreen buffer must be at least the window size before the
     # Renderer is made. The MJCF default is 640x480.
@@ -247,7 +248,7 @@ def main(track: str, bare: bool) -> None:
         if keys[pygame.K_SPACE]:
             state, inputs = DriveState(), Inputs(0.0, 0.0)  # hard stop, no slew
         state = next_state(params, state, inputs.throttle, inputs.steer, dt)
-        apply_and_step(model, data, params, wheels, state, dt)
+        apply_and_step(scene, data, params, wheels, state, dt)
 
         cam.azimuth = yaw_deg(data.xquat[car_id])
         renderer.update_scene(data, camera=cam)
@@ -255,7 +256,7 @@ def main(track: str, bare: bool) -> None:
         screen.blit(pygame.surfarray.make_surface(frame.swapaxes(0, 1)), (0, 0))
         if timing:
             elapsed += dt
-        ranges = sensors.lidar_ranges(sensors.read_layout(layout, data))
+        ranges = sensors.lidar_ranges(sensors.read(car.sensors, data.sensordata))
         draw_lidar(hud, screen, ranges)
         draw_wasd(hud, screen, keys, key_font)
         color = (0, 255, 90) if timing else (220, 220, 220)
