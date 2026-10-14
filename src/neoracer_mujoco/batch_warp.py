@@ -13,10 +13,14 @@ small amount, and the difference grows after a crash, as two CPU runs with
 slightly different states do.
 """
 
+from collections.abc import Sequence
+
 import jax
 import jax.numpy as jnp
 import mujoco
 from mujoco import mjx
+
+from . import batch
 
 # The most contacts and constraints that one environment holds at once. The
 # car on a track has about 10 contacts and 40 constraints.
@@ -34,11 +38,16 @@ class WarpBatch:
         self._mx = mjx.put_model(model, impl="warp")
         self._step = jax.jit(self._step_batch, static_argnames="nstep")
 
-    def initial(self, data: mujoco.MjData) -> mjx.Data:
-        """A batched mjx.Data with every environment a copy of the physics
-        state of data."""
+    def initial(self, datas: Sequence[mujoco.MjData]) -> mjx.Data:
+        """A batched mjx.Data whose environment i has the physics state of
+        datas[i]. Raise ValueError unless there is one MjData per row."""
+        batch.check_one_per_row(datas, self.nbatch)
+        fields = ("time", "qpos", "qvel", "act", "ctrl", "history")
+        rows = {
+            f: jnp.stack([jnp.asarray(getattr(d, f)) for d in datas]) for f in fields
+        }
 
-        def one_env(_: jax.Array) -> mjx.Data:
+        def one_env(row: dict[str, jax.Array]) -> mjx.Data:
             # Made inside vmap, as MJX requires: Warp keeps one contact and
             # constraint buffer for all environments, not one per environment.
             d = mjx.make_data(
@@ -47,16 +56,9 @@ class WarpBatch:
                 naconmax=self.nbatch * CONTACTS_PER_ENV,
                 njmax=CONSTRAINTS_PER_ENV,
             )
-            return d.replace(
-                time=jnp.asarray(data.time),
-                qpos=jnp.asarray(data.qpos),
-                qvel=jnp.asarray(data.qvel),
-                act=jnp.asarray(data.act),
-                ctrl=jnp.asarray(data.ctrl),
-                history=jnp.asarray(data.history),
-            )
+            return d.replace(**row)
 
-        return jax.jit(jax.vmap(one_env))(jnp.arange(self.nbatch))
+        return jax.jit(jax.vmap(one_env))(rows)
 
     def _step_batch(
         self, state: mjx.Data, ctrl: jax.Array, nstep: int

@@ -135,7 +135,7 @@ from neoracer_mujoco import assets, batch, sim
 
 scene = assets.load()
 cpu = batch.CpuBatch(scene.model, nbatch=64, nthread=4)
-state = cpu.initial(sim.settle(scene.model))  # 64 copies of a car at rest
+state = cpu.initial([sim.settle(scene.model)] * 64)  # 64 copies of a car at rest
 throttle, steer = np.full(64, 0.1), np.zeros(64)  # N·m, rad
 ctrl = batch.command(scene.model, scene.car, throttle, steer)
 state, sensordata = cpu.step(state, ctrl, nstep=17)  # sensordata: (64, 17, n)
@@ -160,7 +160,7 @@ from neoracer_mujoco import assets, batch, batch_warp, sim
 
 scene = assets.load()
 gpu = batch_warp.WarpBatch(scene.model, nbatch=4096)
-state = gpu.initial(sim.settle(scene.model))
+state = gpu.initial([sim.settle(scene.model)] * 4096)
 throttle, steer = jnp.full(4096, 0.1), jnp.zeros(4096)
 ctrl = batch.command(scene.model, scene.car, throttle, steer)
 state, sensordata = gpu.step(state, ctrl, nstep=17)
