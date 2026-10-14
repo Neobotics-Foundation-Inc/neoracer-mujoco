@@ -323,3 +323,22 @@ def test_the_warp_batch_follows_the_cpu_batch_with_its_physics():
     cpu_pos = batch.read(scene.model, cpu_data[:, -1], pos)
     warp_pos = np.asarray(batch.read(scene.model, warp_data[:, -1], pos))
     np.testing.assert_allclose(warp_pos, cpu_pos, atol=1e-3)
+
+
+def test_the_warp_batch_reset_gives_a_row_the_physics_of_initial():
+    """After a reset with a mixed done mask, every physics field of a done
+    row is that of initial, and every field of the other rows is unchanged.
+    This test runs only where the jax extra is installed."""
+    jnp, batch_warp = _warp_modules()
+    scene = _loop_scene()
+    warp = batch_warp.WarpBatch(scene, 4)
+    datas = [sim.settle(scene.model)] * 4
+    before = warp.initial(datas, _random_physics(4, seed=2))
+    initial = warp.initial(datas, _random_physics(4, seed=3))
+    done = np.array([True, False, True, False])
+    reset = warp.reset(before, jnp.asarray(done), initial)
+    for name in physics.FIELDS:
+        after, old, new = (np.asarray(s.fields[name]) for s in (reset, before, initial))
+        assert not np.array_equal(old, new), name
+        np.testing.assert_array_equal(after[done], new[done], err_msg=name)
+        np.testing.assert_array_equal(after[~done], old[~done], err_msg=name)

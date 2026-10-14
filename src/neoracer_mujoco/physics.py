@@ -24,9 +24,10 @@ each different Physics, so build its scene with visuals=False: the model is
 """
 
 import copy
-import functools
+import math
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from typing import Any
 
 import mujoco
 import numpy as np
@@ -48,6 +49,12 @@ class Physics:
     )
     steer_stiffness: float = 1.0  # x the stiffness (kp) of the steering servo
 
+    def __post_init__(self) -> None:
+        for f in fields(self):
+            value = getattr(self, f.name)
+            if not (math.isfinite(value) and value > 0.0):
+                raise ValueError(f"{f.name} must be finite and > 0, not {value}")
+
 
 @dataclass(frozen=True)
 class Range:
@@ -57,8 +64,8 @@ class Range:
     high: float = 1.0
 
     def __post_init__(self) -> None:
-        if not 0.0 < self.low <= self.high:
-            raise ValueError(f"a range needs 0 < low <= high, not {self}")
+        if not 0.0 < self.low <= self.high < math.inf:
+            raise ValueError(f"a range needs 0 < low <= high < inf, not {self}")
 
 
 @dataclass(frozen=True)
@@ -125,9 +132,12 @@ FIELDS = (
 )
 
 
-def field(model: mujoco.MjModel, name: str) -> object:
-    """The field of model that name in FIELDS names."""
-    return functools.reduce(getattr, name.split("."), model)
+def field(model: mujoco.MjModel, name: str) -> npt.NDArray[np.float64]:
+    """The value of the field of model that name in FIELDS names."""
+    value: Any = model
+    for part in name.split("."):
+        value = getattr(value, part)
+    return np.asarray(value)
 
 
 def field_rows(
@@ -136,9 +146,9 @@ def field_rows(
     """For each name in FIELDS, the value of that field in a model with
     physics[i] applied, stacked over i: shape (len(physics), *field shape)."""
     scratch = copy.deepcopy(scene.model)
-    rows: dict[str, list[npt.NDArray[np.float64]]] = {f: [] for f in FIELDS}
+    distinct: dict[Physics, dict[str, npt.NDArray[np.float64]]] = {}
     for p in physics:
-        apply_physics(scratch, scene, p)
-        for f in FIELDS:
-            rows[f].append(np.array(field(scratch, f)))
-    return {f: np.stack(v) for f, v in rows.items()}
+        if p not in distinct:
+            apply_physics(scratch, scene, p)
+            distinct[p] = {f: np.array(field(scratch, f)) for f in FIELDS}
+    return {f: np.stack([distinct[p][f] for p in physics]) for f in FIELDS}
