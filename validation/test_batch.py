@@ -33,7 +33,7 @@ def _commands(seed: int) -> np.ndarray:
 def _batch_run(scene: Scene, nthread: int) -> np.ndarray:
     """The sensordata of every call of a CpuBatch, (CALLS, NBATCH, NSTEP, n)."""
     sim_batch = batch.CpuBatch(scene.model, NBATCH, nthread)
-    state = sim_batch.initial(sim.settle(scene.model))
+    state = sim_batch.initial([sim.settle(scene.model)] * NBATCH)
     out = []
     for c in _commands(0):
         ctrl = batch.command(scene.model, scene.car, c[:, 0], c[:, 1])
@@ -101,7 +101,7 @@ def test_read_gives_the_bound_sensor_values(scene):
 def test_reset_replaces_only_the_rows_that_are_done():
     scene = assets.load()
     sim_batch = batch.CpuBatch(scene.model, 4, nthread=0)
-    initial = sim_batch.initial(sim.settle(scene.model))
+    initial = sim_batch.initial([sim.settle(scene.model)] * 4)
     ctrl = batch.command(scene.model, scene.car, np.full(4, 0.3), np.zeros(4))
     state, _ = sim_batch.step(initial, ctrl, NSTEP)
     done = np.array([True, False, False, True])
@@ -141,7 +141,7 @@ def test_the_warp_batch_follows_the_cpu_batch():
     scene = _loop_scene()
     data = sim.settle(scene.model)
     cpu, warp = batch.CpuBatch(scene.model, 4, 2), batch_warp.WarpBatch(scene.model, 4)
-    cpu_state, warp_state = cpu.initial(data), warp.initial(data)
+    cpu_state, warp_state = cpu.initial([data] * 4), warp.initial([data] * 4)
     throttle, steer = np.array([0.0, 0.1, 0.2, 0.3]), np.array([0.0, 0.2, -0.2, 0.1])
     cpu_ctrl = batch.command(scene.model, scene.car, throttle, steer)
     warp_ctrl = batch.command(
@@ -165,7 +165,7 @@ def test_the_warp_batch_resets_only_the_rows_that_are_done():
     jnp, batch_warp = _warp_modules()
     scene = _loop_scene()
     warp = batch_warp.WarpBatch(scene.model, 4)
-    initial = warp.initial(sim.settle(scene.model))
+    initial = warp.initial([sim.settle(scene.model)] * 4)
     ctrl = batch.command(scene.model, scene.car, jnp.full(4, 0.3), jnp.zeros(4))
     state, _ = warp.step(initial, ctrl, NSTEP)
     done = jnp.array([True, False, True, False])
@@ -184,8 +184,39 @@ def test_step_rejects_zero_steps():
     asks for at least one step."""
     scene = assets.load()
     sim_batch = batch.CpuBatch(scene.model, 2, nthread=0)
-    state = sim_batch.initial(mujoco.MjData(scene.model))
+    state = sim_batch.initial([mujoco.MjData(scene.model)] * 2)
     ctrl = batch.command(scene.model, scene.car, np.zeros(2), np.zeros(2))
     with pytest.raises(ValueError, match="nstep"):
         sim_batch.step(state, ctrl, 0)
     sim_batch.close()
+
+
+def _cpu_batch(model: mujoco.MjModel, nbatch: int) -> batch.CpuBatch:
+    return batch.CpuBatch(model, nbatch, nthread=0)
+
+
+def _warp_batch(model: mujoco.MjModel, nbatch: int):
+    _, batch_warp = _warp_modules()
+    return batch_warp.WarpBatch(model, nbatch)
+
+
+@pytest.mark.parametrize("make", [_cpu_batch, _warp_batch], ids=["cpu", "warp"])
+def test_each_row_starts_from_its_own_data(make):
+    """initial takes one MjData per row, so the rows can start apart, in
+    their order, and rejects a list of another length. The warp case runs
+    only where the jax extra is installed."""
+    scene = assets.load()
+    datas = [sim.settle(scene.model) for _ in range(3)]
+    for i, data in enumerate(datas):
+        data.bind_scalar(scene.car.joint).qpos[0] += i  # m, along +X
+        mujoco.mj_forward(scene.model, data)
+    sim_batch = make(scene.model, 3)
+    zeros = np.zeros(3)
+    ctrl = batch.command(scene.model, scene.car, zeros, zeros)
+    _, sensordata = sim_batch.step(sim_batch.initial(datas), ctrl, 1)
+    x = np.asarray(batch.read(scene.model, sensordata[:, -1], scene.car.truth.pos))
+    np.testing.assert_allclose(np.diff(x[:, 0]), 1.0, atol=1e-6)
+    with pytest.raises(ValueError, match="one MjData per row"):
+        sim_batch.initial(datas[:2])
+    if isinstance(sim_batch, batch.CpuBatch):
+        sim_batch.close()

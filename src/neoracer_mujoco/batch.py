@@ -15,7 +15,7 @@ A batch holds nbatch environments of one MjModel. You choose the backend:
 Both have the same methods (the Batch protocol):
 
     sim = CpuBatch(scene.model, nbatch=64, nthread=4)
-    initial = sim.initial(data)  # every row is a copy of data
+    initial = sim.initial([data] * 64)  # one MjData per row
     ctrl = command(scene.model, scene.car, throttle, steer)  # (64, nu)
     state, sensordata = sim.step(initial, ctrl, nstep=17)  # (64, 17, nsensordata)
     zaxis = read(scene.model, sensordata[:, -1], scene.car.truth.zaxis)  # (64, 3)
@@ -31,6 +31,7 @@ model and index the array with its address. They are the only code that
 uses an address. They work on numpy and JAX arrays alike.
 """
 
+from collections.abc import Sequence
 from typing import Any, Protocol
 
 import mujoco
@@ -62,7 +63,7 @@ class Batch[S, A, M](Protocol):
 
     nbatch: int
 
-    def initial(self, data: mujoco.MjData) -> S: ...
+    def initial(self, datas: Sequence[mujoco.MjData]) -> S: ...
 
     def step(self, state: S, ctrl: A, nstep: int) -> tuple[S, A]: ...
 
@@ -81,11 +82,14 @@ class CpuBatch:
         # rollout steps each row on the MjData of the thread that runs it.
         self._datas = [mujoco.MjData(model) for _ in range(max(nthread, 1))]
 
-    def initial(self, data: mujoco.MjData) -> States:
-        """A state with every row a copy of the physics state of data."""
-        row = np.empty(mujoco.mj_stateSize(self.model, FULL_PHYSICS))
-        mujoco.mj_getState(self.model, data, row, FULL_PHYSICS)
-        return np.tile(row, (self.nbatch, 1))
+    def initial(self, datas: Sequence[mujoco.MjData]) -> States:
+        """A state whose row i is the physics state of datas[i]. Raise
+        ValueError unless there is one MjData per row."""
+        check_one_per_row(datas, self.nbatch)
+        rows = np.empty((self.nbatch, mujoco.mj_stateSize(self.model, FULL_PHYSICS)))
+        for row, data in zip(rows, datas, strict=True):
+            mujoco.mj_getState(self.model, data, row, FULL_PHYSICS)
+        return rows
 
     def step(self, state: States, ctrl: Rows, nstep: int) -> tuple[States, SensorData]:
         """Hold ctrl (nbatch, nu) for nstep >= 1 steps. Return the state after
@@ -105,6 +109,14 @@ class CpuBatch:
 
     def close(self) -> None:
         self._pool.close()
+
+
+def check_one_per_row(datas: Sequence[mujoco.MjData], nbatch: int) -> None:
+    """Raise ValueError unless datas has one MjData for each of nbatch rows."""
+    if len(datas) != nbatch:
+        raise ValueError(
+            f"initial needs one MjData per row: {nbatch}, not {len(datas)}"
+        )
 
 
 def command[A: Array](model: mujoco.MjModel, car: Car, throttle: A, steer: A) -> A:
