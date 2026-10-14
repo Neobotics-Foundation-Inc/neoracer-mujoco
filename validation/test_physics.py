@@ -130,3 +130,11 @@ def test_sample_draws_each_factor_from_its_range():
 def test_a_range_needs_0_below_low_below_high(low, high):
     with pytest.raises(ValueError, match="range"):
         Range(low, high)
+
+
+def test_a_range_of_one_value_takes_no_draw():
+    """Sampling the default ranges leaves the generator as it was, so adding
+    physics randomization with no ranges changes no other random draw."""
+    rng = np.random.default_rng(0)
+    assert physics.sample(PhysicsRanges(), rng) == Physics()
+    assert rng.uniform() == np.random.default_rng(0).uniform()

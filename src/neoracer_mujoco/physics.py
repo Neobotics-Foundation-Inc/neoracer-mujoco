@@ -73,10 +73,11 @@ class PhysicsRanges:
 
 def sample(ranges: PhysicsRanges, rng: np.random.Generator) -> Physics:
     """A Physics with each factor drawn uniformly from its range, in the
-    order of the fields."""
+    order of the fields. A range of one value takes no draw from rng, so
+    PhysicsRanges() leaves rng as it was."""
 
     def draw(r: Range) -> float:
-        return float(rng.uniform(r.low, r.high))
+        return r.low if r.low == r.high else float(rng.uniform(r.low, r.high))
 
     return Physics(
         wheel_friction=draw(ranges.wheel_friction),
