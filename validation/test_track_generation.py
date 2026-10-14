@@ -30,7 +30,12 @@ from neoracer_mujoco.track_generation import (
     to_mjcf,
     to_spec,
 )
-from neoracer_mujoco.track_generation.mjcf import decimate_closed, to_start_frame
+from neoracer_mujoco.track_generation.mjcf import (
+    decimate_closed,
+    lap_distance,
+    split_to,
+    to_start_frame,
+)
 from neoracer_mujoco.truth import WALLS_BODY
 
 # The largest geom count of a composed scene: walls, floor and car. Over
@@ -225,3 +230,62 @@ def test_generated_track_keeps_the_car_solver_options(seed):
 @pytest.mark.parametrize("seed", range(2))
 def test_car_comes_to_rest_on_a_generated_track(seed):
     assert_car_rests(_scene(seed, 3))
+
+
+# --- fixed-size walls and the lap distance -------------------------------------
+
+FIXED = WallParams(boxes_per_wall=192)
+
+
+def test_a_fixed_box_count_gives_every_track_the_same_model_size():
+    """With boxes_per_wall, tracks of every difficulty compile to models with
+    the same geoms and bodies, so a batch can step one per row."""
+    sizes = set()
+    for seed, difficulty in itertools.product(range(3), (0, 3)):
+        model = assets.compose(to_spec(_track(seed, difficulty), FIXED)).model
+        sizes.add((model.ngeom, model.nbody, model.nq, model.nsensordata))
+    assert len(sizes) == 1
+
+
+@pytest.mark.parametrize("difficulty", [0, 3])
+def test_split_walls_still_track_the_edges(difficulty):
+    """split_to only splits chords, so every box stays within max_deviation of
+    the edge and the boxes cover the whole loop."""
+    track = _track(1, difficulty)
+    walls = WallParams()
+    for edge in (left_edge(track), right_edge(track)):
+        edge = to_start_frame(track, edge)
+        kept = split_to(
+            decimate_closed(edge, walls.segment_length, walls.max_deviation), 192
+        )
+        assert len(kept) - 1 == 192 and kept[0] == 0 and kept[-1] == len(edge)
+        for i, j in itertools.pairwise(kept):
+            first, last = edge[i], edge[j % len(edge)]
+            chord = last - first
+            interior = edge[i + 1 : j] - first
+            if len(interior) == 0:
+                continue
+            across = chord[0] * interior[:, 1] - chord[1] * interior[:, 0]
+            assert (
+                np.abs(across).max() / np.linalg.norm(chord)
+                <= walls.max_deviation + 1e-9
+            )
+
+
+def test_split_to_refuses_fewer_boxes_than_a_wall_needs():
+    with pytest.raises(ValueError, match="boxes_per_wall"):
+        split_to([0, 5, 10, 15], 2)
+
+
+@pytest.mark.parametrize("difficulty", [0, 3])
+def test_lap_distance_finds_the_sample_across_the_corridor(difficulty):
+    """A point on the centerline, or moved across the corridor by up to 80% of
+    its half-width, is at the distance along the loop of its sample."""
+    track = _track(2, difficulty)
+    samples = np.arange(0, len(track.center), 7)
+    for side in (-0.8, 0.0, 0.8):
+        moved = track.center + side * track.half_width[:, None] * track.left_normal
+        xy = to_start_frame(track, moved)[samples]
+        np.testing.assert_array_equal(
+            lap_distance(track, xy), track.distance_along[samples]
+        )

@@ -17,6 +17,7 @@ from importlib import resources
 
 import mujoco
 import numpy as np
+import numpy.typing as npt
 
 from .shape import Points
 from .track import Track, left_edge, right_edge
@@ -33,6 +34,10 @@ class WallParams:
     segment_length: float = 0.5
     max_deviation: float = 0.01  # m; how far an edge may bow away from a wall box
     floor_margin: float = 1.0  # m of floor beyond the outermost wall
+    # None: as few boxes as the two caps above allow. A number: exactly that
+    # many boxes in each wall, so that every track compiles to a model of the
+    # same size, as a batch with one track per row needs (see split_to).
+    boxes_per_wall: int | None = None
 
 
 def to_start_frame(track: Track, points: Points) -> Points:
@@ -104,6 +109,25 @@ def decimate_closed(
     return kept
 
 
+def split_to(kept: list[int], count: int) -> list[int]:
+    """kept, a list of decimate_closed, with the longest segments split at
+    their middle sample until there are count segments. Splitting a chord
+    only brings it closer to the polyline, so both caps still hold. Raise
+    ValueError if kept already has more than count segments."""
+    if len(kept) - 1 > count:
+        raise ValueError(
+            f"this wall needs {len(kept) - 1} boxes, more than boxes_per_wall={count}"
+        )
+    kept = list(kept)
+    while len(kept) - 1 < count:
+        spans = np.diff(kept)
+        longest = int(np.argmax(spans))
+        if spans[longest] < 2:
+            raise ValueError(f"a wall of {kept[-1]} samples cannot have {count} boxes")
+        kept.insert(longest + 1, kept[longest] + int(spans[longest]) // 2)
+    return kept
+
+
 def _wall_boxes(edge: Points, name_prefix: str, walls: WallParams) -> list[str]:
     """MJCF <geom> lines for one wall: one box per decimated segment, centred on
     its midpoint and yawed to lie along it.
@@ -112,6 +136,8 @@ def _wall_boxes(edge: Points, name_prefix: str, walls: WallParams) -> list[str]:
     overlap at their corners instead of leaving a notch for a wheel to catch in.
     """
     kept = decimate_closed(edge, walls.segment_length, walls.max_deviation)
+    if walls.boxes_per_wall is not None:
+        kept = split_to(kept, walls.boxes_per_wall)
     thickness, height = walls.thickness, walls.height
     lines = []
     for n, (i, j) in enumerate(itertools.pairwise(kept)):
@@ -170,7 +196,20 @@ def to_mjcf(track: Track, walls: WallParams = WallParams()) -> str:
     )
 
 
-def to_spec(track: Track) -> mujoco.MjSpec:
-    """The scenery of to_mjcf, with the default WallParams, as an MjSpec for
-    assets.compose."""
-    return mujoco.MjSpec.from_string(to_mjcf(track))
+def lap_distance(track: Track, xy: npt.ArrayLike) -> npt.NDArray[np.float64]:
+    """The distance (m) along the centerline, from the start, of the sample
+    nearest to each point of xy (..., 2) in the frame of to_mjcf, where the
+    car starts at the origin facing +X. It is in [0, total_length).
+
+    Limit: the nearest sample is the right one only while the point is in
+    the corridor, which reject.py keeps apart from the rest of the loop."""
+    center = to_start_frame(track, track.center)  # (N, 2)
+    points = np.asarray(xy, dtype=np.float64)
+    gaps = points[..., None, :] - center  # (..., N, 2)
+    nearest = np.argmin(np.einsum("...ij,...ij->...i", gaps, gaps), axis=-1)
+    return track.distance_along[nearest]
+
+
+def to_spec(track: Track, walls: WallParams = WallParams()) -> mujoco.MjSpec:
+    """The scenery of to_mjcf as an MjSpec, for assets.compose."""
+    return mujoco.MjSpec.from_string(to_mjcf(track, walls))
