@@ -8,7 +8,7 @@ Coding agents read AGENTS.md instead.
 - Run `ruff check .` and `ruff format .`. CI runs `ruff check .` and `ruff format --check .`.
 - Run `ty check`. CI runs it too.
   ty needs the mujoco stubs in `typings/`.
-  Make them with `pybind11-stubgen mujoco mujoco.viewer -o typings` after you install or update mujoco.
+  Make them with `pybind11-stubgen mujoco mujoco.viewer mujoco.rollout -o typings` after you install or update mujoco.
 - Run `python -m pytest validation`. Put a new test in `validation/test_<module>.py`, never in the module it tests.
 - Keep the tests green after each commit.
   If a change alters behavior, change its test in the same commit.

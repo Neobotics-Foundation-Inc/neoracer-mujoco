@@ -61,6 +61,7 @@ python3 -m pytest validation/ -v
 │   ├── scene.py           — Scene (spec + model) and Car, the car's parts as spec elements
 │   ├── sensors.py         — SensorReadings, find_sensors() + read()
 │   ├── truth.py           — sensors that only the simulator has: car pose, wall contact
+│   ├── batch.py           — step many copies of a scene at once (mujoco.rollout, or MuJoCo Warp)
 │   ├── sim.py             — settle, step and command helpers, physics probes
 │   ├── control/           — classical controllers (track_centering)
 │   └── track_generation/  — procedural racetracks (generate_track → Track → MJCF)
@@ -118,6 +119,20 @@ The real car cannot measure where it is or whether it touches a wall, so `neorac
 | truth_wall_contact | the number of contacts between the car and a wall | `scene.car.truth.wall_contact` |
 
 A wall is a geom of the body named `walls`. The tracks in `assets/tracks/` and the generated tracks put every wall there. With these sensors, a step can read everything it needs from `data.sensordata`, which `mujoco.rollout` and MuJoCo Warp also return for every step of a batch. `collision.car_touches_wall(data, scene.car)` and `sim.car_upright_cos(data, scene.car)` read them.
+
+### Batches
+
+`batch.py` steps many copies of one scene at once. `CpuBatch` steps rows of physics state with `mujoco.rollout` on a pool of threads, which run in C and use every core. `batch_warp.WarpBatch` steps a batched `mjx.Data` with MJX on MuJoCo Warp, on a CUDA GPU; it needs the `jax` extra (`pip install "neoracer-mujoco[jax]"`). `make_batch(model, nbatch, default_backend())` picks Warp when JAX sees a GPU.
+
+```python
+sim = batch.make_batch(scene.model, nbatch=64, backend=batch.default_backend())
+state = sim.initial(data)  # every row a copy of data
+ctrl = batch.command(scene.model, scene.car, throttle, steer)  # (64, nu)
+state, sensordata = sim.step(state, ctrl, nstep=17)  # (64, 17, nsensordata)
+upright = batch.read(scene.model, sensordata[:, -1], scene.car.truth.zaxis)[:, 2]
+```
+
+Each `step` starts the constraint solver cold, and a CPU row is then the same, bit for bit, as one MjData stepped the same way. Warp computes collisions and constraints with its own code, so its rows are close to the CPU rows, not equal: after ten env steps from rest, within 1 mm. On 4 CPU cores, a batch of 64 runs about 3,200 env steps/s (17 physics steps each), against about 2,400 for threads that step one MjData each.
 
 ## Track generation (`src/neoracer_mujoco/track_generation/`)
 
