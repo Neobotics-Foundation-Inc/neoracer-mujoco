@@ -38,6 +38,8 @@ def assert_car_rests(scene: Scene) -> None:
     """Check that the car settles on the floor of the scene with zero
     control: it does not fall through and it does not move."""
     data = sim.settle(scene.model)
-    z = float(data.xpos[scene.car.body][2])
+    z = float(data.bind_scalar(scene.car.body).xpos[2])
     assert 0.05 < z < 0.2, f"car z = {z:.3f} m"
-    assert float(np.linalg.norm(data.qvel[scene.car.qvel][:3])) < 0.05  # m/s
+    assert (
+        float(np.linalg.norm(data.bind_scalar(scene.car.joint).qvel[:3])) < 0.05
+    )  # m/s

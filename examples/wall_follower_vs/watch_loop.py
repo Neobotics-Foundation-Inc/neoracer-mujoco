@@ -54,7 +54,6 @@ def main() -> None:
     data = sim.settle(model)
     perturb_spawn(scene, data, np.random.default_rng(args.seed))
 
-    car_id = car.body
     mount = lidar_mount(scene)
     lidar = DenseLidarParams(n_beams=args.n)
     vs_params = VsParams(car=car_geometry(scene))
@@ -65,7 +64,7 @@ def main() -> None:
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-        viewer.cam.trackbodyid = car_id
+        viewer.cam.trackbodyid = model.bind_scalar(car.body).id
         viewer.cam.distance = params.camera_distance_m
         viewer.cam.azimuth = params.camera_azimuth_deg
         viewer.cam.elevation = params.camera_elevation_deg

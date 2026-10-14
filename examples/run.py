@@ -30,6 +30,7 @@ import mujoco.viewer
 
 from neoracer_mujoco import assets, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco.scene import Car
 
 type Mode = Literal["safe", "full"]
 
@@ -93,13 +94,13 @@ def _command(params: DriveParams, t: float, speed_ms: float) -> ControlCommand:
 def _log(
     params: DriveParams,
     data: mujoco.MjData,
-    car_id: int,
+    car: Car,
     command: ControlCommand,
     readings: sensors.SensorReadings,
     speed_ms: float,
 ) -> None:
     """Print one diagnostic line."""
-    car_z = data.xpos[car_id][2]
+    car_z = data.bind_scalar(car.body).xpos[2]
     roll, pitch = _roll_pitch_deg(readings.imu_quat)
     yaw_rate = math.degrees(readings.imu_gyro[2])  # deg/s
 
@@ -137,7 +138,6 @@ def main() -> None:
     scene = assets.load()
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
-    car_id = car.body
 
     print(f"NeoRacer viewer — mode={args.mode}")
     print(
@@ -148,7 +148,7 @@ def main() -> None:
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-        viewer.cam.trackbodyid = car_id
+        viewer.cam.trackbodyid = model.bind_scalar(car.body).id
         viewer.cam.distance = 1.2  # m from the car
         viewer.cam.azimuth = 90  # deg
         viewer.cam.elevation = -30  # deg; negative = the camera looks down
@@ -157,7 +157,7 @@ def main() -> None:
         while viewer.is_running():
             loop_start = time.time()
 
-            readings = sensors.read(car.sensors, data.sensordata)
+            readings = sensors.read(car.sensors, data)
             speed = sensors.estimated_linear_speed_ms(
                 sensors.motor_encoder_rad_s(readings)
             )
@@ -169,7 +169,7 @@ def main() -> None:
 
             step += 1
             if step % params.print_every_steps == 0:
-                _log(params, data, car_id, command, readings, speed)
+                _log(params, data, car, command, readings, speed)
 
             # Sleep only for the rest of this timestep, so the simulation
             # keeps pace with real time.

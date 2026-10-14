@@ -27,7 +27,7 @@ def test_canonical_wall_follower_runs_unmodified_against_mujoco():
     scene = run_racecar_core.load_scene()
     car = scene.car
     data, rc = run_racecar_core.build_racecar(scene, steps=400)
-    x0 = float(data.xpos[car.body][0])
+    x0 = float(data.bind_scalar(car.body).xpos[0])
 
     # rc.drive, rc.lidar, rc.controller and rc.display work before the
     # controller uses them.
@@ -54,10 +54,11 @@ def test_canonical_wall_follower_runs_unmodified_against_mujoco():
 
     limits = contract.actuator_limits(scene.model, car)
     assert np.isfinite(data.ctrl).all()
-    assert np.all(np.abs(data.ctrl[list(car.drive)]) <= limits.torque_nm + 1e-6)
-    assert abs(data.ctrl[car.steer]) <= limits.steer_rad + 1e-6
+    for motor in car.drive:
+        assert abs(data.bind_scalar(motor).ctrl[0]) <= limits.torque_nm + 1e-6
+    assert abs(data.bind_scalar(car.steer).ctrl[0]) <= limits.steer_rad + 1e-6
 
-    x1 = float(data.xpos[car.body][0])
+    x1 = float(data.bind_scalar(car.body).xpos[0])
     assert x1 - x0 > 0.2, (
         f"expected forward progress down the corridor, got dx={x1 - x0:.3f}"
     )

@@ -91,11 +91,11 @@ A parser checks a value and returns a type that keeps the result.
   The edges are files, the MuJoCo model, the command line and raw sensor arrays.
 - A parser returns the typed value or raises an error with a clear message.
   `def parse_side(text: str) -> Side`, not `def check_side(text: str) -> None`.
-- Keep the `MjSpec` next to the compiled model (`scene.Scene`).
-  Find each part of the model once, with `model.bind` on an element of that spec, and keep the indices in a frozen dataclass (`scene.CarIndex`).
-  Do not call `mj_name2id`, `model.body(name)` or `getattr(obj, name, None)`, and do not compute addresses by hand (`jnt_qposadr`, `sensor_adr`).
-  The step loop then reads and writes plain arrays (`data.ctrl`, `data.qpos`, `data.sensordata`) with these indices.
-  Plain indexing works the same on numpy, JAX and Warp arrays, so the step code can move to those backends.
+- Keep the `MjSpec` next to the compiled model (`scene.Scene`), and refer to each part of the model by its spec element (`scene.Car`).
+  Read and write a part by binding it where you use it: `data.bind(car.steer).ctrl = steer`, `data.bind(car.joint).qpos`.
+  Do not keep ids or indices, call `mj_name2id` or `model.body(name)`, or compute addresses (`jnt_qposadr`, `sensor_adr`).
+  MJX has the same bind (`dx.bind(mx, element)`), so the step code keeps its shape on the JAX backend.
+  In code, call `bind_scalar`: it is `bind` for one element, and the generated type stubs get `bind` wrong.
 - After the edge, the code trusts the type. Do not check the same property again.
 - Some invariants have no Python type, for example "a positive float".
   Check such an invariant once, where the value is made (`__post_init__` of its params).

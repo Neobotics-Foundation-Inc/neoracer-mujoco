@@ -140,7 +140,8 @@ def test_impossible_limits_return_no_valid_track():
 
 @pytest.mark.parametrize("seed", range(3))
 def test_generated_track_compiles_with_the_car_on_it(seed):
-    assert _scene(seed, 3).car.body > 0
+    scene = _scene(seed, 3)
+    assert scene.model.bind_scalar(scene.car.body).id > 0
 
 
 @pytest.mark.parametrize("seed", range(3))
@@ -164,7 +165,7 @@ def test_car_spawns_clear_of_the_walls(seed, difficulty):
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
 
-    assert not car_touches_wall(model, data, scene.car.body, walls)
+    assert not car_touches_wall(model, data, scene.car, walls)
 
     corridor_width = 2 * track.half_width[0]
     nearest = min(

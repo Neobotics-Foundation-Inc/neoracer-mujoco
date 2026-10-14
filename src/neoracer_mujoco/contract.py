@@ -12,8 +12,8 @@ Frame: +X forward, +Y left, +Z up.
 Actuators:
   fl/fr/rl/rr_motor = wheel drive torque (N·m), + = forward
   steer_servo       = steering target angle (rad), + = left
-Their order in data.ctrl is not part of the contract: scene.CarIndex holds
-the ctrl index of each one.
+Their order in the XML is not part of the contract: code binds each one by
+its element in the scene's MjSpec (scene.Car).
 """
 
 from dataclasses import dataclass
@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import mujoco
 
 if TYPE_CHECKING:  # scene.py imports this module
-    from .scene import CarIndex
+    from .scene import Car
 
 # --- actuators ---------------------------------------------------------------
 DRIVE_ACTUATORS = ("fl_motor", "fr_motor", "rl_motor", "rr_motor")
@@ -68,14 +68,14 @@ class ActuatorLimits:
     steer_rad: float  # rad; ctrlrange is [-steer_rad, steer_rad]
 
 
-def actuator_limits(model: mujoco.MjModel, car: CarIndex) -> ActuatorLimits:
+def actuator_limits(model: mujoco.MjModel, car: Car) -> ActuatorLimits:
     """Read the actuator limits of the car in model, once per model. Raise
     ValueError if the four drive ranges differ, or a range is not symmetric
     about 0: the env and MujocoDrive send one torque to all four wheels and
     negate the limit for a negative command."""
-    drive = [tuple(float(x) for x in model.actuator_ctrlrange[i]) for i in car.drive]
+    drive = [tuple(float(x) for x in model.bind_scalar(a).ctrlrange) for a in car.drive]
     low, high = drive[0]
-    steer_low, steer_high = model.actuator_ctrlrange[car.steer]
+    steer_low, steer_high = model.bind_scalar(car.steer).ctrlrange
     problems = []
     if any(r != drive[0] for r in drive):
         problems.append(f"the drive ctrlranges differ: {drive}")

@@ -24,7 +24,16 @@ from neoracer_mujoco.racecar_core_adapter import (
 
 
 def _set_beam(scene: Scene, data: mujoco.MjData, name: str, meters: float) -> None:
-    data.sensordata[getattr(scene.car.sensors, name)] = meters
+    data.bind_scalar(scene.spec.sensor(name)).data[0] = meters
+
+
+def _drive_ctrl(scene: Scene, data: mujoco.MjData) -> np.ndarray:
+    """The ctrl (N·m) of the fl, fr, rl and rr drive motors."""
+    return np.array([data.bind_scalar(motor).ctrl[0] for motor in scene.car.drive])
+
+
+def _steer_ctrl(scene: Scene, data: mujoco.MjData) -> float:
+    return float(data.bind_scalar(scene.car.steer).ctrl[0])
 
 
 # --- Drive: the ctrl mapping, without physics ----------------------------------
@@ -47,20 +56,16 @@ def test_drive_writes_clipped_and_scaled_commands(scene):
                 drive.set_speed_angle(speed, angle)
                 torque = np.clip(speed, -1.0, 1.0) * scale * limits.torque_nm
                 steer = -np.clip(angle, -1.0, 1.0) * limits.steer_rad
-                np.testing.assert_allclose(
-                    data.ctrl[list(scene.car.drive)], torque, atol=1e-12
-                )
-                assert data.ctrl[scene.car.steer] == pytest.approx(steer, abs=1e-12)
+                np.testing.assert_allclose(_drive_ctrl(scene, data), torque, atol=1e-12)
+                assert _steer_ctrl(scene, data) == pytest.approx(steer, abs=1e-12)
 
 
 def test_new_drive_uses_the_full_torque(scene):
     """A new MujocoDrive has max_speed 1.0."""
     data = mujoco.MjData(scene.model)
     MujocoDrive(scene, data).set_speed_angle(1.0, 0.0)
-    assert np.all(
-        data.ctrl[list(scene.car.drive)]
-        == contract.actuator_limits(scene.model, scene.car).torque_nm
-    )
+    torque_nm = contract.actuator_limits(scene.model, scene.car).torque_nm
+    assert np.all(_drive_ctrl(scene, data) == torque_nm)
 
 
 def test_stop_zeros_drive_and_steer(scene):
@@ -68,8 +73,8 @@ def test_stop_zeros_drive_and_steer(scene):
     drive = MujocoDrive(scene, data)
     drive.set_speed_angle(1.0, 1.0)
     drive.stop()
-    assert np.all(data.ctrl[list(scene.car.drive)] == 0.0)
-    assert data.ctrl[scene.car.steer] == 0.0
+    assert np.all(_drive_ctrl(scene, data) == 0.0)
+    assert _steer_ctrl(scene, data) == 0.0
 
 
 # --- Drive: physics -----------------------------------------------------------
@@ -86,8 +91,9 @@ def _drive_for(scene, speed: float, angle: float) -> mujoco.MjData:
 
 
 def test_full_forward_drives_forward_physically(scene):
-    x0 = float(sim.settle(scene.model).xpos[scene.car.body][0])
-    assert float(_drive_for(scene, 1.0, 0.0).xpos[scene.car.body][0]) - x0 > 0.1  # m
+    body = scene.car.body
+    x0 = float(sim.settle(scene.model).bind_scalar(body).xpos[0])
+    assert float(_drive_for(scene, 1.0, 0.0).bind_scalar(body).xpos[0]) - x0 > 0.1  # m
 
 
 def test_right_and_left_angles_yaw_as_mirror_images(scene):
@@ -95,8 +101,8 @@ def test_right_and_left_angles_yaw_as_mirror_images(scene):
     is negative. Angle -1 gives the mirrored yaw rate. The car model is not
     exactly symmetric, so the two rates agree to 10 %."""
     # qvel[5] of the car's free joint is its yaw rate, rad/s, + = left.
-    right = float(_drive_for(scene, 0.5, 1.0).qvel[scene.car.qvel][5])
-    left = float(_drive_for(scene, 0.5, -1.0).qvel[scene.car.qvel][5])
+    right = float(_drive_for(scene, 0.5, 1.0).bind_scalar(scene.car.joint).qvel[5])
+    left = float(_drive_for(scene, 0.5, -1.0).bind_scalar(scene.car.joint).qvel[5])
     assert right < -0.1, f"right steer gave yaw rate {right:.3f} rad/s"
     assert left == pytest.approx(-right, rel=0.1)
 

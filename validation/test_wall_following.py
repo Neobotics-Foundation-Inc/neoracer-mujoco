@@ -176,13 +176,13 @@ def test_controller_converges_to_target_distance_on_corridor():
     model, car = scene.model, scene.car
     data = sim.settle(model)
     dt = model.opt.timestep
-    steer_low, steer_high = model.actuator_ctrlrange[car.steer]
+    steer_low, steer_high = model.bind_scalar(car.steer).ctrlrange
     cfg = WallFollowingConfig(follow_side="right")
     state = PDState()
 
     side_distances = []
     for _ in range(1500):  # 3 s at the 2 ms timestep
-        readings = sensors.read(car.sensors, data.sensordata)
+        readings = sensors.read(car.sensors, data)
         state, control = step(cfg, state, readings, dt)
         sim.apply_command(car, data, control)
         mujoco.mj_step(model, data)
@@ -191,7 +191,7 @@ def test_controller_converges_to_target_distance_on_corridor():
         assert np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel))
         side_distances.append(readings.lidar_270)
 
-    upright_cos = sim.car_upright_cos(data, car.body)
+    upright_cos = sim.car_upright_cos(data, car)
     assert upright_cos > 0.7, "car should not have flipped during the run"
 
     quarter = len(side_distances) // 4

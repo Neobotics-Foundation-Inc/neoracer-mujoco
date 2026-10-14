@@ -122,13 +122,12 @@ def run_controller(controller_path: str, steps: int = DEFAULT_STEPS) -> float:
 
     scene = load_scene()
     data, rc = build_racecar(scene, steps)
-    car_id = scene.car.body
-    x0 = float(data.xpos[car_id][0])
+    x0 = float(data.bind_scalar(scene.car.body).xpos[0])
 
     with controller_imports(rc, path.parent):
         runpy.run_path(str(path), run_name="__main__")
 
-    x1 = float(data.xpos[car_id][0])
+    x1 = float(data.bind_scalar(scene.car.body).xpos[0])
     print(
         f"[run_racecar_core] {steps} steps done -- car moved dx={x1 - x0:+.2f}m "
         f"(x: {x0:.2f} -> {x1:.2f})"

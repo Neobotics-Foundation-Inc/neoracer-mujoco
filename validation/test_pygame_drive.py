@@ -13,7 +13,7 @@ from examples.pygame_drive.drive_sim import (
     DriveParams,
     DriveState,
     apply_and_step,
-    drive_wheel_dofs,
+    drive_wheel_joints,
     next_state,
     wheel_torque,
 )
@@ -24,7 +24,7 @@ DT = 0.02  # s, one 50 Hz frame
 
 
 def _drive(scene, data, state, throttle, steer, frames):
-    wheels = drive_wheel_dofs(scene)
+    wheels = drive_wheel_joints(scene)
     for _ in range(frames):
         state = next_state(P, state, throttle, steer, DT)
         apply_and_step(scene, data, P, wheels, state, DT)
@@ -32,7 +32,7 @@ def _drive(scene, data, state, throttle, steer, frames):
 
 
 def _speed(scene, data) -> float:
-    return float(np.linalg.norm(data.qvel[scene.car.qvel][0:2]))  # freejoint vx, vy
+    return float(np.linalg.norm(data.bind_scalar(scene.car.joint).qvel[0:2]))  # vx, vy
 
 
 @pytest.mark.parametrize("throttle", [-3.0, -1.0, 0.3, 1.0, 3.0])
@@ -57,7 +57,7 @@ def test_a_negative_frame_time_changes_nothing():
     assert next_state(P, state, 1.0, 1.0, -0.1) == state
     scene = assets.load()
     data = mujoco.MjData(scene.model)
-    apply_and_step(scene, data, P, drive_wheel_dofs(scene), state, -0.1)
+    apply_and_step(scene, data, P, drive_wheel_joints(scene), state, -0.1)
     assert data.time == 0.0
 
 
@@ -68,22 +68,23 @@ def test_wheel_torque_stays_in_limits_and_brakes_a_spinning_wheel():
     assert np.all(np.sign(wheel_torque(P, 0.0, spin)) == -np.sign(spin))
 
 
-def test_drive_wheel_dofs_are_four_hinge_joints():
+def test_drive_wheel_joints_are_four_hinge_joints():
     scene = assets.load()
-    model, dofs = scene.model, drive_wheel_dofs(scene)
-    assert len(set(dofs.tolist())) == 4
-    hinge = mujoco.mjtJoint.mjJNT_HINGE
-    assert all(model.jnt_type[model.dof_jntid[d]] == hinge for d in dofs)
+    joints = drive_wheel_joints(scene)
+    assert len({joint.name for joint in joints}) == 4
+    assert all(joint.type == mujoco.mjtJoint.mjJNT_HINGE for joint in joints)
 
 
 def test_car_tops_out_then_brakes_when_the_throttle_is_released():
     scene = assets.load()  # the car alone on its own plane
     data = mujoco.MjData(scene.model)
     body = scene.car.body
-    x0 = float(data.xpos[body][0])
+    x0 = float(data.bind_scalar(body).xpos[0])
     state = _drive(scene, data, DriveState(), 1.0, 0.0, 150)  # 3 s full throttle
-    assert float(data.xpos[body][0]) - x0 > 1.0
-    spin = float(np.mean(data.qvel[drive_wheel_dofs(scene)]))
+    assert float(data.bind_scalar(body).xpos[0]) - x0 > 1.0
+    spin = float(
+        np.mean([data.bind_scalar(j).qvel[0] for j in drive_wheel_joints(scene)])
+    )
     assert spin < 1.1 * P.max_torque / P.motor_damping  # the back-EMF balance point
     v_release = _speed(scene, data)
     _drive(scene, data, state, 0.0, 0.0, 200)  # 4 s hands off
@@ -97,7 +98,9 @@ def test_held_steer_input_sets_the_steer_ctrl(steer):
     scene = assets.load()
     data = mujoco.MjData(scene.model)
     _drive(scene, data, DriveState(), 0.0, steer, 50)  # 1 s
-    assert data.ctrl[scene.car.steer] == pytest.approx(steer * P.max_steer)
+    assert data.bind_scalar(scene.car.steer).ctrl[0] == pytest.approx(
+        steer * P.max_steer
+    )
 
 
 @pytest.mark.parametrize("track", assets.tracks(), ids=os.path.basename)
@@ -105,4 +108,4 @@ def test_car_drives_forward_on_every_track(track):
     scene = assets.compose(mujoco.MjSpec.from_file(track))
     data = mujoco.MjData(scene.model)
     _drive(scene, data, DriveState(), 1.0, 0.0, 25)  # 0.5 s
-    assert float(data.qvel[scene.car.qvel][0]) > 0.1
+    assert float(data.bind_scalar(scene.car.joint).qvel[0]) > 0.1

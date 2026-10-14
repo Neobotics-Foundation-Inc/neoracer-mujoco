@@ -45,18 +45,18 @@ def scan_angles(params: DenseLidarParams) -> npt.NDArray[np.float64]:
 
 @dataclass(frozen=True)
 class LidarMount:
-    """Model ids that cast_dense_lidar() reads at each tick."""
+    """The spec elements that cast_dense_lidar() reads at each tick."""
 
-    site_id: int  # the lidar_mount site: the ray origin
-    body_id: int  # the car body: its axes give the ray directions; rays ignore it
+    site: mujoco.MjsSite  # the lidar_mount site: the ray origin
+    body: mujoco.MjsBody  # the car body: its axes orient the rays; rays ignore it
 
 
 def lidar_mount(scene: Scene) -> LidarMount:
-    """Read the ids of the lidar_mount site and the car body once."""
+    """Find the lidar_mount site and the car body once."""
     site = scene.spec.site("lidar_mount")
     if site is None:
         raise ValueError("the scene has no lidar_mount site")
-    return LidarMount(site_id=scene.model.bind_scalar(site).id, body_id=scene.car.body)
+    return LidarMount(site=site, body=scene.car.body)
 
 
 def cast_dense_lidar(
@@ -68,8 +68,8 @@ def cast_dense_lidar(
     """Cast the beams from the lidar mount. Returns (angles_rad, ranges_m)
     in the same layout as synthetic_scenes.cast_scan(). A range is -1.0 if
     the beam has no hit within max_range_m."""
-    origin = data.site_xpos[mount.site_id]
-    body_mat = data.xmat[mount.body_id].reshape(3, 3)
+    origin = data.bind_scalar(mount.site).xpos
+    body_mat = data.bind_scalar(mount.body).xmat.reshape(3, 3)
     angles = scan_angles(params)
     directions = (
         np.cos(angles)[:, None] * body_mat[:, 0]
@@ -84,7 +84,7 @@ def cast_dense_lidar(
         directions.ravel(),
         None,
         True,
-        mount.body_id,
+        model.bind_scalar(mount.body).id,
         geom_id,
         dist,
         None,
