@@ -187,7 +187,9 @@ from neoracer_mujoco.physics import Physics
 
 scene = assets.load()
 gpu = batch_warp.WarpBatch(scene, nbatch=4096)
-state = gpu.initial([sim.settle(scene.model)] * 4096, [scene] * 4096, [Physics()] * 4096)
+state = gpu.initial(
+    [sim.settle(scene.model)] * 4096, [scene] * 4096, [Physics()] * 4096
+)
 throttle, steer = jnp.full(4096, 0.1), jnp.zeros(4096)
 ctrl = batch.command(scene.model, scene.car, throttle, steer)
 state, sensordata = gpu.step(state, ctrl, nstep=17)
@@ -195,6 +197,32 @@ pos = batch.read(scene.model, sensordata[:, -1], scene.car.truth.pos)
 ```
 
 Warp computes collisions and constraints with its own code, so its results are close to the CPU version's, not equal: after ten env steps from rest, the car positions are within 1 mm. Without a GPU, JAX runs Warp on the CPU, correctly but much more slowly than `CpuBatch`.
+
+#### Many tracks at once
+
+`initial` takes one `Scene` per row, so a `CpuBatch` can step each row on its own track, as long as every scene has the sizes of the batch's. Generated tracks with a fixed number of wall boxes do (see `boxes_per_wall` under Track generation):
+
+```python
+from neoracer_mujoco import assets, batch, sim
+from neoracer_mujoco.physics import Physics
+from neoracer_mujoco.track_generation import (
+    WallParams,
+    generate_track,
+    settings_for_difficulty,
+    to_spec,
+)
+
+walls = WallParams(boxes_per_wall=192)
+tracks = [
+    generate_track(seed, settings_for_difficulty(1)) for seed in range(8)
+]  # all Track
+scenes = [assets.compose(to_spec(t, walls), visuals=False) for t in tracks]
+cpu = batch.CpuBatch(scenes[0], nbatch=8, nthread=4)
+state = cpu.initial([sim.settle(s.model) for s in scenes], scenes, [Physics()] * 8)
+cpu.close()
+```
+
+A `WarpBatch` steps every row on its own scene: MuJoCo Warp collides and casts rays against the geometry of the model it was made from, whatever geometry each environment gets later. For another track on Warp, make another `WarpBatch`.
 
 ### Physics randomization
 
