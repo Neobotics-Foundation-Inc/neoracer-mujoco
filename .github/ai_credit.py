@@ -136,7 +136,7 @@ def main(argv: list[str]) -> int:
             for line in found:
                 print(f"credits an AI tool: {line.strip()}")
             if found:
-                # "::error::" makes GitHub Actions show the message on the run.
+                # A line that starts with ::error makes GitHub Actions show it on the run.
                 print(f"::error title=AI credit on main::{NOT_OWNED}")
             return 1 if found else 0
         case _:
