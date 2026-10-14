@@ -77,6 +77,10 @@ SESSION_LINK = re.compile(
     r"|app\.devin\.ai/sessions|jules\.google\.com)/\S+\s*$",
     re.IGNORECASE,
 )
+NOT_OWNED = (
+    "A change on main must be owned by a person, who takes responsibility for "
+    "every line of it, so it does not credit an AI tool. See CONTRIBUTING.md."
+)
 SEPARATOR = re.compile(r"^\s*(-{3,}|\*{3,}|_{3,})\s*$")
 
 
@@ -131,6 +135,9 @@ def main(argv: list[str]) -> int:
             found = [line for line in text.splitlines() if credits_ai(line)]
             for line in found:
                 print(f"credits an AI tool: {line.strip()}")
+            if found:
+                # A line that starts with ::error makes GitHub Actions show it on the run.
+                print(f"::error title=AI credit on main::{NOT_OWNED}")
             return 1 if found else 0
         case _:
             print(__doc__, file=sys.stderr)
