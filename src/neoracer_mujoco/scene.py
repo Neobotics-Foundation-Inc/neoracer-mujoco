@@ -3,7 +3,8 @@ A compiled NeoRacer scene, and the parts of its car.
 
 A Scene keeps the MjSpec next to the MjModel that was compiled from it. Car
 holds the parts of the car as elements of that spec: the body, its free
-joint, the actuators and the sensors. Code reads and writes a part by binding
+joint, the actuators, the sensors of the real car, and the truth sensors that
+only the simulator has (truth.py). Code reads and writes a part by binding
 it to the model or the data where it uses it:
 
     data.bind_scalar(scene.car.steer).ctrl = 0.2    # rad, + = left
@@ -24,7 +25,7 @@ from dataclasses import dataclass
 
 import mujoco
 
-from . import contract, sensors
+from . import contract, sensors, truth
 
 CAR_BODY = "car"  # the car's root body, with the free joint
 
@@ -40,7 +41,8 @@ class Car:
         mujoco.MjsActuator, mujoco.MjsActuator, mujoco.MjsActuator, mujoco.MjsActuator
     ]
     steer: mujoco.MjsActuator  # the steering servo (rad, + = left)
-    sensors: sensors.CarSensors
+    sensors: sensors.CarSensors  # the sensors of the real car
+    truth: truth.TruthSensors  # what only the simulator knows (truth.py)
 
 
 @dataclass(frozen=True)
@@ -75,11 +77,15 @@ def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel) -> Car:
         drive=(actuators[fl], actuators[fr], actuators[rl], actuators[rr]),
         steer=actuators[contract.STEER_ACTUATOR],
         sensors=sensors.find_sensors(spec, model),
+        truth=truth.find_sensors(spec),
     )
 
 
 def compile_scene(spec: mujoco.MjSpec) -> Scene:
-    """Compile spec into a Scene. Raise ValueError if the car is not a
-    NeoRacer car (see find_car)."""
+    """Add the truth sensors to spec (truth.add_sensors) and compile it into a
+    Scene. Raise ValueError if the car is not a NeoRacer car (see find_car)."""
+    if spec.body(CAR_BODY) is None:
+        raise ValueError(f'the model has no "{CAR_BODY}" body')
+    truth.add_sensors(spec, CAR_BODY)
     model = spec.compile()
     return Scene(spec=spec, model=model, car=find_car(spec, model))

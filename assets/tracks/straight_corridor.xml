@@ -49,7 +49,9 @@
     <worldbody>
         <geom name="floor" type="plane" size="9 1 .01" pos="6 0 0"
               material="corridor_floor" friction="1.5 0.1 0.1"/>
-        <geom class="scenery" name="corridor_wall_left"  pos="6 .5 .15" size="8 .02 .15"/>
-        <geom class="scenery" name="corridor_wall_right" pos="6 -.5 .15" size="8 .02 .15"/>
+        <body name="walls">
+            <geom class="scenery" name="corridor_wall_left"  pos="6 .5 .15" size="8 .02 .15"/>
+            <geom class="scenery" name="corridor_wall_right" pos="6 -.5 .15" size="8 .02 .15"/>
+        </body>
     </worldbody>
 </mujoco>

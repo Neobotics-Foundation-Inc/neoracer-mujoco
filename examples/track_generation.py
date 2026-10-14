@@ -85,7 +85,6 @@ def drive(seed: int, difficulty: Difficulty) -> None:
         f"{model.ngeom} geoms. Close the viewer window to exit."
     )
 
-    walls = collision.wall_geom_ids(scene.spec, model)
     state = PDState()
     with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
@@ -102,7 +101,7 @@ def drive(seed: int, difficulty: Difficulty) -> None:
 
             # Touching a wall resets the car to its spawn pose. Clear the
             # controller state too, or its D-term carries across the jump.
-            if collision.car_touches_wall(model, data, car, walls):
+            if collision.car_touches_wall(data, car):
                 collision.reset_car(model, data)
                 state = PDState()
 

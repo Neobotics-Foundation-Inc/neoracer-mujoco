@@ -12,15 +12,17 @@ import numpy as np
 import pytest
 from fake_sensors import fake_readings
 
-from neoracer_mujoco import contract, sensors
+from neoracer_mujoco import contract, sensors, truth
 
 
 def test_read_returns_every_sensor(scene):
-    """sensors.read returns every sensor of the model, each with its size."""
+    """sensors.read returns every sensor of the model but the truth sensors,
+    each with its size."""
     d = mujoco.MjData(scene.model)
     mujoco.mj_step(scene.model, d)
     out = sensors.read(scene.car.sensors, d)
-    assert len(fields(sensors.SensorReadings)) == scene.model.nsensor
+    read_count = len(fields(sensors.SensorReadings))
+    assert read_count + len(fields(truth.TruthSensors)) == scene.model.nsensor
     assert out.imu_accel.shape == (3,) and out.imu_gyro.shape == (3,)
     assert out.imu_quat.shape == (4,)
     assert isinstance(out.lidar_000, float) and isinstance(out.steer_cmd_pos, float)

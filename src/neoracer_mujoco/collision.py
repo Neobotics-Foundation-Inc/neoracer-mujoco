@@ -2,19 +2,13 @@
 Detects when the car touches a wall, and resets the simulation, so that a
 driving demo can recover without a manual reset key.
 
-A geom is a wall if the name of its MuJoCo material is "wall" or starts with
-"wall_". The track XMLs in assets/tracks/ use these materials for real walls.
-The floor and drivable ramps use other materials. If a scene has no wall
-material, for example the bare car on assets/neoracer.xml, no reset occurs.
+A wall is a geom of the body named "walls" (truth.WALLS_BODY). The track
+XMLs in assets/tracks/ put their walls there; the floor and drivable ramps
+are elsewhere. The car is the body tree of its root body ("car", the free
+joint body in neoracer.xml), so the chassis and the wheels are both the car.
+The truth sensor car.truth.wall_contact counts the contacts between the two.
 
-The car is the body tree of its root body ("car", the freejoint body in
-neoracer.xml). Every geom in that tree, for example the chassis and the
-wheels, is part of the car.
-
-Get the wall geoms once, then check each step:
-
-    walls = wall_geom_ids(scene.spec, scene.model)
-    if car_touches_wall(scene.model, data, scene.car, walls):
+    if car_touches_wall(data, scene.car):
         reset_car(scene.model, data)
 """
 
@@ -22,35 +16,11 @@ import mujoco
 
 from .scene import Car
 
-WALL_MATERIAL = "wall"
 
-
-def wall_geom_ids(spec: mujoco.MjSpec, model: mujoco.MjModel) -> frozenset[int]:
-    """Ids in model, which was compiled from spec, of the geoms whose material
-    is a wall material (see module docstring)."""
-    return frozenset(
-        model.bind_scalar(geom).id
-        for geom in spec.geoms
-        if geom.material == WALL_MATERIAL
-        or geom.material.startswith(WALL_MATERIAL + "_")
-    )
-
-
-def car_touches_wall(
-    model: mujoco.MjModel, data: mujoco.MjData, car: Car, walls: frozenset[int]
-) -> bool:
-    """True if a geom of the car's body tree touches a geom in walls. A
-    contact names its two geoms by id, so walls holds geom ids, and the car
-    is the body tree whose root is the car body."""
-    car_root = model.bind_scalar(car.body).id
-    for i in range(data.ncon):
-        contact = data.contact[i]
-        g1, g2 = contact.geom1, contact.geom2
-        g1_is_car = model.body_rootid[model.geom_bodyid[g1]] == car_root
-        g2_is_car = model.body_rootid[model.geom_bodyid[g2]] == car_root
-        if (g1_is_car and g2 in walls) or (g2_is_car and g1 in walls):
-            return True
-    return False
+def car_touches_wall(data: mujoco.MjData, car: Car) -> bool:
+    """True if a geom of the car touches a wall. Like every sensor, the
+    count is up to date after mj_forward or mj_step (see truth.py)."""
+    return bool(data.bind_scalar(car.truth.wall_contact).data[0] > 0)
 
 
 def reset_car(model: mujoco.MjModel, data: mujoco.MjData) -> None:

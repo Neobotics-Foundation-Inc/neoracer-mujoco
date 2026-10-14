@@ -34,9 +34,6 @@
                  rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
         <material name="track_floor" texture="track_grid" texrepeat="1 1"
                   texuniform="true" reflectance=".2"/>
-        <!-- Must stay named "wall" (or "wall_..."): collision.py identifies
-             walls by material name, and that is what makes car_hit_wall / reset_if_wall_hit work
-             on a generated track with no extra code on either side. -->
         <material name="wall" rgba=".55 .57 .60 1"/>
     </asset>
 
@@ -53,6 +50,10 @@
               size="$floor_size_x $floor_size_y 0.1"
               pos="$floor_pos_x $floor_pos_y 0"
               material="track_floor" friction="1.5 0.1 0.1"/>
+        <!-- Every wall is a geom of this one body, so that the scene's wall
+             contact sensor finds them all (see truth.py). -->
+        <body name="walls">
 $walls
+        </body>
     </worldbody>
 </mujoco>

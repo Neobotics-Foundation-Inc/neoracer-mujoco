@@ -182,7 +182,6 @@ def drive(scene: Scene, params: ManualDriveParams) -> None:
     window closes or Esc is pressed."""
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
-    walls = collision.wall_geom_ids(scene.spec, model)
 
     if not glfw.init():
         raise RuntimeError("glfw.init() failed")
@@ -234,7 +233,7 @@ def drive(scene: Scene, params: ManualDriveParams) -> None:
         target = data.time + dt
         while data.time < target:
             mujoco.mj_step(model, data)
-            if collision.car_touches_wall(model, data, car, walls):
+            if collision.car_touches_wall(data, car):
                 collision.reset_car(model, data)
                 command = stopped
                 break

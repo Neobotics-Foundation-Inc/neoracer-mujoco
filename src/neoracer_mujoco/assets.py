@@ -38,7 +38,8 @@ def cars() -> list[str]:
 
 def tracks() -> list[str]:
     """Every track XML in assets/tracks/, sorted. A track is scenery only: no
-    car, so it is not in cars() or the car conformance tests."""
+    car, so it is not in cars() or the car conformance tests. It puts every
+    wall in the body named "walls" (truth.WALLS_BODY)."""
     return sorted(glob.glob(os.path.join(TRACK_DIR, "*.xml")))
 
 
