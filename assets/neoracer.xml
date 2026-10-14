@@ -51,11 +51,15 @@
         geom: cylinder, radius 0.050 m, half-width 0.02 m. condim=3 (sliding only);
         condim=6 adds torsional/rolling contact that chatters on small cylinders.
         mass is set per wheel instance, not here.
+        priority=1: in a contact with the floor or a wall, MuJoCo takes the
+        friction and the contact softness of the wheel alone, instead of the
+        larger friction of the two geoms. The wheel geom then sets its own grip,
+        so changing its friction changes how much the wheel slips.
         -->
         <default class="wheel">
             <joint type="hinge" axis="0 1 0" armature=".005" damping=".0005"/>
             <geom type="cylinder" size=".050 .02" zaxis="0 1 0"
-                  friction="1.5 0.1 0.1" condim="3"/>
+                  friction="1.5 0.1 0.1" condim="3" priority="1"/>
         </default>
 
         <!--
@@ -186,7 +190,7 @@
                 <joint name="fl_susp"  class="susp"/>
                 <joint name="fl_steer" class="steer"/>
                 <joint name="fl_drive" class="wheel"/>
-                <geom class="wheel" mass=".0573" rgba=".2 .4 1 0.1"/>
+                <geom name="fl_wheel" class="wheel" mass=".0573" rgba=".2 .4 1 0.1"/>
                 <geom name="vis_fl_wheel" type="mesh" mass="0" mesh="vis_fl_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
@@ -196,7 +200,7 @@
                 <joint name="fr_susp"  class="susp"/>
                 <joint name="fr_steer" class="steer"/>
                 <joint name="fr_drive" class="wheel"/>
-                <geom class="wheel" mass=".0587" rgba=".2 .4 1 0.1"/>
+                <geom name="fr_wheel" class="wheel" mass=".0587" rgba=".2 .4 1 0.1"/>
                 <geom name="vis_fr_wheel" type="mesh" mass="0" mesh="vis_fr_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
@@ -205,7 +209,7 @@
             <body name="rl_wheel_body" pos="-.1439 .1175 -.0806">
                 <joint name="rl_susp"  class="susp"/>
                 <joint name="rl_drive" class="wheel"/>
-                <geom class="wheel" mass=".0587" rgba=".3 .3 .3 0.1"/>
+                <geom name="rl_wheel" class="wheel" mass=".0587" rgba=".3 .3 .3 0.1"/>
                 <geom name="vis_rl_wheel" type="mesh" mass="0" mesh="vis_rl_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
@@ -214,7 +218,7 @@
             <body name="rr_wheel_body" pos="-.1439 -.1175 -.0806">
                 <joint name="rr_susp"  class="susp"/>
                 <joint name="rr_drive" class="wheel"/>
-                <geom class="wheel" mass=".0587" rgba=".3 .3 .3 0.1"/>
+                <geom name="rr_wheel" class="wheel" mass=".0587" rgba=".3 .3 .3 0.1"/>
                 <geom name="vis_rr_wheel" type="mesh" mass="0" mesh="vis_rr_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>

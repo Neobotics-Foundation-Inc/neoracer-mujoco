@@ -41,6 +41,8 @@ class Car:
         mujoco.MjsActuator, mujoco.MjsActuator, mujoco.MjsActuator, mujoco.MjsActuator
     ]
     steer: mujoco.MjsActuator  # the steering servo (rad, + = left)
+    # the fl, fr, rl, rr wheel geoms that touch the ground
+    wheels: tuple[mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom]
     sensors: sensors.CarSensors  # the sensors of the real car
     truth: truth.TruthSensors  # what only the simulator knows (truth.py)
 
@@ -57,8 +59,8 @@ class Scene:
 
 def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel) -> Car:
     """Find the parts of the car in spec, which model was compiled from.
-    Raise ValueError if the car body has no free joint, or an actuator or a
-    sensor of contract.py is missing."""
+    Raise ValueError if the car body has no free joint, or an actuator, a
+    wheel geom or a sensor of contract.py is missing."""
     problems: list[str] = []
     body = spec.body(CAR_BODY)
     if body is None:
@@ -68,14 +70,18 @@ def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel) -> Car:
         problems.append(f'the "{CAR_BODY}" body needs exactly one free joint')
     actuators = {name: spec.actuator(name) for name in contract.EXPECTED_ACTUATORS}
     problems += [f"actuator {n} is missing" for n, a in actuators.items() if a is None]
+    wheels = {name: spec.geom(name) for name in contract.WHEEL_GEOMS}
+    problems += [f"wheel geom {n} is missing" for n, g in wheels.items() if g is None]
     if problems:
         raise ValueError("; ".join(problems))
     fl, fr, rl, rr = contract.DRIVE_ACTUATORS
+    wfl, wfr, wrl, wrr = contract.WHEEL_GEOMS
     return Car(
         body=body,
         joint=joints[0],
         drive=(actuators[fl], actuators[fr], actuators[rl], actuators[rr]),
         steer=actuators[contract.STEER_ACTUATOR],
+        wheels=(wheels[wfl], wheels[wfr], wheels[wrl], wheels[wrr]),
         sensors=sensors.find_sensors(spec, model),
         truth=truth.find_sensors(spec),
     )

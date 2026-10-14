@@ -56,3 +56,21 @@ def test_read_does_not_depend_on_the_sensor_order():
         np.testing.assert_allclose(
             getattr(a, f.name), getattr(b, f.name), atol=1e-9, err_msg=f.name
         )
+
+
+def test_a_wheel_sets_the_friction_of_its_contacts():
+    """The wheel geoms have contact priority, so each contact of a wheel with
+    the floor takes the friction of the wheel alone, whatever the friction of
+    the floor."""
+    scene = assets.load()
+    for i, wheel in enumerate(scene.car.wheels):
+        scene.model.bind_scalar(wheel).friction[0] = 0.2 + 0.1 * i
+    data = sim.settle(scene.model)
+    ids = [int(scene.model.bind_scalar(w).id) for w in scene.car.wheels]
+    touching = set()
+    for contact in data.contact:
+        for i, wheel_id in enumerate(ids):
+            if wheel_id in contact.geom:
+                assert contact.friction[0] == pytest.approx(0.2 + 0.1 * i)
+                touching.add(i)
+    assert touching == {0, 1, 2, 3}

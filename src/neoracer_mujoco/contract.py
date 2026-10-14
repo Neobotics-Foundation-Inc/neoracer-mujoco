@@ -12,6 +12,8 @@ Frame: +X forward, +Y left, +Z up.
 Actuators:
   fl/fr/rl/rr_motor = wheel drive torque (N·m), + = forward
   steer_servo       = steering target angle (rad), + = left
+Wheels:
+  fl/fr/rl/rr_wheel = the geom of each wheel that touches the ground
 Their order in the XML is not part of the contract: code binds each one by
 its element in the scene's MjSpec (scene.Car).
 """
@@ -28,6 +30,10 @@ if TYPE_CHECKING:  # scene.py imports this module
 DRIVE_ACTUATORS = ("fl_motor", "fr_motor", "rl_motor", "rr_motor")
 STEER_ACTUATOR = "steer_servo"
 EXPECTED_ACTUATORS = (*DRIVE_ACTUATORS, STEER_ACTUATOR)
+
+# --- wheels -----------------------------------------------------------------
+# The geoms that touch the ground, in the order fl, fr, rl, rr.
+WHEEL_GEOMS = ("fl_wheel", "fr_wheel", "rl_wheel", "rr_wheel")
 
 # --- sensors ----------------------------------------------------------------
 REQUIRED_SENSORS = (
