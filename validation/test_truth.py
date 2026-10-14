@@ -7,8 +7,9 @@ import os
 
 import mujoco
 import numpy as np
+import pytest
 
-from neoracer_mujoco import Scene, assets, sim
+from neoracer_mujoco import Scene, assets, sim, truth
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.scene import compile_scene
 from neoracer_mujoco.truth import WALLS_BODY
@@ -77,3 +78,17 @@ def test_a_scene_spec_compiles_again():
     scene = assets.load()
     again = compile_scene(scene.spec)
     assert again.model.nsensor == scene.model.nsensor
+
+
+def test_a_sensor_with_a_truth_name_but_another_definition_is_rejected():
+    """A car XML that already has a sensor named truth_zaxis, but on another
+    object, does not compile: car_upright_cos would read the wrong value."""
+    spec = mujoco.MjSpec.from_file(assets.DEFAULT_CAR)
+    spec.add_sensor(
+        name=truth.ZAXIS,
+        type=mujoco.mjtSensor.mjSENS_FRAMEZAXIS,
+        objtype=mujoco.mjtObj.mjOBJ_SITE,
+        objname="imu",
+    )
+    with pytest.raises(ValueError, match=truth.ZAXIS):
+        compile_scene(spec)
