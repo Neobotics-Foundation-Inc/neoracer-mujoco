@@ -1,9 +1,8 @@
 """
 Reads all named sensors of a compiled NeoRacer scene into a SensorReadings struct.
 
-sensor_index finds each sensor once, with model.bind (bind_scalar, see
-scene.py) on the sensor element of the scene's MjSpec. read then takes the
-values out of the sensordata array with these indices, with no name lookups.
+find_sensors finds the sensor elements in the scene's MjSpec once. read then
+binds each one to the data (bind_scalar, see scene.py) and copies its values.
 
 Frame: +X forward, +Y left, +Z up.
 
@@ -80,40 +79,40 @@ VECTOR_SIZE: frozendict[str, int] = frozendict(
 
 
 @dataclass(frozen=True)
-class SensorIndex:
-    """Where each SensorReadings field is in data.sensordata: a slice for a
-    sensor with several values, an index for a sensor with one. Make it once
-    per scene with sensor_index."""
+class CarSensors:
+    """The sensor element of each SensorReadings field, in the scene's
+    MjSpec. Make it once per scene with find_sensors."""
 
-    imu_accel: slice
-    imu_gyro: slice
-    imu_quat: slice
-    imu_linvel: slice
-    steer_cmd_pos: int
-    fl_steer_pos: int
-    fr_steer_pos: int
-    fl_wheel_vel: int
-    fr_wheel_vel: int
-    rl_wheel_vel: int
-    rr_wheel_vel: int
-    fl_susp_pos: int
-    fr_susp_pos: int
-    rl_susp_pos: int
-    rr_susp_pos: int
-    lidar_000: int
-    lidar_045: int
-    lidar_090: int
-    lidar_135: int
-    lidar_180: int
-    lidar_225: int
-    lidar_270: int
-    lidar_315: int
+    imu_accel: mujoco.MjsSensor
+    imu_gyro: mujoco.MjsSensor
+    imu_quat: mujoco.MjsSensor
+    imu_linvel: mujoco.MjsSensor
+    steer_cmd_pos: mujoco.MjsSensor
+    fl_steer_pos: mujoco.MjsSensor
+    fr_steer_pos: mujoco.MjsSensor
+    fl_wheel_vel: mujoco.MjsSensor
+    fr_wheel_vel: mujoco.MjsSensor
+    rl_wheel_vel: mujoco.MjsSensor
+    rr_wheel_vel: mujoco.MjsSensor
+    fl_susp_pos: mujoco.MjsSensor
+    fr_susp_pos: mujoco.MjsSensor
+    rl_susp_pos: mujoco.MjsSensor
+    rr_susp_pos: mujoco.MjsSensor
+    lidar_000: mujoco.MjsSensor
+    lidar_045: mujoco.MjsSensor
+    lidar_090: mujoco.MjsSensor
+    lidar_135: mujoco.MjsSensor
+    lidar_180: mujoco.MjsSensor
+    lidar_225: mujoco.MjsSensor
+    lidar_270: mujoco.MjsSensor
+    lidar_315: mujoco.MjsSensor
 
 
-def sensor_index(spec: mujoco.MjSpec, model: mujoco.MjModel) -> SensorIndex:
-    """Find each SensorReadings field in model, which was compiled from spec.
-    Raise ValueError if a field has no sensor of that name and size."""
-    starts: dict[str, int] = {}
+def find_sensors(spec: mujoco.MjSpec, model: mujoco.MjModel) -> CarSensors:
+    """Find the sensor of each SensorReadings field in spec, which model was
+    compiled from. Raise ValueError if a field has no sensor of that name and
+    size."""
+    found: dict[str, mujoco.MjsSensor] = {}
     problems: list[str] = []
     for f in fields(SensorReadings):
         sensor = spec.sensor(f.name)
@@ -121,56 +120,45 @@ def sensor_index(spec: mujoco.MjSpec, model: mujoco.MjModel) -> SensorIndex:
         if sensor is None:
             problems.append(f"{f.name} is missing")
             continue
-        bound = model.bind_scalar(sensor)
-        start, dim = int(bound.adr[0]), int(bound.dim[0])
+        dim = int(model.bind_scalar(sensor).dim[0])
         if dim != size:
             problems.append(f"{f.name} has {dim} values, not {size}")
         else:
-            starts[f.name] = start
+            found[f.name] = sensor
     if problems:
         raise ValueError(
             f"the model does not have the NeoRacer sensors: {'; '.join(problems)}"
         )
-
-    def vector(name: str) -> slice:
-        return slice(starts[name], starts[name] + VECTOR_SIZE[name])
-
-    return SensorIndex(
-        imu_accel=vector("imu_accel"),
-        imu_gyro=vector("imu_gyro"),
-        imu_quat=vector("imu_quat"),
-        imu_linvel=vector("imu_linvel"),
-        **{name: at for name, at in starts.items() if name not in VECTOR_SIZE},
-    )
+    return CarSensors(**found)
 
 
-def read(index: SensorIndex, sensordata: npt.NDArray[np.float64]) -> SensorReadings:
-    """Read every named sensor out of sensordata (data.sensordata)."""
-    d, at = sensordata, index
+def read(sensors: CarSensors, data: mujoco.MjData) -> SensorReadings:
+    """Read every named sensor of data."""
+    d, s = data.bind_scalar, sensors
     return SensorReadings(
-        imu_accel=d[at.imu_accel].copy(),
-        imu_gyro=d[at.imu_gyro].copy(),
-        imu_quat=d[at.imu_quat].copy(),
-        imu_linvel=d[at.imu_linvel].copy(),
-        steer_cmd_pos=float(d[at.steer_cmd_pos]),
-        fl_steer_pos=float(d[at.fl_steer_pos]),
-        fr_steer_pos=float(d[at.fr_steer_pos]),
-        fl_wheel_vel=float(d[at.fl_wheel_vel]),
-        fr_wheel_vel=float(d[at.fr_wheel_vel]),
-        rl_wheel_vel=float(d[at.rl_wheel_vel]),
-        rr_wheel_vel=float(d[at.rr_wheel_vel]),
-        fl_susp_pos=float(d[at.fl_susp_pos]),
-        fr_susp_pos=float(d[at.fr_susp_pos]),
-        rl_susp_pos=float(d[at.rl_susp_pos]),
-        rr_susp_pos=float(d[at.rr_susp_pos]),
-        lidar_000=float(d[at.lidar_000]),
-        lidar_045=float(d[at.lidar_045]),
-        lidar_090=float(d[at.lidar_090]),
-        lidar_135=float(d[at.lidar_135]),
-        lidar_180=float(d[at.lidar_180]),
-        lidar_225=float(d[at.lidar_225]),
-        lidar_270=float(d[at.lidar_270]),
-        lidar_315=float(d[at.lidar_315]),
+        imu_accel=d(s.imu_accel).data.copy(),
+        imu_gyro=d(s.imu_gyro).data.copy(),
+        imu_quat=d(s.imu_quat).data.copy(),
+        imu_linvel=d(s.imu_linvel).data.copy(),
+        steer_cmd_pos=float(d(s.steer_cmd_pos).data[0]),
+        fl_steer_pos=float(d(s.fl_steer_pos).data[0]),
+        fr_steer_pos=float(d(s.fr_steer_pos).data[0]),
+        fl_wheel_vel=float(d(s.fl_wheel_vel).data[0]),
+        fr_wheel_vel=float(d(s.fr_wheel_vel).data[0]),
+        rl_wheel_vel=float(d(s.rl_wheel_vel).data[0]),
+        rr_wheel_vel=float(d(s.rr_wheel_vel).data[0]),
+        fl_susp_pos=float(d(s.fl_susp_pos).data[0]),
+        fr_susp_pos=float(d(s.fr_susp_pos).data[0]),
+        rl_susp_pos=float(d(s.rl_susp_pos).data[0]),
+        rr_susp_pos=float(d(s.rr_susp_pos).data[0]),
+        lidar_000=float(d(s.lidar_000).data[0]),
+        lidar_045=float(d(s.lidar_045).data[0]),
+        lidar_090=float(d(s.lidar_090).data[0]),
+        lidar_135=float(d(s.lidar_135).data[0]),
+        lidar_180=float(d(s.lidar_180).data[0]),
+        lidar_225=float(d(s.lidar_225).data[0]),
+        lidar_270=float(d(s.lidar_270).data[0]),
+        lidar_315=float(d(s.lidar_315).data[0]),
     )
 
 

@@ -14,7 +14,7 @@ from neoracer_mujoco.collision import car_touches_wall, reset_car, wall_geom_ids
 
 def _touches_wall(scene: Scene, data: mujoco.MjData) -> bool:
     walls = wall_geom_ids(scene.spec, scene.model)
-    return car_touches_wall(scene.model, data, scene.car.body, walls)
+    return car_touches_wall(scene.model, data, scene.car, walls)
 
 
 def _wall_names(spec: mujoco.MjSpec, model: mujoco.MjModel) -> set[str]:
@@ -68,7 +68,7 @@ def test_reset_after_wall_penetration_restores_the_spawn_state():
     data = sim.settle(model)
 
     # The corridor half-width is 0.5 m: this moves the car into the left wall.
-    data.qpos[scene.car.qpos][1] = 0.6
+    data.bind_scalar(scene.car.joint).qpos[1] = 0.6
     mujoco.mj_forward(model, data)
     assert _touches_wall(scene, data)
 
@@ -90,10 +90,11 @@ def test_no_contact_when_driving_down_the_center():
     model = scene.model
     data = sim.settle(model)
     walls = wall_geom_ids(scene.spec, model)
-    data.ctrl[list(scene.car.drive)] = 0.1  # N·m per wheel
+    for motor in scene.car.drive:
+        data.bind_scalar(motor).ctrl = 0.1  # N·m
     for _ in range(500):  # 1 s at the 2 ms timestep
         mujoco.mj_step(model, data)
-        assert not car_touches_wall(model, data, scene.car.body, walls)
+        assert not car_touches_wall(model, data, scene.car, walls)
 
 
 def test_bare_car_never_touches_a_wall():

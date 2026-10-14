@@ -39,7 +39,6 @@ def main() -> None:
         f"({math.degrees(car.steer_max_rad):.3f}deg)  R_theory={r_theory:.4f}m"
     )
 
-    car_id = scene.car.body
     data = sim.settle(model)
     sim.apply_command(
         scene.car,
@@ -53,7 +52,7 @@ def main() -> None:
     for i in range(n_steps):
         mujoco.mj_step(model, data)
         if i % sample_every == 0:
-            xy.append(data.xpos[car_id][:2].copy())
+            xy.append(data.bind_scalar(scene.car.body).xpos[:2].copy())
 
     path = np.array(xy)
     xs, ys = path[:, 0], path[:, 1]

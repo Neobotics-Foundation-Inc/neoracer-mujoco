@@ -13,7 +13,7 @@ import pytest
 
 from neoracer_mujoco.contract import ActuatorLimits
 from neoracer_mujoco.control.steering import ControlCommand
-from neoracer_mujoco.scene import CarIndex, Scene
+from neoracer_mujoco.scene import Car, Scene
 from neoracer_mujoco.sensors import SensorReadings
 
 USED_BY_NEORACER_RL = (
@@ -24,7 +24,7 @@ USED_BY_NEORACER_RL = (
     "collision.car_touches_wall",
     "collision.wall_geom_ids",
     "contract.actuator_limits",
-    "scene.CarIndex",
+    "scene.Car",
     "scene.Scene",
     "sensors.SensorReadings",
     "sensors.estimated_linear_speed_ms",
@@ -51,7 +51,7 @@ def test_records_used_by_neoracer_rl_keep_their_fields():
     assert {"throttle", "steer"} <= fields(ControlCommand)
     assert {"torque_nm", "steer_rad"} <= fields(ActuatorLimits)
     assert {"spec", "model", "car"} <= fields(Scene)
-    assert {"body", "qpos", "qvel", "drive", "steer", "sensors"} <= fields(CarIndex)
+    assert {"body", "joint", "drive", "steer", "sensors"} <= fields(Car)
     assert {"imu_accel", "imu_gyro", "imu_quat", "steer_cmd_pos"} <= fields(
         SensorReadings
     )

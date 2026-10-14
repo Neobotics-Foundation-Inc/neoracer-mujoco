@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from neoracer_mujoco import Scene, contract, sensors, sim
+from neoracer_mujoco.control.steering import ControlCommand
 
 
 def _steps(model: mujoco.MjModel, seconds: float) -> int:
@@ -26,17 +27,15 @@ def _drive(
 ) -> mujoco.MjData:
     """Settle the car, then hold throttle (N·m per wheel) and steer (rad)
     for `seconds`. Return the MjData."""
-    model, car = scene.model, scene.car
-    data = sim.settle(model)
-    ctrl = np.zeros(model.nu)
-    ctrl[list(car.drive)] = throttle
-    ctrl[car.steer] = steer
-    sim.apply_ctrl_and_step(model, data, ctrl, _steps(model, seconds))
+    data = sim.settle(scene.model)
+    sim.apply_command(scene.car, data, ControlCommand(throttle=throttle, steer=steer))
+    for _ in range(_steps(scene.model, seconds)):
+        mujoco.mj_step(scene.model, data)
     return data
 
 
 def _read(scene: Scene, data: mujoco.MjData) -> sensors.SensorReadings:
-    return sensors.read(scene.car.sensors, data.sensordata)
+    return sensors.read(scene.car.sensors, data)
 
 
 # --- the model has the actuators and sensors of contract.py -------------------
@@ -84,7 +83,7 @@ def test_lidar_sits_on_chassis_top(scene):
     top = float(chassis.pos[2] + chassis.size[2])
     for name in ("lidar_mount", *sensors.LIDAR_BEAM_ORDER):
         site = model.bind_scalar(spec.site(name))
-        assert int(site.bodyid[0]) == scene.car.body, name
+        assert int(site.bodyid[0]) == model.bind_scalar(scene.car.body).id, name
         assert float(site.pos[2]) == pytest.approx(top), name
 
 
@@ -111,13 +110,13 @@ def test_rests_on_ground(scene):
     """The car does not sink through the floor. A bad initial penetration
     does not launch it."""
     body = scene.car.body
-    spawn_z = scene.model.body_pos[body][2]
-    z = sim.settle(scene.model).xpos[body][2]
+    spawn_z = scene.model.bind_scalar(body).pos[2]
+    z = sim.settle(scene.model).bind_scalar(body).xpos[2]
     assert 0.02 < z < spawn_z + 0.02, f"settled z={z:.3f} vs spawn {spawn_z:.3f}"
 
 
 def test_stays_upright_at_rest(scene):
-    upright = sim.car_upright_cos(sim.settle(scene.model), scene.car.body)
+    upright = sim.car_upright_cos(sim.settle(scene.model), scene.car)
     assert upright > 0.95, "car tips over with no input"
 
 
@@ -155,9 +154,11 @@ def test_imu_stationary_gyro_near_zero(scene):
 
 def test_throttle_drives_forward(scene):
     body = scene.car.body
-    x0 = sim.settle(scene.model).xpos[body][0]
+    x0 = sim.settle(scene.model).bind_scalar(body).xpos[0]
     d = _drive(scene, throttle=1.0, steer=0.0, seconds=0.8)
-    assert d.xpos[body][0] - x0 > 0.1, "full throttle produced no forward motion"
+    assert d.bind_scalar(body).xpos[0] - x0 > 0.1, (
+        "full throttle produced no forward motion"
+    )
 
 
 def test_motor_encoder_positive_under_forward_throttle(scene):
@@ -174,7 +175,7 @@ def test_left_steer_yaws_left(scene):
     steering of every agent."""
     steer = contract.actuator_limits(scene.model, scene.car).steer_rad
     d = _drive(scene, throttle=0.5, steer=steer, seconds=0.8)
-    yaw_rate = d.qvel[scene.car.qvel][5]  # freejoint yaw rate, rad/s
+    yaw_rate = d.bind_scalar(scene.car.joint).qvel[5]  # freejoint yaw rate, rad/s
     assert yaw_rate > 0.1, f"left steer gave yaw rate {yaw_rate:.3f} (expected > 0)"
 
 
@@ -204,7 +205,7 @@ def test_top_speed_bounded(scene):
     # real car is much slower. If an agent needs a realistic top speed, add a
     # speed limit to the motor in the car XML.
     d = _drive(scene, throttle=1.0, steer=0.0, seconds=4.0)
-    v = np.linalg.norm(d.qvel[scene.car.qvel][:3])
+    v = np.linalg.norm(d.bind_scalar(scene.car.joint).qvel[:3])
     assert np.isfinite(v) and v < 40.0, (
         f"top speed {v:.2f} m/s is a blow-up, not physics"
     )

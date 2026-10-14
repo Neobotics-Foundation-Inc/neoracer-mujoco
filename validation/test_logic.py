@@ -19,15 +19,15 @@ def test_read_returns_every_sensor(scene):
     """sensors.read returns every sensor of the model, each with its size."""
     d = mujoco.MjData(scene.model)
     mujoco.mj_step(scene.model, d)
-    out = sensors.read(scene.car.sensors, d.sensordata)
+    out = sensors.read(scene.car.sensors, d)
     assert len(fields(sensors.SensorReadings)) == scene.model.nsensor
     assert out.imu_accel.shape == (3,) and out.imu_gyro.shape == (3,)
     assert out.imu_quat.shape == (4,)
     assert isinstance(out.lidar_000, float) and isinstance(out.steer_cmd_pos, float)
 
 
-def test_sensor_index_names_every_missing_or_wrong_size_sensor():
-    """sensor_index parses the model once, and one ValueError names each
+def test_find_sensors_names_every_missing_or_wrong_size_sensor():
+    """find_sensors parses the model once, and one ValueError names each
     problem: every missing sensor and every sensor with the wrong size."""
     spec = mujoco.MjSpec.from_string(
         """<mujoco><worldbody><body><site name="s"/></body></worldbody>
@@ -35,7 +35,7 @@ def test_sensor_index_names_every_missing_or_wrong_size_sensor():
         </mujoco>"""
     )
     with pytest.raises(ValueError) as error:
-        sensors.sensor_index(spec, spec.compile())
+        sensors.find_sensors(spec, spec.compile())
     message = str(error.value)
     assert "steer_cmd_pos has 3 values, not 1" in message
     for f in fields(sensors.SensorReadings):

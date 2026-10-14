@@ -182,7 +182,6 @@ def drive(scene: Scene, params: ManualDriveParams) -> None:
     window closes or Esc is pressed."""
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
-    car_id = car.body
     walls = collision.wall_geom_ids(scene.spec, model)
 
     if not glfw.init():
@@ -194,7 +193,7 @@ def drive(scene: Scene, params: ManualDriveParams) -> None:
 
     cam = mujoco.MjvCamera()
     cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-    cam.trackbodyid = car_id
+    cam.trackbodyid = model.bind_scalar(car.body).id
     cam.distance = params.cam.distance
     cam.elevation = params.cam.elevation
     # The loop sets cam.azimuth in each frame from the car yaw.
@@ -235,12 +234,12 @@ def drive(scene: Scene, params: ManualDriveParams) -> None:
         target = data.time + dt
         while data.time < target:
             mujoco.mj_step(model, data)
-            if collision.car_touches_wall(model, data, car_id, walls):
+            if collision.car_touches_wall(model, data, car, walls):
                 collision.reset_car(model, data)
                 command = stopped
                 break
 
-        cam.azimuth = params.cam.azimuth + _yaw_deg(data.xquat[car_id])
+        cam.azimuth = params.cam.azimuth + _yaw_deg(data.bind_scalar(car.body).xquat)
 
         w, h = glfw.get_framebuffer_size(window)
         viewport = mujoco.MjrRect(0, 0, w, h)
@@ -253,7 +252,7 @@ def drive(scene: Scene, params: ManualDriveParams) -> None:
 
         hud_accum += dt
         if hud_accum >= params.hud_period_s:
-            print_sensors(sensors.read(car.sensors, data.sensordata))
+            print_sensors(sensors.read(car.sensors, data))
             hud_accum = 0.0
 
     glfw.terminate()

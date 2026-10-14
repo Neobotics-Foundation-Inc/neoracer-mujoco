@@ -41,7 +41,7 @@ from examples.wall_follower_vs.vehicle_space_controller import (
     turn_radius_m,
 )
 from neoracer_mujoco import collision, sim
-from neoracer_mujoco.scene import Scene
+from neoracer_mujoco.scene import Car, Scene
 
 
 @dataclass(frozen=True)
@@ -115,14 +115,15 @@ class LoopTrialResult:
         return np.asarray(self.raycast_times_ms) + np.asarray(self.compute_times_ms)
 
 
-def _lap_angle_rad(data: mujoco.MjData, car_id: int) -> float:
+def _lap_angle_rad(data: mujoco.MjData, car: Car) -> float:
     """Angle (rad) of the car position about the world origin."""
-    return float(np.arctan2(data.xpos[car_id][1], data.xpos[car_id][0]))
+    xpos = data.bind_scalar(car.body).xpos
+    return float(np.arctan2(xpos[1], xpos[0]))
 
 
-def _car_yaw_rad(data: mujoco.MjData, car_id: int) -> float:
+def _car_yaw_rad(data: mujoco.MjData, car: Car) -> float:
     """Yaw (rad) of the car body about world +Z."""
-    xmat = data.xmat[car_id].reshape(3, 3)
+    xmat = data.bind_scalar(car.body).xmat.reshape(3, 3)
     return float(np.arctan2(xmat[1, 0], xmat[0, 0]))
 
 
@@ -158,7 +159,6 @@ def run_loop_trial(
     data = sim.settle(model)
     perturb_spawn(scene, data, np.random.default_rng(seed))
 
-    car_id = car.body
     walls = collision.wall_geom_ids(scene.spec, model)
     mount = lidar_mount(scene)
     vs_params = VsParams(car=car_geometry(scene))
@@ -167,7 +167,7 @@ def run_loop_trial(
     max_ticks = int(params.max_sim_time_s / dt)
 
     state = VsState()
-    prev_angle = _lap_angle_rad(data, car_id)
+    prev_angle = _lap_angle_rad(data, car)
     cum_angle = 0.0
     angle_history: list[tuple[float, float]] = [(0.0, 0.0)]  # (sim time, cum_angle)
     contact_steps = 0
@@ -204,13 +204,14 @@ def run_loop_trial(
         touched = False
         for _ in range(steps_per_tick):
             mujoco.mj_step(model, data)
-            if collision.car_touches_wall(model, data, car_id, walls):
+            if collision.car_touches_wall(model, data, car, walls):
                 contact_steps += 1
                 touched = True
         contact.append(touched)
 
         sim_time_s = (tick + 1) * dt
-        x_m, y_m = float(data.xpos[car_id][0]), float(data.xpos[car_id][1])
+        xpos = data.bind_scalar(car.body).xpos
+        x_m, y_m = float(xpos[0]), float(xpos[1])
         xy_m.append((x_m, y_m))
         min_straight_clear_m = min(min_straight_clear_m, result.straight_clear_m)
         targets.append(result.target_steer_deg)
@@ -227,7 +228,7 @@ def run_loop_trial(
             region_switches += 1
         prev_region_key = region_key
 
-        angle = _lap_angle_rad(data, car_id)
+        angle = _lap_angle_rad(data, car)
         cum_angle += math.remainder(angle - prev_angle, 2.0 * math.pi)
         prev_angle = angle
         angle_history.append((sim_time_s, cum_angle))
@@ -245,7 +246,7 @@ def run_loop_trial(
                     assert_never(result)
             print(
                 f"t={sim_time_s:5.2f}s pos=({x_m:+.2f},{y_m:+.2f}) "
-                f"yaw={math.degrees(_car_yaw_rad(data, car_id)):+6.1f}deg "
+                f"yaw={math.degrees(_car_yaw_rad(data, car)):+6.1f}deg "
                 f"target={result.target_steer_deg:+6.2f}deg "
                 f"R={turn_radius_m(vs_params, result.target_steer_deg):5.2f}m "
                 f"straight_clear={result.straight_clear_m:.2f}m {detail} "
@@ -257,7 +258,7 @@ def run_loop_trial(
             print(f"  -- {prev_label} -> {label(result)} at t={sim_time_s:.2f}s")
         prev_label = label(result)
 
-        upright = sim.car_upright_cos(data, car_id)
+        upright = sim.car_upright_cos(data, car)
         if upright < params.upright_rollover_cos:
             outcome = "rollover"
             if verbose:

@@ -190,15 +190,15 @@ def test_controller_stable_on_corridor():
     scene = corridor_scene()
     model, car = scene.model, scene.car
     data = sim.settle(model)
-    data.qpos[car.qpos][1] += 0.25  # m, toward the left wall
+    data.bind_scalar(car.joint).qpos[1] += 0.25  # m, toward the left wall
     mujoco.mj_forward(model, data)
 
     dt = model.opt.timestep
-    steer_low, steer_high = model.actuator_ctrlrange[car.steer]
+    steer_low, steer_high = model.bind_scalar(car.steer).ctrlrange
     state = PDState()
     min_front = float("inf")
     for _ in range(1500):  # 3 s at the 2 ms timestep
-        readings = sensors.read(car.sensors, data.sensordata)
+        readings = sensors.read(car.sensors, data)
         state, control = step(CFG, state, readings, dt)
         sim.apply_command(car, data, control)
         mujoco.mj_step(model, data)
@@ -207,6 +207,6 @@ def test_controller_stable_on_corridor():
         assert np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel))
         min_front = min(min_front, compute_signals(readings, CFG).front_distance)
 
-    upright_cos = sim.car_upright_cos(data, car.body)
+    upright_cos = sim.car_upright_cos(data, car)
     assert upright_cos > 0.7, "car should not have flipped during the run"
     assert min_front > 0.05, "controller should not have driven straight into a wall"

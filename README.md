@@ -58,8 +58,8 @@ python3 -m pytest validation/ -v
 ├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
 │   ├── contract.py        — the car contract (single source of truth)
 │   ├── assets.py          — cars() / load() / compose(): find and compile a Scene
-│   ├── scene.py           — Scene (spec + model) and CarIndex, found with model.bind
-│   ├── sensors.py         — SensorReadings, sensor_index() + read()
+│   ├── scene.py           — Scene (spec + model) and Car, the car's parts as spec elements
+│   ├── sensors.py         — SensorReadings, find_sensors() + read()
 │   ├── sim.py             — settle, step and command helpers, physics probes
 │   ├── control/           — classical controllers (track_centering)
 │   └── track_generation/  — procedural racetracks (generate_track → Track → MJCF)
@@ -93,7 +93,7 @@ python3 -m pytest validation/ -v
 
 ### Actuator interface
 
-| Actuator | Unit | Direction | ctrl index |
+| Actuator | Unit | Direction | Spec element |
 |---|---|---|---|
 | fl_motor | N·m | + = forward | `scene.car.drive[0]` |
 | fr_motor | N·m | + = forward | `scene.car.drive[1]` |
@@ -101,7 +101,7 @@ python3 -m pytest validation/ -v
 | rr_motor | N·m | + = forward | `scene.car.drive[3]` |
 | steer_servo | rad | + = left turn | `scene.car.steer` |
 
-Code finds each ctrl index with `model.bind` on the actuator in the scene's MjSpec (see `scene.py`), so it does not depend on the order of the actuators in the XML. `sim.apply_command(scene.car, data, command)` writes a throttle and a steer.
+Code writes an actuator by binding its element to the data, for example `data.bind_scalar(scene.car.steer).ctrl = 0.2` (see `scene.py`), so it does not depend on the order of the actuators in the XML. `sim.apply_command(scene.car, data, command)` writes a throttle and a steer.
 
 Steering command range is ±0.4 rad; the two Ackermann equality constraints split
 it into the correct inner/outer front-wheel angles automatically.
@@ -175,7 +175,7 @@ stable API.
   `python3 -m examples.track_centering_demo` (headless) or
   `mjpython -m examples.track_centering_demo --viewer`.
 
-The package reads the sensors, not the examples. To log the IMU, wheel, steer, suspension and LiDAR values of a scene, call `sensors.read(scene.car.sensors, data.sensordata)` at each step. `scene.car.sensors` holds the place of each sensor in `sensordata`, found once with `model.bind`. `lidar_ranges` and `motor_encoder_rad_s` read from the result.
+The package reads the sensors, not the examples. To log the IMU, wheel, steer, suspension and LiDAR values of a scene, call `sensors.read(scene.car.sensors, data)` at each step. `scene.car.sensors` holds the sensor elements of the scene's MjSpec, and `read` binds each one to the data. `lidar_ranges` and `motor_encoder_rad_s` read from the result.
 
 Add your own demos here — a pure-pursuit follower, a data recorder, etc. — using
 `run.py` as the template for the load → step → control loop.

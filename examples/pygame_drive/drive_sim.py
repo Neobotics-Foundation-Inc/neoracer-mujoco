@@ -7,7 +7,7 @@ Frame: +X forward, +Y left, +Z up. The throttle and steer inputs are in
 [-1, 1]; + throttle = forward, + steer = left (contract.py).
 
     params, state = DriveParams(), DriveState()
-    wheels = drive_wheel_dofs(scene)  # once per scene
+    wheels = drive_wheel_joints(scene)  # once per scene
     state = next_state(params, state, throttle, steer, dt)
     apply_and_step(scene, data, params, wheels, state, dt)
 """
@@ -18,10 +18,12 @@ import mujoco
 import numpy as np
 import numpy.typing as npt
 
-from neoracer_mujoco import contract
 from neoracer_mujoco.scene import Scene
 
-type WheelDofs = npt.NDArray[np.intp]  # shape (4,): qvel index of each drive wheel
+# the spin joint of each drive wheel: fl, fr, rl, rr
+type WheelJoints = tuple[
+    mujoco.MjsJoint, mujoco.MjsJoint, mujoco.MjsJoint, mujoco.MjsJoint
+]
 
 
 @dataclass(frozen=True)
@@ -56,17 +58,18 @@ class DriveState:
     steer: float = 0.0  # in [-1, 1]
 
 
-def drive_wheel_dofs(scene: Scene) -> WheelDofs:
-    """qvel index of the wheel spin joint of each drive actuator, in the order
-    of contract.DRIVE_ACTUATORS and scene.car.drive."""
-    dofs = []
-    for name in contract.DRIVE_ACTUATORS:
-        actuator = scene.spec.actuator(name)
-        joint = None if actuator is None else scene.spec.joint(actuator.target)
+def drive_wheel_joints(scene: Scene) -> WheelJoints:
+    """The wheel spin joint of each drive actuator, in the order of
+    scene.car.drive (fl, fr, rl, rr)."""
+
+    def spin_joint(motor: mujoco.MjsActuator) -> mujoco.MjsJoint:
+        joint = scene.spec.joint(motor.target)
         if joint is None:
-            raise ValueError(f"actuator {name} drives no joint of the scene")
-        dofs.append(int(scene.model.bind_scalar(joint).dofadr[0]))
-    return np.array(dofs, dtype=np.intp)
+            raise ValueError(f"actuator {motor.name} drives no joint of the scene")
+        return joint
+
+    fl, fr, rl, rr = scene.car.drive
+    return (spin_joint(fl), spin_joint(fr), spin_joint(rl), spin_joint(rr))
 
 
 def frame_dt(p: DriveParams, dt: float) -> float:
@@ -109,14 +112,17 @@ def apply_and_step(
     scene: Scene,
     data: mujoco.MjData,
     p: DriveParams,
-    wheels: WheelDofs,
+    wheels: WheelJoints,
     state: DriveState,
     dt: float,
 ) -> None:
     """Write the commands of state to data.ctrl and step the physics dt (s)."""
     car = scene.car
-    data.ctrl[car.steer] = state.steer * p.max_steer
-    data.ctrl[list(car.drive)] = wheel_torque(p, state.throttle, data.qvel[wheels])
+    data.bind_scalar(car.steer).ctrl = state.steer * p.max_steer
+    spin = np.array([data.bind_scalar(joint).qvel[0] for joint in wheels])
+    torque = wheel_torque(p, state.throttle, spin)
+    for motor, t in zip(car.drive, torque, strict=True):
+        data.bind_scalar(motor).ctrl = t
     end = data.time + frame_dt(p, dt)
     while data.time < end:
         mujoco.mj_step(scene.model, data)

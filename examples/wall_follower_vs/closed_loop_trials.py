@@ -79,7 +79,6 @@ def run_trial(
     data = sim.settle(model)
     perturb_spawn(scene, data, np.random.default_rng(seed))
 
-    car_id = car.body
     walls = collision.wall_geom_ids(scene.spec, model)
     mount = lidar_mount(scene)
     vs_params = VsParams(car=car_geometry(scene))
@@ -87,7 +86,7 @@ def run_trial(
     steps_per_tick = max(1, round(dt / float(model.opt.timestep)))
     max_ticks = int(params.max_sim_time_s / dt)
 
-    x0_m = float(data.xpos[car_id][0])
+    x0_m = float(data.bind_scalar(car.body).xpos[0])
     state = VsState()
     contact_steps = 0
     min_straight_clear_m = math.inf
@@ -112,7 +111,7 @@ def run_trial(
         sim.apply_command(car, data, result.command)
         for _ in range(steps_per_tick):
             mujoco.mj_step(model, data)
-            if collision.car_touches_wall(model, data, car_id, walls):
+            if collision.car_touches_wall(model, data, car, walls):
                 contact_steps += 1
 
         sim_time_s = (tick + 1) * dt
@@ -134,10 +133,10 @@ def run_trial(
             region_switches += 1
         prev_region_key = region_key
 
-        if sim.car_upright_cos(data, car_id) < params.upright_rollover_cos:
+        if sim.car_upright_cos(data, car) < params.upright_rollover_cos:
             outcome = "rollover"
             break
-        x_m = float(data.xpos[car_id][0])
+        x_m = float(data.bind_scalar(car.body).xpos[0])
         x_history.append((sim_time_s, x_m))
         if x_m - x0_m >= params.corridor_success_m:
             outcome = "success"
@@ -152,7 +151,7 @@ def run_trial(
     return TrialResult(
         outcome=outcome,
         sim_time_s=sim_time_s,
-        dx_m=float(data.xpos[car_id][0]) - x0_m,
+        dx_m=float(data.bind_scalar(car.body).xpos[0]) - x0_m,
         contact_steps=contact_steps,
         min_straight_clear_m=min_straight_clear_m,
         no_path_ticks=no_path_ticks,

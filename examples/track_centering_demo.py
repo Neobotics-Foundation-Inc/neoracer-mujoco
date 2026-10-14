@@ -103,7 +103,8 @@ def load_scene() -> Scene:
 def _spawn(scene: Scene, params: DemoParams) -> mujoco.MjData:
     """Settle the car, then move it sideways by params.initial_y_offset_m."""
     data = sim.settle(scene.model)
-    qpos = data.qpos[scene.car.qpos]  # a view: x, y, z, then the quaternion
+    # A view of data.qpos: x, y, z, then the quaternion.
+    qpos = data.bind_scalar(scene.car.joint).qpos
     qpos[1] += params.initial_y_offset_m
     mujoco.mj_forward(scene.model, data)
     return data
@@ -129,7 +130,6 @@ def run(params: DemoParams) -> CenteringReport:
     scene = load_scene()
     model, car = scene.model, scene.car
     data = _spawn(scene, params)
-    car_id = car.body
     dt = model.opt.timestep
 
     cfg = TrackCenteringConfig()
@@ -139,7 +139,7 @@ def run(params: DemoParams) -> CenteringReport:
     upright_all, finite_all = True, True
 
     for _ in range(params.steps):
-        readings = sensors.read(car.sensors, data.sensordata)
+        readings = sensors.read(car.sensors, data)
         signals = compute_signals(readings, cfg)
         state, control = track_centering.step(cfg, state, readings, dt)
 
@@ -151,7 +151,7 @@ def run(params: DemoParams) -> CenteringReport:
         throttles.append(control.throttle)
         front_dists.append(signals.front_distance)
 
-        if sim.car_upright_cos(data, car_id) < params.min_upright_cos:
+        if sim.car_upright_cos(data, car) < params.min_upright_cos:
             upright_all = False
         if not (np.isfinite(data.qpos).all() and np.isfinite(data.qvel).all()):
             finite_all = False
@@ -163,7 +163,7 @@ def run(params: DemoParams) -> CenteringReport:
     quarter = len(lateral_errors) // 4
 
     return CenteringReport(
-        distance_traveled_x=float(data.xpos[car_id][0]),
+        distance_traveled_x=float(data.bind_scalar(car.body).xpos[0]),
         mean_abs_lateral_error=float(np.mean(np.abs(lateral_errors))),
         max_abs_lateral_error=float(np.max(np.abs(lateral_errors))),
         first_quarter_mean_abs_lateral_error=float(
@@ -210,7 +210,6 @@ def run_viewer(params: DemoParams, duration_s: float | None) -> None:
     scene = load_scene()
     model, car = scene.model, scene.car
     data = _spawn(scene, params)
-    car_id = car.body
     dt = model.opt.timestep
     max_steps = None if duration_s is None else int(duration_s / dt)
 
@@ -229,7 +228,7 @@ def run_viewer(params: DemoParams, duration_s: float | None) -> None:
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-        viewer.cam.trackbodyid = car_id
+        viewer.cam.trackbodyid = model.bind_scalar(car.body).id
         viewer.cam.distance = 1.6  # m from the car
         viewer.cam.azimuth = 90  # deg
         viewer.cam.elevation = -30  # deg; negative = the camera looks down
@@ -242,7 +241,7 @@ def run_viewer(params: DemoParams, duration_s: float | None) -> None:
 
             loop_start = time.time()
 
-            readings = sensors.read(car.sensors, data.sensordata)
+            readings = sensors.read(car.sensors, data)
             signals = compute_signals(readings, cfg)
             state, control = track_centering.step(cfg, state, readings, dt)
 

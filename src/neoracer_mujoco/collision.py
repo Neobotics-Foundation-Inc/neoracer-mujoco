@@ -14,11 +14,13 @@ wheels, is part of the car.
 Get the wall geoms once, then check each step:
 
     walls = wall_geom_ids(scene.spec, scene.model)
-    if car_touches_wall(scene.model, data, scene.car.body, walls):
+    if car_touches_wall(scene.model, data, scene.car, walls):
         reset_car(scene.model, data)
 """
 
 import mujoco
+
+from .scene import Car
 
 WALL_MATERIAL = "wall"
 
@@ -35,11 +37,12 @@ def wall_geom_ids(spec: mujoco.MjSpec, model: mujoco.MjModel) -> frozenset[int]:
 
 
 def car_touches_wall(
-    model: mujoco.MjModel, data: mujoco.MjData, car_root: int, walls: frozenset[int]
+    model: mujoco.MjModel, data: mujoco.MjData, car: Car, walls: frozenset[int]
 ) -> bool:
-    """True if a geom of the body tree with root body id car_root touches a
-    geom in walls. It does no name lookup, so a control loop can call it at
-    each step."""
+    """True if a geom of the car's body tree touches a geom in walls. A
+    contact names its two geoms by id, so walls holds geom ids, and the car
+    is the body tree whose root is the car body."""
+    car_root = model.bind_scalar(car.body).id
     for i in range(data.ncon):
         contact = data.contact[i]
         g1, g2 = contact.geom1, contact.geom2

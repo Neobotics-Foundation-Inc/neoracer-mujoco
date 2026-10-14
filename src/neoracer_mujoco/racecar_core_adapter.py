@@ -103,11 +103,11 @@ class MujocoLidar:
     """
 
     def __init__(self, scene: Scene, data: mujoco.MjData):
-        self._index = scene.car.sensors
+        self._sensors = scene.car.sensors
         self._data = data
 
     def get_samples(self) -> np.ndarray:
-        readings = sensors.read(self._index, self._data.sensordata)
+        readings = sensors.read(self._sensors, self._data)
         meters = sensors.lidar_ranges(readings)[_CLOCKWISE]
         cm = meters * 100.0
         # In racecar_core, 0.0 means "no return". A -1 (no hit) and a value

@@ -82,7 +82,7 @@ def perturb_spawn(
     lateral = float(rng.uniform(-params.lateral_m, params.lateral_m))
     yaw = float(rng.uniform(-params.yaw_rad, params.yaw_rad))
     # qpos of the car freejoint: (x, y, z, qw, qx, qy, qz). A view of data.qpos.
-    qpos = data.qpos[scene.car.qpos]
+    qpos = data.bind_scalar(scene.car.joint).qpos
     qpos[1] += lateral
     qpos[3:7] = _compose_yaw(qpos[3:7], yaw)
     model = scene.model
