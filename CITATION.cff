@@ -1,4 +1,6 @@
 # Written by .github/citation.py from the git history. Do not edit.
+# The authors are the 5 people with the most commits, counting
+# the commits that a person authored or co-authored.
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "NeoRacer MuJoCo"

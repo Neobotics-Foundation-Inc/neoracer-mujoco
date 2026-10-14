@@ -2,12 +2,13 @@
 Write CITATION.cff, the file behind GitHub's "Cite this repository" button,
 from the people in the git history.
 
-The authors are every person who authored a commit or appears in a
-Co-authored-by trailer, the most commits first. .mailmap at the repo root
-merges the names and emails of one person. AI tools (the rules of
-ai_credit.py) and bots are not authors.
+The authors are the MAX_AUTHORS people with the most commits. A person
+counts once for each commit that they authored or appear in as a
+Co-authored-by trailer. .mailmap at the repo root merges the names and
+emails of one person. AI tools (the rules of ai_credit.py) and bots are
+not authors.
 
-Usage, from the repo root, after a new person's first commit:
+Usage, from the repo root, when the top contributors change:
     python3 .github/citation.py > CITATION.cff
 """
 
@@ -28,6 +29,7 @@ REPOSITORY = "https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco"
 LICENSE = "GPL-3.0-only"
 
 COAUTHOR = "Co-authored-by: "
+MAX_AUTHORS = 5
 HAS_EMAIL = re.compile(r" <[^<>]*>$")
 
 
@@ -87,19 +89,23 @@ def cff_person(name: str) -> str:
 
 
 def citation(people: list[str]) -> str:
-    """The text of CITATION.cff for the authors people ("Name <email>"). Two
-    entries of one list must differ, so an author whose entry would equal
-    another one's also gets the email."""
-    entries = [cff_person(p.partition(" <")[0]) for p in people]
+    """The text of CITATION.cff, with the first MAX_AUTHORS of people
+    ("Name <email>", most commits first) as the authors. Two entries of one
+    list must differ, so an author whose entry would equal another one's
+    also gets the email."""
+    top = people[:MAX_AUTHORS]
+    entries = [cff_person(p.partition(" <")[0]) for p in top]
     shared = Counter(entries)
     authors = ""
-    for entry, person in zip(entries, people, strict=True):
+    for entry, person in zip(entries, top, strict=True):
         authors += entry
         if shared[entry] > 1:
             email = person.partition(" <")[2].removesuffix(">")
             authors += f"    email: {json.dumps(email)}\n"
     return (
         "# Written by .github/citation.py from the git history. Do not edit.\n"
+        f"# The authors are the {MAX_AUTHORS} people with the most commits, counting\n"
+        "# the commits that a person authored or co-authored.\n"
         "cff-version: 1.2.0\n"
         'message: "If you use this software, please cite it as below."\n'
         f"title: {json.dumps(TITLE)}\n"
