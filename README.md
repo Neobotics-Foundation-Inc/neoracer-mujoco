@@ -62,6 +62,7 @@ python3 -m pytest validation/ -v
 │   ├── sensors.py         — SensorReadings, find_sensors() + read()
 │   ├── truth.py           — sensors that only the simulator has: car pose, wall contact
 │   ├── batch.py           — step many copies of a scene at once (mujoco.rollout, or MuJoCo Warp)
+│   ├── physics.py         — change the car's grip, mass, motor torque and steering stiffness per row
 │   ├── sim.py             — settle, step and command helpers, physics probes
 │   ├── control/           — classical controllers (track_centering)
 │   └── track_generation/  — procedural racetracks (generate_track → Track → MJCF)
@@ -153,10 +154,12 @@ A wall is a geom of the body named `walls`. The tracks in `assets/tracks/` and t
 import numpy as np
 
 from neoracer_mujoco import assets, batch, sim
+from neoracer_mujoco.physics import Physics
 
 scene = assets.load()
-cpu = batch.CpuBatch(scene.model, nbatch=64, nthread=4)
-state = cpu.initial([sim.settle(scene.model)] * 64)  # 64 copies of a car at rest
+cpu = batch.CpuBatch(scene, nbatch=64, nthread=4)
+# 64 copies of a car at rest, each with the physics of the XML
+state = cpu.initial([sim.settle(scene.model)] * 64, [Physics()] * 64)
 throttle, steer = np.full(64, 0.1), np.zeros(64)  # N·m, rad
 ctrl = batch.command(scene.model, scene.car, throttle, steer)
 state, sensordata = cpu.step(state, ctrl, nstep=17)  # sensordata: (64, 17, n)
@@ -178,10 +181,11 @@ pip install "neoracer-mujoco[jax]" "jax[cuda12]"
 import jax.numpy as jnp
 
 from neoracer_mujoco import assets, batch, batch_warp, sim
+from neoracer_mujoco.physics import Physics
 
 scene = assets.load()
-gpu = batch_warp.WarpBatch(scene.model, nbatch=4096)
-state = gpu.initial([sim.settle(scene.model)] * 4096)
+gpu = batch_warp.WarpBatch(scene, nbatch=4096)
+state = gpu.initial([sim.settle(scene.model)] * 4096, [Physics()] * 4096)
 throttle, steer = jnp.full(4096, 0.1), jnp.zeros(4096)
 ctrl = batch.command(scene.model, scene.car, throttle, steer)
 state, sensordata = gpu.step(state, ctrl, nstep=17)
@@ -189,6 +193,46 @@ pos = batch.read(scene.model, sensordata[:, -1], scene.car.truth.pos)
 ```
 
 Warp computes collisions and constraints with its own code, so its results are close to the CPU version's, not equal: after ten env steps from rest, the car positions are within 1 mm. Without a GPU, JAX runs Warp on the CPU, correctly but much more slowly than `CpuBatch`.
+
+### Physics randomization
+
+Nobody knows the real car's grip, mass or motor strength exactly, so a controller trained on one simulated car may fail on the real one. Domain randomization trains it on many slightly different cars instead. `physics.py` changes four parameters of the compiled model, as factors on the values in the XML:
+
+| Factor | Changes |
+|---|---|
+| `wheel_friction` | the sliding friction of the wheel contacts, and so how much the wheels slip |
+| `chassis_mass` | the mass and inertia of the car body |
+| `motor_torque` | the torque that each drive motor gives per unit of command |
+| `steer_stiffness` | the stiffness of the steering servo |
+
+`PhysicsRanges` gives the interval of each factor (the default changes nothing), `physics.sample` draws a `Physics` from it, and `apply_physics` writes one into a copy of the model:
+
+```python
+import copy
+
+import numpy as np
+
+from neoracer_mujoco import assets, physics
+from neoracer_mujoco.physics import PhysicsRanges, Range
+
+scene = assets.load()
+ranges = PhysicsRanges(wheel_friction=Range(0.5, 1.2), motor_torque=Range(0.7, 1.3))
+params = physics.sample(ranges, np.random.default_rng(0))
+model = copy.deepcopy(scene.model)
+physics.apply_physics(model, scene, params)
+```
+
+A batch takes one `Physics` per row in `initial`, and a row's physics is part of its state, so `reset` gives a row that starts over the physics of `initial` too. The model is the same, bit for bit, as one compiled with the changed values, and a row of `CpuBatch` steps the same as one MjData on that model.
+
+On 4 cores, with 64 rows on `loop_corridor`:
+
+| | CpuBatch | WarpBatch, on the CPU |
+|---|---|---|
+| env steps/s, one physics for all rows | 7,300 to 8,100 | 89 |
+| env steps/s, 64 different physics | 7,000 to 7,500 | 87 |
+| `initial` with 64 new physics | 100 to 180 ms | 60 ms |
+
+`CpuBatch` keeps one MjModel per different `Physics`, so build its scene with `assets.compose(track, visuals=False)`, which makes each model 1.6 MB instead of 35 MB. With the visuals, the 64 copies take 11 s to make. `WarpBatch` keeps only the fields that `apply_physics` changes, `physics.FIELDS`, for each environment. There was no GPU to measure Warp on, so its numbers above show only that per-environment physics costs nothing extra.
 
 ## Track generation (`src/neoracer_mujoco/track_generation/`)
 
