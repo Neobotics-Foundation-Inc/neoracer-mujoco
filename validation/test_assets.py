@@ -7,10 +7,11 @@ import tomllib
 from pathlib import Path
 
 import mujoco
+import numpy as np
 import pytest
 from scenes import assert_car_rests, assert_keeps_car_solver_options
 
-from neoracer_mujoco import assets
+from neoracer_mujoco import assets, sim
 
 TRACKS = assets.tracks()
 
@@ -40,3 +41,24 @@ def test_the_wheel_puts_assets_where_assets_py_looks():
     assert wheel["force-include"] == {
         "assets": f"neoracer_mujoco/{assets.PACKAGED_DIR}"
     }
+
+
+@pytest.mark.parametrize("track", TRACKS, ids=os.path.basename)
+def test_a_scene_without_visuals_senses_the_same(track):
+    """visuals=False deletes only meshes that collide with nothing, so every
+    sensor reads the same, bit for bit, while the car drives and steers."""
+    spec = mujoco.MjSpec.from_file(track)
+    full, bare = assets.compose(spec), assets.compose(spec, visuals=False)
+    assert bare.model.nmesh < full.model.nmesh
+    readings = []
+    for scene in (full, bare):
+        data = sim.settle(scene.model)
+        for motor in scene.car.drive:
+            data.bind_scalar(motor).ctrl = 0.3  # N·m
+        data.bind_scalar(scene.car.steer).ctrl = 0.3  # rad
+        steps = []
+        for _ in range(300):  # 0.6 s
+            mujoco.mj_step(scene.model, data)
+            steps.append(data.sensordata.copy())
+        readings.append(np.array(steps))
+    np.testing.assert_array_equal(readings[0], readings[1])

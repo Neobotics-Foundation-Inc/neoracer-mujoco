@@ -52,12 +52,18 @@ def compose(
     track: mujoco.MjSpec,
     car_path: str | os.PathLike[str] = DEFAULT_CAR,
     pos: Position = (0.0, 0.0, 0.0),
+    visuals: bool = True,
 ) -> Scene:
     """Compile the track with the car's "car" body attached at pos (m),
     facing +X. track is not changed: the car is attached to a copy.
 
     Only the car body is attached, so the track keeps its own floor and
     <option>, and the track XML never names the car file.
+
+    With visuals=False, the scene has none of the meshes that only show
+    the car (see delete_visuals): the physics and the sensors are the
+    same, and the model is much smaller and steps faster. Use it where
+    nothing renders the scene, as in a batch.
 
         compose(mujoco.MjSpec.from_file(os.path.join(TRACK_DIR, "f1_track.xml")))
     """
@@ -66,4 +72,21 @@ def compose(
     frame = scene.worldbody.add_frame()
     frame.pos = np.array(pos)
     frame.attach_body(car.body("car"), "", "")
+    if not visuals:
+        delete_visuals(scene)
     return compile_scene(scene)
+
+
+def delete_visuals(spec: mujoco.MjSpec) -> None:
+    """Delete from spec every mesh geom that collides with nothing, and the
+    meshes that no geom uses after that. In neoracer.xml these geoms have no
+    mass and only show the car. Their collision trees are most of the
+    compiled model: 33 of its 35 MB on loop_corridor.xml."""
+    for geom in list(spec.geoms):
+        cosmetic = geom.contype == 0 and geom.conaffinity == 0
+        if geom.type == mujoco.mjtGeom.mjGEOM_MESH and cosmetic:
+            spec.delete(geom)
+    used = {geom.meshname for geom in spec.geoms}
+    for mesh in list(spec.meshes):
+        if mesh.name not in used:
+            spec.delete(mesh)
