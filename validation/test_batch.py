@@ -327,8 +327,9 @@ def test_the_warp_batch_follows_the_cpu_batch_with_its_physics():
 
 def test_the_warp_batch_reset_gives_a_row_the_physics_of_initial():
     """After a reset with a mixed done mask, every physics field of a done
-    row is that of initial, and every field of the other rows is unchanged.
-    This test runs only where the jax extra is installed."""
+    row is that of initial, every field of the other rows is unchanged, and
+    a done row steps like a fresh one. This test runs only where the jax
+    extra is installed."""
     jnp, batch_warp = _warp_modules()
     scene = _loop_scene()
     warp = batch_warp.WarpBatch(scene, 4)
@@ -342,3 +343,8 @@ def test_the_warp_batch_reset_gives_a_row_the_physics_of_initial():
         assert not np.array_equal(old, new), name
         np.testing.assert_array_equal(after[done], new[done], err_msg=name)
         np.testing.assert_array_equal(after[~done], old[~done], err_msg=name)
+    # A reset row then steps like the same row of a fresh initial.
+    ctrl = batch.command(scene.model, scene.car, jnp.full(4, 0.3), jnp.zeros(4))
+    _, reset_data = warp.step(reset, ctrl, NSTEP)
+    _, fresh_data = warp.step(initial, ctrl, NSTEP)
+    np.testing.assert_allclose(reset_data[done], fresh_data[done], atol=1e-6)
