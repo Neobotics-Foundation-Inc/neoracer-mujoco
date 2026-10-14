@@ -289,4 +289,4 @@ lives in `src/neoracer_mujoco/contract.py` — update it there if the contract c
 
 ## Citing
 
-If you use this simulator in your work, cite it with the "Cite this repository" button on GitHub, which reads `CITATION.cff`. The authors in that file are the people in the git history, most commits first. `.github/citation.py` writes it, so do not edit it by hand.
+If you use this simulator in your work, cite it with the "Cite this repository" button on GitHub, which reads `CITATION.cff`. The authors in that file are the five people with the most commits in the git history. A commit counts for its author and for each person in a `Co-authored-by` trailer, `.mailmap` merges the names and emails of one person, and AI tools and bots do not count. `.github/citation.py` writes the file, so do not edit it by hand.

@@ -110,6 +110,14 @@ def test_the_family_name_keeps_its_particles(name, entry):
     assert citation.cff_person(name) == entry
 
 
+def test_the_file_lists_the_top_five_authors():
+    """people come most commits first, so the authors are the first five."""
+    people = [f"Person {c} <{c}@example.com>" for c in "ABCDEFG"]
+    text = citation.citation(people)
+    assert text.count("given-names") == 5
+    assert 'family-names: "E"' in text and 'family-names: "F"' not in text
+
+
 def test_the_file_lists_each_author_once():
     text = citation.citation(
         ["Bassel Mabsout <b@example.com>", "anshm <a@example.com>"]
