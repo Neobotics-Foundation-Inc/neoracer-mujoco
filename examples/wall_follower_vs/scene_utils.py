@@ -13,6 +13,7 @@ import mujoco
 import numpy as np
 
 from neoracer_mujoco import assets
+from neoracer_mujoco.scene import Scene
 
 type TrackName = Literal["straight_corridor.xml", "loop_corridor.xml"]
 
@@ -30,7 +31,7 @@ def _spawn_offset(track: TrackName) -> assets.Position:
             assert_never(track)
 
 
-def load_track_scene(track: TrackName) -> mujoco.MjModel:
+def load_track_scene(track: TrackName) -> Scene:
     """Compile assets/tracks/<track> with the car at the center of the
     corridor, facing +X."""
     return assets.compose(
@@ -71,7 +72,7 @@ def _compose_yaw(q: np.ndarray, yaw: float) -> np.ndarray:
 
 
 def perturb_spawn(
-    model: mujoco.MjModel,
+    scene: Scene,
     data: mujoco.MjData,
     rng: np.random.Generator,
     params: SpawnParams = SpawnParams(),
@@ -80,10 +81,11 @@ def perturb_spawn(
     from rng. Then step data resettle_steps times."""
     lateral = float(rng.uniform(-params.lateral_m, params.lateral_m))
     yaw = float(rng.uniform(-params.yaw_rad, params.yaw_rad))
-    # qpos of the car freejoint: (x, y, z, qw, qx, qy, qz).
-    q = int(model.jnt_qposadr[model.body_jntadr[model.body("car").id]])
-    data.qpos[q + 1] += lateral
-    data.qpos[q + 3 : q + 7] = _compose_yaw(data.qpos[q + 3 : q + 7], yaw)
+    # qpos of the car freejoint: (x, y, z, qw, qx, qy, qz). A view of data.qpos.
+    qpos = data.qpos[scene.car.qpos]
+    qpos[1] += lateral
+    qpos[3:7] = _compose_yaw(qpos[3:7], yaw)
+    model = scene.model
     mujoco.mj_forward(model, data)
     for _ in range(params.resettle_steps):
         mujoco.mj_step(model, data)

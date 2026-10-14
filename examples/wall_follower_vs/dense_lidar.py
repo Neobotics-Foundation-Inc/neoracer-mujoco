@@ -14,6 +14,8 @@ import mujoco
 import numpy as np
 import numpy.typing as npt
 
+from neoracer_mujoco.scene import Scene
+
 type Scan = tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]  # rad, m
 
 
@@ -49,11 +51,12 @@ class LidarMount:
     body_id: int  # the car body: its axes give the ray directions; rays ignore it
 
 
-def lidar_mount(model: mujoco.MjModel) -> LidarMount:
+def lidar_mount(scene: Scene) -> LidarMount:
     """Read the ids of the lidar_mount site and the car body once."""
-    return LidarMount(
-        site_id=model.site("lidar_mount").id, body_id=model.body("car").id
-    )
+    site = scene.spec.site("lidar_mount")
+    if site is None:
+        raise ValueError("the scene has no lidar_mount site")
+    return LidarMount(site_id=scene.model.bind_scalar(site).id, body_id=scene.car.body)
 
 
 def cast_dense_lidar(

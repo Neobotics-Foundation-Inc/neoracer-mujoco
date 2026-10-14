@@ -3,7 +3,7 @@ Steering and throttle shaping shared by the LiDAR controllers
 (track_centering.py, wall_following.py).
 
 Frame: +X forward, +Y left, +Z up.
-ctrl[0:4] = wheel torque (N·m), + = forward. ctrl[4] = steer angle (rad), + = left.
+Wheel torque (N·m), + = forward. Steer angle (rad), + = left.
 
 Each controller computes one error signal (m) and a raw steer command (rad).
 command() then clamps the steer, limits its rate of change, and reduces the
@@ -19,8 +19,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ControlCommand:
-    """throttle goes to ctrl[0:4] (N·m, + = forward); steer goes to ctrl[4]
-    (rad, + = left)."""
+    """throttle goes to the four drive motors (N·m, + = forward); steer goes
+    to the steering servo (rad, + = left). sim.apply_command writes both."""
 
     throttle: float
     steer: float
@@ -40,7 +40,7 @@ class ShapingConfig:
     """Steer and throttle limits that command() and fallback() apply."""
 
     target_throttle: float = 0.10  # N·m per wheel, base forward drive command
-    steer_limit: float = 0.4  # rad; matches ctrl[4] ctrlrange in neoracer.xml
+    steer_limit: float = 0.4  # rad; matches the steer_servo ctrlrange in neoracer.xml
     steer_slew_limit: float = 3.0  # rad/s max steering rate of change
     steer_slowdown_gain: float = 0.6  # throttle cut fraction at full steer deflection
     # m; at this front clearance or less, the throttle is 0

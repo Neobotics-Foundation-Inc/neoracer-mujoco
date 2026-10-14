@@ -49,14 +49,15 @@ def main() -> None:
     args = parser.parse_args()
     params = WatchParams()
 
-    model = load_track_scene("loop_corridor.xml")
+    scene = load_track_scene("loop_corridor.xml")
+    model, car = scene.model, scene.car
     data = sim.settle(model)
-    perturb_spawn(model, data, np.random.default_rng(args.seed))
+    perturb_spawn(scene, data, np.random.default_rng(args.seed))
 
-    car_id = model.body("car").id
-    mount = lidar_mount(model)
+    car_id = car.body
+    mount = lidar_mount(scene)
     lidar = DenseLidarParams(n_beams=args.n)
-    vs_params = VsParams(car=car_geometry(model))
+    vs_params = VsParams(car=car_geometry(scene))
     state = VsState()
     dt = 1.0 / params.control_hz
     steps_per_tick = max(1, round(dt / float(model.opt.timestep)))
@@ -74,7 +75,7 @@ def main() -> None:
             loop_start = time.time()
             angles, ranges = cast_dense_lidar(model, data, mount, lidar)
             state, result = step(vs_params, state, angles, ranges, dt)
-            sim.apply_command(data, result.command)
+            sim.apply_command(car, data, result.command)
             for _ in range(steps_per_tick):
                 mujoco.mj_step(model, data)
             viewer.sync()

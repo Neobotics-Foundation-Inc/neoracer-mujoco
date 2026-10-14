@@ -15,6 +15,8 @@ from importlib import resources
 import mujoco
 import numpy as np
 
+from .scene import Scene, compile_scene
+
 PACKAGED_DIR = "data"  # the name of assets/ inside an installed wheel
 
 _package = resources.files("neoracer_mujoco")
@@ -40,16 +42,16 @@ def tracks() -> list[str]:
     return sorted(glob.glob(os.path.join(TRACK_DIR, "*.xml")))
 
 
-def load(path: str | os.PathLike[str] = DEFAULT_CAR) -> mujoco.MjModel:
-    """Compile a car XML into an MjModel. Defaults to assets/neoracer.xml."""
-    return mujoco.MjModel.from_xml_path(str(path))
+def load(path: str | os.PathLike[str] = DEFAULT_CAR) -> Scene:
+    """Compile a car XML into a Scene. Defaults to assets/neoracer.xml."""
+    return compile_scene(mujoco.MjSpec.from_file(str(path)))
 
 
 def compose(
     track: mujoco.MjSpec,
     car_path: str | os.PathLike[str] = DEFAULT_CAR,
     pos: Position = (0.0, 0.0, 0.0),
-) -> mujoco.MjModel:
+) -> Scene:
     """Compile the track with the car's "car" body attached at pos (m),
     facing +X. track is not changed: the car is attached to a copy.
 
@@ -63,4 +65,4 @@ def compose(
     frame = scene.worldbody.add_frame()
     frame.pos = np.array(pos)
     frame.attach_body(car.body("car"), "", "")
-    return scene.compile()
+    return compile_scene(scene)

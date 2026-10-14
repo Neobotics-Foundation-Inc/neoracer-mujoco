@@ -43,6 +43,7 @@ from neoracer_mujoco.control.track_centering import (
     TrackCenteringConfig,
     compute_signals,
 )
+from neoracer_mujoco.scene import Scene
 
 
 @dataclass(frozen=True)
@@ -93,17 +94,18 @@ class CenteringReport:
     finite_throughout: bool
 
 
-def load_model() -> mujoco.MjModel:
+def load_scene() -> Scene:
     return assets.compose(
         mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "straight_corridor.xml"))
     )
 
 
-def _spawn(model: mujoco.MjModel, params: DemoParams) -> mujoco.MjData:
+def _spawn(scene: Scene, params: DemoParams) -> mujoco.MjData:
     """Settle the car, then move it sideways by params.initial_y_offset_m."""
-    data = sim.settle(model)
-    data.qpos[1] += params.initial_y_offset_m
-    mujoco.mj_forward(model, data)
+    data = sim.settle(scene.model)
+    qpos = data.qpos[scene.car.qpos]  # a view: x, y, z, then the quaternion
+    qpos[1] += params.initial_y_offset_m
+    mujoco.mj_forward(scene.model, data)
     return data
 
 
@@ -124,10 +126,10 @@ def _side_clearance(
 
 def run(params: DemoParams) -> CenteringReport:
     """Run the controller headless for params.steps steps and measure the result."""
-    model = load_model()
-    data = _spawn(model, params)
-    car_id = model.body("car").id
-    layout = sensors.sensor_layout(model)
+    scene = load_scene()
+    model, car = scene.model, scene.car
+    data = _spawn(scene, params)
+    car_id = car.body
     dt = model.opt.timestep
 
     cfg = TrackCenteringConfig()
@@ -137,11 +139,11 @@ def run(params: DemoParams) -> CenteringReport:
     upright_all, finite_all = True, True
 
     for _ in range(params.steps):
-        readings = sensors.read_layout(layout, data)
+        readings = sensors.read(car.sensors, data.sensordata)
         signals = compute_signals(readings, cfg)
         state, control = track_centering.step(cfg, state, readings, dt)
 
-        sim.apply_command(data, control)
+        sim.apply_command(car, data, control)
         mujoco.mj_step(model, data)
 
         lateral_errors.append(signals.lateral_error)
@@ -205,10 +207,10 @@ def run_viewer(params: DemoParams, duration_s: float | None) -> None:
     close the window. If duration_s is None, only the window close stops it.
     On macOS, run it with mjpython (see the module docstring).
     """
-    model = load_model()
-    data = _spawn(model, params)
-    car_id = model.body("car").id
-    layout = sensors.sensor_layout(model)
+    scene = load_scene()
+    model, car = scene.model, scene.car
+    data = _spawn(scene, params)
+    car_id = car.body
     dt = model.opt.timestep
     max_steps = None if duration_s is None else int(duration_s / dt)
 
@@ -240,11 +242,11 @@ def run_viewer(params: DemoParams, duration_s: float | None) -> None:
 
             loop_start = time.time()
 
-            readings = sensors.read_layout(layout, data)
+            readings = sensors.read(car.sensors, data.sensordata)
             signals = compute_signals(readings, cfg)
             state, control = track_centering.step(cfg, state, readings, dt)
 
-            sim.apply_command(data, control)
+            sim.apply_command(car, data, control)
             mujoco.mj_step(model, data)
             viewer.sync()
 

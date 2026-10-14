@@ -12,7 +12,7 @@ import mujoco
 import numpy as np
 import pytest
 from fake_sensors import beams, mirror, random_beams
-from scenes import corridor_model
+from scenes import corridor_scene
 
 from neoracer_mujoco import sensors, sim
 from neoracer_mujoco.control import PDState
@@ -187,26 +187,26 @@ def test_controller_stable_on_corridor():
     """Run the controller on the car in the corridor for 3 s. The values stay
     finite, the steer stays in the actuator range, the car stays upright and
     it does not drive into a wall."""
-    model = corridor_model()
+    scene = corridor_scene()
+    model, car = scene.model, scene.car
     data = sim.settle(model)
-    data.qpos[1] += 0.25  # m, toward the left wall
+    data.qpos[car.qpos][1] += 0.25  # m, toward the left wall
     mujoco.mj_forward(model, data)
 
-    layout = sensors.sensor_layout(model)
     dt = model.opt.timestep
-    steer_low, steer_high = model.actuator("steer_servo").ctrlrange
+    steer_low, steer_high = model.actuator_ctrlrange[car.steer]
     state = PDState()
     min_front = float("inf")
     for _ in range(1500):  # 3 s at the 2 ms timestep
-        readings = sensors.read_layout(layout, data)
+        readings = sensors.read(car.sensors, data.sensordata)
         state, control = step(CFG, state, readings, dt)
-        sim.apply_command(data, control)
+        sim.apply_command(car, data, control)
         mujoco.mj_step(model, data)
 
         assert steer_low <= control.steer <= steer_high
         assert np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel))
         min_front = min(min_front, compute_signals(readings, CFG).front_distance)
 
-    upright_cos = sim.car_upright_cos(data, model.body("car").id)
+    upright_cos = sim.car_upright_cos(data, car.body)
     assert upright_cos > 0.7, "car should not have flipped during the run"
     assert min_front > 0.05, "controller should not have driven straight into a wall"

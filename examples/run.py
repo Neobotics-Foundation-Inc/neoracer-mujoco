@@ -13,10 +13,10 @@ Full mode uses a high throttle and no speed limit. At high speed, the car rolls 
 In both modes, the script prints a warning when the roll angle is more than roll_warn_deg.
 
 Frame: +X forward, +Y left, +Z up.
-Control layout (see neoracer_mujoco.contract):
-  ctrl[0..3] = fl/fr/rl/rr wheel torque (N·m), + = forward
-  ctrl[4]    = steer_servo target angle (rad), + = left.
-               Two Ackermann equality constraints set the fl and fr steer angles from it.
+Actuators (see neoracer_mujoco.contract):
+  fl/fr/rl/rr_motor = wheel torque (N·m), + = forward
+  steer_servo       = target angle (rad), + = left.
+                      Two Ackermann equality constraints set the fl and fr steer angles from it.
 """
 
 import argparse
@@ -134,10 +134,10 @@ def main() -> None:
     args = parser.parse_args()
     params = MODES[args.mode]
 
-    model = assets.load()
+    scene = assets.load()
+    model, car = scene.model, scene.car
     data = mujoco.MjData(model)
-    car_id = model.body("car").id
-    layout = sensors.sensor_layout(model)
+    car_id = car.body
 
     print(f"NeoRacer viewer — mode={args.mode}")
     print(
@@ -157,13 +157,13 @@ def main() -> None:
         while viewer.is_running():
             loop_start = time.time()
 
-            readings = sensors.read_layout(layout, data)
+            readings = sensors.read(car.sensors, data.sensordata)
             speed = sensors.estimated_linear_speed_ms(
                 sensors.motor_encoder_rad_s(readings)
             )
 
             command = _command(params, data.time, speed)
-            sim.apply_command(data, command)
+            sim.apply_command(car, data, command)
             mujoco.mj_step(model, data)
             viewer.sync()
 

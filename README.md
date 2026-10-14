@@ -57,8 +57,9 @@ python3 -m pytest validation/ -v
 │   └── meshes/            — visual STL meshes (cosmetic; mass="0")
 ├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
 │   ├── contract.py        — the car contract (single source of truth)
-│   ├── assets.py          — cars() / load() model discovery + compile
-│   ├── sensors.py         — SensorReadings, sensor_layout() + read_layout()
+│   ├── assets.py          — cars() / load() / compose(): find and compile a Scene
+│   ├── scene.py           — Scene (spec + model) and CarIndex, found with model.bind
+│   ├── sensors.py         — SensorReadings, sensor_index() + read()
 │   ├── sim.py             — settle, step and command helpers, physics probes
 │   ├── control/           — classical controllers (track_centering)
 │   └── track_generation/  — procedural racetracks (generate_track → Track → MJCF)
@@ -90,15 +91,17 @@ python3 -m pytest validation/ -v
 | Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m) | ESTIMATED |
 | Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · susp pos · 8-beam LiDAR | |
 
-### Actuator interface (`ctrl[0:4]` drive + `ctrl[4]` steer)
+### Actuator interface
 
-| Index | Name | Unit | Direction |
+| Actuator | Unit | Direction | ctrl index |
 |---|---|---|---|
-| ctrl[0] | fl_motor | N·m | + = forward |
-| ctrl[1] | fr_motor | N·m | + = forward |
-| ctrl[2] | rl_motor | N·m | + = forward |
-| ctrl[3] | rr_motor | N·m | + = forward |
-| ctrl[4] | steer_servo | rad | + = left turn |
+| fl_motor | N·m | + = forward | `scene.car.drive[0]` |
+| fr_motor | N·m | + = forward | `scene.car.drive[1]` |
+| rl_motor | N·m | + = forward | `scene.car.drive[2]` |
+| rr_motor | N·m | + = forward | `scene.car.drive[3]` |
+| steer_servo | rad | + = left turn | `scene.car.steer` |
+
+Code finds each ctrl index with `model.bind` on the actuator in the scene's MjSpec (see `scene.py`), so it does not depend on the order of the actuators in the XML. `sim.apply_command(scene.car, data, command)` writes a throttle and a steer.
 
 Steering command range is ±0.4 rad; the two Ackermann equality constraints split
 it into the correct inner/outer front-wheel angles automatically.
@@ -119,7 +122,7 @@ from neoracer_mujoco.track_generation import (
 
 match generate_track(7, settings_for_difficulty(2)):  # pure geometry, no MuJoCo
     case Track() as track:
-        model = assets.compose(to_spec(track))  # a compiled MjModel, car included
+        scene = assets.compose(to_spec(track))  # a compiled Scene, car included
     case NoValidTrack():
         ...  # try another seed or looser settings
 ```
@@ -172,7 +175,7 @@ stable API.
   `python3 -m examples.track_centering_demo` (headless) or
   `mjpython -m examples.track_centering_demo --viewer`.
 
-The package reads the sensors, not the examples. To log the IMU, wheel, steer, suspension and LiDAR values of a compiled model, use `neoracer_mujoco.sensors`: call `sensor_layout(model)` once, then `read_layout(layout, data)` at each step. `lidar_ranges` and `motor_encoder_rad_s` read from the result.
+The package reads the sensors, not the examples. To log the IMU, wheel, steer, suspension and LiDAR values of a scene, call `sensors.read(scene.car.sensors, data.sensordata)` at each step. `scene.car.sensors` holds the place of each sensor in `sensordata`, found once with `model.bind`. `lidar_ranges` and `motor_encoder_rad_s` read from the result.
 
 Add your own demos here — a pure-pursuit follower, a data recorder, etc. — using
 `run.py` as the template for the load → step → control loop.

@@ -3,7 +3,7 @@ MuJoCo backend for the racecar_core controller interface.
 
 racecar_core (Neobotics-Foundation-Inc/racecar-neo-library) is the interface
 that NeoRacer controllers use. This module gives the same method names and
-signatures over a MuJoCo MjModel and MjData. It does not copy or change
+signatures over a NeoRacer Scene and its MjData. It does not copy or change
 racecar_core. So controller code (`rc.drive`, `rc.lidar`,
 `rc.set_start_update`, `rc.go`) runs in this simulator without changes.
 
@@ -18,8 +18,8 @@ Frame: +X forward, +Y left, +Z up.
 racecar_core and contract.py use two different conventions. This module
 converts between them, so the controllers do not convert them:
 
-  1. Steer sign. In racecar_core, + angle = right. In contract.py, ctrl[4]
-     (steer_servo) + = left. MujocoDrive negates the angle.
+  1. Steer sign. In racecar_core, + angle = right. In contract.py, the
+     steer_servo + = left. MujocoDrive negates the angle.
   2. LiDAR order and units. racecar_core scans clockwise, in cm, and 0.0
      means no return. sensors.LIDAR_BEAM_ORDER is counterclockwise, in m,
      and -1 means no return. MujocoLidar changes the order and the units.
@@ -39,6 +39,7 @@ import numpy as np
 
 from . import contract, sensors, sim
 from .control.steering import ControlCommand
+from .scene import Scene
 
 # racecar_core scans clockwise from the front. LIDAR_BEAM_ORDER is
 # counterclockwise from the front (see sensors.py). Both orders start at
@@ -54,7 +55,7 @@ def _clamp(value: float, low: float, high: float) -> float:
 
 
 class MujocoDrive:
-    """racecar_core.Drive backend over a NeoRacer MjModel/MjData.
+    """racecar_core.Drive backend over a NeoRacer Scene and its MjData.
 
     set_speed_angle(speed, angle): both unitless ratios in [-1.0, 1.0].
     speed: -1.0 full backward .. +1.0 full forward (racecar_core convention).
@@ -65,20 +66,21 @@ class MujocoDrive:
     a step.
     """
 
-    def __init__(self, model: mujoco.MjModel, data: mujoco.MjData):
+    def __init__(self, scene: Scene, data: mujoco.MjData):
+        self._car = scene.car
         self._data = data
         self._max_speed = 1.0  # fraction of the torque limit, 0..1
-        self._limits = contract.actuator_limits(model)
+        self._limits = contract.actuator_limits(scene.model, scene.car)
 
     def set_speed_angle(self, speed: float, angle: float) -> None:
         speed = _clamp(speed, -1.0, 1.0)
         angle = _clamp(angle, -1.0, 1.0)
         command = ControlCommand(
             throttle=speed * self._max_speed * self._limits.torque_nm,
-            # Negate: in racecar_core + angle = right; in ctrl[4] + = left.
+            # Negate: in racecar_core + angle = right; for steer_servo + = left.
             steer=-angle * self._limits.steer_rad,
         )
-        sim.apply_command(self._data, command)
+        sim.apply_command(self._car, self._data, command)
 
     def stop(self) -> None:
         self.set_speed_angle(0.0, 0.0)
@@ -100,12 +102,12 @@ class MujocoLidar:
     backend does not make up more samples.
     """
 
-    def __init__(self, model: mujoco.MjModel, data: mujoco.MjData):
-        self._layout = sensors.sensor_layout(model)
+    def __init__(self, scene: Scene, data: mujoco.MjData):
+        self._index = scene.car.sensors
         self._data = data
 
     def get_samples(self) -> np.ndarray:
-        readings = sensors.read_layout(self._layout, self._data)
+        readings = sensors.read(self._index, self._data.sensordata)
         meters = sensors.lidar_ranges(readings)[_CLOCKWISE]
         cm = meters * 100.0
         # In racecar_core, 0.0 means "no return". A -1 (no hit) and a value
@@ -181,7 +183,7 @@ class MujocoRacecar:
     """racecar_core.Racecar backend over MuJoCo.
 
     It connects MujocoDrive, MujocoLidar, MujocoController and MujocoDisplay
-    to one MjModel and MjData, and runs the start/update/update_slow loop in
+    to one Scene and MjData, and runs the start/update/update_slow loop in
     go(). So a racecar_core controller script, for example
     neoracer-labs/ultimate-wall-follower/wall_follower.py, runs without
     changes. Only its `import racecar_core` must give this class.
@@ -198,18 +200,18 @@ class MujocoRacecar:
 
     def __init__(
         self,
-        model: mujoco.MjModel,
+        scene: Scene,
         data: mujoco.MjData,
         max_steps: int | None = None,
         held_buttons: Iterable[MujocoController.Button] = (MujocoController.Button.RB,),
     ):
-        self.drive = MujocoDrive(model, data)
-        self.lidar = MujocoLidar(model, data)
+        self.drive = MujocoDrive(scene, data)
+        self.lidar = MujocoLidar(scene, data)
         self.controller = MujocoController(held_buttons)
         self.display = MujocoDisplay()
-        self._model = model
+        self._model = scene.model
         self._data = data
-        self._dt = float(model.opt.timestep)  # s
+        self._dt = float(scene.model.opt.timestep)  # s
         self._max_steps = max_steps
         self._update_slow_time = 1.0  # s
         # None until the controller calls set_start_update.

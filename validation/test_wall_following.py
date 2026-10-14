@@ -13,7 +13,7 @@ import mujoco
 import numpy as np
 import pytest
 from fake_sensors import beams, mirror, random_beams
-from scenes import corridor_model
+from scenes import corridor_scene
 
 from neoracer_mujoco import sensors, sim
 from neoracer_mujoco.control import PDState, ShapingConfig
@@ -172,26 +172,26 @@ def test_controller_converges_to_target_distance_on_corridor():
     quarter of the run, the mean right beam distance is near target_distance.
     The car does not flip, the values stay finite and the steer stays in the
     actuator range."""
-    model = corridor_model()
+    scene = corridor_scene()
+    model, car = scene.model, scene.car
     data = sim.settle(model)
-    layout = sensors.sensor_layout(model)
     dt = model.opt.timestep
-    steer_low, steer_high = model.actuator("steer_servo").ctrlrange
+    steer_low, steer_high = model.actuator_ctrlrange[car.steer]
     cfg = WallFollowingConfig(follow_side="right")
     state = PDState()
 
     side_distances = []
     for _ in range(1500):  # 3 s at the 2 ms timestep
-        readings = sensors.read_layout(layout, data)
+        readings = sensors.read(car.sensors, data.sensordata)
         state, control = step(cfg, state, readings, dt)
-        sim.apply_command(data, control)
+        sim.apply_command(car, data, control)
         mujoco.mj_step(model, data)
 
         assert steer_low <= control.steer <= steer_high
         assert np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel))
         side_distances.append(readings.lidar_270)
 
-    upright_cos = sim.car_upright_cos(data, model.body("car").id)
+    upright_cos = sim.car_upright_cos(data, car.body)
     assert upright_cos > 0.7, "car should not have flipped during the run"
 
     quarter = len(side_distances) // 4

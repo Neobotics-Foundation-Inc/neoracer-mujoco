@@ -23,9 +23,9 @@ If the car touches a wall (see neoracer_mujoco.collision), the script resets the
 A reset puts the car back at its start position, the same as Backspace.
 
 Frame: +X forward, +Y left, +Z up.
-Control layout (see neoracer_mujoco.contract):
-  ctrl[0..3] = fl/fr/rl/rr wheel torque (N·m), + = forward
-  ctrl[4]    = steer_servo target angle (rad), + = left, range ±0.4
+Actuators (see neoracer_mujoco.contract):
+  fl/fr/rl/rr_motor = wheel torque (N·m), + = forward
+  steer_servo       = target angle (rad), + = left, range ±0.4
 """
 
 import argparse
@@ -39,6 +39,7 @@ import mujoco
 
 from neoracer_mujoco import assets, collision, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco.scene import Scene
 
 type Pedal = Literal["forward", "reverse", "coast"]
 type SteerKey = Literal["left", "right", "center"]
@@ -176,13 +177,13 @@ def parse_steer_key(held: frozenset[int]) -> SteerKey:
     return "center"
 
 
-def drive(model: mujoco.MjModel, params: ManualDriveParams) -> None:
-    """Open a window and drive the car in model with the keyboard until the
+def drive(scene: Scene, params: ManualDriveParams) -> None:
+    """Open a window and drive the car in scene with the keyboard until the
     window closes or Esc is pressed."""
+    model, car = scene.model, scene.car
     data = mujoco.MjData(model)
-    car_id = model.body("car").id
-    walls = collision.wall_geom_ids(model)
-    layout = sensors.sensor_layout(model)
+    car_id = car.body
+    walls = collision.wall_geom_ids(scene.spec, model)
 
     if not glfw.init():
         raise RuntimeError("glfw.init() failed")
@@ -199,7 +200,7 @@ def drive(model: mujoco.MjModel, params: ManualDriveParams) -> None:
     # The loop sets cam.azimuth in each frame from the car yaw.
 
     opt = mujoco.MjvOption()
-    scene = mujoco.MjvScene(model, maxgeom=params.max_scene_geoms)
+    mjv_scene = mujoco.MjvScene(model, maxgeom=params.max_scene_geoms)
     ctx = mujoco.MjrContext(model, mujoco.mjtFontScale.mjFONTSCALE_150)
 
     print(__doc__)
@@ -228,7 +229,7 @@ def drive(model: mujoco.MjModel, params: ManualDriveParams) -> None:
                 params, command, dt, parse_pedal(held), parse_steer_key(held)
             )
 
-        sim.apply_command(data, command)
+        sim.apply_command(car, data, command)
 
         # Step the physics until the simulation time catches up with real time.
         target = data.time + dt
@@ -244,15 +245,15 @@ def drive(model: mujoco.MjModel, params: ManualDriveParams) -> None:
         w, h = glfw.get_framebuffer_size(window)
         viewport = mujoco.MjrRect(0, 0, w, h)
         mujoco.mjv_updateScene(
-            model, data, opt, None, cam, mujoco.mjtCatBit.mjCAT_ALL, scene
+            model, data, opt, None, cam, mujoco.mjtCatBit.mjCAT_ALL, mjv_scene
         )
-        mujoco.mjr_render(viewport, scene, ctx)
+        mujoco.mjr_render(viewport, mjv_scene, ctx)
         glfw.swap_buffers(window)
         glfw.poll_events()
 
         hud_accum += dt
         if hud_accum >= params.hud_period_s:
-            print_sensors(sensors.read_layout(layout, data))
+            print_sensors(sensors.read(car.sensors, data.sensordata))
             hud_accum = 0.0
 
     glfw.terminate()
@@ -274,10 +275,10 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.bare:
-        model = assets.load()
+        scene = assets.load()
     else:
-        model = assets.compose(mujoco.MjSpec.from_file(args.track))
-    drive(model, ManualDriveParams())
+        scene = assets.compose(mujoco.MjSpec.from_file(args.track))
+    drive(scene, ManualDriveParams())
 
 
 if __name__ == "__main__":

@@ -8,8 +8,8 @@ logic: it does not load a model, step the simulator or read MjData. See
 examples/track_centering_demo.py for a demo that does.
 
 Frame: +X forward, +Y left, +Z up.
-ctrl[0:4] = wheel torque (N·m), + = forward.
-ctrl[4] = steer_servo target angle (rad), + = left, range [-0.4, 0.4].
+Wheel torque (N·m), + = forward.
+steer_servo target angle (rad), + = left, range [-0.4, 0.4].
 
 LiDAR beams: 8 horizontal beams at 45° steps.
   lidar_000 = straight ahead (+X)      lidar_180 = straight behind (-X)
@@ -65,8 +65,7 @@ safe_fallback_throttle_fraction of target_throttle.
 Usage: call step in a loop, and pass each new state to the next call.
     state = PDState()
     state, command = step(TrackCenteringConfig(), state, sensor_readings, dt)
-    data.ctrl[contract.DRIVE] = command.throttle
-    data.ctrl[contract.STEER] = command.steer
+    sim.apply_command(scene.car, data, command)
 """
 
 from dataclasses import dataclass

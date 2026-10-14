@@ -91,8 +91,11 @@ A parser checks a value and returns a type that keeps the result.
   The edges are files, the MuJoCo model, the command line and raw sensor arrays.
 - A parser returns the typed value or raises an error with a clear message.
   `def parse_side(text: str) -> Side`, not `def check_side(text: str) -> None`.
-- Read names from a compiled model once, into a frozen record of indices or slices.
-  Do not call `mj_name2id` or `getattr(obj, name, None)` inside the control loop.
+- Keep the `MjSpec` next to the compiled model (`scene.Scene`).
+  Find each part of the model once, with `model.bind` on an element of that spec, and keep the indices in a frozen dataclass (`scene.CarIndex`).
+  Do not call `mj_name2id`, `model.body(name)` or `getattr(obj, name, None)`, and do not compute addresses by hand (`jnt_qposadr`, `sensor_adr`).
+  The step loop then reads and writes plain arrays (`data.ctrl`, `data.qpos`, `data.sensordata`) with these indices.
+  Plain indexing works the same on numpy, JAX and Warp arrays, so the step code can move to those backends.
 - After the edge, the code trusts the type. Do not check the same property again.
 - Some invariants have no Python type, for example "a positive float".
   Check such an invariant once, where the value is made (`__post_init__` of its params).

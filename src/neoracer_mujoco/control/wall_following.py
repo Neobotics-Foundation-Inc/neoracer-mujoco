@@ -8,7 +8,7 @@ two walls. This controller uses only one wall, so it also works where there
 is no second wall, for example in a bend or on an open course.
 
 Frame: +X forward, +Y left, +Z up.
-ctrl[0:4] = wheel torque (N·m), + = forward. ctrl[4] = steer angle (rad), + = left.
+Wheel torque (N·m), + = forward. Steer angle (rad), + = left.
 
 Signals (see compute_signals()). They have the same meaning for the left and
 the right wall:

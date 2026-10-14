@@ -15,27 +15,27 @@ from fake_sensors import fake_readings
 from neoracer_mujoco import contract, sensors
 
 
-def test_read_returns_every_sensor(car):
+def test_read_returns_every_sensor(scene):
     """sensors.read returns every sensor of the model, each with its size."""
-    d = mujoco.MjData(car)
-    mujoco.mj_step(car, d)
-    out = sensors.read(car, d)
-    assert len(fields(sensors.SensorReadings)) == car.nsensor
+    d = mujoco.MjData(scene.model)
+    mujoco.mj_step(scene.model, d)
+    out = sensors.read(scene.car.sensors, d.sensordata)
+    assert len(fields(sensors.SensorReadings)) == scene.model.nsensor
     assert out.imu_accel.shape == (3,) and out.imu_gyro.shape == (3,)
     assert out.imu_quat.shape == (4,)
     assert isinstance(out.lidar_000, float) and isinstance(out.steer_cmd_pos, float)
 
 
-def test_sensor_layout_names_every_missing_or_wrong_size_sensor():
-    """sensor_layout parses the model once, and one ValueError names each
+def test_sensor_index_names_every_missing_or_wrong_size_sensor():
+    """sensor_index parses the model once, and one ValueError names each
     problem: every missing sensor and every sensor with the wrong size."""
-    model = mujoco.MjModel.from_xml_string(
+    spec = mujoco.MjSpec.from_string(
         """<mujoco><worldbody><body><site name="s"/></body></worldbody>
         <sensor><framepos name="steer_cmd_pos" objtype="site" objname="s"/></sensor>
         </mujoco>"""
     )
     with pytest.raises(ValueError) as error:
-        sensors.sensor_layout(model)
+        sensors.sensor_index(spec, spec.compile())
     message = str(error.value)
     assert "steer_cmd_pos has 3 values, not 1" in message
     for f in fields(sensors.SensorReadings):
@@ -68,18 +68,19 @@ def test_estimated_linear_speed_is_linear_in_the_motor_speed():
     ("constraint", "side"),
     [("ackermann_left", -1.0), ("ackermann_right", 1.0)],
 )
-def test_ackermann_polycoef_matches_exact_geometry(car, constraint, side):
+def test_ackermann_polycoef_matches_exact_geometry(scene, constraint, side):
     """The steering polycoef in the car XML gives the exact Ackermann angle
     for the wheelbase and track of the car, to 0.01 rad. A + steer turns
     left, so the left wheel is the inner wheel (side -1) and the right wheel
     is the outer wheel (side +1)."""
-    eq = car.eq(constraint)
-    fl = car.body("fl_wheel_body")
+    model, spec = scene.model, scene.spec
+    eq = model.bind_scalar(spec.equality(constraint))
+    fl = model.bind_scalar(spec.body("fl_wheel_body"))
     wheelbase = 2 * abs(float(fl.pos[0]))  # m
     track = 2 * abs(float(fl.pos[1]))  # m
     coef = np.array(eq.data[:5])  # a0..a4
 
-    limit = contract.actuator_limits(car).steer_rad  # rad
+    limit = contract.actuator_limits(model, scene.car).steer_rad  # rad
     # An even count of angles leaves out 0, where 1 / tan is not defined.
     delta = np.linspace(-limit, limit, 40)  # rad
     exact = np.arctan(wheelbase / (wheelbase / np.tan(delta) + side * track / 2))
