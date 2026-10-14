@@ -4,6 +4,7 @@ commits first, and leaves out AI tools and bots.
 """
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -58,6 +59,18 @@ def test_two_people_with_one_name_are_two_authors():
     sam = "Sam Roe <sam@example.com>"
     commits = [[alex1], [alex2], [sam], [sam], [sam]]
     assert citation.ranked_names(commits) == ["Sam Roe", "Alex Smith", "Alex Smith"]
+
+
+def test_a_credit_without_an_email_is_left_out(tmp_path, monkeypatch):
+    """git check-mailmap takes only "Name <email>". A trailer without an
+    email, such as "Co-authored-by: Claude", is not an author."""
+    monkeypatch.chdir(tmp_path)
+    git = ["git", "-c", "user.name=Ann Lee", "-c", "user.email=ann@example.com"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    message = "Add a file\n\nCo-authored-by: Claude\n"
+    commit = [*git, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty"]
+    subprocess.run([*commit, "-m", message], check=True)
+    assert citation.ranked_names(citation.identities()) == ["Ann Lee"]
 
 
 @pytest.mark.parametrize(

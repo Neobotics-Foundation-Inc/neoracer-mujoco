@@ -12,6 +12,7 @@ Usage, from the repo root, after a new person's first commit:
 """
 
 import json
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -27,6 +28,7 @@ REPOSITORY = "https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco"
 LICENSE = "GPL-3.0-only"
 
 COAUTHOR = "Co-authored-by: "
+HAS_EMAIL = re.compile(r" <[^<>]*>$")
 
 
 def is_person(identity: str) -> bool:
@@ -122,11 +124,13 @@ def identities() -> list[list[str]]:
         if c.strip()
     ]
     # Trailers are not mapped by --use-mailmap, so map every identity.
-    flat = [i for c in commits for i in c]
-    mapped = iter(
-        git("check-mailmap", "--stdin", stdin="\n".join(flat) + "\n").splitlines()
-    )
-    return [[next(mapped) for _ in c] for c in commits]
+    # check-mailmap takes only "Name <email>". A credit without an email, such
+    # as "Co-authored-by: Claude", stays as it is, and is_person leaves it out.
+    mappable = list(dict.fromkeys(i for c in commits for i in c if HAS_EMAIL.search(i)))
+    stdin = "".join(f"{i}\n" for i in mappable)
+    mapped = git("check-mailmap", "--stdin", stdin=stdin).splitlines()
+    names = dict(zip(mappable, mapped, strict=True))
+    return [[names.get(i, i) for i in c] for c in commits]
 
 
 def main() -> int:
