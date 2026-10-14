@@ -69,6 +69,14 @@ def test_two_people_with_one_name_are_two_authors():
     ]
 
 
+def test_names_that_differ_only_in_spaces_get_the_email():
+    """cff_person splits a name at any run of spaces, so these two names give
+    the same entry and need the email to differ."""
+    people = ["Alex Smith <a@one.org>", "Alex  Smith <a@two.org>"]
+    text = citation.citation(people)
+    assert 'email: "a@one.org"' in text and 'email: "a@two.org"' in text
+
+
 def test_a_credit_without_an_email_is_left_out(tmp_path, monkeypatch):
     """git check-mailmap takes only "Name <email>". A trailer without an
     email, such as "Co-authored-by: Claude", is not an author."""

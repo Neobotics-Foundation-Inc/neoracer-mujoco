@@ -88,14 +88,14 @@ def cff_person(name: str) -> str:
 
 def citation(people: list[str]) -> str:
     """The text of CITATION.cff for the authors people ("Name <email>"). Two
-    entries of one list must differ, so an author who shares a name with
-    another one also gets the email."""
-    names = [p.partition(" <")[0] for p in people]
-    shared = Counter(names)
+    entries of one list must differ, so an author whose entry would equal
+    another one's also gets the email."""
+    entries = [cff_person(p.partition(" <")[0]) for p in people]
+    shared = Counter(entries)
     authors = ""
-    for name, person in zip(names, people, strict=True):
-        authors += cff_person(name)
-        if shared[name] > 1:
+    for entry, person in zip(entries, people, strict=True):
+        authors += entry
+        if shared[entry] > 1:
             email = person.partition(" <")[2].removesuffix(">")
             authors += f"    email: {json.dumps(email)}\n"
     return (
