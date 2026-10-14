@@ -286,3 +286,7 @@ python3 -m pytest validation/ -v
 
 The car contract (expected actuators, required sensors, mass band, ctrl layout)
 lives in `src/neoracer_mujoco/contract.py` — update it there if the contract changes.
+
+## Citing
+
+If you use this simulator in your work, cite it with the "Cite this repository" button on GitHub, which reads `CITATION.cff`. The authors in that file are the people in the git history, most commits first. `.github/citation.py` writes it, so do not edit it by hand.
