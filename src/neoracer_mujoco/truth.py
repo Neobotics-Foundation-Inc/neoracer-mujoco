@@ -49,11 +49,14 @@ class TruthSensors:
 
 def _definitions(car_body: str) -> frozendict[str, frozendict[str, object]]:
     """The MjSpec fields of each truth sensor of the body named car_body."""
-    # The body frame, not its inertial frame. For a contact sensor,
-    # mjOBJ_XBODY means the body's whole tree (subtree1 in MJCF), and
-    # mjOBJ_BODY the body alone (body2).
+    # The body frame, not its inertial frame, measured in the world frame (no
+    # reference object). For a contact sensor, mjOBJ_XBODY means the body's
+    # whole tree (subtree1 in MJCF), and mjOBJ_BODY the body alone (body2).
     car: frozendict[str, object] = frozendict(
-        objtype=mujoco.mjtObj.mjOBJ_XBODY, objname=car_body
+        objtype=mujoco.mjtObj.mjOBJ_XBODY,
+        objname=car_body,
+        reftype=mujoco.mjtObj.mjOBJ_UNKNOWN,
+        refname="",
     )
     return frozendict(
         {
