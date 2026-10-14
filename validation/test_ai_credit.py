@@ -5,6 +5,7 @@ of a tool.
 """
 
 import importlib.util
+import io
 from pathlib import Path
 
 import pytest
@@ -92,3 +93,15 @@ def test_clean_leaves_text_without_credit_unchanged():
 def test_clean_is_idempotent(text):
     once = ai_credit.clean("Title\n\n" + text)
     assert ai_credit.clean(once) == once == "Title\n"
+
+
+def test_check_says_that_a_person_must_own_the_change(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO(AI_LINES[0] + "\n"))
+    assert ai_credit.main(["check"]) == 1
+    assert "must be owned by a person" in capsys.readouterr().out
+
+
+def test_check_passes_text_without_credit(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO(PEOPLE_LINES[0] + "\n"))
+    assert ai_credit.main(["check"]) == 0
+    assert capsys.readouterr().out == ""
