@@ -53,6 +53,7 @@ class WarpBatch:
                 qvel=jnp.asarray(data.qvel),
                 act=jnp.asarray(data.act),
                 ctrl=jnp.asarray(data.ctrl),
+                history=jnp.asarray(data.history),
             )
 
         return jax.jit(jax.vmap(one_env))(jnp.arange(self.nbatch))
@@ -74,9 +75,11 @@ class WarpBatch:
     def step(
         self, state: mjx.Data, ctrl: jax.Array, nstep: int
     ) -> tuple[mjx.Data, jax.Array]:
-        """Hold ctrl (nbatch, nu) for nstep steps. Return the state after the
-        last step and the sensordata (nbatch, nstep, nsensordata) after each
-        step."""
+        """Hold ctrl (nbatch, nu) for nstep >= 1 steps. Return the state after
+        the last step and the sensordata (nbatch, nstep, nsensordata) after
+        each step."""
+        if nstep < 1:
+            raise ValueError(f"nstep must be at least 1, not {nstep}")
         return self._step(state, ctrl, nstep=nstep)
 
     def reset(self, state: mjx.Data, done: jax.Array, initial: mjx.Data) -> mjx.Data:

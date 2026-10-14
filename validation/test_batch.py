@@ -177,3 +177,15 @@ def test_the_warp_batch_resets_only_the_rows_that_are_done():
     _, reset_data = warp.step(reset, ctrl, NSTEP)
     _, fresh_data = warp.step(initial, ctrl, NSTEP)
     np.testing.assert_allclose(reset_data[done], fresh_data[done], atol=1e-6)
+
+
+def test_step_rejects_zero_steps():
+    """mujoco.rollout reads nstep=0 as "not given" and steps once, so step
+    asks for at least one step."""
+    scene = assets.load()
+    sim_batch = batch.CpuBatch(scene.model, 2, nthread=0)
+    state = sim_batch.initial(mujoco.MjData(scene.model))
+    ctrl = batch.command(scene.model, scene.car, np.zeros(2), np.zeros(2))
+    with pytest.raises(ValueError, match="nstep"):
+        sim_batch.step(state, ctrl, 0)
+    sim_batch.close()

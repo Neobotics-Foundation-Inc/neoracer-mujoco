@@ -56,9 +56,9 @@ class Array(Protocol):
     def __getitem__(self, key: Any, /) -> Any: ...
 
 
-class Batch[S, A](Protocol):
+class Batch[S, A, M](Protocol):
     """A batch of nbatch copies of one model. S is the batch state, A the
-    array type of ctrl and sensordata."""
+    array type of ctrl and sensordata, M the array type of the done mask."""
 
     nbatch: int
 
@@ -66,7 +66,7 @@ class Batch[S, A](Protocol):
 
     def step(self, state: S, ctrl: A, nstep: int) -> tuple[S, A]: ...
 
-    def reset(self, state: S, done: A, initial: S) -> S: ...
+    def reset(self, state: S, done: M, initial: S) -> S: ...
 
 
 class CpuBatch:
@@ -88,12 +88,16 @@ class CpuBatch:
         return np.tile(row, (self.nbatch, 1))
 
     def step(self, state: States, ctrl: Rows, nstep: int) -> tuple[States, SensorData]:
-        """Hold ctrl (nbatch, nu) for nstep steps. Return the state after the
-        last step and the sensordata after each step."""
+        """Hold ctrl (nbatch, nu) for nstep >= 1 steps. Return the state after
+        the last step and the sensordata after each step."""
+        if nstep < 1:
+            # rollout reads nstep=0 as "not given" and steps once.
+            raise ValueError(f"nstep must be at least 1, not {nstep}")
         states, sensordata = self._pool.rollout(
             self.model, self._datas, state, ctrl[:, None, :], nstep=nstep
         )
-        return states[:, -1], sensordata
+        # A copy, so the states of the other steps can be freed.
+        return states[:, -1].copy(), sensordata
 
     def reset(self, state: States, done: Done, initial: States) -> States:
         """state with the rows where done replaced by the rows of initial."""
