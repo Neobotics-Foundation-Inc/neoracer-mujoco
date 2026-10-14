@@ -14,6 +14,7 @@ slightly different states do.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
@@ -22,6 +23,9 @@ import numpy as np
 from mujoco import mjx
 
 from . import batch
+from . import physics as physics_module
+from .physics import Physics
+from .scene import Scene
 
 # The most contacts and constraints that one environment holds at once. The
 # car on a track has about 10 contacts and 40 constraints.
@@ -29,28 +33,47 @@ CONTACTS_PER_ENV = 64
 CONSTRAINTS_PER_ENV = 256
 
 
+@jax.tree_util.register_dataclass
+@dataclass(frozen=True)
+class WarpState:
+    """The state of a WarpBatch: environment i steps data[i] with the model
+    fields fields[name][i] (physics.FIELDS) in place of the scene's."""
+
+    data: mjx.Data
+    fields: dict[str, jax.Array]
+
+
 class WarpBatch:
-    """nbatch copies of model in a batched mjx.Data (impl="warp"). ctrl,
+    """nbatch copies of scene in a batched mjx.Data (impl="warp"). ctrl,
     done and sensordata are JAX arrays."""
 
-    def __init__(self, model: mujoco.MjModel, nbatch: int) -> None:
-        self.model = model
+    def __init__(self, scene: Scene, nbatch: int) -> None:
+        self.scene = scene
+        self.model = scene.model
         self.nbatch = nbatch
-        self._mx = mjx.put_model(model, impl="warp")
+        self._mx = mjx.put_model(scene.model, impl="warp")
         self._step = jax.jit(self._step_batch, static_argnames="nstep")
         # Compiled once here, so that each call of initial reuses it.
         self._initial = jax.jit(jax.vmap(self._one_env))
 
-    def initial(self, datas: Sequence[mujoco.MjData]) -> mjx.Data:
-        """A batched mjx.Data whose environment i has the physics state of
-        datas[i]. Raise ValueError unless there is one MjData per row."""
-        batch.check_one_per_row(datas, self.nbatch)
+    def initial(
+        self, datas: Sequence[mujoco.MjData], physics: Sequence[Physics]
+    ) -> WarpState:
+        """A state whose environment i has the physics state of datas[i] and
+        steps with physics[i]. Raise ValueError unless there is one of each
+        per row."""
+        batch.check_one_per_row(datas, self.nbatch, "MjData")
+        batch.check_one_per_row(physics, self.nbatch, "Physics")
         fields = ("time", "qpos", "qvel", "act", "ctrl", "history")
         # Stacked on the host, so each field goes to the device once.
         rows = {
             f: jnp.asarray(np.stack([getattr(d, f) for d in datas])) for f in fields
         }
-        return self._initial(rows)
+        model_rows = physics_module.field_rows(self.scene, physics)
+        return WarpState(
+            data=self._initial(rows),
+            fields={f: jnp.asarray(v) for f, v in model_rows.items()},
+        )
 
     def _one_env(self, row: dict[str, jax.Array]) -> mjx.Data:
         # Made inside vmap, as MJX requires: Warp keeps one contact and
@@ -64,22 +87,27 @@ class WarpBatch:
         return d.replace(**row)
 
     def _step_batch(
-        self, state: mjx.Data, ctrl: jax.Array, nstep: int
-    ) -> tuple[mjx.Data, jax.Array]:
-        def substep(d: mjx.Data, _: None) -> tuple[mjx.Data, jax.Array]:
-            d = mjx.step(self._mx, d)
-            return d, d.sensordata
+        self, state: WarpState, ctrl: jax.Array, nstep: int
+    ) -> tuple[WarpState, jax.Array]:
+        def one_env(
+            fields: dict[str, jax.Array], d: mjx.Data, c: jax.Array
+        ) -> tuple[mjx.Data, jax.Array]:
+            model = self._mx.tree_replace(fields)
 
-        def one_env(d: mjx.Data, c: jax.Array) -> tuple[mjx.Data, jax.Array]:
+            def substep(d: mjx.Data, _: None) -> tuple[mjx.Data, jax.Array]:
+                d = mjx.step(model, d)
+                return d, d.sensordata
+
             # Start the solver cold, as mujoco.rollout does on the CPU.
             d = d.replace(ctrl=c, qacc_warmstart=jnp.zeros_like(d.qacc_warmstart))
             return jax.lax.scan(substep, d, None, length=nstep)
 
-        return jax.vmap(one_env)(state, ctrl)
+        data, sensordata = jax.vmap(one_env)(state.fields, state.data, ctrl)
+        return WarpState(data, state.fields), sensordata
 
     def step(
-        self, state: mjx.Data, ctrl: jax.Array, nstep: int
-    ) -> tuple[mjx.Data, jax.Array]:
+        self, state: WarpState, ctrl: jax.Array, nstep: int
+    ) -> tuple[WarpState, jax.Array]:
         """Hold ctrl (nbatch, nu) for nstep >= 1 steps. Return the state after
         the last step and the sensordata (nbatch, nstep, nsensordata) after
         each step."""
@@ -87,7 +115,12 @@ class WarpBatch:
             raise ValueError(f"nstep must be at least 1, not {nstep}")
         return self._step(state, ctrl, nstep=nstep)
 
-    def reset(self, state: mjx.Data, done: jax.Array, initial: mjx.Data) -> mjx.Data:
+    def reset(self, state: WarpState, done: jax.Array, initial: WarpState) -> WarpState:
         """state with the environments where done replaced by initial."""
         # Data.where merges only the per-environment fields, as Warp requires.
-        return jax.vmap(lambda s, d, i: s.where(d, i))(state, done, initial)
+        data = jax.vmap(lambda s, d, i: s.where(d, i))(state.data, done, initial.data)
+        fields = {
+            f: jnp.where(done.reshape(-1, *[1] * (v.ndim - 1)), initial.fields[f], v)
+            for f, v in state.fields.items()
+        }
+        return WarpState(data, fields)

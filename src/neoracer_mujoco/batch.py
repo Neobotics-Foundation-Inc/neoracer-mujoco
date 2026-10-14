@@ -2,7 +2,9 @@
 Step a batch of copies of one scene at once, and read and write the batch
 arrays by spec element.
 
-A batch holds nbatch environments of one MjModel. You choose the backend:
+A batch holds nbatch environments of one scene. Each row has its own
+physics.Physics, so a batch can train on many slightly different cars (see
+physics.py). You choose the backend:
 
 - CpuBatch, optimized for CPU. It keeps one row of mjSTATE_FULLPHYSICS
   state per environment and steps the rows with mujoco.rollout on a pool of
@@ -14,12 +16,15 @@ A batch holds nbatch environments of one MjModel. You choose the backend:
 
 Both have the same methods (the Batch protocol):
 
-    sim = CpuBatch(scene.model, nbatch=64, nthread=4)
-    initial = sim.initial([data] * 64)  # one MjData per row
+    sim = CpuBatch(scene, nbatch=64, nthread=4)
+    initial = sim.initial([data] * 64, [Physics()] * 64)  # one of each per row
     ctrl = command(scene.model, scene.car, throttle, steer)  # (64, nu)
     state, sensordata = sim.step(initial, ctrl, nstep=17)  # (64, 17, nsensordata)
     zaxis = read(scene.model, sensordata[:, -1], scene.car.truth.zaxis)  # (64, 3)
     state = sim.reset(state, done, initial)  # rows where done start over
+
+The state of a row holds its physics, so a row that starts over takes the
+physics of initial too.
 
 step holds ctrl for nstep physics steps and returns the sensor values after
 each one. Each call starts the constraint solver cold (qacc_warmstart = 0),
@@ -31,7 +36,9 @@ model and index the array with its address. They are the only code that
 uses an address. They work on numpy and JAX arrays alike.
 """
 
+import copy
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 import mujoco
@@ -39,7 +46,8 @@ import numpy as np
 import numpy.typing as npt
 from mujoco import rollout
 
-from .scene import Car
+from .physics import Physics, apply_physics
+from .scene import Car, Scene
 
 type States = npt.NDArray[np.float64]  # shape (nbatch, nstate), mjSTATE_FULLPHYSICS
 type Rows = npt.NDArray[np.float64]  # shape (nbatch, n)
@@ -58,64 +66,91 @@ class Array(Protocol):
 
 
 class Batch[S, A, M](Protocol):
-    """A batch of nbatch copies of one model. S is the batch state, A the
+    """A batch of nbatch copies of one scene. S is the batch state, A the
     array type of ctrl and sensordata, M the array type of the done mask."""
 
     nbatch: int
 
-    def initial(self, datas: Sequence[mujoco.MjData]) -> S: ...
+    def initial(
+        self, datas: Sequence[mujoco.MjData], physics: Sequence[Physics]
+    ) -> S: ...
 
     def step(self, state: S, ctrl: A, nstep: int) -> tuple[S, A]: ...
 
     def reset(self, state: S, done: M, initial: S) -> S: ...
 
 
-class CpuBatch:
-    """nbatch copies of model, stepped by mujoco.rollout on nthread threads.
-    The state is an array of mjSTATE_FULLPHYSICS rows. Call close() to stop
-    the threads."""
+@dataclass(frozen=True)
+class CpuState:
+    """The state of a CpuBatch: row i steps from rows[i] with models[i]."""
 
-    def __init__(self, model: mujoco.MjModel, nbatch: int, nthread: int) -> None:
-        self.model = model
+    rows: States
+    # One model per row; rows with the same Physics share one model.
+    models: tuple[mujoco.MjModel, ...]
+
+
+class CpuBatch:
+    """nbatch copies of scene, stepped by mujoco.rollout on nthread threads.
+    Call close() to stop the threads."""
+
+    def __init__(self, scene: Scene, nbatch: int, nthread: int) -> None:
+        self.scene = scene
+        self.model = scene.model
         self.nbatch = nbatch
         self._pool = rollout.Rollout(nthread=nthread)
         # rollout steps each row on the MjData of the thread that runs it.
-        self._datas = [mujoco.MjData(model) for _ in range(max(nthread, 1))]
+        # The models of all rows have the same sizes, so any of them fits.
+        self._datas = [mujoco.MjData(scene.model) for _ in range(max(nthread, 1))]
 
-    def initial(self, datas: Sequence[mujoco.MjData]) -> States:
-        """A state whose row i is the physics state of datas[i]. Raise
-        ValueError unless there is one MjData per row."""
-        check_one_per_row(datas, self.nbatch)
+    def initial(
+        self, datas: Sequence[mujoco.MjData], physics: Sequence[Physics]
+    ) -> CpuState:
+        """A state whose row i is the physics state of datas[i], stepped with
+        physics[i]. Raise ValueError unless there is one of each per row."""
+        check_one_per_row(datas, self.nbatch, "MjData")
+        check_one_per_row(physics, self.nbatch, "Physics")
         rows = np.empty((self.nbatch, mujoco.mj_stateSize(self.model, FULL_PHYSICS)))
         for row, data in zip(rows, datas, strict=True):
             mujoco.mj_getState(self.model, data, row, FULL_PHYSICS)
-        return rows
+        models: dict[Physics, mujoco.MjModel] = {Physics(): self.model}
+        for p in physics:
+            if p not in models:
+                models[p] = copy.deepcopy(self.model)
+                apply_physics(models[p], self.scene, p)
+        return CpuState(rows, tuple(models[p] for p in physics))
 
-    def step(self, state: States, ctrl: Rows, nstep: int) -> tuple[States, SensorData]:
+    def step(
+        self, state: CpuState, ctrl: Rows, nstep: int
+    ) -> tuple[CpuState, SensorData]:
         """Hold ctrl (nbatch, nu) for nstep >= 1 steps. Return the state after
         the last step and the sensordata after each step."""
         if nstep < 1:
             # rollout reads nstep=0 as "not given" and steps once.
             raise ValueError(f"nstep must be at least 1, not {nstep}")
         states, sensordata = self._pool.rollout(
-            self.model, self._datas, state, ctrl[:, None, :], nstep=nstep
+            list(state.models), self._datas, state.rows, ctrl[:, None, :], nstep=nstep
         )
         # A copy, so the states of the other steps can be freed.
-        return states[:, -1].copy(), sensordata
+        return CpuState(states[:, -1].copy(), state.models), sensordata
 
-    def reset(self, state: States, done: Done, initial: States) -> States:
+    def reset(self, state: CpuState, done: Done, initial: CpuState) -> CpuState:
         """state with the rows where done replaced by the rows of initial."""
-        return np.where(done[:, None], initial, state)
+        models = zip(state.models, initial.models, done, strict=True)
+        return CpuState(
+            np.where(done[:, None], initial.rows, state.rows),
+            tuple(i if d else s for s, i, d in models),
+        )
 
     def close(self) -> None:
         self._pool.close()
 
 
-def check_one_per_row(datas: Sequence[mujoco.MjData], nbatch: int) -> None:
-    """Raise ValueError unless datas has one MjData for each of nbatch rows."""
-    if len(datas) != nbatch:
+def check_one_per_row(items: Sequence[object], nbatch: int, what: str) -> None:
+    """Raise ValueError unless items has one item, a what, for each of nbatch
+    rows."""
+    if len(items) != nbatch:
         raise ValueError(
-            f"initial needs one MjData per row: {nbatch}, not {len(datas)}"
+            f"initial needs one {what} per row: {nbatch}, not {len(items)}"
         )
 
 
