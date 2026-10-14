@@ -213,9 +213,8 @@ from neoracer_mujoco.track_generation import (
 )
 
 walls = WallParams(boxes_per_wall=192)
-tracks = [
-    generate_track(seed, settings_for_difficulty(1)) for seed in range(8)
-]  # all Track
+# Seeds 0 to 7 all give a Track, not a NoValidTrack.
+tracks = [generate_track(seed, settings_for_difficulty(1)) for seed in range(8)]
 scenes = [assets.compose(to_spec(t, walls), visuals=False) for t in tracks]
 cpu = batch.CpuBatch(scenes[0], nbatch=8, nthread=4)
 state = cpu.initial([sim.settle(s.model) for s in scenes], scenes, [Physics()] * 8)
