@@ -2,19 +2,19 @@
 Step a batch of copies of one scene at once, and read and write the batch
 arrays by spec element.
 
-A batch holds nbatch environments of one MjModel. Two backends step it:
+A batch holds nbatch environments of one MjModel. You choose the backend:
 
-- CpuBatch keeps one row of mjSTATE_FULLPHYSICS state per environment and
-  steps the rows with mujoco.rollout on a pool of threads. The threads run
-  in C, so the batch uses every core on any Python build.
-- batch_warp.WarpBatch keeps a batched mjx.Data and steps it with MJX on
-  MuJoCo Warp, on a CUDA GPU. It needs the jax extra:
+- CpuBatch, optimized for CPU. It keeps one row of mjSTATE_FULLPHYSICS
+  state per environment and steps the rows with mujoco.rollout on a pool of
+  threads. The threads run in C, so the batch uses every core on any Python
+  build.
+- batch_warp.WarpBatch, optimized for GPU. It keeps a batched mjx.Data and
+  steps it with MJX on MuJoCo Warp, on a CUDA GPU. It needs the jax extra:
   pip install "neoracer-mujoco[jax]".
 
-make_batch(model, nbatch, default_backend()) picks the Warp backend when JAX
-sees a GPU, and the CPU backend otherwise. Both have the same methods:
+Both have the same methods (the Batch protocol):
 
-    sim = make_batch(scene.model, nbatch=64, backend=default_backend())
+    sim = CpuBatch(scene.model, nbatch=64, nthread=4)
     initial = sim.initial(data)  # every row is a copy of data
     ctrl = command(scene.model, scene.car, throttle, steer)  # (64, nu)
     state, sensordata = sim.step(initial, ctrl, nstep=17)  # (64, 17, nsensordata)
@@ -31,8 +31,7 @@ model and index the array with its address. They are the only code that
 uses an address. They work on numpy and JAX arrays alike.
 """
 
-import importlib.util
-from typing import Any, Literal, Protocol, assert_never
+from typing import Any, Protocol
 
 import mujoco
 import numpy as np
@@ -40,8 +39,6 @@ import numpy.typing as npt
 from mujoco import rollout
 
 from .scene import Car
-
-type Backend = Literal["cpu", "warp"]
 
 type States = npt.NDArray[np.float64]  # shape (nbatch, nstate), mjSTATE_FULLPHYSICS
 type Rows = npt.NDArray[np.float64]  # shape (nbatch, n)
@@ -104,33 +101,6 @@ class CpuBatch:
 
     def close(self) -> None:
         self._pool.close()
-
-
-def default_backend() -> Backend:
-    """ "warp" if MuJoCo Warp is installed and JAX sees a GPU, else "cpu"."""
-    if importlib.util.find_spec("mujoco_warp") is None:
-        return "cpu"
-    # The jax extra is optional, so jax is imported only when it is there.
-    import jax
-
-    return "warp" if any(d.platform == "gpu" for d in jax.devices()) else "cpu"
-
-
-def make_batch(
-    model: mujoco.MjModel, nbatch: int, backend: Backend, nthread: int = 4
-) -> Batch:
-    """A batch of nbatch copies of model on backend. nthread is the number of
-    threads of the CPU backend."""
-    match backend:
-        case "cpu":
-            return CpuBatch(model, nbatch, nthread)
-        case "warp":
-            # The jax extra is optional, so this module does not import it.
-            from . import batch_warp
-
-            return batch_warp.WarpBatch(model, nbatch)
-        case _:
-            assert_never(backend)
 
 
 def command[A: Array](model: mujoco.MjModel, car: Car, throttle: A, steer: A) -> A:
