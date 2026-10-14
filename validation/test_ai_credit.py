@@ -99,7 +99,9 @@ def test_check_says_that_a_person_must_own_the_change(monkeypatch, capsys):
     monkeypatch.setattr("sys.stdin", io.StringIO(AI_LINES[0] + "\n"))
     assert ai_credit.main(["check"]) == 1
     out = capsys.readouterr().out
-    assert "owned by a person" in out and "takes responsibility" in out
+    # GitHub Actions shows a line that starts with ::error:: on the run's summary.
+    error = next(line for line in out.splitlines() if line.startswith("::error "))
+    assert "owned by a person" in error and "takes responsibility" in error
 
 
 def test_check_passes_text_without_credit(monkeypatch, capsys):
