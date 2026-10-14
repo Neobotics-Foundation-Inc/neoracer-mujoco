@@ -17,14 +17,16 @@ physics.py). You choose the backend:
 Both have the same methods (the Batch protocol):
 
     sim = CpuBatch(scene, nbatch=64, nthread=4)
-    initial = sim.initial([data] * 64, [Physics()] * 64)  # one of each per row
+    initial = sim.initial([data] * 64, [scene] * 64, [Physics()] * 64)  # per row
     ctrl = command(scene.model, scene.car, throttle, steer)  # (64, nu)
     state, sensordata = sim.step(initial, ctrl, nstep=17)  # (64, 17, nsensordata)
     zaxis = read(scene.model, sensordata[:, -1], scene.car.truth.zaxis)  # (64, 3)
     state = sim.reset(state, done, initial)  # rows where done start over
 
-The state of a row holds its physics, so a row that starts over takes the
-physics of initial too.
+The state of a row holds its scene and its physics, so a row that starts
+over takes those of initial too. CpuBatch can give each row its own scene,
+such as a generated track of fixed size; WarpBatch steps every row on its
+own scene.
 
 step holds ctrl for nstep physics steps and returns the sensor values after
 each one. Each call starts the constraint solver cold (qacc_warmstart = 0),
@@ -72,7 +74,10 @@ class Batch[S, A, M](Protocol):
     nbatch: int
 
     def initial(
-        self, datas: Sequence[mujoco.MjData], physics: Sequence[Physics]
+        self,
+        datas: Sequence[mujoco.MjData],
+        scenes: Sequence[Scene],
+        physics: Sequence[Physics],
     ) -> S: ...
 
     def step(self, state: S, ctrl: A, nstep: int) -> tuple[S, A]: ...
@@ -85,13 +90,14 @@ class CpuState:
     """The state of a CpuBatch: row i steps from rows[i] with models[i]."""
 
     rows: States
-    # One model per row; rows with the same Physics share one model.
+    # One model per row; rows with the same scene and Physics share one.
     models: tuple[mujoco.MjModel, ...]
 
 
 class CpuBatch:
-    """nbatch copies of scene, stepped by mujoco.rollout on nthread threads.
-    Call close() to stop the threads."""
+    """nbatch rows of scene, or of scenes with the same sizes, such as
+    generated tracks with a fixed number of wall boxes, stepped by
+    mujoco.rollout on nthread threads. Call close() to stop the threads."""
 
     def __init__(self, scene: Scene, nbatch: int, nthread: int) -> None:
         self.scene = scene
@@ -103,21 +109,34 @@ class CpuBatch:
         self._datas = [mujoco.MjData(scene.model) for _ in range(max(nthread, 1))]
 
     def initial(
-        self, datas: Sequence[mujoco.MjData], physics: Sequence[Physics]
+        self,
+        datas: Sequence[mujoco.MjData],
+        scenes: Sequence[Scene],
+        physics: Sequence[Physics],
     ) -> CpuState:
-        """A state whose row i is the physics state of datas[i], stepped with
-        physics[i]. Raise ValueError unless there is one of each per row."""
+        """A state whose row i starts from the physics state of datas[i] and
+        steps on scenes[i] with physics[i]. Raise ValueError unless there is
+        one of each per row and every scene has the sizes of the batch's."""
         check_one_per_row(datas, self.nbatch, "MjData")
+        check_one_per_row(scenes, self.nbatch, "Scene")
         check_one_per_row(physics, self.nbatch, "Physics")
+        for scene in scenes:
+            check_same_sizes(self.model, scene.model)
         rows = np.empty((self.nbatch, mujoco.mj_stateSize(self.model, FULL_PHYSICS)))
         for row, data in zip(rows, datas, strict=True):
             mujoco.mj_getState(self.model, data, row, FULL_PHYSICS)
-        models: dict[Physics, mujoco.MjModel] = {Physics(): self.model}
-        for p in physics:
-            if p not in models:
-                models[p] = copy.deepcopy(self.model)
-                apply_physics(models[p], self.scene, p)
-        return CpuState(rows, tuple(models[p] for p in physics))
+        models: dict[tuple[int, Physics], mujoco.MjModel] = {}
+        for scene, p in zip(scenes, physics, strict=True):
+            if (id(scene), p) not in models:
+                model = scene.model
+                if p != Physics():
+                    model = copy.deepcopy(scene.model)
+                    apply_physics(model, scene, p)
+                models[id(scene), p] = model
+        return CpuState(
+            rows,
+            tuple(models[id(s), p] for s, p in zip(scenes, physics, strict=True)),
+        )
 
     def step(
         self, state: CpuState, ctrl: Rows, nstep: int
@@ -143,6 +162,22 @@ class CpuBatch:
 
     def close(self) -> None:
         self._pool.close()
+
+
+def check_same_sizes(model: mujoco.MjModel, other: mujoco.MjModel) -> None:
+    """Raise ValueError unless other has every size (nq, ngeom, ...) of
+    model, as mujoco.rollout needs of the models of one batch."""
+    for name in dir(model):
+        size = getattr(model, name)
+        if (
+            name.startswith("n")
+            and isinstance(size, int)
+            and getattr(other, name) != size
+        ):
+            raise ValueError(
+                f"the scenes of a batch need the same sizes: {name} is {size} "
+                f"and {getattr(other, name)}"
+            )
 
 
 def check_one_per_row(items: Sequence[object], nbatch: int, what: str) -> None:

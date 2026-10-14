@@ -17,6 +17,13 @@ from neoracer_mujoco import Scene, assets, batch, physics, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import Physics
 from neoracer_mujoco.scene import compile_scene
+from neoracer_mujoco.track_generation import (
+    Track,
+    WallParams,
+    generate_track,
+    settings_for_difficulty,
+    to_spec,
+)
 
 NBATCH, NSTEP, CALLS = 6, 17, 8
 NOMINAL = [Physics()]  # times nbatch: the car of the XML in every row
@@ -36,7 +43,9 @@ def _commands(seed: int) -> np.ndarray:
 def _batch_run(scene: Scene, nthread: int) -> np.ndarray:
     """The sensordata of every call of a CpuBatch, (CALLS, NBATCH, NSTEP, n)."""
     sim_batch = batch.CpuBatch(scene, NBATCH, nthread)
-    state = sim_batch.initial([sim.settle(scene.model)] * NBATCH, NOMINAL * NBATCH)
+    state = sim_batch.initial(
+        [sim.settle(scene.model)] * NBATCH, [scene] * NBATCH, NOMINAL * NBATCH
+    )
     out = []
     for c in _commands(0):
         ctrl = batch.command(scene.model, scene.car, c[:, 0], c[:, 1])
@@ -104,7 +113,7 @@ def test_read_gives_the_bound_sensor_values(scene):
 def test_reset_replaces_only_the_rows_that_are_done():
     scene = assets.load()
     sim_batch = batch.CpuBatch(scene, 4, nthread=0)
-    initial = sim_batch.initial([sim.settle(scene.model)] * 4, NOMINAL * 4)
+    initial = sim_batch.initial([sim.settle(scene.model)] * 4, [scene] * 4, NOMINAL * 4)
     ctrl = batch.command(scene.model, scene.car, np.full(4, 0.3), np.zeros(4))
     state, _ = sim_batch.step(initial, ctrl, NSTEP)
     done = np.array([True, False, False, True])
@@ -144,8 +153,8 @@ def test_the_warp_batch_follows_the_cpu_batch():
     scene = _loop_scene()
     data = sim.settle(scene.model)
     cpu, warp = batch.CpuBatch(scene, 4, 2), batch_warp.WarpBatch(scene, 4)
-    cpu_state = cpu.initial([data] * 4, NOMINAL * 4)
-    warp_state = warp.initial([data] * 4, NOMINAL * 4)
+    cpu_state = cpu.initial([data] * 4, [scene] * 4, NOMINAL * 4)
+    warp_state = warp.initial([data] * 4, [scene] * 4, NOMINAL * 4)
     throttle, steer = np.array([0.0, 0.1, 0.2, 0.3]), np.array([0.0, 0.2, -0.2, 0.1])
     cpu_ctrl = batch.command(scene.model, scene.car, throttle, steer)
     warp_ctrl = batch.command(
@@ -169,7 +178,7 @@ def test_the_warp_batch_resets_only_the_rows_that_are_done():
     jnp, batch_warp = _warp_modules()
     scene = _loop_scene()
     warp = batch_warp.WarpBatch(scene, 4)
-    initial = warp.initial([sim.settle(scene.model)] * 4, NOMINAL * 4)
+    initial = warp.initial([sim.settle(scene.model)] * 4, [scene] * 4, NOMINAL * 4)
     ctrl = batch.command(scene.model, scene.car, jnp.full(4, 0.3), jnp.zeros(4))
     state, _ = warp.step(initial, ctrl, NSTEP)
     done = jnp.array([True, False, True, False])
@@ -188,7 +197,9 @@ def test_step_rejects_zero_steps():
     asks for at least one step."""
     scene = assets.load()
     sim_batch = batch.CpuBatch(scene, 2, nthread=0)
-    state = sim_batch.initial([mujoco.MjData(scene.model)] * 2, NOMINAL * 2)
+    state = sim_batch.initial(
+        [mujoco.MjData(scene.model)] * 2, [scene] * 2, NOMINAL * 2
+    )
     ctrl = batch.command(scene.model, scene.car, np.zeros(2), np.zeros(2))
     with pytest.raises(ValueError, match="nstep"):
         sim_batch.step(state, ctrl, 0)
@@ -217,11 +228,13 @@ def test_each_row_starts_from_its_own_data(make):
     sim_batch = make(scene, 3)
     zeros = np.zeros(3)
     ctrl = batch.command(scene.model, scene.car, zeros, zeros)
-    _, sensordata = sim_batch.step(sim_batch.initial(datas, NOMINAL * 3), ctrl, 1)
+    _, sensordata = sim_batch.step(
+        sim_batch.initial(datas, [scene] * 3, NOMINAL * 3), ctrl, 1
+    )
     x = np.asarray(batch.read(scene.model, sensordata[:, -1], scene.car.truth.pos))
     np.testing.assert_allclose(np.diff(x[:, 0]), 1.0, atol=1e-6)
     with pytest.raises(ValueError, match="one MjData per row"):
-        sim_batch.initial(datas[:2], NOMINAL * 2)
+        sim_batch.initial(datas[:2], [scene] * 2, NOMINAL * 2)
     if isinstance(sim_batch, batch.CpuBatch):
         sim_batch.close()
 
@@ -241,10 +254,10 @@ def test_the_warp_batch_compiles_initial_once(monkeypatch):
     scene = assets.load()
     warp = batch_warp.WarpBatch(scene, 2)
     datas = [sim.settle(scene.model) for _ in range(2)]
-    warp.initial(datas, NOMINAL * 2)
+    warp.initial(datas, [scene] * 2, NOMINAL * 2)
     for i, data in enumerate(datas):
         data.bind_scalar(scene.car.joint).qpos[0] += 1.0 + i  # m, along +X
-    second = warp.initial(datas, NOMINAL * 2)
+    second = warp.initial(datas, [scene] * 2, NOMINAL * 2)
     assert len(traces) == 1
     qpos = second.data.qpos
     expected = np.stack([d.qpos for d in datas]).astype(qpos.dtype)
@@ -269,7 +282,9 @@ def test_a_row_steps_with_its_own_physics():
     scene = _loop_scene()
     params = _random_physics(4, seed=0)
     sim_batch = batch.CpuBatch(scene, 4, nthread=2)
-    state = sim_batch.initial([sim.settle(scene.model)] * 4, params)
+    state = sim_batch.initial(
+        [sim.settle(scene.model)] * 4, [scene] * len(params), params
+    )
     throttle, steer = np.full(4, 0.4), np.array([0.3, -0.3, 0.0, 0.2])
     ctrl = batch.command(scene.model, scene.car, throttle, steer)
     for _ in range(5):
@@ -294,8 +309,8 @@ def test_reset_gives_a_row_the_physics_of_initial():
     sim_batch = batch.CpuBatch(scene, 2, nthread=0)
     datas = [sim.settle(scene.model)] * 2
     slippery = Physics(wheel_friction=0.2)
-    before = sim_batch.initial(datas, [slippery, slippery])
-    initial = sim_batch.initial(datas, NOMINAL * 2)
+    before = sim_batch.initial(datas, [scene] * 2, [slippery, slippery])
+    initial = sim_batch.initial(datas, [scene] * 2, NOMINAL * 2)
     reset = sim_batch.reset(before, np.array([True, False]), initial)
     assert reset.models[0] is initial.models[0]
     assert reset.models[1] is before.models[1]
@@ -311,7 +326,10 @@ def test_the_warp_batch_follows_the_cpu_batch_with_its_physics():
     params = _random_physics(4, seed=1)
     datas = [sim.settle(scene.model)] * 4
     cpu, warp = batch.CpuBatch(scene, 4, 2), batch_warp.WarpBatch(scene, 4)
-    cpu_state, warp_state = cpu.initial(datas, params), warp.initial(datas, params)
+    cpu_state, warp_state = (
+        cpu.initial(datas, [scene] * len(params), params),
+        warp.initial(datas, [scene] * len(params), params),
+    )
     throttle, steer = np.full(4, 0.5), np.array([0.3, -0.3, 0.0, 0.2])
     cpu_ctrl = batch.command(scene.model, scene.car, throttle, steer)
     warp_ctrl = jnp.asarray(cpu_ctrl)
@@ -334,8 +352,8 @@ def test_the_warp_batch_reset_gives_a_row_the_physics_of_initial():
     scene = _loop_scene()
     warp = batch_warp.WarpBatch(scene, 4)
     datas = [sim.settle(scene.model)] * 4
-    before = warp.initial(datas, _random_physics(4, seed=2))
-    initial = warp.initial(datas, _random_physics(4, seed=3))
+    before = warp.initial(datas, [scene] * 4, _random_physics(4, seed=2))
+    initial = warp.initial(datas, [scene] * 4, _random_physics(4, seed=3))
     done = np.array([True, False, True, False])
     reset = warp.reset(before, jnp.asarray(done), initial)
     for name in physics.FIELDS:
@@ -348,3 +366,63 @@ def test_the_warp_batch_reset_gives_a_row_the_physics_of_initial():
     _, reset_data = warp.step(reset, ctrl, NSTEP)
     _, fresh_data = warp.step(initial, ctrl, NSTEP)
     np.testing.assert_allclose(reset_data[done], fresh_data[done], atol=1e-6)
+
+
+def _tracks(seeds: range) -> list[Scene]:
+    """Generated tracks of the same size, the car on each, without visuals."""
+    walls = WallParams(boxes_per_wall=192)
+    scenes = []
+    for seed in seeds:
+        track = generate_track(seed, settings_for_difficulty(1))
+        assert isinstance(track, Track), seed
+        scenes.append(assets.compose(to_spec(track, walls), visuals=False))
+    return scenes
+
+
+def test_each_row_steps_on_its_own_track():
+    """Rows on different generated tracks of one size each equal, bit for
+    bit, one MjData stepped on that track, with its own physics."""
+    scenes = _tracks(range(3))
+    params = [Physics(), Physics(wheel_friction=0.5), Physics()]
+    datas = [sim.settle(s.model) for s in scenes]
+    sim_batch = batch.CpuBatch(scenes[0], 3, nthread=2)
+    state = sim_batch.initial(datas, scenes, params)
+    ctrl = batch.command(
+        scenes[0].model, scenes[0].car, np.full(3, 0.5), np.full(3, 0.2)
+    )
+    for _ in range(20):
+        state, sensordata = sim_batch.step(state, ctrl, NSTEP)
+    sim_batch.close()
+    for i, (scene, p) in enumerate(zip(scenes, params, strict=True)):
+        model = copy.deepcopy(scene.model)
+        physics.apply_physics(model, scene, p)
+        data = sim.settle(scene.model)
+        data.ctrl[:] = ctrl[i]
+        for _ in range(20):
+            data.qacc_warmstart[:] = 0
+            for _ in range(NSTEP):
+                mujoco.mj_step(model, data)
+        np.testing.assert_array_equal(sensordata[i, -1], data.sensordata)
+    # Rows 0 and 2 have the same physics on different tracks.
+    assert not np.array_equal(sensordata[0, -1], sensordata[2, -1])
+
+
+def test_a_batch_refuses_a_scene_of_another_size():
+    loop, track = _loop_scene(), _tracks(range(1))[0]
+    sim_batch = batch.CpuBatch(loop, 2, nthread=0)
+    datas = [sim.settle(loop.model)] * 2
+    with pytest.raises(ValueError, match="same sizes"):
+        sim_batch.initial(datas, [loop, track], NOMINAL * 2)
+    sim_batch.close()
+
+
+def test_the_warp_batch_refuses_another_scene():
+    """MuJoCo Warp keeps the geometry of the model it was made from, so a
+    WarpBatch steps every row on its own scene. This test runs only where
+    the jax extra is installed."""
+    _, batch_warp = _warp_modules()
+    first, second = _tracks(range(2))
+    warp = batch_warp.WarpBatch(first, 2)
+    datas = [sim.settle(first.model)] * 2
+    with pytest.raises(ValueError, match="batch's scene"):
+        warp.initial(datas, [first, second], NOMINAL * 2)

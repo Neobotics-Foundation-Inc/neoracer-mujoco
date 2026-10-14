@@ -161,7 +161,7 @@ from neoracer_mujoco.physics import Physics
 scene = assets.load()
 cpu = batch.CpuBatch(scene, nbatch=64, nthread=4)
 # 64 copies of a car at rest, each with the physics of the XML
-state = cpu.initial([sim.settle(scene.model)] * 64, [Physics()] * 64)
+state = cpu.initial([sim.settle(scene.model)] * 64, [scene] * 64, [Physics()] * 64)
 throttle, steer = np.full(64, 0.1), np.zeros(64)  # N·m, rad
 ctrl = batch.command(scene.model, scene.car, throttle, steer)
 state, sensordata = cpu.step(state, ctrl, nstep=17)  # sensordata: (64, 17, n)
@@ -187,7 +187,7 @@ from neoracer_mujoco.physics import Physics
 
 scene = assets.load()
 gpu = batch_warp.WarpBatch(scene, nbatch=4096)
-state = gpu.initial([sim.settle(scene.model)] * 4096, [Physics()] * 4096)
+state = gpu.initial([sim.settle(scene.model)] * 4096, [scene] * 4096, [Physics()] * 4096)
 throttle, steer = jnp.full(4096, 0.1), jnp.zeros(4096)
 ctrl = batch.command(scene.model, scene.car, throttle, steer)
 state, sensordata = gpu.step(state, ctrl, nstep=17)
