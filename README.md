@@ -93,6 +93,27 @@ python3 -m pytest validation/ -v
 | Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m) | ESTIMATED |
 | Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · susp pos · 8-beam LiDAR | |
 
+### How closely the model matches the real car
+
+The model has not yet been checked against recordings of the real car; issue #4 tracks that system identification. Until then, treat the simulator as a tool for developing and comparing controllers, not as a prediction of the real car's lap times or speeds.
+
+| Part | Where the value comes from |
+|---|---|
+| Wheelbase and track width | the CAD model, through the URDF |
+| Chassis mass, center of mass and inertia; wheel masses | the URDF; the wheel masses still need a check against a real wheel and tire |
+| Wheel radius | estimated from the bounding box of the wheel mesh |
+| Suspension stiffness and damping | estimated, tuned for 8 to 10 mm of sag at rest |
+| Tire friction (1.5), joint damping and armature | estimated; the damping and armature keep the light wheels numerically stable |
+| Steering servo gain (kp = 25) | estimated, not fitted to the servo's torque or slew rate |
+| Sensor positions | placed by hand: the IMU at the chassis center, the LiDAR 8 cm above it |
+| Drive: four wheel motors, torque in N·m | a stand-in for the real car's single motor and speed controller |
+
+Known gaps that matter for sim-to-real work:
+
+- The drive motors have no back-EMF, so at full throttle the simulated car passes 27 m/s within 4 s, far above the real car's top speed. Keep the throttle low or add a speed limit to the motors.
+- The sensors have no noise, bias or latency, and the LiDAR has 8 beams, while the real one is a spinning scanner. The car has no camera yet (issue #3).
+- The tires slip sideways a little: at full lock the car turns on a 0.74 m radius, against 0.68 m for ideal Ackermann steering.
+
 ### Actuator interface
 
 | Actuator | Unit | Direction | Spec element |
