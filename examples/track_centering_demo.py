@@ -94,7 +94,7 @@ class CenteringReport:
     finite_throughout: bool
 
 
-def load_model() -> Scene:
+def load_scene() -> Scene:
     return assets.compose(
         mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "straight_corridor.xml"))
     )
@@ -126,7 +126,7 @@ def _side_clearance(
 
 def run(params: DemoParams) -> CenteringReport:
     """Run the controller headless for params.steps steps and measure the result."""
-    scene = load_model()
+    scene = load_scene()
     model, car = scene.model, scene.car
     data = _spawn(scene, params)
     car_id = car.body
@@ -207,7 +207,7 @@ def run_viewer(params: DemoParams, duration_s: float | None) -> None:
     close the window. If duration_s is None, only the window close stops it.
     On macOS, run it with mjpython (see the module docstring).
     """
-    scene = load_model()
+    scene = load_scene()
     model, car = scene.model, scene.car
     data = _spawn(scene, params)
     car_id = car.body

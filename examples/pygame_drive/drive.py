@@ -111,7 +111,7 @@ def event_action(gamepad: GamepadParams, event: pygame.event.Event) -> Action:
     return "none"
 
 
-def load_model(track: str, bare: bool) -> Scene:
+def load_scene(track: str, bare: bool) -> Scene:
     """The car on a track from assets/tracks/, or the car alone on the
     plane in neoracer.xml."""
     if bare:
@@ -192,7 +192,7 @@ def draw_wasd(
 
 def main(track: str, bare: bool) -> None:
     view, gamepad, hud = ViewParams(), GamepadParams(), HudParams()
-    scene = load_model(track, bare)
+    scene = load_scene(track, bare)
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
     params, state = DriveParams(), DriveState()
