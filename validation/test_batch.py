@@ -121,15 +121,23 @@ def test_command_rejects_a_model_with_other_actuators():
         batch.command(scene.model, scene.car, np.zeros(1), np.zeros(1))
 
 
-def test_the_warp_batch_follows_the_cpu_batch():
-    """On MuJoCo Warp, a short drive from rest ends within 1 mm of the CPU
-    batch. Warp has its own collision and solver code, so the rows are close,
-    not equal. This test runs only where the jax extra is installed."""
-    pytest.importorskip("mujoco_warp")
+def _warp_modules():
+    """jax.numpy and batch_warp, or skip the test where the jax extra is not
+    installed."""
+    for module in ("jax", "mujoco.mjx", "mujoco_warp"):
+        pytest.importorskip(module)
     import jax.numpy as jnp
 
     from neoracer_mujoco import batch_warp
 
+    return jnp, batch_warp
+
+
+def test_the_warp_batch_follows_the_cpu_batch():
+    """On MuJoCo Warp, a short drive from rest ends within 1 mm of the CPU
+    batch. Warp has its own collision and solver code, so the rows are close,
+    not equal. This test runs only where the jax extra is installed."""
+    jnp, batch_warp = _warp_modules()
     scene = _loop_scene()
     data = sim.settle(scene.model)
     cpu, warp = batch.CpuBatch(scene.model, 4, 2), batch_warp.WarpBatch(scene.model, 4)
@@ -147,3 +155,25 @@ def test_the_warp_batch_follows_the_cpu_batch():
     warp_pos = np.asarray(batch.read(scene.model, warp_data[:, -1], pos))
     np.testing.assert_allclose(warp_pos, cpu_pos, atol=1e-3)
     cpu.close()
+
+
+def test_the_warp_batch_resets_only_the_rows_that_are_done():
+    """Warp keeps one contact buffer for all environments, so reset merges
+    only the per-environment fields. After a reset with a mixed done mask,
+    the done rows are back at the initial state, the others are unchanged,
+    and a reset row steps like a fresh one."""
+    jnp, batch_warp = _warp_modules()
+    scene = _loop_scene()
+    warp = batch_warp.WarpBatch(scene.model, 4)
+    initial = warp.initial(sim.settle(scene.model))
+    ctrl = batch.command(scene.model, scene.car, jnp.full(4, 0.3), jnp.zeros(4))
+    state, _ = warp.step(initial, ctrl, NSTEP)
+    done = jnp.array([True, False, True, False])
+    reset = warp.reset(state, done, initial)
+    for field in ("qpos", "qvel"):
+        after, before, start = (getattr(d, field) for d in (reset, state, initial))
+        np.testing.assert_array_equal(after[done], start[done])
+        np.testing.assert_array_equal(after[~done], before[~done])
+    _, reset_data = warp.step(reset, ctrl, NSTEP)
+    _, fresh_data = warp.step(initial, ctrl, NSTEP)
+    np.testing.assert_allclose(reset_data[done], fresh_data[done], atol=1e-6)
