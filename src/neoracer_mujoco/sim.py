@@ -48,5 +48,6 @@ def car_mass(model: mujoco.MjModel, car: Car) -> float:
 def car_upright_cos(data: mujoco.MjData, car: Car) -> float:
     """The cosine of the angle between the car body's +Z axis and the world
     +Z axis. It is 1.0 when the car is level and below 0 when it is upside
-    down."""
-    return float(data.bind_scalar(car.body).xmat[8])
+    down. It reads the truth sensor car.truth.zaxis, so it is up to date after
+    mj_forward or mj_step (see truth.py)."""
+    return float(data.bind_scalar(car.truth.zaxis).data[2])

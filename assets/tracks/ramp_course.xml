@@ -54,10 +54,12 @@
         <geom name="ramp" type="box" material="ramp" condim="3"
               pos="1.2 0 .13" euler="0 -.2 0" size=".5 .6 .02"/>
 
-        <!-- ── turn 1: wall after the ramp on the right → sweep left (north) ─ -->
-        <geom class="scenery" name="turn1" pos="3.5 -1.2 .15" size=".05 2.0 .15"/>
+        <body name="walls">
+            <!-- ── turn 1: wall after the ramp on the right → sweep left (north) ─ -->
+            <geom class="scenery" name="turn1" pos="3.5 -1.2 .15" size=".05 2.0 .15"/>
 
-        <!-- ── turn 2: wall to the north → turn back right (east) ──────────── -->
-        <geom class="scenery" name="turn2" pos="2.5 2.5 .15" size="2.0 .05 .15"/>
+            <!-- ── turn 2: wall to the north → turn back right (east) ──────────── -->
+            <geom class="scenery" name="turn2" pos="2.5 2.5 .15" size="2.0 .05 .15"/>
+        </body>
     </worldbody>
 </mujoco>

@@ -159,7 +159,6 @@ def run_loop_trial(
     data = sim.settle(model)
     perturb_spawn(scene, data, np.random.default_rng(seed))
 
-    walls = collision.wall_geom_ids(scene.spec, model)
     mount = lidar_mount(scene)
     vs_params = VsParams(car=car_geometry(scene))
     dt = 1.0 / params.control_hz
@@ -204,7 +203,7 @@ def run_loop_trial(
         touched = False
         for _ in range(steps_per_tick):
             mujoco.mj_step(model, data)
-            if collision.car_touches_wall(model, data, car, walls):
+            if collision.car_touches_wall(data, car):
                 contact_steps += 1
                 touched = True
         contact.append(touched)

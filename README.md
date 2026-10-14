@@ -60,6 +60,7 @@ python3 -m pytest validation/ -v
 │   ├── assets.py          — cars() / load() / compose(): find and compile a Scene
 │   ├── scene.py           — Scene (spec + model) and Car, the car's parts as spec elements
 │   ├── sensors.py         — SensorReadings, find_sensors() + read()
+│   ├── truth.py           — sensors that only the simulator has: car pose, wall contact
 │   ├── sim.py             — settle, step and command helpers, physics probes
 │   ├── control/           — classical controllers (track_centering)
 │   └── track_generation/  — procedural racetracks (generate_track → Track → MJCF)
@@ -105,6 +106,18 @@ Code writes an actuator by binding its element to the data, for example `data.bi
 
 Steering command range is ±0.4 rad; the two Ackermann equality constraints split
 it into the correct inner/outer front-wheel angles automatically.
+
+### Truth sensors
+
+The real car cannot measure where it is or whether it touches a wall, so `neoracer.xml` has no such sensors. Every scene gets three that only the simulator has (`truth.py`):
+
+| Sensor | Values | Spec element |
+|---|---|---|
+| truth_pos | x, y, z of the car body (m, world frame) | `scene.car.truth.pos` |
+| truth_zaxis | the car's +Z axis, in the world frame | `scene.car.truth.zaxis` |
+| truth_wall_contact | the number of contacts between the car and a wall | `scene.car.truth.wall_contact` |
+
+A wall is a geom of the body named `walls`. The tracks in `assets/tracks/` and the generated tracks put every wall there. With these sensors, a step can read everything it needs from `data.sensordata`, which `mujoco.rollout` and MuJoCo Warp also return for every step of a batch. `collision.car_touches_wall(data, scene.car)` and `sim.car_upright_cos(data, scene.car)` read them.
 
 ## Track generation (`src/neoracer_mujoco/track_generation/`)
 

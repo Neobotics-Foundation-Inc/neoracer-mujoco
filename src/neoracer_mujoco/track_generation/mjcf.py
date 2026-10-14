@@ -123,7 +123,7 @@ def _wall_boxes(edge: Points, name_prefix: str, walls: WallParams) -> list[str]:
         middle = 0.5 * (first + last)
         yaw = float(np.arctan2(span[1], span[0]))
         lines.append(
-            f'        <geom class="track_wall" name="{name_prefix}_{n:04d}"'
+            f'            <geom class="track_wall" name="{name_prefix}_{n:04d}"'
             f' pos="{middle[0]:.5f} {middle[1]:.5f} {height / 2:.5f}"'
             f' euler="0 0 {yaw:.5f}"'
             f' size="{length / 2 + thickness:.5f} {thickness / 2:.5f}'
