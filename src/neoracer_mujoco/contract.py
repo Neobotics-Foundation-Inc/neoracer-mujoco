@@ -9,19 +9,25 @@ This module is the one source of truth for the interface. Code, examples and
 tests all read it.
 
 Frame: +X forward, +Y left, +Z up.
-Control layout (ctrl[0:4] + ctrl[4]):
-  ctrl[0..3] = fl/fr/rl/rr wheel drive torque (N·m), + = forward
-  ctrl[4]    = steer_servo target angle (rad), + = left
+Actuators:
+  fl/fr/rl/rr_motor = wheel drive torque (N·m), + = forward
+  steer_servo       = steering target angle (rad), + = left
+Their order in data.ctrl is not part of the contract: scene.CarIndex holds
+the ctrl index of each one.
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import mujoco
 
-# --- actuators + ctrl layout ------------------------------------------------
-EXPECTED_ACTUATORS = ("fl_motor", "fr_motor", "rl_motor", "rr_motor", "steer_servo")
-DRIVE = slice(0, 4)  # ctrl indices for the four wheel motors
-STEER = 4  # ctrl index for the steering servo
+if TYPE_CHECKING:  # scene.py imports this module
+    from .scene import CarIndex
+
+# --- actuators ---------------------------------------------------------------
+DRIVE_ACTUATORS = ("fl_motor", "fr_motor", "rl_motor", "rr_motor")
+STEER_ACTUATOR = "steer_servo"
+EXPECTED_ACTUATORS = (*DRIVE_ACTUATORS, STEER_ACTUATOR)
 
 # --- sensors ----------------------------------------------------------------
 REQUIRED_SENSORS = (
@@ -62,14 +68,14 @@ class ActuatorLimits:
     steer_rad: float  # rad; ctrlrange is [-steer_rad, steer_rad]
 
 
-def actuator_limits(model: mujoco.MjModel) -> ActuatorLimits:
-    """Read the actuator limits from a compiled car model, once per model.
-    Raise ValueError if the four drive ranges differ, or a range is not
-    symmetric about 0: the env and MujocoDrive send one torque to all four
-    wheels and negate the limit for a negative command."""
-    drive = [tuple(model.actuator(name).ctrlrange) for name in EXPECTED_ACTUATORS[:4]]
+def actuator_limits(model: mujoco.MjModel, car: CarIndex) -> ActuatorLimits:
+    """Read the actuator limits of the car in model, once per model. Raise
+    ValueError if the four drive ranges differ, or a range is not symmetric
+    about 0: the env and MujocoDrive send one torque to all four wheels and
+    negate the limit for a negative command."""
+    drive = [tuple(float(x) for x in model.actuator_ctrlrange[i]) for i in car.drive]
     low, high = drive[0]
-    steer_low, steer_high = model.actuator("steer_servo").ctrlrange
+    steer_low, steer_high = model.actuator_ctrlrange[car.steer]
     problems = []
     if any(r != drive[0] for r in drive):
         problems.append(f"the drive ctrlranges differ: {drive}")

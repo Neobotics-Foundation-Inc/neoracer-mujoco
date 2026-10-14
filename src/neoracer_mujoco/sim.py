@@ -9,8 +9,8 @@ Frame: +X forward, +Y left, +Z up.
 import mujoco
 import numpy as np
 
-from . import contract
 from .control.steering import ControlCommand
+from .scene import CarIndex
 
 SETTLE_STEPS = 400  # zero-ctrl steps to reach static equilibrium
 
@@ -24,11 +24,11 @@ def apply_ctrl_and_step(
         mujoco.mj_step(model, data)
 
 
-def apply_command(data: mujoco.MjData, command: ControlCommand) -> None:
+def apply_command(car: CarIndex, data: mujoco.MjData, command: ControlCommand) -> None:
     """Write command to data.ctrl: the throttle (N·m) to every drive wheel and
     the steer (rad, + = left) to the steer servo."""
-    data.ctrl[contract.DRIVE] = command.throttle
-    data.ctrl[contract.STEER] = command.steer
+    data.ctrl[list(car.drive)] = command.throttle
+    data.ctrl[car.steer] = command.steer
 
 
 def settle(model: mujoco.MjModel) -> mujoco.MjData:
@@ -39,13 +39,13 @@ def settle(model: mujoco.MjModel) -> mujoco.MjData:
     return data
 
 
-def car_mass(model: mujoco.MjModel) -> float:
+def car_mass(model: mujoco.MjModel, car: CarIndex) -> float:
     """Total mass (kg) of the car body and its children."""
-    return float(model.body_subtreemass[model.body("car").id])
+    return float(model.body_subtreemass[car.body])
 
 
 def car_upright_cos(data: mujoco.MjData, car_body: int) -> float:
     """The cosine of the angle between the +Z axis of body car_body and the
     world +Z axis. It is 1.0 when the car is level and below 0 when it is
-    upside down. Get car_body once, with model.body("car").id."""
+    upside down. car_body is CarIndex.body."""
     return float(data.xmat[car_body][8])

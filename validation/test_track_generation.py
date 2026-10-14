@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 from scenes import assert_car_rests, assert_keeps_car_solver_options
 
-from neoracer_mujoco import assets
+from neoracer_mujoco import Scene, assets
 from neoracer_mujoco.collision import car_touches_wall, wall_geom_ids
 from neoracer_mujoco.track_generation import (
     Difficulty,
@@ -59,7 +59,7 @@ def _track(seed: int, difficulty: Difficulty) -> Track:
 
 
 @functools.cache
-def _scene(seed: int, difficulty: Difficulty) -> mujoco.MjModel:
+def _scene(seed: int, difficulty: Difficulty) -> Scene:
     """The compiled scene, car included, for one generated track."""
     return assets.compose(to_spec(_track(seed, difficulty)))
 
@@ -140,7 +140,7 @@ def test_impossible_limits_return_no_valid_track():
 
 @pytest.mark.parametrize("seed", range(3))
 def test_generated_track_compiles_with_the_car_on_it(seed):
-    assert _scene(seed, 3).body("car").id > 0
+    assert _scene(seed, 3).car.body > 0
 
 
 @pytest.mark.parametrize("seed", range(3))
@@ -149,8 +149,8 @@ def test_generated_walls_use_the_wall_material(seed):
     mjcf.py renames the material, car_touches_wall finds no wall on a
     generated track. The walls are some of the geoms, but not all: the floor
     and the car are not walls."""
-    model = _scene(seed, 3)
-    assert 0 < len(wall_geom_ids(model)) < model.ngeom
+    scene = _scene(seed, 3)
+    assert 0 < len(wall_geom_ids(scene.spec, scene.model)) < scene.model.ngeom
 
 
 @pytest.mark.parametrize("difficulty", [0, 3])
@@ -159,16 +159,17 @@ def test_car_spawns_clear_of_the_walls(seed, difficulty):
     """The start transform puts the car on sample 0, facing +X. The car does
     not touch a wall and is not near one."""
     track = _track(seed, difficulty)
-    model = _scene(seed, difficulty)
+    scene = _scene(seed, difficulty)
+    model, walls = scene.model, wall_geom_ids(scene.spec, scene.model)
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
 
-    assert not car_touches_wall(model, data, model.body("car").id, wall_geom_ids(model))
+    assert not car_touches_wall(model, data, scene.car.body, walls)
 
     corridor_width = 2 * track.half_width[0]
     nearest = min(
         float(np.linalg.norm(data.geom_xpos[geom_id][:2]))
-        for geom_id in wall_geom_ids(model)
+        for geom_id in walls
     )
     assert nearest >= 0.4 * corridor_width
 
@@ -179,7 +180,7 @@ def test_geom_count_stays_within_budget(seed, difficulty):
     """The decimation keeps the geom count below MAX_GEOMS. One box for each
     centerline sample gives thousands of geoms, and MuJoCo checks each geom
     for contacts at each step."""
-    model = _scene(seed, difficulty)
+    model = _scene(seed, difficulty).model
     assert model.ngeom < MAX_GEOMS
 
 

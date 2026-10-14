@@ -3,7 +3,7 @@ Physics conformance: the tests that every car XML must pass before RL
 training uses it. Each test checks one fault that can stop training or that
 an RL agent can exploit. The failure message names the fault.
 
-The `car` fixture (conftest.py) runs each test once for each car XML.
+The `scene` fixture (conftest.py) runs each test once for each car XML.
 """
 
 import copy
@@ -13,35 +13,37 @@ import mujoco
 import numpy as np
 import pytest
 
-from neoracer_mujoco import contract, sensors, sim
-from neoracer_mujoco.contract import DRIVE, STEER
+from neoracer_mujoco import Scene, contract, sensors, sim
 
 
-def _steps(car: mujoco.MjModel, seconds: float) -> int:
+def _steps(model: mujoco.MjModel, seconds: float) -> int:
     """The number of physics steps in `seconds` of simulated time."""
-    return round(seconds / car.opt.timestep)
+    return round(seconds / model.opt.timestep)
 
 
-def _drive(
-    car: mujoco.MjModel, throttle: float, steer: float, seconds: float
-) -> mujoco.MjData:
+def _drive(scene: Scene, throttle: float, steer: float, seconds: float) -> mujoco.MjData:
     """Settle the car, then hold throttle (N·m per wheel) and steer (rad)
     for `seconds`. Return the MjData."""
-    data = sim.settle(car)
-    ctrl = np.zeros(car.nu)
-    ctrl[DRIVE] = throttle
-    ctrl[STEER] = steer
-    sim.apply_ctrl_and_step(car, data, ctrl, _steps(car, seconds))
+    model, car = scene.model, scene.car
+    data = sim.settle(model)
+    ctrl = np.zeros(model.nu)
+    ctrl[list(car.drive)] = throttle
+    ctrl[car.steer] = steer
+    sim.apply_ctrl_and_step(model, data, ctrl, _steps(model, seconds))
     return data
+
+
+def _read(scene: Scene, data: mujoco.MjData) -> sensors.SensorReadings:
+    return sensors.read(scene.car.sensors, data.sensordata)
 
 
 # --- the model has the actuators and sensors of contract.py -------------------
 
 
-def test_actuator_limits_parse_every_car(car):
+def test_actuator_limits_parse_every_car(scene):
     """Every car has the same symmetric range on its four drive actuators,
     and a symmetric steer range."""
-    limits = contract.actuator_limits(car)
+    limits = contract.actuator_limits(scene.model, scene.car)
     assert limits.torque_nm > 0 and limits.steer_rad > 0
 
 
@@ -50,44 +52,44 @@ def test_actuator_limits_parse_every_car(car):
     [("rr_motor", (-0.5, 0.5)), ("fl_motor", (-0.5, 1.0)), ("steer_servo", (0.0, 0.4))],
 )
 def test_actuator_limits_reject_ranges_that_one_limit_cannot_scale(
-    car, actuator, ctrlrange
+    scene, actuator, ctrlrange
 ):
-    model = copy.copy(car)  # an independent MjModel; car is shared
-    model.actuator(actuator).ctrlrange[:] = ctrlrange
+    model = copy.copy(scene.model)  # an independent MjModel; scene is shared
+    model.bind_scalar(scene.spec.actuator(actuator)).ctrlrange[:] = ctrlrange
     with pytest.raises(ValueError, match="ctrlrange"):
-        contract.actuator_limits(model)
+        contract.actuator_limits(model, scene.car)
 
 
-def test_actuator_contract(car):
-    """The car has the actuators of contract.EXPECTED_ACTUATORS, in that ctrl
-    order. Agent code writes ctrl[0:4] and ctrl[4] by index."""
-    names = tuple(car.actuator(i).name for i in range(car.nu))
-    assert names == contract.EXPECTED_ACTUATORS, f"got {names}"
+def test_actuator_contract(scene):
+    """The car has the actuators of contract.EXPECTED_ACTUATORS and no
+    others. Their order in ctrl does not matter: code writes ctrl through
+    scene.car."""
+    names = sorted(a.name for a in scene.spec.actuators)
+    assert names == sorted(contract.EXPECTED_ACTUATORS), f"got {names}"
 
 
-def test_required_sensors_present(car):
-    names = {car.sensor(i).name for i in range(car.nsensor)}
-    missing = [s for s in contract.REQUIRED_SENSORS if s not in names]
+def test_required_sensors_present(scene):
+    missing = [s for s in contract.REQUIRED_SENSORS if scene.spec.sensor(s) is None]
     assert not missing, f"missing sensors: {missing}"
 
 
-def test_lidar_sits_on_chassis_top(car):
+def test_lidar_sits_on_chassis_top(scene):
     """The LiDAR mount and its 8 ray sites sit on the top face of the chassis
     box, in the car body frame. The ray tests use horizontal distances only,
     so they cannot see this height."""
-    chassis = car.geom("chassis")
+    model, spec = scene.model, scene.spec
+    chassis = model.bind_scalar(spec.geom("chassis"))
     top = float(chassis.pos[2] + chassis.size[2])
-    car_body = car.body("car").id
     for name in ("lidar_mount", *sensors.LIDAR_BEAM_ORDER):
-        site = car.site(name)
-        assert car.site_bodyid[site.id] == car_body, name
+        site = model.bind_scalar(spec.site(name))
+        assert int(site.bodyid[0]) == scene.car.body, name
         assert float(site.pos[2]) == pytest.approx(top), name
 
 
-def test_total_mass_plausible(car):
+def test_total_mass_plausible(scene):
     """A geom with no explicit mass gets the default density, and the car
     then weighs tens of kg. The mass band of contract.py finds this error."""
-    m = sim.car_mass(car)
+    m = sim.car_mass(scene.model, scene.car)
     assert contract.MASS_MIN < m < contract.MASS_MAX, (
         f"car mass {m:.2f} kg outside RC range"
     )
@@ -96,51 +98,52 @@ def test_total_mass_plausible(car):
 # --- the car rests without errors ---------------------------------------------
 
 
-def test_settles_without_nan(car):
-    d = sim.settle(car)
+def test_settles_without_nan(scene):
+    d = sim.settle(scene.model)
     assert np.all(np.isfinite(d.qpos)) and np.all(np.isfinite(d.qvel)), (
         "NaN/Inf at rest"
     )
 
 
-def test_rests_on_ground(car):
+def test_rests_on_ground(scene):
     """The car does not sink through the floor. A bad initial penetration
     does not launch it."""
-    spawn_z = car.body("car").pos[2]
-    z = sim.settle(car).body("car").xpos[2]
+    body = scene.car.body
+    spawn_z = scene.model.body_pos[body][2]
+    z = sim.settle(scene.model).xpos[body][2]
     assert 0.02 < z < spawn_z + 0.02, f"settled z={z:.3f} vs spawn {spawn_z:.3f}"
 
 
-def test_stays_upright_at_rest(car):
-    upright = sim.car_upright_cos(sim.settle(car), car.body("car").id)
+def test_stays_upright_at_rest(scene):
+    upright = sim.car_upright_cos(sim.settle(scene.model), scene.car.body)
     assert upright > 0.95, "car tips over with no input"
 
 
-def test_motor_encoder_near_zero_at_rest(car):
+def test_motor_encoder_near_zero_at_rest(scene):
     """With no control, the car does not move, so the motor encoder reads
     about 0 rad/s."""
-    d = sim.settle(car)
-    motor_rad_s = sensors.motor_encoder_rad_s(sensors.read(car, d))
+    d = sim.settle(scene.model)
+    motor_rad_s = sensors.motor_encoder_rad_s(_read(scene, d))
     assert abs(motor_rad_s) < 0.05, (
         f"stationary motor encoder={motor_rad_s:.4f} rad/s, expected ~0"
     )
 
 
-def test_imu_stationary_accel_matches_gravity(car):
+def test_imu_stationary_accel_matches_gravity(scene):
     """A stationary accelerometer reads the specific force, not zero. So its
     magnitude is about the gravity of the model. A disconnected or broken
     accelerometer fails this test."""
-    readings = sensors.read(car, sim.settle(car))
-    g = float(np.linalg.norm(car.opt.gravity))
+    readings = _read(scene, sim.settle(scene.model))
+    g = float(np.linalg.norm(scene.model.opt.gravity))
     accel_mag = float(np.linalg.norm(readings.imu_accel))
     assert abs(accel_mag - g) < 0.5, (
         f"stationary |accel|={accel_mag:.2f} m/s^2, expected ~{g:.2f}"
     )
 
 
-def test_imu_stationary_gyro_near_zero(car):
+def test_imu_stationary_gyro_near_zero(scene):
     """The car does not rotate at rest, so the gyro reads about 0 rad/s."""
-    readings = sensors.read(car, sim.settle(car))
+    readings = _read(scene, sim.settle(scene.model))
     gyro_mag = float(np.linalg.norm(readings.imu_gyro))
     assert gyro_mag < 0.05, f"stationary |gyro|={gyro_mag:.4f} rad/s, expected ~0"
 
@@ -148,67 +151,68 @@ def test_imu_stationary_gyro_near_zero(car):
 # --- the car responds to control with the contract.py signs -------------------
 
 
-def test_throttle_drives_forward(car):
-    x0 = sim.settle(car).body("car").xpos[0]
-    d = _drive(car, throttle=1.0, steer=0.0, seconds=0.8)
-    assert d.body("car").xpos[0] - x0 > 0.1, "full throttle produced no forward motion"
+def test_throttle_drives_forward(scene):
+    body = scene.car.body
+    x0 = sim.settle(scene.model).xpos[body][0]
+    d = _drive(scene, throttle=1.0, steer=0.0, seconds=0.8)
+    assert d.xpos[body][0] - x0 > 0.1, "full throttle produced no forward motion"
 
 
-def test_motor_encoder_positive_under_forward_throttle(car):
+def test_motor_encoder_positive_under_forward_throttle(scene):
     """Full forward throttle spins the motor forward (+ angular velocity)."""
-    d = _drive(car, throttle=1.0, steer=0.0, seconds=0.8)
-    motor_rad_s = sensors.motor_encoder_rad_s(sensors.read(car, d))
+    d = _drive(scene, throttle=1.0, steer=0.0, seconds=0.8)
+    motor_rad_s = sensors.motor_encoder_rad_s(_read(scene, d))
     assert motor_rad_s > 0.1, (
         f"expected motor encoder > 0 under forward throttle, got {motor_rad_s}"
     )
 
 
-def test_left_steer_yaws_left(car):
+def test_left_steer_yaws_left(scene):
     """A + steer yaws the car to the left (+Z). A sign error here inverts the
     steering of every agent."""
-    steer = contract.actuator_limits(car).steer_rad
-    d = _drive(car, throttle=0.5, steer=steer, seconds=0.8)
-    yaw_rate = d.qvel[5]  # freejoint yaw rate, rad/s
+    steer = contract.actuator_limits(scene.model, scene.car).steer_rad
+    d = _drive(scene, throttle=0.5, steer=steer, seconds=0.8)
+    yaw_rate = d.qvel[scene.car.qvel][5]  # freejoint yaw rate, rad/s
     assert yaw_rate > 0.1, f"left steer gave yaw rate {yaw_rate:.3f} (expected > 0)"
 
 
-def test_ackermann_inner_exceeds_outer(car):
+def test_ackermann_inner_exceeds_outer(scene):
     """In a left turn, the inner (left) front wheel steers more than the
     outer (right) front wheel."""
-    steer = contract.actuator_limits(car).steer_rad
-    s = sensors.read(car, _drive(car, throttle=0.0, steer=steer, seconds=0.8))
+    steer = contract.actuator_limits(scene.model, scene.car).steer_rad
+    s = _read(scene, _drive(scene, throttle=0.0, steer=steer, seconds=0.8))
     assert s.fl_steer_pos > s.fr_steer_pos, "Ackermann differential wrong/absent"
 
 
 # --- an RL agent cannot exploit the physics -----------------------------------
 
 
-def test_no_free_energy(car):
+def test_no_free_energy(scene):
     """With zero control, the car stays at rest. A car that moves by itself
     gives an agent reward for nothing."""
-    v = np.linalg.norm(sim.settle(car).qvel)
+    v = np.linalg.norm(sim.settle(scene.model).qvel)
     assert v < 0.05, f"car drifts at {v:.3f} with no control"
 
 
-def test_top_speed_bounded(car):
+def test_top_speed_bounded(scene):
     """Full throttle for 4 s gives a finite speed below 40 m/s. A larger
     speed is a numerical error, not physics."""
     # Limit: 40 m/s is an error limit, not a realistic top speed. A plain
     # <motor> has no back-EMF, so a light car accelerates toward ~25 m/s. The
     # real car is much slower. If an agent needs a realistic top speed, add a
     # speed limit to the motor in the car XML.
-    d = _drive(car, throttle=1.0, steer=0.0, seconds=4.0)
-    v = np.linalg.norm(d.qvel[:3])
+    d = _drive(scene, throttle=1.0, steer=0.0, seconds=4.0)
+    v = np.linalg.norm(d.qvel[scene.car.qvel][:3])
     assert np.isfinite(v) and v < 40.0, (
         f"top speed {v:.2f} m/s is a blow-up, not physics"
     )
 
 
-def test_sensors_finite_under_load(car):
+def test_sensors_finite_under_load(scene):
     """After 1 s of full throttle and full steer, every sensor, the motor
     encoder and the speed estimate are finite."""
-    steer = contract.actuator_limits(car).steer_rad
-    s = sensors.read(car, _drive(car, throttle=1.0, steer=steer, seconds=1.0))
+    steer = contract.actuator_limits(scene.model, scene.car).steer_rad
+    s = _read(scene, _drive(scene, throttle=1.0, steer=steer, seconds=1.0))
     bad = [f.name for f in fields(s) if not np.all(np.isfinite(getattr(s, f.name)))]
     assert not bad, f"non-finite sensors: {bad}"
     motor_rad_s = sensors.motor_encoder_rad_s(s)
@@ -216,11 +220,11 @@ def test_sensors_finite_under_load(car):
     assert np.isfinite(sensors.estimated_linear_speed_ms(motor_rad_s))
 
 
-def test_deterministic(car):
+def test_deterministic(scene):
     """The same start and the same ctrl give the same trajectory. RL fails
     if the simulation has hidden nondeterminism."""
 
     def rollout():
-        return _drive(car, throttle=1.0, steer=0.2, seconds=0.6).qpos.copy()
+        return _drive(scene, throttle=1.0, steer=0.2, seconds=0.6).qpos.copy()
 
     assert np.array_equal(rollout(), rollout()), "trajectory not reproducible"

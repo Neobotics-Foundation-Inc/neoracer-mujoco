@@ -11,12 +11,11 @@ The car is the body tree of its root body ("car", the freejoint body in
 neoracer.xml). Every geom in that tree, for example the chassis and the
 wheels, is part of the car.
 
-Get the wall geoms and the car root once, then check each step:
+Get the wall geoms once, then check each step:
 
-    walls = wall_geom_ids(model)
-    car_root = model.body("car").id
-    if car_touches_wall(model, data, car_root, walls):
-        reset_car(model, data)
+    walls = wall_geom_ids(scene.spec, scene.model)
+    if car_touches_wall(scene.model, data, scene.car.body, walls):
+        reset_car(scene.model, data)
 """
 
 import mujoco
@@ -24,17 +23,15 @@ import mujoco
 WALL_MATERIAL = "wall"
 
 
-def wall_geom_ids(model: mujoco.MjModel) -> frozenset[int]:
-    """Geom ids whose material is a wall material (see module docstring)."""
-    walls = set[int]()
-    for geom_id in range(model.ngeom):
-        material = model.geom_matid[geom_id]
-        if material == -1:
-            continue
-        name = model.material(material).name
-        if name == WALL_MATERIAL or name.startswith(WALL_MATERIAL + "_"):
-            walls.add(geom_id)
-    return frozenset(walls)
+def wall_geom_ids(spec: mujoco.MjSpec, model: mujoco.MjModel) -> frozenset[int]:
+    """Ids in model, which was compiled from spec, of the geoms whose material
+    is a wall material (see module docstring)."""
+    return frozenset(
+        model.bind_scalar(geom).id
+        for geom in spec.geoms
+        if geom.material == WALL_MATERIAL
+        or geom.material.startswith(WALL_MATERIAL + "_")
+    )
 
 
 def car_touches_wall(

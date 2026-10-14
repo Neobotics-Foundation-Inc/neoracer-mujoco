@@ -1,5 +1,9 @@
 """
-Reads all named sensors from a compiled NeoRacer model into a SensorReadings struct.
+Reads all named sensors of a compiled NeoRacer scene into a SensorReadings struct.
+
+sensor_index finds each sensor once, with model.bind (bind_scalar, see
+scene.py) on the sensor element of the scene's MjSpec. read then takes the
+values out of the sensordata array with these indices, with no name lookups.
 
 Frame: +X forward, +Y left, +Z up.
 
@@ -76,15 +80,15 @@ VECTOR_SIZE: frozendict[str, int] = frozendict(
 
 
 @dataclass(frozen=True)
-class SensorLayout:
-    """The first sensordata index of each SensorReadings field. Make it once
-    per model with sensor_layout. A control loop then reads with read_layout,
-    without name lookups."""
+class SensorIndex:
+    """Where each SensorReadings field is in data.sensordata: a slice for a
+    sensor with several values, an index for a sensor with one. Make it once
+    per scene with sensor_index."""
 
-    imu_accel: int
-    imu_gyro: int
-    imu_quat: int
-    imu_linvel: int
+    imu_accel: slice
+    imu_gyro: slice
+    imu_quat: slice
+    imu_linvel: slice
     steer_cmd_pos: int
     fl_steer_pos: int
     fr_steer_pos: int
@@ -106,37 +110,48 @@ class SensorLayout:
     lidar_315: int
 
 
-def sensor_layout(model: mujoco.MjModel) -> SensorLayout:
-    """Parse the sensors of a compiled model. Raise ValueError if a
-    SensorReadings field has no sensor of that name and size."""
+def sensor_index(spec: mujoco.MjSpec, model: mujoco.MjModel) -> SensorIndex:
+    """Find each SensorReadings field in model, which was compiled from spec.
+    Raise ValueError if a field has no sensor of that name and size."""
     starts: dict[str, int] = {}
     problems: list[str] = []
     for f in fields(SensorReadings):
-        sensor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SENSOR, f.name)
+        sensor = spec.sensor(f.name)
         size = VECTOR_SIZE.get(f.name, 1)
-        if sensor_id == -1:
+        if sensor is None:
             problems.append(f"{f.name} is missing")
-        elif model.sensor_dim[sensor_id] != size:
-            problems.append(
-                f"{f.name} has {model.sensor_dim[sensor_id]} values, not {size}"
-            )
+            continue
+        bound = model.bind_scalar(sensor)
+        start, dim = int(bound.adr[0]), int(bound.dim[0])
+        if dim != size:
+            problems.append(f"{f.name} has {dim} values, not {size}")
         else:
-            starts[f.name] = int(model.sensor_adr[sensor_id])
+            starts[f.name] = start
     if problems:
         raise ValueError(
             f"the model does not have the NeoRacer sensors: {'; '.join(problems)}"
         )
-    return SensorLayout(**starts)
+
+    def vector(name: str) -> slice:
+        return slice(starts[name], starts[name] + VECTOR_SIZE[name])
+
+    return SensorIndex(
+        imu_accel=vector("imu_accel"),
+        imu_gyro=vector("imu_gyro"),
+        imu_quat=vector("imu_quat"),
+        imu_linvel=vector("imu_linvel"),
+        **{name: at for name, at in starts.items() if name not in VECTOR_SIZE},
+    )
 
 
-def read_layout(layout: SensorLayout, data: mujoco.MjData) -> SensorReadings:
-    """Read every named sensor into a SensorReadings struct."""
-    d, at = data.sensordata, layout
+def read(index: SensorIndex, sensordata: npt.NDArray[np.float64]) -> SensorReadings:
+    """Read every named sensor out of sensordata (data.sensordata)."""
+    d, at = sensordata, index
     return SensorReadings(
-        imu_accel=d[at.imu_accel : at.imu_accel + 3].copy(),
-        imu_gyro=d[at.imu_gyro : at.imu_gyro + 3].copy(),
-        imu_quat=d[at.imu_quat : at.imu_quat + 4].copy(),
-        imu_linvel=d[at.imu_linvel : at.imu_linvel + 3].copy(),
+        imu_accel=d[at.imu_accel].copy(),
+        imu_gyro=d[at.imu_gyro].copy(),
+        imu_quat=d[at.imu_quat].copy(),
+        imu_linvel=d[at.imu_linvel].copy(),
         steer_cmd_pos=float(d[at.steer_cmd_pos]),
         fl_steer_pos=float(d[at.fl_steer_pos]),
         fr_steer_pos=float(d[at.fr_steer_pos]),
@@ -157,12 +172,6 @@ def read_layout(layout: SensorLayout, data: mujoco.MjData) -> SensorReadings:
         lidar_270=float(d[at.lidar_270]),
         lidar_315=float(d[at.lidar_315]),
     )
-
-
-def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
-    """Read every named sensor into a SensorReadings struct. In a control
-    loop, use read_layout with a layout from sensor_layout(model)."""
-    return read_layout(sensor_layout(model), data)
 
 
 def motor_encoder_rad_s(sensors: SensorReadings) -> float:

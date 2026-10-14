@@ -2,7 +2,7 @@
 
     match generate_track(7, settings_for_difficulty(2)):
         case Track() as track:
-            model = assets.compose(to_spec(track))
+            scene = assets.compose(to_spec(track))
         case NoValidTrack():
             ...  # try another seed or looser settings
 

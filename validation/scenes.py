@@ -6,10 +6,10 @@ import warnings
 import mujoco
 import numpy as np
 
-from neoracer_mujoco import assets, sim
+from neoracer_mujoco import Scene, assets, sim
 
 
-def corridor_model() -> mujoco.MjModel:
+def corridor_scene() -> Scene:
     """The default car on assets/tracks/straight_corridor.xml. The corridor
     runs along +X and has a half-width of 0.5 m."""
     return assets.compose(
@@ -25,19 +25,19 @@ def assert_keeps_car_solver_options(
     When MuJoCo attaches a car to a track, it keeps the <option> of the track.
     So the track must have the friction cone and impratio of the car, and the
     attach must give no warning."""
-    car = assets.load(car_path)
+    car = assets.load(car_path).model
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        composed = assets.compose(track, car_path)
+        composed = assets.compose(track, car_path).model
     assert [str(w.message) for w in caught] == []
     assert composed.opt.cone == car.opt.cone
     assert composed.opt.impratio == car.opt.impratio
 
 
-def assert_car_rests(model: mujoco.MjModel) -> None:
+def assert_car_rests(scene: Scene) -> None:
     """Check that the car settles on the floor of the scene with zero
     control: it does not fall through and it does not move."""
-    data = sim.settle(model)
-    car = data.body("car")
-    assert 0.05 < float(car.xpos[2]) < 0.2, f"car z = {car.xpos[2]:.3f} m"
-    assert float(np.linalg.norm(data.qvel[:3])) < 0.05  # m/s
+    data = sim.settle(scene.model)
+    z = float(data.xpos[scene.car.body][2])
+    assert 0.05 < z < 0.2, f"car z = {z:.3f} m"
+    assert float(np.linalg.norm(data.qvel[scene.car.qvel][:3])) < 0.05  # m/s
