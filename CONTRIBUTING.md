@@ -19,6 +19,8 @@ Coding agents read AGENTS.md instead.
 - `validation/testdata/` and `examples/ultimate_wall_follower/` hold copies of outside code.
   Do not change these directories unless your change is about them.
 - Keep one change in one pull request.
+- If this is your first commit, add yourself to the citation: run `python3 .github/citation.py > CITATION.cff`.
+  If you have committed under more than one name or email, add a line to `.mailmap` first, so you appear once.
 
 ## You are responsible for your change
 

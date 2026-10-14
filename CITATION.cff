@@ -1,0 +1,16 @@
+# Written by .github/citation.py from the git history. Do not edit.
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "NeoRacer MuJoCo"
+abstract: "A MuJoCo simulation of the NeoRacer, a 1/12-scale RC car, with its sensors, tracks, a procedural track generator and batched stepping on CPU or GPU."
+type: software
+repository-code: "https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco"
+license: GPL-3.0-only
+authors:
+  - given-names: "Bassel"
+    family-names: "Mabsout"
+  - given-names: "Abdallah"
+    family-names: "El Hamawi"
+  - given-names: "Amogh"
+    family-names: "Panhale"
+  - alias: "anshm"
