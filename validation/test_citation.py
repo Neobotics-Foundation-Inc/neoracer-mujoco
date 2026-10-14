@@ -44,21 +44,29 @@ def test_an_ai_tool_or_a_bot_is_not_an_author(identity):
 def test_authors_are_ranked_by_credited_commits_then_by_first_credit():
     a, b, c = (f"{n} <{n.lower()}@example.com>" for n in ("Ann Lee", "Bo Kim", "Cy Wu"))
     commits = [[c], [a, *NOT_PEOPLE], [b], [a, NOT_PEOPLE[0]], [b], [c]]
-    assert citation.ranked_names(commits) == ["Cy Wu", "Ann Lee", "Bo Kim"]
+    assert citation.ranked_people(commits) == [c, a, b]
 
 
 def test_a_person_counts_once_per_commit():
     """Ann is the author and a co-author of one commit; Bo authored two."""
     ann, bo = "Ann Lee <ann@example.com>", "Bo Kim <bo@example.com>"
-    assert citation.ranked_names([[ann, ann], [bo], [bo]]) == ["Bo Kim", "Ann Lee"]
+    assert citation.ranked_people([[ann, ann], [bo], [bo]]) == [bo, ann]
 
 
 def test_two_people_with_one_name_are_two_authors():
-    """.mailmap keeps two Alex Smiths apart, so the citation does too."""
+    """.mailmap keeps two Alex Smiths apart, so the citation does too: each
+    gets an entry with the email, as CFF requires different entries. A name
+    that nobody else has gets no email."""
     alex1, alex2 = "Alex Smith <a@one.org>", "Alex Smith <a@two.org>"
     sam = "Sam Roe <sam@example.com>"
-    commits = [[alex1], [alex2], [sam], [sam], [sam]]
-    assert citation.ranked_names(commits) == ["Sam Roe", "Alex Smith", "Alex Smith"]
+    people = citation.ranked_people([[alex1], [alex2], [sam], [sam], [sam]])
+    assert people == [sam, alex1, alex2]
+    authors = citation.citation(people).split("authors:\n")[1]
+    assert authors.split("  - ")[1:] == [
+        'given-names: "Sam"\n    family-names: "Roe"\n',
+        'given-names: "Alex"\n    family-names: "Smith"\n    email: "a@one.org"\n',
+        'given-names: "Alex"\n    family-names: "Smith"\n    email: "a@two.org"\n',
+    ]
 
 
 def test_a_credit_without_an_email_is_left_out(tmp_path, monkeypatch):
@@ -70,7 +78,9 @@ def test_a_credit_without_an_email_is_left_out(tmp_path, monkeypatch):
     message = "Add a file\n\nCo-authored-by: Claude\n"
     commit = [*git, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty"]
     subprocess.run([*commit, "-m", message], check=True)
-    assert citation.ranked_names(citation.identities()) == ["Ann Lee"]
+    assert citation.ranked_people(citation.identities()) == [
+        "Ann Lee <ann@example.com>"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -93,7 +103,9 @@ def test_the_family_name_keeps_its_particles(name, entry):
 
 
 def test_the_file_lists_each_author_once():
-    text = citation.citation(["Bassel Mabsout", "anshm"])
+    text = citation.citation(
+        ["Bassel Mabsout <b@example.com>", "anshm <a@example.com>"]
+    )
     assert text.startswith("# Written by .github/citation.py")
     assert text.count("family-names") == 1 and text.count("alias") == 1
     assert "cff-version: 1.2.0\n" in text and "authors:\n" in text

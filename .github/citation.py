@@ -39,17 +39,14 @@ def is_person(identity: str) -> bool:
     return not bot and not ai_credit.credits_ai(COAUTHOR + identity) and bool(name)
 
 
-def ranked_names(commits: list[list[str]]) -> list[str]:
-    """The names of the people credited in commits, the most credited commits
-    first. Each commit is the list of identities ("Name <email>") that it
-    credits. A person counts once per commit, and two identities with one
+def ranked_people(commits: list[list[str]]) -> list[str]:
+    """The identities ("Name <email>") of the people credited in commits, the
+    most credited commits first. Each commit is the list of identities that
+    it credits. A person counts once per commit, and two identities with one
     name are two people. A tie keeps the order of the first credit."""
     people = [list(dict.fromkeys(i for i in c if is_person(i))) for c in commits]
     counts = Counter(i for c in people for i in c)
-    ranked = sorted(
-        dict.fromkeys(i for c in people for i in c), key=lambda i: -counts[i]
-    )
-    return [i.partition(" <")[0] for i in ranked]
+    return sorted(dict.fromkeys(i for c in people for i in c), key=lambda i: -counts[i])
 
 
 # Words that start a family name, as in Abdallah El Hamawi or Guido van Rossum.
@@ -89,8 +86,18 @@ def cff_person(name: str) -> str:
     )
 
 
-def citation(names: list[str]) -> str:
-    """The text of CITATION.cff for the authors names."""
+def citation(people: list[str]) -> str:
+    """The text of CITATION.cff for the authors people ("Name <email>"). Two
+    entries of one list must differ, so an author who shares a name with
+    another one also gets the email."""
+    names = [p.partition(" <")[0] for p in people]
+    shared = Counter(names)
+    authors = ""
+    for name, person in zip(names, people, strict=True):
+        authors += cff_person(name)
+        if shared[name] > 1:
+            email = person.partition(" <")[2].removesuffix(">")
+            authors += f"    email: {json.dumps(email)}\n"
     return (
         "# Written by .github/citation.py from the git history. Do not edit.\n"
         "cff-version: 1.2.0\n"
@@ -100,7 +107,7 @@ def citation(names: list[str]) -> str:
         "type: software\n"
         f"repository-code: {json.dumps(REPOSITORY)}\n"
         f"license: {LICENSE}\n"
-        "authors:\n" + "".join(cff_person(n) for n in names)
+        "authors:\n" + authors
     )
 
 
@@ -134,7 +141,7 @@ def identities() -> list[list[str]]:
 
 
 def main() -> int:
-    sys.stdout.write(citation(ranked_names(identities())))
+    sys.stdout.write(citation(ranked_people(identities())))
     return 0
 
 
