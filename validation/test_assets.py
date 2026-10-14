@@ -62,3 +62,42 @@ def test_a_scene_without_visuals_senses_the_same(track):
             steps.append(data.sensordata.copy())
         readings.append(np.array(steps))
     np.testing.assert_array_equal(readings[0], readings[1])
+
+
+def _mesh_geom(spec: mujoco.MjSpec, body: mujoco.MjsBody, name: str, mass: float):
+    """Add to spec a tetrahedron mesh, and a geom of it on body that collides
+    with nothing and has mass (kg)."""
+    mesh = spec.add_mesh(name=name)
+    mesh.uservert = [0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1]
+    body.add_geom(
+        name=name,
+        type=mujoco.mjtGeom.mjGEOM_MESH,
+        meshname=name,
+        contype=0,
+        conaffinity=0,
+        mass=mass,
+        pos=[5, 5, 1],
+    )
+
+
+def test_delete_visuals_keeps_a_mesh_with_mass():
+    """A mesh geom that collides with nothing but has mass moves its body,
+    so delete_visuals keeps it."""
+    spec = mujoco.MjSpec()
+    body = spec.worldbody.add_body(name="body")
+    body.add_freejoint()
+    _mesh_geom(spec, body, "heavy", mass=0.5)
+    _mesh_geom(spec, body, "cosmetic", mass=0.0)
+    assets.delete_visuals(spec)
+    assert [g.name for g in spec.geoms] == ["heavy"]
+    assert [m.name for m in spec.meshes] == ["heavy"]
+
+
+def test_a_scene_without_visuals_keeps_the_track_meshes():
+    """visuals=False changes only the car: a mesh of the track stays, even
+    one with no mass that collides with nothing, as a LiDAR ray can meet it."""
+    track = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xml"))
+    _mesh_geom(track, track.worldbody, "track_sign", mass=0.0)
+    scene = assets.compose(track, visuals=False)
+    assert scene.spec.geom("track_sign") is not None
+    assert scene.model.nmesh == 1
