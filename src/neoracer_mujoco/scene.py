@@ -6,16 +6,16 @@ holds the parts of the car as elements of that spec: the body, its free
 joint, the actuators and the sensors. Code reads and writes a part by binding
 it to the model or the data where it uses it:
 
-    data.bind(scene.car.steer).ctrl = 0.2       # rad, + = left
-    data.bind(scene.car.joint).qpos             # x, y, z (m), then qw, qx, qy, qz
-    model.bind(scene.car.body).subtreemass      # kg
+    data.bind_scalar(scene.car.steer).ctrl = 0.2    # rad, + = left
+    data.bind_scalar(scene.car.joint).qpos          # x, y, z (m), then qw, qx, qy, qz
+    model.bind_scalar(scene.car.body).subtreemass   # kg
 
 No code looks up names in the compiled model, computes addresses or keeps
 indices. MJX has the same bind (dx.bind(mx, element)), so this code has the
 same shape on the JAX backend.
 
-The code calls bind_scalar, which is what bind runs for one element, because
-the type stubs that pybind11-stubgen makes for MuJoCo get bind wrong.
+bind_scalar is what bind runs for one element. Call it instead of bind: the
+type stubs that pybind11-stubgen makes for MuJoCo get bind wrong.
 
 Frame: +X forward, +Y left, +Z up.
 """
@@ -35,7 +35,10 @@ class Car:
 
     body: mujoco.MjsBody  # the car's root body
     joint: mujoco.MjsJoint  # its free joint: qpos x, y, z, qw, qx, qy, qz
-    drive: tuple[mujoco.MjsActuator, ...]  # fl, fr, rl, rr wheel motors (N·m)
+    # the fl, fr, rl, rr wheel motors (N·m)
+    drive: tuple[
+        mujoco.MjsActuator, mujoco.MjsActuator, mujoco.MjsActuator, mujoco.MjsActuator
+    ]
     steer: mujoco.MjsActuator  # the steering servo (rad, + = left)
     sensors: sensors.CarSensors
 
@@ -65,10 +68,11 @@ def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel) -> Car:
     problems += [f"actuator {n} is missing" for n, a in actuators.items() if a is None]
     if problems:
         raise ValueError("; ".join(problems))
+    fl, fr, rl, rr = contract.DRIVE_ACTUATORS
     return Car(
         body=body,
         joint=joints[0],
-        drive=tuple(actuators[name] for name in contract.DRIVE_ACTUATORS),
+        drive=(actuators[fl], actuators[fr], actuators[rl], actuators[rr]),
         steer=actuators[contract.STEER_ACTUATOR],
         sensors=sensors.find_sensors(spec, model),
     )

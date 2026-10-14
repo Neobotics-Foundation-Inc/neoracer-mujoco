@@ -101,7 +101,7 @@ python3 -m pytest validation/ -v
 | rr_motor | N·m | + = forward | `scene.car.drive[3]` |
 | steer_servo | rad | + = left turn | `scene.car.steer` |
 
-Code writes an actuator by binding its element to the data, for example `data.bind(scene.car.steer).ctrl = 0.2` (see `scene.py`), so it does not depend on the order of the actuators in the XML. `sim.apply_command(scene.car, data, command)` writes a throttle and a steer.
+Code writes an actuator by binding its element to the data, for example `data.bind_scalar(scene.car.steer).ctrl = 0.2` (see `scene.py`), so it does not depend on the order of the actuators in the XML. `sim.apply_command(scene.car, data, command)` writes a throttle and a steer.
 
 Steering command range is ±0.4 rad; the two Ackermann equality constraints split
 it into the correct inner/outer front-wheel angles automatically.

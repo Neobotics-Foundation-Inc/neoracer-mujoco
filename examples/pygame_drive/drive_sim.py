@@ -20,7 +20,10 @@ import numpy.typing as npt
 
 from neoracer_mujoco.scene import Scene
 
-type WheelJoints = tuple[mujoco.MjsJoint, ...]  # the spin joint of each drive wheel
+# the spin joint of each drive wheel: fl, fr, rl, rr
+type WheelJoints = tuple[
+    mujoco.MjsJoint, mujoco.MjsJoint, mujoco.MjsJoint, mujoco.MjsJoint
+]
 
 
 @dataclass(frozen=True)
@@ -58,13 +61,15 @@ class DriveState:
 def drive_wheel_joints(scene: Scene) -> WheelJoints:
     """The wheel spin joint of each drive actuator, in the order of
     scene.car.drive (fl, fr, rl, rr)."""
-    joints = []
-    for motor in scene.car.drive:
+
+    def spin_joint(motor: mujoco.MjsActuator) -> mujoco.MjsJoint:
         joint = scene.spec.joint(motor.target)
         if joint is None:
             raise ValueError(f"actuator {motor.name} drives no joint of the scene")
-        joints.append(joint)
-    return tuple(joints)
+        return joint
+
+    fl, fr, rl, rr = scene.car.drive
+    return (spin_joint(fl), spin_joint(fr), spin_joint(rl), spin_joint(rr))
 
 
 def frame_dt(p: DriveParams, dt: float) -> float:
