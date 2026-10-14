@@ -24,6 +24,9 @@ dev = [
     "ty==0.0.86",
     "pybind11-stubgen==3.0.0",
 ]
+# Optional: the Warp backend of batch.py (batch_warp.py), MJX on MuJoCo Warp.
+# It runs on a CUDA GPU; install jax[cuda12] or jax[cuda13] for the GPU.
+jax = ["jax>=0.7", "mujoco-mjx>=3.15", "warp-lang>=1.10", "mujoco-warp>=3.15"]
 # Optional: only needed for the pygame driving demo (examples/pygame_drive/).
 # pygame-ce, not pygame: pygame has no wheels for Python 3.15.
 demo = ["pygame-ce>=2.5.8"]
@@ -34,10 +37,14 @@ demo = ["pygame-ce>=2.5.8"]
 testpaths = ["validation"]
 
 [tool.ty.environment]
-# typings/ holds mujoco stubs from `pybind11-stubgen mujoco mujoco.viewer -o typings`.
+# typings/ holds mujoco stubs from `pybind11-stubgen mujoco mujoco.viewer mujoco.rollout -o typings`.
 # The examples directories are on sys.path at runtime for the scripts and tests
 # that import from them.
 extra-paths = ["typings", "examples"]
+
+[tool.ty.analysis]
+# batch_warp.py needs the jax extra, which the CI type check does not install.
+allowed-unresolved-imports = ["jax", "jax.numpy", "mujoco.mjx"]
 
 [tool.ty.src]
 exclude = ["users", "validation/testdata", "examples/ultimate_wall_follower", "typings"]

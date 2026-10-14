@@ -61,6 +61,7 @@ python3 -m pytest validation/ -v
 │   ├── scene.py           — Scene (spec + model) and Car, the car's parts as spec elements
 │   ├── sensors.py         — SensorReadings, find_sensors() + read()
 │   ├── truth.py           — sensors that only the simulator has: car pose, wall contact
+│   ├── batch.py           — step many copies of a scene at once (mujoco.rollout, or MuJoCo Warp)
 │   ├── sim.py             — settle, step and command helpers, physics probes
 │   ├── control/           — classical controllers (track_centering)
 │   └── track_generation/  — procedural racetracks (generate_track → Track → MJCF)
@@ -118,6 +119,55 @@ The real car cannot measure where it is or whether it touches a wall, so `neorac
 | truth_wall_contact | the number of contacts between the car and a wall | `scene.car.truth.wall_contact` |
 
 A wall is a geom of the body named `walls`. The tracks in `assets/tracks/` and the generated tracks put every wall there. With these sensors, a step can read everything it needs from `data.sensordata`, which `mujoco.rollout` and MuJoCo Warp also return for every step of a batch. `collision.car_touches_wall(data, scene.car)` and `sim.car_upright_cos(data, scene.car)` read them.
+
+### Batches
+
+`batch.py` steps many copies of one scene at once, for example to train a policy. Pick the version that fits your machine. Both have the same methods, and `batch.command` and `batch.read` build the controls and read a sensor out of the result on either one.
+
+#### Optimized for CPU
+
+`CpuBatch` steps the copies with `mujoco.rollout` on a pool of threads that run in C and use every core. It needs nothing beyond the package.
+
+```python
+import numpy as np
+
+from neoracer_mujoco import assets, batch, sim
+
+scene = assets.load()
+cpu = batch.CpuBatch(scene.model, nbatch=64, nthread=4)
+state = cpu.initial(sim.settle(scene.model))  # 64 copies of a car at rest
+throttle, steer = np.full(64, 0.1), np.zeros(64)  # N·m, rad
+ctrl = batch.command(scene.model, scene.car, throttle, steer)
+state, sensordata = cpu.step(state, ctrl, nstep=17)  # sensordata: (64, 17, n)
+pos = batch.read(scene.model, sensordata[:, -1], scene.car.truth.pos)  # (64, 3)
+cpu.close()
+```
+
+On 4 cores, a batch of 64 runs about 3,200 env steps/s (17 physics steps each), against about 2,400 for Python threads that each step one MjData. Each `step` starts the constraint solver cold, and a row is then the same, bit for bit, as one MjData stepped the same way.
+
+#### Optimized for GPU
+
+`batch_warp.WarpBatch` steps the copies with MJX on MuJoCo Warp, on a CUDA GPU. Install the `jax` extra and the CUDA build of JAX:
+
+```bash
+pip install "neoracer-mujoco[jax]" "jax[cuda12]"
+```
+
+```python
+import jax.numpy as jnp
+
+from neoracer_mujoco import assets, batch, batch_warp, sim
+
+scene = assets.load()
+gpu = batch_warp.WarpBatch(scene.model, nbatch=4096)
+state = gpu.initial(sim.settle(scene.model))
+throttle, steer = jnp.full(4096, 0.1), jnp.zeros(4096)
+ctrl = batch.command(scene.model, scene.car, throttle, steer)
+state, sensordata = gpu.step(state, ctrl, nstep=17)
+pos = batch.read(scene.model, sensordata[:, -1], scene.car.truth.pos)
+```
+
+Warp computes collisions and constraints with its own code, so its results are close to the CPU version's, not equal: after ten env steps from rest, the car positions are within 1 mm. Without a GPU, JAX runs Warp on the CPU, correctly but much more slowly than `CpuBatch`.
 
 ## Track generation (`src/neoracer_mujoco/track_generation/`)
 

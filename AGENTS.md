@@ -6,7 +6,7 @@ Follow every rule here. If a task conflicts with a rule, say so in the pull requ
 ## Before you push
 
 - Run `ruff check .`, `ruff format --check .`, `ty check` and `python -m pytest validation`. All four must pass.
-- If `ty check` cannot see mujoco, make the stubs: `pybind11-stubgen mujoco mujoco.viewer -o typings`.
+- If `ty check` cannot see mujoco, make the stubs: `pybind11-stubgen mujoco mujoco.viewer mujoco.rollout -o typings`.
 - Put a new test in `validation/test_<module>.py`, never in the module that it tests.
 - Keep the tests green after each commit. If a change alters behavior, change its test in the same commit.
 - Never skip, delete or loosen a test to make it pass. If a test fails, find the cause.
@@ -94,7 +94,7 @@ A parser checks a value and returns a type that keeps the result.
 - Keep the `MjSpec` next to the compiled model (`scene.Scene`), and refer to each part of the model by its spec element (`scene.Car`).
   Read and write a part by binding it where you use it: `data.bind_scalar(car.steer).ctrl = steer`, `data.bind_scalar(car.joint).qpos`.
   Do not keep ids or indices, call `mj_name2id` or `model.body(name)`, or compute addresses (`jnt_qposadr`, `sensor_adr`).
-  MJX has the same bind (`dx.bind(mx, element)`), so the step code keeps its shape on the JAX backend.
+  A batch array (`batch.py`) has no bind: read and write it with `batch.read` and `batch.command`, the only code that uses an address.
   Call `bind_scalar`, not `bind`: it is what `bind` runs for one element, and the generated type stubs get `bind` wrong.
 - After the edge, the code trusts the type. Do not check the same property again.
 - Some invariants have no Python type, for example "a positive float".

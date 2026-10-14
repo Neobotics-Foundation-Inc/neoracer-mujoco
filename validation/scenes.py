@@ -2,11 +2,13 @@
 
 import os
 import warnings
+import xml.etree.ElementTree as ET
 
 import mujoco
 import numpy as np
 
 from neoracer_mujoco import Scene, assets, sim
+from neoracer_mujoco.scene import compile_scene
 
 
 def corridor_scene() -> Scene:
@@ -15,6 +17,23 @@ def corridor_scene() -> Scene:
     return assets.compose(
         mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "straight_corridor.xml"))
     )
+
+
+def reversed_car() -> Scene:
+    """The default car with its actuators and its sensors in reverse order."""
+    root = ET.parse(assets.DEFAULT_CAR).getroot()
+    for tag in ("actuator", "sensor"):
+        section = root.find(tag)
+        assert section is not None, tag
+        children = list(section)
+        for child in children:
+            section.remove(child)
+        section.extend(reversed(children))
+    spec = mujoco.MjSpec.from_string(ET.tostring(root, encoding="unicode"))
+    # A spec made from a string has no file directory, so give it the one of
+    # the car XML. Mesh paths in neoracer.xml are relative to it.
+    spec.meshdir = assets.ASSET_DIR
+    return compile_scene(spec)
 
 
 def assert_keeps_car_solver_options(

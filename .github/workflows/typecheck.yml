@@ -31,7 +31,7 @@ jobs:
       # the known errors: C++ types that mujoco's bindings do not expose.
       - name: Generate mujoco stubs
         run: >-
-          pybind11-stubgen mujoco mujoco.viewer -o typings --exit-code
+          pybind11-stubgen mujoco mujoco.viewer mujoco.rollout -o typings --exit-code
           --ignore-invalid-expressions '^(mujoco::python::.*|std::byte)$'
           --ignore-unresolved-names '^(NoneType|_abc\._abc_data|mjs[A-Za-z]+_)$'
 
