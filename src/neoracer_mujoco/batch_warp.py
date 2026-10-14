@@ -18,6 +18,7 @@ from collections.abc import Sequence
 import jax
 import jax.numpy as jnp
 import mujoco
+import numpy as np
 from mujoco import mjx
 
 from . import batch
@@ -43,8 +44,9 @@ class WarpBatch:
         datas[i]. Raise ValueError unless there is one MjData per row."""
         batch.check_one_per_row(datas, self.nbatch)
         fields = ("time", "qpos", "qvel", "act", "ctrl", "history")
+        # Stacked on the host, so each field goes to the device once.
         rows = {
-            f: jnp.stack([jnp.asarray(getattr(d, f)) for d in datas]) for f in fields
+            f: jnp.asarray(np.stack([getattr(d, f) for d in datas])) for f in fields
         }
 
         def one_env(row: dict[str, jax.Array]) -> mjx.Data:
