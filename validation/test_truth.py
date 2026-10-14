@@ -85,13 +85,14 @@ def test_a_scene_spec_compiles_again():
     [
         {"objtype": mujoco.mjtObj.mjOBJ_SITE, "objname": "imu"},
         {"reftype": mujoco.mjtObj.mjOBJ_SITE, "refname": "imu"},
+        {"cutoff": 0.5},
+        {"noise": 0.01},
     ],
-    ids=["another object", "another frame"],
+    ids=["another object", "another frame", "a cutoff", "noise"],
 )
 def test_a_sensor_with_a_truth_name_but_another_definition_is_rejected(other):
-    """A car XML that already has a sensor named truth_zaxis, but on another
-    object or in another frame, does not compile: car_upright_cos would read
-    the wrong value."""
+    """A car XML that already has a sensor named truth_zaxis, but with other
+    settings, does not compile: car_upright_cos would read the wrong value."""
     spec = mujoco.MjSpec.from_file(assets.DEFAULT_CAR)
     spec.add_sensor(
         **{
