@@ -10,8 +10,8 @@ tests all read it.
 
 Frame: +X forward, +Y left, +Z up.
 Actuators:
-  fl/fr/rl/rr_motor = wheel drive torque (N·m), + = forward
-  steer_servo       = steering target angle (rad), + = left
+  motor       = throttle of the one drive motor, in [-1, 1], + = forward
+  steer_servo = steering target angle (rad), + = left
 Wheels:
   fl/fr/rl/rr_wheel = the geom of each wheel that touches the ground
 Their order in the XML is not part of the contract: code binds each one by
@@ -27,9 +27,9 @@ if TYPE_CHECKING:  # scene.py imports this module
     from .scene import Car
 
 # --- actuators ---------------------------------------------------------------
-DRIVE_ACTUATORS = ("fl_motor", "fr_motor", "rl_motor", "rr_motor")
+DRIVE_ACTUATOR = "motor"
 STEER_ACTUATOR = "steer_servo"
-EXPECTED_ACTUATORS = (*DRIVE_ACTUATORS, STEER_ACTUATOR)
+EXPECTED_ACTUATORS = (DRIVE_ACTUATOR, STEER_ACTUATOR)
 
 # --- wheels -----------------------------------------------------------------
 # The geoms that touch the ground, in the order fl, fr, rl, rr.
@@ -70,27 +70,23 @@ class ActuatorLimits:
     """The ctrlrange limits of the drive and steer actuators. Each range is
     symmetric, so a command in [-1, 1] scales by one limit."""
 
-    torque_nm: float  # N·m per wheel; ctrlrange is [-torque_nm, torque_nm]
+    throttle: float  # the motor's ctrlrange is [-throttle, throttle]
     steer_rad: float  # rad; ctrlrange is [-steer_rad, steer_rad]
 
 
 def actuator_limits(model: mujoco.MjModel, car: Car) -> ActuatorLimits:
     """Read the actuator limits of the car in model, once per model. Raise
-    ValueError if the four drive ranges differ, or a range is not symmetric
-    about 0: the env and MujocoDrive send one torque to all four wheels and
+    ValueError if a range is not symmetric about 0: the env and MujocoDrive
     negate the limit for a negative command."""
-    drive = [tuple(float(x) for x in model.bind_scalar(a).ctrlrange) for a in car.drive]
-    low, high = drive[0]
+    low, high = model.bind_scalar(car.drive).ctrlrange
     steer_low, steer_high = model.bind_scalar(car.steer).ctrlrange
     problems = []
-    if any(r != drive[0] for r in drive):
-        problems.append(f"the drive ctrlranges differ: {drive}")
     if not (high > 0 and low == -high):
-        problems.append(f"the drive ctrlrange is not [-a, a] with a > 0: {drive[0]}")
+        problems.append(f"the drive ctrlrange is not [-a, a] with a > 0: {(low, high)}")
     if not (steer_high > 0 and steer_low == -steer_high):
         problems.append(
             f"the steer ctrlrange is not [-a, a] with a > 0: {(steer_low, steer_high)}"
         )
     if problems:
         raise ValueError("; ".join(problems))
-    return ActuatorLimits(torque_nm=float(high), steer_rad=float(steer_high))
+    return ActuatorLimits(throttle=float(high), steer_rad=float(steer_high))

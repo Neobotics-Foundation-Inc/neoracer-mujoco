@@ -185,15 +185,15 @@ def check_one_per_row(items: Sequence[object], nbatch: int, what: str) -> None:
 
 
 def command[A: Array](model: mujoco.MjModel, car: Car, throttle: A, steer: A) -> A:
-    """The ctrl rows (nbatch, nu) that give every drive motor throttle (N·m)
-    and the steer servo steer (rad, + = left). throttle and steer have shape
+    """The ctrl rows (nbatch, nu) that give the drive motor throttle (in
+    [-1, 1]) and the steer servo steer (rad, + = left). throttle and steer have shape
     (nbatch,). Raise ValueError if model has actuators that are not the car's."""
-    elements = (*car.drive, car.steer)
+    elements = (car.drive, car.steer)
     if model.nu != len(elements):
         raise ValueError(
             f"the model has {model.nu} actuators, the car has {len(elements)}"
         )
-    values = (throttle,) * len(car.drive) + (steer,)
+    values = (throttle, steer)
     column = {
         int(model.bind_scalar(a).id): v for a, v in zip(elements, values, strict=True)
     }

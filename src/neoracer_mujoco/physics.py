@@ -44,9 +44,7 @@ class Physics:
     # contacts (the wheels have contact priority). Below 1 the wheels slip more.
     wheel_friction: float = 1.0
     chassis_mass: float = 1.0  # x the mass and the inertia of the car body
-    motor_torque: float = (
-        1.0  # x the torque that each drive motor gives per unit of ctrl
-    )
+    motor_torque: float = 1.0  # x the motor's torque, at every speed
     steer_stiffness: float = 1.0  # x the stiffness (kp) of the steering servo
 
     def __post_init__(self) -> None:
@@ -104,9 +102,11 @@ def apply_physics(model: mujoco.MjModel, scene: Scene, physics: Physics) -> None
     body, body0 = model.bind_scalar(car.body), nominal.bind_scalar(car.body)
     body.mass = body0.mass * physics.chassis_mass
     body.inertia = body0.inertia * physics.chassis_mass
-    for motor in car.drive:
-        gain = nominal.bind_scalar(motor).gainprm[0]
-        model.bind_scalar(motor).gainprm[0] = gain * physics.motor_torque
+    # The motor's torque is gainprm[0] * ctrl + biasprm[2] * speed. Scaling
+    # both scales the torque at every speed and keeps the free speed.
+    motor, motor0 = model.bind_scalar(car.drive), nominal.bind_scalar(car.drive)
+    motor.gainprm[0] = motor0.gainprm[0] * physics.motor_torque
+    motor.biasprm[2] = motor0.biasprm[2] * physics.motor_torque
     # A position servo's force is kp * (ctrl - q): gainprm[0] = kp and
     # biasprm[1] = -kp.
     servo, servo0 = model.bind_scalar(car.steer), nominal.bind_scalar(car.steer)
@@ -127,6 +127,7 @@ FIELDS = (
     "body_invweight0",
     "dof_invweight0",
     "dof_M0",
+    "tendon_invweight0",
     "actuator_acc0",
     "stat.meaninertia",  # scales the solver's tolerance
 )

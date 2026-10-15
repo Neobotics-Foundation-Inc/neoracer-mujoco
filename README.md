@@ -90,7 +90,7 @@ python3 -m pytest validation/ -v
 | Wheel mass | ~0.058 kg each | URDF — verify vs real wheel+tyre |
 | Total mass | 1.86 kg | URDF |
 | Steering | Ackermann (4th-order polynomial equality constraints) | |
-| Drive | AWD — 4 independent torque motors | |
+| Drive | One DC motor through open differentials to all four wheels | stall torque and free speed are PLACEHOLDERS |
 | Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m) | ESTIMATED |
 | Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · susp pos · 8-beam LiDAR | |
 
@@ -107,11 +107,11 @@ The model has not yet been checked against recordings of the real car; issue #4 
 | Tire friction (1.5), joint damping and armature | estimated; the damping and armature keep the light wheels numerically stable |
 | Steering servo gain (kp = 25) | estimated, not fitted to the servo's torque or slew rate |
 | Sensor positions | placed by hand: the IMU at the chassis center, the LiDAR 8 cm above it |
-| Drive: four wheel motors, torque in N·m | a stand-in for the real car's single motor and speed controller |
+| Drive: one motor through open differentials, torque falling linearly from 0.765 N·m at rest to 0 at a wheel speed of 141 rad/s | the structure is the real car's; the two numbers are the playground's estimates (a drive force of 18 N and a top speed of 6 m/s on 42.5 mm tyres), until the RS545 and the differential ratio are measured |
 
 Known gaps that matter for sim-to-real work:
 
-- The drive motors have no back-EMF, so at full throttle the simulated car passes 27 m/s within 4 s, far above the real car's top speed. Keep the throttle low or add a speed limit to the motors.
+- The wheels' armature (0.005 kg·m² each, there for numerical stability) is about 70 times the inertia of a real wheel. Through the 50 mm wheels it acts like 8 kg more mass, so the car speeds up and coasts down several times slower than its 1.86 kg allow: at full throttle it reaches 3.6 m/s after 4 s and tops out at 5.1 m/s.
 - The sensors have no noise, bias or latency, and the LiDAR has 8 beams, while the real one is a spinning scanner. The car has no camera yet (issue #3).
 - The tires slip sideways a little: at full lock the car turns on a 0.74 m radius, against 0.68 m for ideal Ackermann steering.
 
@@ -119,11 +119,10 @@ Known gaps that matter for sim-to-real work:
 
 | Actuator | Unit | Direction | Spec element |
 |---|---|---|---|
-| fl_motor | N·m | + = forward | `scene.car.drive[0]` |
-| fr_motor | N·m | + = forward | `scene.car.drive[1]` |
-| rl_motor | N·m | + = forward | `scene.car.drive[2]` |
-| rr_motor | N·m | + = forward | `scene.car.drive[3]` |
+| motor | throttle in [-1, 1] | + = forward | `scene.car.drive` |
 | steer_servo | rad | + = left turn | `scene.car.steer` |
+
+The throttle is the fraction of the battery voltage that the speed controller applies. At a given throttle the motor's torque falls as the wheels speed up, so the car settles at a speed roughly proportional to the throttle, and a throttle of 0 brakes it.
 
 Code writes an actuator by binding its element to the data, for example `data.bind_scalar(scene.car.steer).ctrl = 0.2` (see `scene.py`), so it does not depend on the order of the actuators in the XML. `sim.apply_command(scene.car, data, command)` writes a throttle and a steer.
 
@@ -162,7 +161,7 @@ scene = assets.load()
 cpu = batch.CpuBatch(scene, nbatch=64, nthread=4)
 # 64 copies of a car at rest, each with the physics of the XML
 state = cpu.initial([sim.settle(scene.model)] * 64, [scene] * 64, [Physics()] * 64)
-throttle, steer = np.full(64, 0.1), np.zeros(64)  # N·m, rad
+throttle, steer = np.full(64, 0.5), np.zeros(64)  # in [-1, 1], rad
 ctrl = batch.command(scene.model, scene.car, throttle, steer)
 state, sensordata = cpu.step(state, ctrl, nstep=17)  # sensordata: (64, 17, n)
 pos = batch.read(scene.model, sensordata[:, -1], scene.car.truth.pos)  # (64, 3)
@@ -231,7 +230,7 @@ Nobody knows the real car's grip, mass or motor strength exactly, so a controlle
 |---|---|
 | `wheel_friction` | the sliding friction of the wheel contacts, and so how much the wheels slip |
 | `chassis_mass` | the mass and inertia of the car body |
-| `motor_torque` | the torque that each drive motor gives per unit of command |
+| `motor_torque` | the motor's torque at every speed; its free speed does not change |
 | `steer_stiffness` | the stiffness of the steering servo |
 
 `PhysicsRanges` gives the interval of each factor (the default changes nothing), `physics.sample` draws a `Physics` from it, and `apply_physics` writes one into a copy of the model:

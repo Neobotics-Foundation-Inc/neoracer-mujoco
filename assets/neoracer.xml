@@ -226,17 +226,42 @@
         </body>
     </worldbody>
 
+    <!--
+    Drivetrain: one motor turns all four wheels through open differentials.
+    An open differential gives each wheel the same torque and turns the motor
+    at the mean speed of the wheels. The fixed tendon below does both: its
+    velocity is the mean wheel speed (rad/s), and a force f on it puts f/4 on
+    each wheel. Motor armature and drivetrain losses are not modelled.
+    -->
+    <tendon>
+        <fixed name="drivetrain">
+            <joint joint="fl_drive" coef=".25"/>
+            <joint joint="fr_drive" coef=".25"/>
+            <joint joint="rl_drive" coef=".25"/>
+            <joint joint="rr_drive" coef=".25"/>
+        </fixed>
+    </tendon>
+
     <actuator>
         <!--
-        AWD drivetrain: one torque motor per wheel. Equal torque to all four wheels
-        approximates the real car's centre-diff split. gear=1 is stable at this scale;
-        gear>=2 causes wheelies. ctrl[0..3] = torque in N·m, positive = forward.
-        Replace gear/ctrlrange with the real motor+ESC torque mapping when characterised.
+        The motor as a DC motor behind its speed controller (ESC). ctrl is the
+        throttle in [-1, 1], the fraction of the battery voltage that the ESC
+        applies, + = forward. The torque at the wheels, all four together, is
+
+            torque = stall * ctrl - (stall / free) * mean wheel speed
+
+        so it is largest from rest and falls to 0 at the free speed. gainprm
+        is stall and biasprm[2] is -stall / free.
+
+        PLACEHOLDERS until the motor is measured: stall = 0.765 N·m and
+        free = 141.18 rad/s are the playground's numbers, a drive force of
+        18 N and a top speed of 6 m/s on its 42.5 mm tyres. From the RS545's
+        stall torque and no-load speed at the pack voltage, with
+        ratio = (48 / 14) x the differential ratio:
+        stall = motor stall torque x ratio, free = motor no-load speed / ratio.
         -->
-        <motor name="fl_motor" joint="fl_drive" gear="1" ctrlrange="-1 1"/>
-        <motor name="fr_motor" joint="fr_drive" gear="1" ctrlrange="-1 1"/>
-        <motor name="rl_motor" joint="rl_drive" gear="1" ctrlrange="-1 1"/>
-        <motor name="rr_motor" joint="rr_drive" gear="1" ctrlrange="-1 1"/>
+        <general name="motor" tendon="drivetrain" ctrlrange="-1 1"
+                 gainprm="0.765" biastype="affine" biasprm="0 0 -0.00541875"/>
 
         <!--
         Steering servo driving the virtual steer_input joint. The Ackermann

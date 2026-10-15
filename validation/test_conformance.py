@@ -42,15 +42,14 @@ def _read(scene: Scene, data: mujoco.MjData) -> sensors.SensorReadings:
 
 
 def test_actuator_limits_parse_every_car(scene):
-    """Every car has the same symmetric range on its four drive actuators,
-    and a symmetric steer range."""
+    """Every car has a symmetric drive range and a symmetric steer range."""
     limits = contract.actuator_limits(scene.model, scene.car)
-    assert limits.torque_nm > 0 and limits.steer_rad > 0
+    assert limits.throttle > 0 and limits.steer_rad > 0
 
 
 @pytest.mark.parametrize(
     ("actuator", "ctrlrange"),
-    [("rr_motor", (-0.5, 0.5)), ("fl_motor", (-0.5, 1.0)), ("steer_servo", (0.0, 0.4))],
+    [("motor", (-0.5, 1.0)), ("motor", (0.0, 1.0)), ("steer_servo", (0.0, 0.4))],
 )
 def test_actuator_limits_reject_ranges_that_one_limit_cannot_scale(
     scene, actuator, ctrlrange

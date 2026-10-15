@@ -8,7 +8,7 @@ logic: it does not load a model, step the simulator or read MjData. See
 examples/track_centering_demo.py for a demo that does.
 
 Frame: +X forward, +Y left, +Z up.
-Wheel torque (N·m), + = forward.
+Throttle in [-1, 1], + = forward.
 steer_servo target angle (rad), + = left, range [-0.4, 0.4].
 
 LiDAR beams: 8 horizontal beams at 45° steps.

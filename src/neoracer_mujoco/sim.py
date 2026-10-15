@@ -25,10 +25,9 @@ def apply_ctrl_and_step(
 
 
 def apply_command(car: Car, data: mujoco.MjData, command: ControlCommand) -> None:
-    """Write command to data.ctrl: the throttle (N·m) to every drive wheel and
-    the steer (rad, + = left) to the steer servo."""
-    for motor in car.drive:
-        data.bind_scalar(motor).ctrl = command.throttle
+    """Write command to data.ctrl: the throttle (in [-1, 1]) to the drive
+    motor and the steer (rad, + = left) to the steer servo."""
+    data.bind_scalar(car.drive).ctrl = command.throttle
     data.bind_scalar(car.steer).ctrl = command.steer
 
 

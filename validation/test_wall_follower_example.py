@@ -26,7 +26,7 @@ _FIXTURE_DIR = Path(__file__).resolve().parent / "testdata" / "ultimate_wall_fol
 def test_canonical_wall_follower_runs_unmodified_against_mujoco():
     scene = run_racecar_core.load_scene()
     car = scene.car
-    data, rc = run_racecar_core.build_racecar(scene, steps=400)
+    data, rc = run_racecar_core.build_racecar(scene, steps=600)
     x0 = float(data.bind_scalar(car.body).xpos[0])
 
     # rc.drive, rc.lidar, rc.controller and rc.display work before the
@@ -54,8 +54,7 @@ def test_canonical_wall_follower_runs_unmodified_against_mujoco():
 
     limits = contract.actuator_limits(scene.model, car)
     assert np.isfinite(data.ctrl).all()
-    for motor in car.drive:
-        assert abs(data.bind_scalar(motor).ctrl[0]) <= limits.torque_nm + 1e-6
+    assert abs(data.bind_scalar(car.drive).ctrl[0]) <= limits.throttle + 1e-6
     assert abs(data.bind_scalar(car.steer).ctrl[0]) <= limits.steer_rad + 1e-6
 
     x1 = float(data.bind_scalar(car.body).xpos[0])

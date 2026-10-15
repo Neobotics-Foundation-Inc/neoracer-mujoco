@@ -36,10 +36,7 @@ class Car:
 
     body: mujoco.MjsBody  # the car's root body
     joint: mujoco.MjsJoint  # its free joint: qpos x, y, z, qw, qx, qy, qz
-    # the fl, fr, rl, rr wheel motors (N·m)
-    drive: tuple[
-        mujoco.MjsActuator, mujoco.MjsActuator, mujoco.MjsActuator, mujoco.MjsActuator
-    ]
+    drive: mujoco.MjsActuator  # the drive motor (throttle in [-1, 1], + = forward)
     steer: mujoco.MjsActuator  # the steering servo (rad, + = left)
     # the fl, fr, rl, rr wheel geoms that touch the ground
     wheels: tuple[mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom]
@@ -74,12 +71,11 @@ def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel) -> Car:
     problems += [f"wheel geom {n} is missing" for n, g in wheels.items() if g is None]
     if problems:
         raise ValueError("; ".join(problems))
-    fl, fr, rl, rr = contract.DRIVE_ACTUATORS
     wfl, wfr, wrl, wrr = contract.WHEEL_GEOMS
     return Car(
         body=body,
         joint=joints[0],
-        drive=(actuators[fl], actuators[fr], actuators[rl], actuators[rr]),
+        drive=actuators[contract.DRIVE_ACTUATOR],
         steer=actuators[contract.STEER_ACTUATOR],
         wheels=(wheels[wfl], wheels[wfr], wheels[wrl], wheels[wrr]),
         sensors=sensors.find_sensors(spec, model),

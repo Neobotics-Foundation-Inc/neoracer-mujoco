@@ -106,19 +106,18 @@ class VsParams:
     # A new region must have a score this many times the score of the tracked
     # region before the controller changes to it.
     region_switch_margin: float = 1.15
-    # N·m per wheel; 3 % of the fl_motor ctrlrange of 1 N·m.
-    max_throttle_nm: float = 0.03
+    max_throttle: float = 0.16  # in [0, 1]
     steer_throttle_cut: float = 0.6  # fraction of throttle removed at full steer
-    # N·m per wheel; minimum throttle while the target path is usable, so the
-    # car has enough torque to complete a sharp turn.
-    min_throttle_nm: float = 0.015
+    # minimum throttle while the target path is usable, so the car has
+    # enough torque to complete a sharp turn
+    min_throttle: float = 0.08
     # Candidates on each side of the target that target_path_clearance() reads.
     path_window_candidates: int = 2
 
     def __post_init__(self) -> None:
         # arc_table() divides by n_candidates - 1. extract_regions() divides
         # by a sum of safe arc lengths that are each at least
-        # clearance_radius_m. The throttle must stay in [0, max_throttle_nm].
+        # clearance_radius_m. The throttle must stay in [0, max_throttle].
         # An odd count puts one candidate at 0 deg, the straight path.
         if self.n_candidates < 3 or self.n_candidates % 2 == 0:
             raise ValueError(
@@ -141,10 +140,9 @@ class VsParams:
             raise ValueError(
                 f"steer_throttle_cut must be in [0, 1], got {self.steer_throttle_cut}"
             )
-        if not 0 <= self.min_throttle_nm <= self.max_throttle_nm:
+        if not 0 <= self.min_throttle <= self.max_throttle:
             raise ValueError(
-                "min_throttle_nm must be in [0, max_throttle_nm], got "
-                f"{self.min_throttle_nm}"
+                f"min_throttle must be in [0, max_throttle], got {self.min_throttle}"
             )
         if self.path_window_candidates < 1:
             raise ValueError(
@@ -496,17 +494,17 @@ class NoPath:
 type VsResult = Driving | NoPath
 
 
-def _throttle_nm(params: VsParams, path_clear_m: float, target_deg: float) -> float:
-    """Throttle (N·m per wheel). It decreases when the target path is short
+def _throttle(params: VsParams, path_clear_m: float, target_deg: float) -> float:
+    """Throttle, in [0, 1]. It decreases when the target path is short
     and when the steering angle is large. If the target path is usable, the
-    throttle is at least min_throttle_nm."""
+    throttle is at least min_throttle."""
     steer_max_deg = math.degrees(params.car.steer_max_rad)
     clear_frac = min(1.0, path_clear_m / params.planning_horizon_m)
     steer_frac = min(1.0, abs(target_deg) / steer_max_deg)
     scale = clear_frac * (1.0 - params.steer_throttle_cut * steer_frac)
-    throttle = params.max_throttle_nm * scale
+    throttle = params.max_throttle * scale
     if path_clear_m >= params.clearance_radius_m:
-        return max(throttle, params.min_throttle_nm)
+        return max(throttle, params.min_throttle)
     return throttle
 
 
@@ -573,7 +571,7 @@ def step(
     )
     return new_state, Driving(
         command=ControlCommand(
-            throttle=_throttle_nm(params, path_clear_m, target_deg),
+            throttle=_throttle(params, path_clear_m, target_deg),
             steer=_steer_rad(params, target_deg),
         ),
         target_steer_deg=target_deg,

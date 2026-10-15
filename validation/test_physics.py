@@ -37,8 +37,7 @@ def _drive(model: mujoco.MjModel, scene: Scene) -> np.ndarray:
     data = sim.settle(model)
     out = []
     for t in range(500):
-        for motor in scene.car.drive:
-            data.bind_scalar(motor).ctrl = 0.5  # N·m
+        data.bind_scalar(scene.car.drive).ctrl = 1.0  # full throttle
         data.bind_scalar(scene.car.steer).ctrl = 0.3 * np.sin(t / 60)  # rad
         mujoco.mj_step(model, data)
         out.append(data.sensordata.copy())
@@ -55,8 +54,9 @@ def test_apply_physics_equals_compiling_the_changed_car():
     body = edited.body(car.body.name)
     body.mass *= CHANGED.chassis_mass
     body.inertia = np.asarray(body.inertia) * CHANGED.chassis_mass
-    for motor in car.drive:
-        edited.actuator(motor.name).gainprm[0] *= CHANGED.motor_torque
+    motor = edited.actuator(car.drive.name)
+    motor.gainprm[0] *= CHANGED.motor_torque
+    motor.biasprm[2] *= CHANGED.motor_torque
     servo = edited.actuator(car.steer.name)
     servo.gainprm[0] *= CHANGED.steer_stiffness
     servo.biasprm[1] *= CHANGED.steer_stiffness
@@ -95,15 +95,16 @@ def test_fields_lists_every_field_that_apply_physics_changes():
 
 
 def test_less_wheel_friction_means_more_slip():
-    """At full motor torque from rest, the rear wheels spin faster than the
-    car moves, and more so as the friction drops."""
+    """At full throttle from rest, the rear wheels spin faster than the car
+    moves, and more so as the friction drops. The nominal motor makes the
+    wheels slip only below a friction of about 0.1, so the motor here is three
+    times as strong."""
     scene = _scene()
     slips = []
-    for friction in (0.2, 0.5, 1.0):
-        model = _applied(scene, Physics(wheel_friction=friction))
+    for friction in (0.05, 0.1, 0.2):
+        model = _applied(scene, Physics(wheel_friction=friction, motor_torque=3.0))
         data = sim.settle(model)
-        for motor in scene.car.drive:
-            data.bind_scalar(motor).ctrl = 1.0  # N·m
+        data.bind_scalar(scene.car.drive).ctrl = 1.0  # full throttle
         for _ in range(250):  # 0.5 s
             mujoco.mj_step(model, data)
         surface = data.bind_scalar(scene.car.sensors.rl_wheel_vel).data[0] * 0.05

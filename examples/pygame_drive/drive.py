@@ -34,7 +34,6 @@ from examples.pygame_drive.drive_sim import (
     DriveParams,
     DriveState,
     apply_and_step,
-    drive_wheel_joints,
     next_state,
 )
 from neoracer_mujoco import assets, sensors
@@ -196,7 +195,6 @@ def main(track: str, bare: bool) -> None:
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
     params, state = DriveParams(), DriveState()
-    wheels = drive_wheel_joints(scene)
 
     # The offscreen buffer must be at least the window size before the
     # Renderer is made. The MJCF default is 640x480.
@@ -247,7 +245,7 @@ def main(track: str, bare: bool) -> None:
         if keys[pygame.K_SPACE]:
             state, inputs = DriveState(), Inputs(0.0, 0.0)  # hard stop, no slew
         state = next_state(params, state, inputs.throttle, inputs.steer, dt)
-        apply_and_step(scene, data, params, wheels, state, dt)
+        apply_and_step(scene, data, params, state, dt)
 
         cam.azimuth = yaw_deg(data.bind_scalar(car.body).xquat)
         renderer.update_scene(data, camera=cam)

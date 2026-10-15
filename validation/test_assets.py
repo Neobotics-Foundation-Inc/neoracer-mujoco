@@ -53,8 +53,7 @@ def test_a_scene_without_visuals_senses_the_same(track):
     readings = []
     for scene in (full, bare):
         data = sim.settle(scene.model)
-        for motor in scene.car.drive:
-            data.bind_scalar(motor).ctrl = 0.3  # N·m
+        data.bind_scalar(scene.car.drive).ctrl = 1.0  # full throttle
         data.bind_scalar(scene.car.steer).ctrl = 0.3  # rad
         steps = []
         for _ in range(300):  # 0.6 s

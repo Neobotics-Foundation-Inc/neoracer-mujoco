@@ -48,7 +48,7 @@ def test_records_used_by_neoracer_rl_keep_their_fields():
         return {f.name for f in dataclasses.fields(record)}
 
     assert {"throttle", "steer"} <= fields(ControlCommand)
-    assert {"torque_nm", "steer_rad"} <= fields(ActuatorLimits)
+    assert {"throttle", "steer_rad"} <= fields(ActuatorLimits)
     assert {"spec", "model", "car"} <= fields(Scene)
     assert {"body", "joint", "drive", "steer", "sensors", "truth"} <= fields(Car)
     assert {"imu_accel", "imu_gyro", "imu_quat", "steer_cmd_pos"} <= fields(

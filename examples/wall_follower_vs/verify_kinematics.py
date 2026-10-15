@@ -23,7 +23,7 @@ from neoracer_mujoco.control.steering import ControlCommand
 
 @dataclass(frozen=True)
 class DriveParams:
-    throttle_nm: float = 0.03  # N·m per wheel
+    throttle: float = 0.16  # in [-1, 1]
     duration_s: float = 12.0  # s of sim time
     sample_period_s: float = 0.04  # s between two path samples
 
@@ -43,7 +43,7 @@ def main() -> None:
     sim.apply_command(
         scene.car,
         data,
-        ControlCommand(throttle=params.throttle_nm, steer=car.steer_max_rad),
+        ControlCommand(throttle=params.throttle, steer=car.steer_max_rad),
     )
     timestep = float(model.opt.timestep)
     n_steps = round(params.duration_s / timestep)

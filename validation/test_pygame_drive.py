@@ -13,9 +13,7 @@ from examples.pygame_drive.drive_sim import (
     DriveParams,
     DriveState,
     apply_and_step,
-    drive_wheel_joints,
     next_state,
-    wheel_torque,
 )
 from neoracer_mujoco import assets
 
@@ -24,10 +22,9 @@ DT = 0.02  # s, one 50 Hz frame
 
 
 def _drive(scene, data, state, throttle, steer, frames):
-    wheels = drive_wheel_joints(scene)
     for _ in range(frames):
         state = next_state(P, state, throttle, steer, DT)
-        apply_and_step(scene, data, P, wheels, state, DT)
+        apply_and_step(scene, data, P, state, DT)
     return state
 
 
@@ -57,22 +54,8 @@ def test_a_negative_frame_time_changes_nothing():
     assert next_state(P, state, 1.0, 1.0, -0.1) == state
     scene = assets.load()
     data = mujoco.MjData(scene.model)
-    apply_and_step(scene, data, P, drive_wheel_joints(scene), state, -0.1)
+    apply_and_step(scene, data, P, state, -0.1)
     assert data.time == 0.0
-
-
-def test_wheel_torque_stays_in_limits_and_brakes_a_spinning_wheel():
-    spin = np.array([-1000.0, -10.0, 10.0, 1000.0])
-    for throttle in (-1.0, 0.0, 1.0):
-        assert np.all(np.abs(wheel_torque(P, throttle, spin)) <= P.max_torque)
-    assert np.all(np.sign(wheel_torque(P, 0.0, spin)) == -np.sign(spin))
-
-
-def test_drive_wheel_joints_are_four_hinge_joints():
-    scene = assets.load()
-    joints = drive_wheel_joints(scene)
-    assert len({joint.name for joint in joints}) == 4
-    assert all(joint.type == mujoco.mjtJoint.mjJNT_HINGE for joint in joints)
 
 
 def test_car_tops_out_then_brakes_when_the_throttle_is_released():
@@ -82,13 +65,16 @@ def test_car_tops_out_then_brakes_when_the_throttle_is_released():
     x0 = float(data.bind_scalar(body).xpos[0])
     state = _drive(scene, data, DriveState(), 1.0, 0.0, 150)  # 3 s full throttle
     assert float(data.bind_scalar(body).xpos[0]) - x0 > 1.0
-    spin = float(
-        np.mean([data.bind_scalar(j).qvel[0] for j in drive_wheel_joints(scene)])
-    )
-    assert spin < 1.1 * P.max_torque / P.motor_damping  # the back-EMF balance point
+    # The motor's torque falls to 0 at its free speed, so the mean wheel spin
+    # (the drivetrain tendon's velocity) stays below it.
+    motor = scene.model.bind_scalar(scene.car.drive)
+    free = motor.gainprm[0] / -motor.biasprm[2]  # rad/s
+    assert data.bind_scalar(scene.car.drive).velocity[0] < free
     v_release = _speed(scene, data)
     _drive(scene, data, state, 0.0, 0.0, 200)  # 4 s hands off
-    assert _speed(scene, data) < 0.1 * v_release
+    # At zero throttle the motor brakes in proportion to its speed. The time
+    # constant is about 4.5 s, mostly the armature of the wheels.
+    assert _speed(scene, data) < 0.5 * v_release
 
 
 @pytest.mark.parametrize("steer", [-1.0, -0.5, 0.5, 1.0])
