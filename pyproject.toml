@@ -9,7 +9,10 @@ description = "MuJoCo simulation baseline + reusable toolbox for the NeoRacer 1/
 readme = "README.md"
 requires-python = ">=3.15"
 dependencies = [
-    "mujoco>=3.9.0",
+    # One exact version: MuJoCo's WebAssembly build of the same version gives
+    # the same physics, and its models (.mjb) load only in the version that
+    # wrote them. Change it here and in requirements.txt together.
+    "mujoco==3.16.0",
     "numpy>=1.26.4",
     # CubicSpline (track centerline) and KDTree (self-touch check) in
     # track_generation/.
@@ -26,7 +29,7 @@ dev = [
 ]
 # Optional: the Warp backend of batch.py (batch_warp.py), MJX on MuJoCo Warp.
 # It runs on a CUDA GPU; install jax[cuda12] or jax[cuda13] for the GPU.
-jax = ["jax>=0.7", "mujoco-mjx>=3.15", "warp-lang>=1.10", "mujoco-warp>=3.15"]
+jax = ["jax>=0.7", "mujoco-mjx==3.16.0", "warp-lang>=1.10", "mujoco-warp==3.16.0"]
 # Optional: only needed for the pygame driving demo (examples/pygame_drive/).
 # pygame-ce, not pygame: pygame has no wheels for Python 3.15.
 demo = ["pygame-ce>=2.5.8"]
