@@ -261,6 +261,10 @@ match generate_track(7, settings_for_difficulty(2)):  # pure geometry, no MuJoCo
 
 Generation draws a candidate and checks it for corners tighter than the car can take, a loop that touches itself, and a total length outside the target range. Then it moves the control points behind each problem and checks again, instead of drawing the whole loop again. A candidate that cannot be repaired is thrown away and a new one is drawn. If every attempt fails, `generate_track` returns `NoValidTrack`. Then try another seed, a larger `max_attempts` or looser limits.
 
+To train on many tracks at once, a batch steps one track per row, and that needs every track to compile to a model of the same size. By default the walls use as few boxes as `segment_length` and `max_deviation` allow, so each track has its own number. `WallParams(boxes_per_wall=192)` fixes the number: it splits the longest boxes until each wall has 192, which keeps both limits. Over 240 tracks of every difficulty, a wall needed 56 to 161 boxes. `to_spec(track, WallParams(boxes_per_wall=192))` then gives the same sizes for every track.
+
+`lap_distance(track, xy)` gives how far along the centerline, in meters from the start, a point of the scene is, for the progress of a car around a generated track.
+
 | File | Role |
 |---|---|
 | `track.py` | the `Track` itself and the attempt and repair loop. **Read this first.** |
