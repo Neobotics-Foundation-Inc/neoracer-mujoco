@@ -4,6 +4,7 @@ Laws for the car and track XML files in assets/.
 
 import os
 import tomllib
+import zipfile
 from pathlib import Path
 
 import mujoco
@@ -101,3 +102,27 @@ def test_a_scene_without_visuals_keeps_the_track_meshes():
     scene = assets.compose(track, visuals=False)
     assert scene.spec.geom("track_sign") is not None
     assert scene.model.nmesh == 1
+
+
+@pytest.mark.parametrize("path", [*assets.cars(), *TRACKS], ids=os.path.basename)
+def test_an_mjz_compiles_to_the_model_of_its_xml(path, tmp_path):
+    """write_mjz packs the XML as written and the files it names, so the
+    archive compiles to the same model, bit for bit, and writing it again
+    gives the same bytes."""
+    first, second = tmp_path / "first.mjz", tmp_path / "second.mjz"
+    assets.write_mjz(path, first)
+    assets.write_mjz(path, second)
+    assert first.read_bytes() == second.read_bytes()
+    expected = mujoco.MjSpec.from_file(path).compile()
+    packed = mujoco.MjSpec.from_zip(str(first)).compile()
+    for name in dir(expected):
+        value = getattr(expected, name)
+        if isinstance(value, np.ndarray):
+            np.testing.assert_array_equal(getattr(packed, name), value, err_msg=name)
+
+
+def test_the_car_mjz_holds_the_xml_and_its_meshes(tmp_path):
+    out = tmp_path / "neoracer.mjz"
+    assets.write_mjz(assets.DEFAULT_CAR, out)
+    meshes = {m.file for m in mujoco.MjSpec.from_file(assets.DEFAULT_CAR).meshes}
+    assert set(zipfile.ZipFile(out).namelist()) == {assets.MJZ_MODEL, *meshes}

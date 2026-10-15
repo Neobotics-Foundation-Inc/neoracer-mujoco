@@ -10,6 +10,7 @@ repo's assets/ instead.
 
 import glob
 import os
+import zipfile
 from importlib import resources
 
 import mujoco
@@ -26,6 +27,7 @@ _checkout = os.path.normpath(os.path.join(str(_package), "..", "..", "assets"))
 ASSET_DIR = str(_packaged) if _packaged.is_dir() else _checkout
 TRACK_DIR = os.path.join(ASSET_DIR, "tracks")
 DEFAULT_CAR = os.path.join(ASSET_DIR, "neoracer.xml")
+MJZ_MODEL = "model.xml"  # the name of the XML in an archive of write_mjz
 
 type Position = tuple[float, float, float]  # m, world frame
 
@@ -94,3 +96,34 @@ def delete_visuals(spec: mujoco.MjSpec) -> None:
     for mesh in list(spec.meshes):
         if mesh.name not in used:
             spec.delete(mesh)
+
+
+def write_mjz(xml_path: str | os.PathLike[str], out: str | os.PathLike[str]) -> None:
+    """Write to out an .mjz archive of the MJCF file at xml_path: the file as
+    written, as model.xml, and every mesh and texture file that it names, at
+    the path that it names them by. It is the XML as written, not
+    MjSpec.to_xml(), which keeps six significant digits, so the archive
+    compiles to the same model, bit for bit.
+
+    MuJoCo reads the archive with MjSpec.from_zip(out) in Python, and as
+    "out/model.xml" in its WebAssembly build. The same files always give the
+    same bytes."""
+    spec = mujoco.MjSpec.from_file(str(xml_path))
+    if any(f.file for f in (*spec.hfields, *spec.skins)):
+        raise ValueError(f"{xml_path} names a height field or skin file")
+    named = [os.path.join(spec.compiler.meshdir, m.file) for m in spec.meshes]
+    named += [os.path.join(spec.compiler.texturedir, t.file) for t in spec.textures]
+    files = sorted({os.path.normpath(n) for n in named if os.path.basename(n)})
+    for name in files:
+        if os.path.isabs(name) or name.startswith(".."):
+            raise ValueError(f"{xml_path} names {name}, outside its folder")
+    folder = os.path.dirname(os.path.abspath(xml_path))
+    sources = [(MJZ_MODEL, str(xml_path))]
+    sources += [(name, os.path.join(folder, name)) for name in files]
+    with zipfile.ZipFile(out, "w") as archive:
+        for name, source in sources:
+            # A fixed date, so that the bytes depend on the files only.
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            with open(source, "rb") as f:
+                archive.writestr(info, f.read())
