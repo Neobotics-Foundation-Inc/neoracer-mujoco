@@ -1,4 +1,4 @@
-mujoco>=3.9.0
+mujoco==3.16.0
 numpy>=1.26.4
 scipy>=1.13
 # The demo extra (examples/pygame_drive/). ty and the demo tests need it.
