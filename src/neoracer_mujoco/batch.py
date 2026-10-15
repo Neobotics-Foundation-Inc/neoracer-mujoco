@@ -165,19 +165,14 @@ class CpuBatch:
 
 
 def check_same_sizes(model: mujoco.MjModel, other: mujoco.MjModel) -> None:
-    """Raise ValueError unless other has every size (nq, ngeom, ...) of
-    model, as mujoco.rollout needs of the models of one batch."""
-    for name in dir(model):
-        size = getattr(model, name)
-        if (
-            name.startswith("n")
-            and isinstance(size, int)
-            and getattr(other, name) != size
-        ):
-            raise ValueError(
-                f"the scenes of a batch need the same sizes: {name} is {size} "
-                f"and {getattr(other, name)}"
-            )
+    """Raise ValueError unless other has the size signature of model, the
+    hash of its sizes that mujoco.rollout needs to be the same for the
+    models of one batch. Names may differ."""
+    if other.signature != model.signature:
+        raise ValueError(
+            "the scenes of a batch need the same sizes, as the same number of "
+            "wall boxes gives generated tracks"
+        )
 
 
 def check_one_per_row(items: Sequence[object], nbatch: int, what: str) -> None:

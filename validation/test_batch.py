@@ -6,6 +6,7 @@ order of the actuators and the sensors in the car XML.
 
 import copy
 import os
+from collections.abc import Sequence
 from dataclasses import fields
 
 import mujoco
@@ -368,7 +369,7 @@ def test_the_warp_batch_reset_gives_a_row_the_physics_of_initial():
     np.testing.assert_allclose(reset_data[done], fresh_data[done], atol=1e-6)
 
 
-def _tracks(seeds: range) -> list[Scene]:
+def _tracks(seeds: Sequence[int]) -> list[Scene]:
     """Generated tracks of the same size, the car on each, without visuals."""
     walls = WallParams(boxes_per_wall=192)
     scenes = []
@@ -381,8 +382,9 @@ def _tracks(seeds: range) -> list[Scene]:
 
 def test_each_row_steps_on_its_own_track():
     """Rows on different generated tracks of one size each equal, bit for
-    bit, one MjData stepped on that track, with its own physics."""
-    scenes = _tracks(range(3))
+    bit, one MjData stepped on that track, with its own physics. Seeds 9 and
+    10 give model names of different lengths, which do not matter."""
+    scenes = _tracks((0, 9, 10))
     params = [Physics(), Physics(wheel_friction=0.5), Physics()]
     datas = [sim.settle(s.model) for s in scenes]
     sim_batch = batch.CpuBatch(scenes[0], 3, nthread=2)
@@ -408,7 +410,7 @@ def test_each_row_steps_on_its_own_track():
 
 
 def test_a_batch_refuses_a_scene_of_another_size():
-    loop, track = _loop_scene(), _tracks(range(1))[0]
+    loop, track = _loop_scene(), _tracks((0,))[0]
     sim_batch = batch.CpuBatch(loop, 2, nthread=0)
     datas = [sim.settle(loop.model)] * 2
     with pytest.raises(ValueError, match="same sizes"):
@@ -421,7 +423,7 @@ def test_the_warp_batch_refuses_another_scene():
     WarpBatch steps every row on its own scene. This test runs only where
     the jax extra is installed."""
     _, batch_warp = _warp_modules()
-    first, second = _tracks(range(2))
+    first, second = _tracks((0, 1))
     warp = batch_warp.WarpBatch(first, 2)
     datas = [sim.settle(first.model)] * 2
     with pytest.raises(ValueError, match="batch's scene"):
