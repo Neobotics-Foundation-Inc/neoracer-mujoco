@@ -109,22 +109,35 @@ def decimate_closed(
     return kept
 
 
-def split_to(kept: list[int], count: int) -> list[int]:
-    """kept, a list of decimate_closed, with the longest segments split at
-    their middle sample until there are count segments. Splitting a chord
-    only brings it closer to the polyline, so both caps still hold. Raise
-    ValueError if kept already has more than count segments."""
+def split_to(
+    points: Points, kept: list[int], count: int, max_deviation: float
+) -> list[int]:
+    """kept, a list of decimate_closed over points, with the longest segments
+    split until there are count segments. Each split takes the sample
+    nearest the middle of the segment whose two halves both stay within
+    max_deviation of points; the first half is a prefix of the segment,
+    which decimate_closed already checked. Raise ValueError if kept already
+    has more than count segments, or if no segment can be split."""
     if len(kept) - 1 > count:
         raise ValueError(
             f"this wall needs {len(kept) - 1} boxes, more than boxes_per_wall={count}"
         )
     kept = list(kept)
     while len(kept) - 1 < count:
-        spans = np.diff(kept)
-        longest = int(np.argmax(spans))
-        if spans[longest] < 2:
-            raise ValueError(f"a wall of {kept[-1]} samples cannot have {count} boxes")
-        kept.insert(longest + 1, kept[longest] + int(spans[longest]) // 2)
+        for segment in np.argsort(-np.diff(kept), kind="stable"):
+            start, end = kept[segment], kept[segment + 1]
+            middle = (start + end) // 2
+            for k in sorted(range(start + 1, end), key=lambda k: abs(k - middle)):
+                if _max_deviation(points, k, end) <= max_deviation:
+                    kept.insert(int(segment) + 1, k)
+                    break
+            else:
+                continue
+            break
+        else:
+            raise ValueError(
+                f"no wall box can be split within max_deviation={max_deviation}"
+            )
     return kept
 
 
@@ -137,7 +150,7 @@ def _wall_boxes(edge: Points, name_prefix: str, walls: WallParams) -> list[str]:
     """
     kept = decimate_closed(edge, walls.segment_length, walls.max_deviation)
     if walls.boxes_per_wall is not None:
-        kept = split_to(kept, walls.boxes_per_wall)
+        kept = split_to(edge, kept, walls.boxes_per_wall, walls.max_deviation)
     thickness, height = walls.thickness, walls.height
     lines = []
     for n, (i, j) in enumerate(itertools.pairwise(kept)):

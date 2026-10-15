@@ -25,6 +25,7 @@ from neoracer_mujoco.track_generation import (
     WallParams,
     generate_track,
     left_edge,
+    mjcf,
     right_edge,
     settings_for_difficulty,
     to_mjcf,
@@ -249,15 +250,14 @@ def test_a_fixed_box_count_gives_every_track_the_same_model_size():
 
 @pytest.mark.parametrize("difficulty", [0, 3])
 def test_split_walls_still_track_the_edges(difficulty):
-    """split_to only splits chords, so every box stays within max_deviation of
-    the edge and the boxes cover the whole loop."""
+    """After split_to, every box stays within max_deviation of the edge and
+    the boxes cover the whole loop."""
     track = _track(1, difficulty)
     walls = WallParams()
     for edge in (left_edge(track), right_edge(track)):
         edge = to_start_frame(track, edge)
-        kept = split_to(
-            decimate_closed(edge, walls.segment_length, walls.max_deviation), 192
-        )
+        kept = decimate_closed(edge, walls.segment_length, walls.max_deviation)
+        kept = split_to(edge, kept, 192, walls.max_deviation)
         assert len(kept) - 1 == 192 and kept[0] == 0 and kept[-1] == len(edge)
         for i, j in itertools.pairwise(kept):
             first, last = edge[i], edge[j % len(edge)]
@@ -274,7 +274,20 @@ def test_split_walls_still_track_the_edges(difficulty):
 
 def test_split_to_refuses_fewer_boxes_than_a_wall_needs():
     with pytest.raises(ValueError, match="boxes_per_wall"):
-        split_to([0, 5, 10, 15], 2)
+        split_to(np.zeros((15, 2)), [0, 5, 10, 15], 2, 0.01)
+
+
+def test_a_split_where_the_edge_bends_stays_within_max_deviation():
+    """Here the middle sample of the first box would leave a second half
+    10.75 mm from the edge, more than max_deviation = 10 mm, so split_to
+    takes another sample."""
+    points = np.array(
+        [(0, 0), (0.124, 0), (0.248, 0.0035), (0.372, -0.009), (0.496, 0)]
+    )
+    kept = split_to(points, [0, 4, 5], 3, max_deviation=0.01)
+    assert len(kept) == 4
+    for i, j in itertools.pairwise(kept):
+        assert mjcf._max_deviation(points, i, j) <= 0.01
 
 
 @pytest.mark.parametrize("difficulty", [0, 3])
