@@ -3,8 +3,10 @@ Laws for the car and track XML files in assets/.
 """
 
 import os
+import struct
 import tomllib
 import zipfile
+import zlib
 from pathlib import Path
 
 import mujoco
@@ -137,3 +139,38 @@ def test_write_mjz_refuses_an_xml_that_includes_another(tmp_path):
     mujoco.MjSpec.from_file(str(model))  # a valid model
     with pytest.raises(ValueError, match="includes"):
         assets.write_mjz(model, tmp_path / "model.mjz")
+
+
+def _png(path: Path) -> None:
+    """Write a 2x2 grey PNG at path."""
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+    rows = b"".join(b"\x00" + b"\x80" * 6 for _ in range(2))  # 2 RGB pixels a row
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+
+def test_an_mjz_holds_the_six_images_of_a_cube_texture(tmp_path):
+    """A cube texture names its images in fileleft, fileright and so on,
+    which MjSpec keeps in cubefiles, not in file."""
+    sides = ["left", "right", "up", "down", "front", "back"]
+    (tmp_path / "sky").mkdir()
+    for side in sides:
+        _png(tmp_path / "sky" / f"{side}.png")
+    files = " ".join(f'file{side}="sky/{side}.png"' for side in sides)
+    model = tmp_path / "model.xml"
+    model.write_text(
+        f'<mujoco><asset><texture name="sky" type="cube" {files}/></asset></mujoco>'
+    )
+    out = tmp_path / "model.mjz"
+    assets.write_mjz(model, out)
+    names = set(zipfile.ZipFile(out).namelist())
+    assert names == {assets.MJZ_MODEL, *(f"sky/{side}.png" for side in sides)}
+    mujoco.MjSpec.from_zip(str(out)).compile()

@@ -122,7 +122,9 @@ def write_mjz(xml_path: str | os.PathLike[str], out: str | os.PathLike[str]) -> 
     if any(f.file for f in (*spec.hfields, *spec.skins)):
         raise ValueError(f"{xml_path} names a height field or skin file")
     named = [os.path.join(spec.compiler.meshdir, m.file) for m in spec.meshes]
-    named += [os.path.join(spec.compiler.texturedir, t.file) for t in spec.textures]
+    # A cube texture names its six images in cubefiles, not file.
+    textures = [f for t in spec.textures for f in (t.file, *t.cubefiles)]
+    named += [os.path.join(spec.compiler.texturedir, f) for f in textures]
     files = sorted({os.path.normpath(n) for n in named if os.path.basename(n)})
     for name in files:
         if os.path.isabs(name) or name.startswith(".."):
