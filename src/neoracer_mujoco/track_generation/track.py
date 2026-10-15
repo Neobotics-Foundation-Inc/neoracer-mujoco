@@ -78,9 +78,9 @@ def generate_track(seed: int, settings: TrackSettings) -> Generated:
     """
     random = np.random.default_rng(seed)
 
-    # Each attempt is a whole track drawn from scratch. Most are thrown away.
+    # Each attempt is a whole track drawn from scratch. Many are thrown away.
     for _ in range(settings.max_attempts):
-        # Scatter a ring of random points for the loop to be drawn through.
+        # Walk a random closed loop of points for the track to be drawn through.
         # This is the only place a track's shape is decided at random.
         points = draw_control_points(random, settings)
 
@@ -100,11 +100,13 @@ def generate_track(seed: int, settings: TrackSettings) -> Generated:
             )
 
             # Is it drivable? Corners not too tight, the loop not doubling
-            # back onto itself, total length in range. See reject.py.
+            # back onto itself, total length in range, counterclockwise. See
+            # reject.py.
             problems = find_problems(line, half_width, settings)
 
-            # There is no repair for the total length, so a new attempt starts.
-            if not problems.length_ok:
+            # There is no repair for the total length or the direction, so a
+            # new attempt starts.
+            if not problems.length_ok or not problems.counterclockwise:
                 break
 
             # Nothing wrong with it -- this is the track.
