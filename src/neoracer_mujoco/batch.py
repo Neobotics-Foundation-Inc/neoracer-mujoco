@@ -66,6 +66,8 @@ class Array(Protocol):
 
     def __getitem__(self, key: Any, /) -> Any: ...
 
+    def __mul__(self, other: float, /) -> Any: ...
+
 
 class Batch[S, A, M](Protocol):
     """A batch of nbatch copies of one scene. S is the batch state, A the
@@ -185,15 +187,17 @@ def check_one_per_row(items: Sequence[object], nbatch: int, what: str) -> None:
 
 
 def command[A: Array](model: mujoco.MjModel, car: Car, throttle: A, steer: A) -> A:
-    """The ctrl rows (nbatch, nu) that give the drive motor throttle (in
-    [-1, 1]) and the steer servo steer (rad, + = left). throttle and steer have shape
+    """The ctrl rows (nbatch, nu) that give the drive motor throttle, in
+    [-1, 1], as that fraction of its voltage limit (the battery), and the
+    steer servo steer (rad, + = left). throttle and steer have shape
     (nbatch,). Raise ValueError if model has actuators that are not the car's."""
     elements = (car.drive, car.steer)
     if model.nu != len(elements):
         raise ValueError(
             f"the model has {model.nu} actuators, the car has {len(elements)}"
         )
-    values = (throttle, steer)
+    voltage = float(model.bind_scalar(car.drive).ctrlrange[1])  # V
+    values = (throttle * voltage, steer)
     column = {
         int(model.bind_scalar(a).id): v for a, v in zip(elements, values, strict=True)
     }

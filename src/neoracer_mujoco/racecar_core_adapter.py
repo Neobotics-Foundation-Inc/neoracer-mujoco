@@ -69,14 +69,14 @@ class MujocoDrive:
     def __init__(self, scene: Scene, data: mujoco.MjData):
         self._car = scene.car
         self._data = data
-        self._max_speed = 1.0  # fraction of the throttle limit, 0..1
+        self._max_speed = 1.0  # fraction of the full throttle, 0..1
         self._limits = contract.actuator_limits(scene.model, scene.car)
 
     def set_speed_angle(self, speed: float, angle: float) -> None:
         speed = _clamp(speed, -1.0, 1.0)
         angle = _clamp(angle, -1.0, 1.0)
         command = ControlCommand(
-            throttle=speed * self._max_speed * self._limits.throttle,
+            throttle=speed * self._max_speed,
             # Negate: in racecar_core + angle = right; for steer_servo + = left.
             steer=-angle * self._limits.steer_rad,
         )

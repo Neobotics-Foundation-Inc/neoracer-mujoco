@@ -65,10 +65,10 @@ def test_car_tops_out_then_brakes_when_the_throttle_is_released():
     x0 = float(data.bind_scalar(body).xpos[0])
     state = _drive(scene, data, DriveState(), 1.0, 0.0, 150)  # 3 s full throttle
     assert float(data.bind_scalar(body).xpos[0]) - x0 > 1.0
-    # The motor's torque falls to 0 at its free speed, so the mean wheel spin
-    # (the drivetrain tendon's velocity) stays below it.
+    # The motor's torque falls to 0 at its free speed V / K, so the mean wheel
+    # spin (the drivetrain tendon's velocity) stays below it.
     motor = scene.model.bind_scalar(scene.car.drive)
-    free = motor.gainprm[0] / -motor.biasprm[2]  # rad/s
+    free = motor.ctrlrange[1] / motor.gainprm[1]  # rad/s
     assert data.bind_scalar(scene.car.drive).velocity[0] < free
     v_release = _speed(scene, data)
     _drive(scene, data, state, 0.0, 0.0, 200)  # 4 s hands off

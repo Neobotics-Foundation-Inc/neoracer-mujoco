@@ -10,7 +10,7 @@ tests all read it.
 
 Frame: +X forward, +Y left, +Z up.
 Actuators:
-  motor       = throttle of the one drive motor, in [-1, 1], + = forward
+  motor       = voltage at the one drive motor (V), + = forward
   steer_servo = steering target angle (rad), + = left
 Wheels:
   fl/fr/rl/rr_wheel = the geom of each wheel that touches the ground
@@ -70,7 +70,7 @@ class ActuatorLimits:
     """The ctrlrange limits of the drive and steer actuators. Each range is
     symmetric, so a command in [-1, 1] scales by one limit."""
 
-    throttle: float  # the motor's ctrlrange is [-throttle, throttle]
+    voltage: float  # V, the battery; the motor's ctrlrange is [-voltage, voltage]
     steer_rad: float  # rad; ctrlrange is [-steer_rad, steer_rad]
 
 
@@ -89,4 +89,4 @@ def actuator_limits(model: mujoco.MjModel, car: Car) -> ActuatorLimits:
         )
     if problems:
         raise ValueError("; ".join(problems))
-    return ActuatorLimits(throttle=float(high), steer_rad=float(steer_high))
+    return ActuatorLimits(voltage=float(high), steer_rad=float(steer_high))

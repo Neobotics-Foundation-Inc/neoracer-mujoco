@@ -231,7 +231,7 @@
     An open differential gives each wheel the same torque and turns the motor
     at the mean speed of the wheels. The fixed tendon below does both: its
     velocity is the mean wheel speed (rad/s), and a force f on it puts f/4 on
-    each wheel. Motor armature and drivetrain losses are not modelled.
+    each wheel. Drivetrain losses are not modelled.
     -->
     <tendon>
         <fixed name="drivetrain">
@@ -244,24 +244,24 @@
 
     <actuator>
         <!--
-        The motor as a DC motor behind its speed controller (ESC). ctrl is the
-        throttle in [-1, 1], the fraction of the battery voltage that the ESC
-        applies, + = forward. The torque at the wheels, all four together, is
+        The motor, as MuJoCo's DC motor model. ctrl is the voltage at its
+        terminals (V), + = forward: the speed controller (ESC) applies the
+        battery voltage times the throttle. Its torque is K (V - K w) / R for
+        a speed w, so it is largest from rest, falls to 0 at the free speed
+        V / K, and a voltage of 0 brakes. MuJoCo derives K and R from
+        nominal = "voltage stall_torque free_speed".
 
-            torque = stall * ctrl - (stall / free) * mean wheel speed
-
-        so it is largest from rest and falls to 0 at the free speed. gainprm
-        is stall and biasprm[2] is -stall / free.
-
-        PLACEHOLDERS until the motor is measured: stall = 0.765 N·m and
-        free = 141.18 rad/s are the playground's numbers, a drive force of
-        18 N and a top speed of 6 m/s on its 42.5 mm tyres. From the RS545's
-        stall torque and no-load speed at the pack voltage, with
-        ratio = (48 / 14) x the differential ratio:
-        stall = motor stall torque x ratio, free = motor no-load speed / ratio.
+        PLACEHOLDERS until the motor is measured: gear is 1, so the torque and
+        the speed are those at the wheels, and the playground's numbers give
+        0.765 N·m from rest and a free speed of 141.18 rad/s (a drive force of
+        18 N and a top speed of 6 m/s on its 42.5 mm tyres), on a 7.4 V pack.
+        With the RS545's datasheet, nominal becomes the motor's own voltage,
+        stall torque and no-load speed, gear the reduction (48 / 14) x the
+        differential ratio, and armature the rotor's inertia, which MuJoCo
+        reflects through gear squared.
         -->
-        <general name="motor" tendon="drivetrain" ctrlrange="-1 1"
-                 gainprm="0.765" biastype="affine" biasprm="0 0 -0.00541875"/>
+        <dcmotor name="motor" tendon="drivetrain" nominal="7.4 0.765 141.18"
+                 ctrlrange="-7.4 7.4"/>
 
         <!--
         Steering servo driving the virtual steer_input joint. The Ackermann

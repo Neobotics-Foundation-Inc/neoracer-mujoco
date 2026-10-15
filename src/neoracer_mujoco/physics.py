@@ -102,11 +102,11 @@ def apply_physics(model: mujoco.MjModel, scene: Scene, physics: Physics) -> None
     body, body0 = model.bind_scalar(car.body), nominal.bind_scalar(car.body)
     body.mass = body0.mass * physics.chassis_mass
     body.inertia = body0.inertia * physics.chassis_mass
-    # The motor's torque is gainprm[0] * ctrl + biasprm[2] * speed. Scaling
-    # both scales the torque at every speed and keeps the free speed.
+    # The DC motor's torque is K (V - K w) / R, with gainprm[0] = R and
+    # gainprm[1] = K. Dividing R scales the torque at every speed and keeps
+    # the free speed V / K.
     motor, motor0 = model.bind_scalar(car.drive), nominal.bind_scalar(car.drive)
-    motor.gainprm[0] = motor0.gainprm[0] * physics.motor_torque
-    motor.biasprm[2] = motor0.biasprm[2] * physics.motor_torque
+    motor.gainprm[0] = motor0.gainprm[0] / physics.motor_torque
     # A position servo's force is kp * (ctrl - q): gainprm[0] = kp and
     # biasprm[1] = -kp.
     servo, servo0 = model.bind_scalar(car.steer), nominal.bind_scalar(car.steer)

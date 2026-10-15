@@ -71,7 +71,8 @@ def apply_and_step(
     """Write the commands of state to data.ctrl and step the physics dt (s)."""
     car = scene.car
     data.bind_scalar(car.steer).ctrl = state.steer * p.max_steer
-    data.bind_scalar(car.drive).ctrl = state.throttle
+    voltage = scene.model.bind_scalar(car.drive).ctrlrange[1]  # V, full throttle
+    data.bind_scalar(car.drive).ctrl = state.throttle * voltage
     end = data.time + frame_dt(p, dt)
     while data.time < end:
         mujoco.mj_step(scene.model, data)

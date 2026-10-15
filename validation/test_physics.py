@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from neoracer_mujoco import Scene, assets, physics, sim
+from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import Physics, PhysicsRanges, Range
 from neoracer_mujoco.scene import find_car
 
@@ -37,8 +38,8 @@ def _drive(model: mujoco.MjModel, scene: Scene) -> np.ndarray:
     data = sim.settle(model)
     out = []
     for t in range(500):
-        data.bind_scalar(scene.car.drive).ctrl = 1.0  # full throttle
-        data.bind_scalar(scene.car.steer).ctrl = 0.3 * np.sin(t / 60)  # rad
+        steer = 0.3 * np.sin(t / 60)  # rad
+        sim.apply_command(scene.car, data, ControlCommand(throttle=1.0, steer=steer))
         mujoco.mj_step(model, data)
         out.append(data.sensordata.copy())
     return np.array(out)
@@ -55,8 +56,7 @@ def test_apply_physics_equals_compiling_the_changed_car():
     body.mass *= CHANGED.chassis_mass
     body.inertia = np.asarray(body.inertia) * CHANGED.chassis_mass
     motor = edited.actuator(car.drive.name)
-    motor.gainprm[0] *= CHANGED.motor_torque
-    motor.biasprm[2] *= CHANGED.motor_torque
+    motor.gainprm[0] /= CHANGED.motor_torque  # the DC motor's resistance
     servo = edited.actuator(car.steer.name)
     servo.gainprm[0] *= CHANGED.steer_stiffness
     servo.biasprm[1] *= CHANGED.steer_stiffness
@@ -104,7 +104,7 @@ def test_less_wheel_friction_means_more_slip():
     for friction in (0.05, 0.1, 0.2):
         model = _applied(scene, Physics(wheel_friction=friction, motor_torque=3.0))
         data = sim.settle(model)
-        data.bind_scalar(scene.car.drive).ctrl = 1.0  # full throttle
+        sim.apply_command(scene.car, data, ControlCommand(throttle=1.0, steer=0.0))
         for _ in range(250):  # 0.5 s
             mujoco.mj_step(model, data)
         surface = data.bind_scalar(scene.car.sensors.rl_wheel_vel).data[0] * 0.05

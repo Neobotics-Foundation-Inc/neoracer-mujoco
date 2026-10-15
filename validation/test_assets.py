@@ -15,6 +15,7 @@ import pytest
 from scenes import assert_car_rests, assert_keeps_car_solver_options
 
 from neoracer_mujoco import assets, sim
+from neoracer_mujoco.control.steering import ControlCommand
 
 TRACKS = assets.tracks()
 
@@ -68,8 +69,7 @@ def test_a_scene_without_visuals_senses_the_same(track):
     readings = []
     for scene in (full, bare):
         data = sim.settle(scene.model)
-        data.bind_scalar(scene.car.drive).ctrl = 1.0  # full throttle
-        data.bind_scalar(scene.car.steer).ctrl = 0.3  # rad
+        sim.apply_command(scene.car, data, ControlCommand(throttle=1.0, steer=0.3))
         steps = []
         for _ in range(300):  # 0.6 s
             mujoco.mj_step(scene.model, data)

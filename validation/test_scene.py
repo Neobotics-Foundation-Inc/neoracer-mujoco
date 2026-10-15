@@ -29,15 +29,17 @@ def test_reversed_car_has_another_layout():
 
 @pytest.mark.parametrize(("throttle", "steer"), [(0.7, -0.3), (-1.0, 0.4)])
 def test_apply_command_writes_each_named_actuator(throttle, steer):
-    """apply_command writes the throttle to the drive motor and the steer to
-    the steering servo, whatever their order in the XML."""
+    """apply_command writes the throttle, as that fraction of the motor's
+    voltage limit, to the drive motor and the steer to the steering servo,
+    whatever their order in the XML."""
     for scene in (assets.load(), reversed_car()):
         data = mujoco.MjData(scene.model)
         sim.apply_command(
             scene.car, data, ControlCommand(throttle=throttle, steer=steer)
         )
         motor = scene.spec.actuator(contract.DRIVE_ACTUATOR)
-        assert data.bind_scalar(motor).ctrl[0] == throttle
+        voltage = contract.actuator_limits(scene.model, scene.car).voltage
+        assert data.bind_scalar(motor).ctrl[0] == throttle * voltage
         steer_servo = scene.spec.actuator(contract.STEER_ACTUATOR)
         assert data.bind_scalar(steer_servo).ctrl[0] == steer
 

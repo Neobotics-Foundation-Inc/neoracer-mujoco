@@ -96,7 +96,7 @@ python3 -m pytest validation/ -v
 | Wheel mass | ~0.058 kg each | URDF — verify vs real wheel+tyre |
 | Total mass | 1.86 kg | URDF |
 | Steering | Ackermann (4th-order polynomial equality constraints) | |
-| Drive | One DC motor through open differentials to all four wheels | stall torque and free speed are PLACEHOLDERS |
+| Drive | One DC motor (MuJoCo's `dcmotor`) through open differentials to all four wheels | its constants are PLACEHOLDERS |
 | Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m) | ESTIMATED |
 | Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · susp pos · 8-beam LiDAR | |
 
@@ -113,7 +113,7 @@ The model has not yet been checked against recordings of the real car; issue #4 
 | Tire friction (1.5), joint damping and armature | estimated; the damping and armature keep the light wheels numerically stable |
 | Steering servo gain (kp = 25) | estimated, not fitted to the servo's torque or slew rate |
 | Sensor positions | placed by hand: the IMU at the chassis center, the LiDAR 8 cm above it |
-| Drive: one motor through open differentials, torque falling linearly from 0.765 N·m at rest to 0 at a wheel speed of 141 rad/s | the structure is the real car's; the two numbers are the playground's estimates (a drive force of 18 N and a top speed of 6 m/s on 42.5 mm tyres), until the RS545 and the differential ratio are measured |
+| Drive: one DC motor through open differentials, on a 7.4 V pack; at the wheels, 0.765 N·m from rest and a free speed of 141 rad/s | the structure is the real car's. The numbers are the playground's estimates (a drive force of 18 N and a top speed of 6 m/s on 42.5 mm tyres) until the RS545's datasheet, the battery and the differential ratio replace them; the gear is 1 and the rotor has no inertia until then |
 
 Known gaps that matter for sim-to-real work:
 
@@ -125,10 +125,10 @@ Known gaps that matter for sim-to-real work:
 
 | Actuator | Unit | Direction | Spec element |
 |---|---|---|---|
-| motor | throttle in [-1, 1] | + = forward | `scene.car.drive` |
+| motor | V, the voltage at its terminals | + = forward | `scene.car.drive` |
 | steer_servo | rad | + = left turn | `scene.car.steer` |
 
-The throttle is the fraction of the battery voltage that the speed controller applies. At a given throttle the motor's torque falls as the wheels speed up, so the car settles at a speed roughly proportional to the throttle, and a throttle of 0 brakes it.
+The motor is MuJoCo's `dcmotor`: its torque is K (V − K ω) / R at a speed ω, so it falls as the wheels speed up, the car settles at a speed roughly proportional to the voltage, and 0 V brakes it. Its ctrlrange is the battery voltage, which `contract.actuator_limits(model, car).voltage` reads. Code above the model speaks of a throttle in [-1, 1], the fraction of the battery voltage that the speed controller applies: `sim.apply_command` and `batch.command` multiply it by the battery voltage.
 
 Code writes an actuator by binding its element to the data, for example `data.bind_scalar(scene.car.steer).ctrl = 0.2` (see `scene.py`), so it does not depend on the order of the actuators in the XML. `sim.apply_command(scene.car, data, command)` writes a throttle and a steer.
 

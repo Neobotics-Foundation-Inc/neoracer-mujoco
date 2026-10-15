@@ -54,7 +54,7 @@ def test_canonical_wall_follower_runs_unmodified_against_mujoco():
 
     limits = contract.actuator_limits(scene.model, car)
     assert np.isfinite(data.ctrl).all()
-    assert abs(data.bind_scalar(car.drive).ctrl[0]) <= limits.throttle + 1e-6
+    assert abs(data.bind_scalar(car.drive).ctrl[0]) <= limits.voltage + 1e-6
     assert abs(data.bind_scalar(car.steer).ctrl[0]) <= limits.steer_rad + 1e-6
 
     x1 = float(data.bind_scalar(car.body).xpos[0])

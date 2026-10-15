@@ -44,7 +44,7 @@ def _read(scene: Scene, data: mujoco.MjData) -> sensors.SensorReadings:
 def test_actuator_limits_parse_every_car(scene):
     """Every car has a symmetric drive range and a symmetric steer range."""
     limits = contract.actuator_limits(scene.model, scene.car)
-    assert limits.throttle > 0 and limits.steer_rad > 0
+    assert limits.voltage > 0 and limits.steer_rad > 0
 
 
 @pytest.mark.parametrize(
@@ -58,6 +58,38 @@ def test_actuator_limits_reject_ranges_that_one_limit_cannot_scale(
     model.bind_scalar(scene.spec.actuator(actuator)).ctrlrange[:] = ctrlrange
     with pytest.raises(ValueError, match="ctrlrange"):
         contract.actuator_limits(model, scene.car)
+
+
+def _spin_joint(wheel: mujoco.MjsGeom) -> mujoco.MjsJoint:
+    """The joint that turns a wheel: the hinge about the axle (+Y) of the
+    wheel's body."""
+    hinges = [
+        j
+        for j in wheel.parent.joints
+        if j.type == mujoco.mjtJoint.mjJNT_HINGE and np.allclose(j.axis, [0, 1, 0])
+    ]
+    assert len(hinges) == 1, wheel.name
+    return hinges[0]
+
+
+def test_the_drivetrain_is_open_differentials(scene):
+    """Whatever the speeds of the wheels, the motor turns at their mean and
+    each wheel gets a quarter of the motor's force: the laws of open
+    differentials."""
+    model, car = scene.model, scene.car
+    data = sim.settle(model)
+    spins = [_spin_joint(w) for w in car.wheels]
+    for joint, speed in zip(spins, (10.0, 20.0, 35.0, -5.0), strict=True):
+        data.bind_scalar(joint).qvel = speed  # rad/s
+    sim.apply_command(car, data, ControlCommand(throttle=1.0, steer=0.0))
+    mujoco.mj_forward(model, data)
+    motor, motor_model = data.bind_scalar(car.drive), model.bind_scalar(car.drive)
+    gear = motor_model.gear[0]
+    assert motor.velocity[0] / gear == pytest.approx(np.mean([10, 20, 35, -5]))
+    force = motor.force[0] * gear  # on the drivetrain
+    assert force != 0.0
+    for joint in spins:
+        assert data.bind_scalar(joint).qfrc_actuator[0] == pytest.approx(force / 4)
 
 
 def test_actuator_contract(scene):

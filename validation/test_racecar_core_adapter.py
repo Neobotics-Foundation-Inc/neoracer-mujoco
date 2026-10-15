@@ -28,7 +28,7 @@ def _set_beam(scene: Scene, data: mujoco.MjData, name: str, meters: float) -> No
 
 
 def _drive_ctrl(scene: Scene, data: mujoco.MjData) -> float:
-    """The ctrl of the drive motor: the throttle."""
+    """The ctrl of the drive motor: its voltage (V)."""
     return float(data.bind_scalar(scene.car.drive).ctrl[0])
 
 
@@ -41,7 +41,7 @@ def _steer_ctrl(scene: Scene, data: mujoco.MjData) -> float:
 
 def test_drive_writes_clipped_and_scaled_commands(scene):
     """For each speed, angle and max_speed, set_speed_angle writes
-    clip(speed, -1, 1) * clip(max_speed, 0, 1) * throttle to the drive
+    clip(speed, -1, 1) * clip(max_speed, 0, 1) * voltage to the drive
     motor, and -clip(angle, -1, 1) * steer_rad to the steer servo. The
     minus sign changes the racecar_core steer sign to the contract.py sign."""
     limits = contract.actuator_limits(scene.model, scene.car)
@@ -54,9 +54,9 @@ def test_drive_writes_clipped_and_scaled_commands(scene):
         for speed in grid:
             for angle in grid:
                 drive.set_speed_angle(speed, angle)
-                throttle = np.clip(speed, -1.0, 1.0) * scale * limits.throttle
+                volts = np.clip(speed, -1.0, 1.0) * scale * limits.voltage
                 steer = -np.clip(angle, -1.0, 1.0) * limits.steer_rad
-                assert _drive_ctrl(scene, data) == pytest.approx(throttle, abs=1e-12)
+                assert _drive_ctrl(scene, data) == pytest.approx(volts, abs=1e-12)
                 assert _steer_ctrl(scene, data) == pytest.approx(steer, abs=1e-12)
 
 
@@ -64,8 +64,8 @@ def test_new_drive_uses_the_full_throttle(scene):
     """A new MujocoDrive has max_speed 1.0."""
     data = mujoco.MjData(scene.model)
     MujocoDrive(scene, data).set_speed_angle(1.0, 0.0)
-    throttle = contract.actuator_limits(scene.model, scene.car).throttle
-    assert _drive_ctrl(scene, data) == throttle
+    voltage = contract.actuator_limits(scene.model, scene.car).voltage
+    assert _drive_ctrl(scene, data) == voltage
 
 
 def test_stop_zeros_drive_and_steer(scene):
