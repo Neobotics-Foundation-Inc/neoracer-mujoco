@@ -24,8 +24,10 @@ def draw_control_points(random: np.random.Generator, settings: TrackSettings) ->
     deviation turn_jitter, so the walk turns both ways. Where several turns to
     the right come together, the loop bends inward: an S-bend or a chicane. The
     turns are shifted to add up to exactly one full turn to the left, so the
-    loop goes once around, counterclockwise. Subtracting the mean step from
-    every step makes the walk end where it started.
+    loop goes once around, counterclockwise, unless a turn of more than pi,
+    which points like a turn to the right, reverses it: find_problems rejects
+    those. Subtracting the mean step from every step makes the walk end where
+    it started.
 
     This is the only randomness in a track's shape -- everything downstream is
     deterministic given these points.

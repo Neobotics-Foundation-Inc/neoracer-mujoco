@@ -8,6 +8,7 @@ clearance and the geom count. Other modules depend on these conventions.
 
 import functools
 import itertools
+from dataclasses import replace
 from typing import assert_never
 
 import mujoco
@@ -31,6 +32,7 @@ from neoracer_mujoco.track_generation import (
     to_mjcf,
     to_spec,
 )
+from neoracer_mujoco.track_generation import track as track_module
 from neoracer_mujoco.track_generation.mjcf import (
     decimate_closed,
     lap_distance,
@@ -127,6 +129,19 @@ def test_generated_tracks_bend_both_ways(difficulty):
         assert turn == pytest.approx(2 * np.pi, abs=0.01)
     largest = max(max(_right_bends(t), default=0.0) for t in tracks)
     assert largest > (np.pi / 3 if difficulty == 3 else np.pi / 8)
+
+
+@pytest.mark.parametrize("clockwise", [False, True])
+def test_a_clockwise_loop_is_rejected(monkeypatch, clockwise):
+    """A walk can go around clockwise: 16 steps of -pi/8, with two of them
+    +15 pi/8 instead, sum to +2 pi. The same circle is a track
+    counterclockwise and no track clockwise."""
+    angle = np.linspace(0.0, 2 * np.pi, 16, endpoint=False)
+    circle = 8.0 * np.stack([np.cos(angle), np.sin(angle)], axis=1)  # 50 m
+    points = circle[::-1] if clockwise else circle
+    monkeypatch.setattr(track_module, "draw_control_points", lambda *_: points)
+    generated = generate_track(0, replace(settings_for_difficulty(1), max_attempts=2))
+    assert isinstance(generated, NoValidTrack) == clockwise
 
 
 def test_same_seed_gives_the_same_track():

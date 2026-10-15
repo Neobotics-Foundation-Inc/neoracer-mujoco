@@ -30,6 +30,9 @@ class Problems:
     too_curvy: Indices  # samples that are too tight to drive
     too_close: Pairs  # sample pairs that nearly touch in space
     length_ok: bool
+    # The loop turns left overall. A clockwise loop runs the other way around
+    # every track, so it is redrawn.
+    counterclockwise: bool
 
 
 # --- finding the problems --------------------------------------------------
@@ -84,13 +87,15 @@ def find_problems(
     line: Centerline, half_width: Samples, settings: TrackSettings
 ) -> Problems:
     """Run every rejection rule over a candidate track: curvature, near
-    self-touch, and total length inside the requested range."""
+    self-touch, total length inside the requested range, and direction."""
     return Problems(
         too_curvy=find_too_curvy_samples(line.curvature, half_width, settings),
         too_close=find_near_self_touches(line, half_width, settings),
         length_ok=(
             settings.min_total_length <= line.total_length <= settings.max_total_length
         ),
+        # A loop's curvature adds up to +2 pi counterclockwise, -2 pi clockwise.
+        counterclockwise=bool(line.curvature.sum() > 0),
     )
 
 
@@ -185,8 +190,8 @@ def repair(
 
     Nothing is fixed for certain -- the caller re-splines and re-checks, and
     gives up on this candidate after max_repairs_per_attempt passes. There is
-    no repair for total length: it is a whole-loop property with no single
-    control point to blame, so a too-long track is redrawn instead.
+    no repair for total length or direction: they are whole-loop properties
+    with no single control point to blame, so such a track is redrawn instead.
     """
     if len(problems.too_curvy) > 0:
         points = smooth_sharp_corners(points, problems.too_curvy, center)

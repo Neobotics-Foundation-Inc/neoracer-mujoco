@@ -100,11 +100,13 @@ def generate_track(seed: int, settings: TrackSettings) -> Generated:
             )
 
             # Is it drivable? Corners not too tight, the loop not doubling
-            # back onto itself, total length in range. See reject.py.
+            # back onto itself, total length in range, counterclockwise. See
+            # reject.py.
             problems = find_problems(line, half_width, settings)
 
-            # There is no repair for the total length, so a new attempt starts.
-            if not problems.length_ok:
+            # There is no repair for the total length or the direction, so a
+            # new attempt starts.
+            if not problems.length_ok or not problems.counterclockwise:
                 break
 
             # Nothing wrong with it -- this is the track.
