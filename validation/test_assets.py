@@ -64,6 +64,21 @@ def test_a_scene_without_visuals_senses_the_same(track):
     np.testing.assert_array_equal(readings[0], readings[1])
 
 
+@pytest.mark.parametrize("track", TRACKS, ids=os.path.basename)
+def test_a_scene_reloads_from_its_xml(track):
+    """The XML of a composed scene compiles to the same model, up to the six
+    significant digits that MuJoCo's XML writer keeps. Without visuals, the
+    scene names no mesh file that from_xml_string would have to find."""
+    scene = assets.compose(mujoco.MjSpec.from_file(track), visuals=False)
+    reloaded = mujoco.MjModel.from_xml_string(scene.spec.to_xml())
+    for name in dir(scene.model):
+        value = getattr(scene.model, name)
+        if isinstance(value, np.ndarray):
+            np.testing.assert_allclose(
+                getattr(reloaded, name), value, rtol=1e-5, atol=1e-6, err_msg=name
+            )
+
+
 def _mesh_geom(spec: mujoco.MjSpec, body: mujoco.MjsBody, name: str, mass: float):
     """Add to spec a tetrahedron mesh, and a geom of it on body that collides
     with nothing and has mass (kg)."""

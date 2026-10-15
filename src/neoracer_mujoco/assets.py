@@ -73,6 +73,11 @@ def compose(
     frame.pos = np.array(pos)
     if not visuals:
         delete_visuals(car)
+    # The car's root default class is "main", as the track's is. Attached
+    # with no prefix, it keeps that name, and to_xml writes it as a nested
+    # <default> with no class, which the XML parser rejects. A name of its
+    # own makes the scene's XML load again.
+    car.default.name = "car"
     frame.attach_body(car.body("car"), "", "")
     return compile_scene(scene)
 
