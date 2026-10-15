@@ -10,6 +10,7 @@ repo's assets/ instead.
 
 import glob
 import os
+import re
 import zipfile
 from importlib import resources
 
@@ -107,7 +108,16 @@ def write_mjz(xml_path: str | os.PathLike[str], out: str | os.PathLike[str]) -> 
 
     MuJoCo reads the archive with MjSpec.from_zip(out) in Python, and as
     "out/model.xml" in its WebAssembly build. The same files always give the
-    same bytes."""
+    same bytes. Raise ValueError for an XML that includes another XML, or
+    names a height field or skin file, or a file outside its folder: none of
+    ours does, and the archive would miss them."""
+    # MjSpec.from_file reads an <include>d file into the spec, so only the
+    # XML itself shows one, and the archive would not hold it. MuJoCo's
+    # parser accepts "--" in a comment, which Python's XML parsers refuse.
+    with open(xml_path, encoding="utf-8") as f:
+        text = re.sub(r"<!--.*?-->", "", f.read(), flags=re.DOTALL)
+    if re.search(r"<include\b", text):
+        raise ValueError(f"{xml_path} includes another XML file")
     spec = mujoco.MjSpec.from_file(str(xml_path))
     if any(f.file for f in (*spec.hfields, *spec.skins)):
         raise ValueError(f"{xml_path} names a height field or skin file")

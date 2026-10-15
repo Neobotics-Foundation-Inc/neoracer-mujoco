@@ -126,3 +126,14 @@ def test_the_car_mjz_holds_the_xml_and_its_meshes(tmp_path):
     assets.write_mjz(assets.DEFAULT_CAR, out)
     meshes = {m.file for m in mujoco.MjSpec.from_file(assets.DEFAULT_CAR).meshes}
     assert set(zipfile.ZipFile(out).namelist()) == {assets.MJZ_MODEL, *meshes}
+
+
+def test_write_mjz_refuses_an_xml_that_includes_another(tmp_path):
+    """MjSpec.from_file reads an included XML into the spec, so an archive
+    of the XML alone would not load."""
+    (tmp_path / "world.xml").write_text("<mujoco><worldbody/></mujoco>")
+    model = tmp_path / "model.xml"
+    model.write_text('<mujoco><include file="world.xml"/></mujoco>')
+    mujoco.MjSpec.from_file(str(model))  # a valid model
+    with pytest.raises(ValueError, match="includes"):
+        assets.write_mjz(model, tmp_path / "model.mjz")
