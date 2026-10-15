@@ -63,11 +63,19 @@ jobs:
           cd /tmp
           /tmp/wheel-env/bin/python -c "import neoracer_mujoco; neoracer_mujoco.load()"
 
+      # The car as one archive, for MuJoCo without Python, such as its
+      # WebAssembly build. It is written from the installed wheel, so it holds
+      # the wheel's XML and meshes, and it must load before it is published.
+      - name: Write neoracer.mjz from the installed wheel
+        run: |
+          /tmp/wheel-env/bin/python -c "from neoracer_mujoco import assets; assets.write_mjz(assets.DEFAULT_CAR, 'dist/neoracer.mjz')"
+          /tmp/wheel-env/bin/python -c "import mujoco; mujoco.MjSpec.from_zip('dist/neoracer.mjz').compile()"
+
       # A manual run creates the tag on the commit that this job built. GitHub
       # refuses to create a tag that already exists, so the run stops instead of
       # publishing under a tag that points at another commit. --verify-tag stops
       # gh from creating a tag itself.
-      - name: Attach the wheel to a GitHub Release
+      - name: Attach the wheel and neoracer.mjz to a GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
@@ -75,4 +83,4 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > /dev/null
           fi
-          gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --generate-notes
+          gh release create "$TAG" dist/*.whl dist/neoracer.mjz --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --generate-notes

@@ -37,6 +37,12 @@ from a GitHub Release. The wheel contains the car and track XMLs and the
 meshes, so it needs no Git LFS. In a clone, `load()` reads them from
 `assets/` at the repo root.
 
+Each release also holds `neoracer.mjz`: the car XML and its meshes in one
+archive, which MuJoCo loads without Python, for example in its WebAssembly
+build as `neoracer.mjz/model.xml`. `assets.write_mjz(xml_path, out)` writes
+such an archive of any XML in `assets/`, with the XML as written, so it
+compiles to the same model, bit for bit.
+
 ## Quick start
 
 ```sh
