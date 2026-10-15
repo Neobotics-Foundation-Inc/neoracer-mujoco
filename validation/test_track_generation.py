@@ -40,7 +40,7 @@ from neoracer_mujoco.track_generation.mjcf import (
 from neoracer_mujoco.truth import WALLS_BODY
 
 # The largest geom count of a composed scene: walls, floor and car. Over
-# difficulties 0-3 and seeds 0-7, the largest measured count is 305. One box for
+# difficulties 0-3 and seeds 0-7, the largest measured count is 298. One box for
 # each centerline sample gives about 4000. So this limit finds a decimation error
 # and still allows a long track.
 MAX_GEOMS = 600
@@ -56,7 +56,7 @@ def _generate(seed: int, settings: TrackSettings) -> Track:
             assert_never(other)
 
 
-# The generation of one track takes about a second, and several tests use the
+# The generation of one track takes up to a second, and several tests use the
 # same (seed, difficulty). The cache keeps the run time of this file short. The
 # cache is correct only because the generation is deterministic.
 # test_same_seed_gives_the_same_track checks that.
@@ -101,6 +101,34 @@ def test_generated_track_is_valid(seed, difficulty):
     assert left_edge(track).shape == track.center.shape
 
 
+def _right_bends(track: Track) -> list[float]:
+    """The angle (rad) of each stretch of the loop that turns right."""
+    turn = track.curvature * track.total_length / len(track.curvature)  # rad
+    right = turn < 0
+    start = int(np.argmin(right))  # a sample that turns left, if there is one
+    bends, angle = [], 0.0
+    for i in range(start, start + len(turn)):
+        if right[i % len(turn)]:
+            angle -= turn[i % len(turn)]
+        elif angle > 0:
+            bends.append(angle)
+            angle = 0.0
+    return [*bends, angle] if angle > 0 else bends
+
+
+@pytest.mark.parametrize("difficulty", [0, 3])
+def test_generated_tracks_bend_both_ways(difficulty):
+    """Each loop goes once around counterclockwise: its turns add up to one
+    full turn to the left. The loops are not convex: some stretches turn
+    right, and at difficulty 3 some by more than 60 degrees."""
+    tracks = [_track(seed, difficulty) for seed in range(4)]
+    for track in tracks:
+        turn = track.curvature.sum() * track.total_length / len(track.curvature)
+        assert turn == pytest.approx(2 * np.pi, abs=0.01)
+    largest = max(max(_right_bends(t), default=0.0) for t in tracks)
+    assert largest > (np.pi / 3 if difficulty == 3 else np.pi / 8)
+
+
 def test_same_seed_gives_the_same_track():
     """A new generation gives the same track as the cached one. A different
     seed gives a different track."""
@@ -124,8 +152,9 @@ def test_harder_difficulty_allows_tighter_turns():
     [
         {"samples": 0},
         {"oversample_factor": 0},
-        {"control_points_min": 20},
-        {"ring_radius_min": 0.0},
+        {"control_points_min": 30},
+        {"edge_length_min": 0.0},
+        {"turn_jitter": -0.1},
         {"min_total_length": 100.0},
         {"half_width_min": 0.9},
         {"max_attempts": 0},

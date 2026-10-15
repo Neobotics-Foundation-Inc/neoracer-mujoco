@@ -33,8 +33,8 @@ class Problems:
 
 
 # --- finding the problems --------------------------------------------------
-# Checked on the sampled geometry, not on the control points: a well-behaved
-# ring of control points still splines into a hairpin now and then.
+# Checked on the sampled geometry, not on the control points: the spline
+# between well-spaced control points can still bend too sharply.
 
 
 def find_too_curvy_samples(

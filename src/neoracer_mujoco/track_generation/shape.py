@@ -16,58 +16,27 @@ type Points = npt.NDArray[np.float64]  # shape (N, 2), meters
 type Samples = npt.NDArray[np.float64]  # shape (N,), one value per sample
 
 
-def spread_out_angles(angles: Samples, min_gap: float) -> Samples:
-    """Sort `angles` and push each one forward until it is at least `min_gap`
-    past the previous.
-
-    Two control points at nearly the same angle would sit almost on top of each
-    other and force the loop into a hairpin.
-    """
-    angles = np.sort(angles).copy()
-    for i in range(1, len(angles)):
-        if angles[i] - angles[i - 1] < min_gap:
-            angles[i] = angles[i - 1] + min_gap
-    return angles
-
-
-def smooth_around_loop(
-    values: npt.NDArray[np.float64], rounds: int
-) -> npt.NDArray[np.float64]:
-    """Blur a periodic sequence `rounds` times: each entry becomes half itself
-    plus a quarter of each neighbor, wrapping at the ends.
-
-    A low-pass filter, so it removes the sharp jumps that become tight corners.
-    Works on a 1D sequence of numbers or an (n, 2) sequence of points alike.
-    """
-    for _ in range(rounds):
-        values = 0.5 * values + 0.25 * (np.roll(values, 1, 0) + np.roll(values, -1, 0))
-    return values
-
-
 def draw_control_points(random: np.random.Generator, settings: TrackSettings) -> Points:
-    """Scatter the (n, 2) control points a track is drawn through, in loop order.
+    """Draw the (n, 2) control points a track is drawn through, in loop order.
 
-    Polar, not cartesian: each point is an angle plus a radius, so sorting by
-    angle puts them in loop order for free and the loop always encloses the
-    origin. Then the radii are smoothed so neighboring points sit at similar
-    distances and the loop does not zigzag in and out; each point gets an
-    independent random shove, which is what makes one track differ from the
-    next; and the points are smoothed to round off the corners that created.
+    A closed walk of n steps. Each step has a random length and turns from the
+    last by 2 pi / n, the turn of a regular polygon, plus noise of standard
+    deviation turn_jitter, so the walk turns both ways. Where several turns to
+    the right come together, the loop bends inward: an S-bend or a chicane. The
+    turns are shifted to add up to exactly one full turn to the left, so the
+    loop goes once around, counterclockwise. Subtracting the mean step from
+    every step makes the walk end where it started.
 
     This is the only randomness in a track's shape -- everything downstream is
     deterministic given these points.
     """
     s = settings
     count = int(random.integers(s.control_points_min, s.control_points_max + 1))
-    angles = spread_out_angles(
-        random.uniform(0, 2 * np.pi, count), s.min_angle_between_points
-    )
-    radii = random.uniform(s.ring_radius_min, s.ring_radius_max, count)
-    radii = smooth_around_loop(radii, s.radius_smoothing_rounds)
-
-    points = np.stack([radii * np.cos(angles), radii * np.sin(angles)], axis=1)
-    points += random.normal(0.0, s.point_jitter, points.shape)
-    return smooth_around_loop(points, s.point_smoothing_rounds)
+    turn = random.normal(0.0, s.turn_jitter, count)
+    heading = np.cumsum(turn + 2 * np.pi / count - turn.mean())
+    length = random.uniform(s.edge_length_min, s.edge_length_max, count)
+    steps = length[:, None] * np.stack([np.cos(heading), np.sin(heading)], axis=1)
+    return np.cumsum(steps - steps.mean(axis=0), axis=0)
 
 
 # --- the centerline --------------------------------------------------------

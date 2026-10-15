@@ -78,9 +78,9 @@ def generate_track(seed: int, settings: TrackSettings) -> Generated:
     """
     random = np.random.default_rng(seed)
 
-    # Each attempt is a whole track drawn from scratch. Most are thrown away.
+    # Each attempt is a whole track drawn from scratch. Many are thrown away.
     for _ in range(settings.max_attempts):
-        # Scatter a ring of random points for the loop to be drawn through.
+        # Walk a random closed loop of points for the track to be drawn through.
         # This is the only place a track's shape is decided at random.
         points = draw_control_points(random, settings)
 
