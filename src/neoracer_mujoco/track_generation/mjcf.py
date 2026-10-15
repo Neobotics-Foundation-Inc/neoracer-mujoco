@@ -115,9 +115,8 @@ def split_to(
     """kept, a list of decimate_closed over points, with the longest segments
     split until there are count segments. Each split takes the sample
     nearest the middle of the segment whose two halves both stay within
-    max_deviation of points; the first half is a prefix of the segment,
-    which decimate_closed already checked. Raise ValueError if kept already
-    has more than count segments, or if no segment can be split."""
+    max_deviation of points. Raise ValueError if kept already has more than
+    count segments, or if no segment can be split."""
     if len(kept) - 1 > count:
         raise ValueError(
             f"this wall needs {len(kept) - 1} boxes, more than boxes_per_wall={count}"
@@ -128,7 +127,10 @@ def split_to(
             start, end = kept[segment], kept[segment + 1]
             middle = (start + end) // 2
             for k in sorted(range(start + 1, end), key=lambda k: abs(k - middle)):
-                if _max_deviation(points, k, end) <= max_deviation:
+                halves = ((start, k), (k, end))
+                if all(
+                    _max_deviation(points, a, b) <= max_deviation for a, b in halves
+                ):
                     kept.insert(int(segment) + 1, k)
                     break
             else:

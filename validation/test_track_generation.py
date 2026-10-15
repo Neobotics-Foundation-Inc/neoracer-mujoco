@@ -290,6 +290,20 @@ def test_a_split_where_the_edge_bends_stays_within_max_deviation():
         assert mjcf._max_deviation(points, i, j) <= 0.01
 
 
+def test_repeated_splits_stay_within_max_deviation():
+    """A half made by one split was never checked by decimate_closed, so the
+    next split of it must check both of its halves too. Here the middle
+    samples would give a box 10.75 mm from the edge."""
+    y = [0, 0, 0, 0, 0.005, -0.006, 0.0045, 0, 0]
+    points = np.array([(0.062 * i, v) for i, v in enumerate(y)])
+    kept = decimate_closed(points, 0.5, 0.01)
+    assert kept == [0, 8, 9]
+    kept = split_to(points, kept, 5, max_deviation=0.01)
+    assert len(kept) == 6
+    for i, j in itertools.pairwise(kept):
+        assert mjcf._max_deviation(points, i, j) <= 0.01
+
+
 @pytest.mark.parametrize("difficulty", [0, 3])
 def test_lap_distance_finds_the_sample_across_the_corridor(difficulty):
     """A point on the centerline, or moved across the corridor by up to 80% of
