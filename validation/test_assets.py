@@ -43,6 +43,18 @@ def test_the_wheel_puts_assets_where_assets_py_looks():
     }
 
 
+def test_mujoco_is_pinned_to_one_version():
+    """pyproject.toml and requirements.txt name the same exact MuJoCo, and it
+    is the one installed: the WebAssembly build gives the same physics only
+    at the same version."""
+    root = Path(__file__).resolve().parent.parent
+    project = tomllib.loads((root / "pyproject.toml").read_text())["project"]
+    pins = [d for d in project["dependencies"] if d.startswith("mujoco")]
+    requirements = (root / "requirements.txt").read_text().splitlines()
+    assert pins == [line for line in requirements if line.startswith("mujoco")]
+    assert pins == [f"mujoco=={mujoco.__version__}"]
+
+
 @pytest.mark.parametrize("track", TRACKS, ids=os.path.basename)
 def test_a_scene_without_visuals_senses_the_same(track):
     """visuals=False deletes only meshes that collide with nothing, so every
