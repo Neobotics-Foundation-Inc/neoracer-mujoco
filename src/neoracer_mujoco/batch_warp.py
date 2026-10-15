@@ -57,13 +57,23 @@ class WarpBatch:
         self._initial = jax.jit(jax.vmap(self._one_env))
 
     def initial(
-        self, datas: Sequence[mujoco.MjData], physics: Sequence[Physics]
+        self,
+        datas: Sequence[mujoco.MjData],
+        scenes: Sequence[Scene],
+        physics: Sequence[Physics],
     ) -> WarpState:
         """A state whose environment i has the physics state of datas[i] and
         steps with physics[i]. Raise ValueError unless there is one of each
-        per row."""
+        per row and every scene is the batch's own.
+
+        Limit: MuJoCo Warp collides and casts rays against the geometry of the
+        model that put_model was given, so every environment steps on the
+        batch's scene. For another track, make another WarpBatch."""
         batch.check_one_per_row(datas, self.nbatch, "MjData")
+        batch.check_one_per_row(scenes, self.nbatch, "Scene")
         batch.check_one_per_row(physics, self.nbatch, "Physics")
+        if any(scene is not self.scene for scene in scenes):
+            raise ValueError("every row of a WarpBatch steps on the batch's scene")
         fields = ("time", "qpos", "qvel", "act", "ctrl", "history")
         # Stacked on the host, so each field goes to the device once.
         rows = {
