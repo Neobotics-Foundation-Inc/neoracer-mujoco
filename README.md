@@ -161,7 +161,7 @@ from neoracer_mujoco.physics import Physics
 scene = assets.load()
 cpu = batch.CpuBatch(scene, nbatch=64, nthread=4)
 # 64 copies of a car at rest, each with the physics of the XML
-state = cpu.initial([sim.settle(scene.model)] * 64, [Physics()] * 64)
+state = cpu.initial([sim.settle(scene.model)] * 64, [scene] * 64, [Physics()] * 64)
 throttle, steer = np.full(64, 0.1), np.zeros(64)  # N·m, rad
 ctrl = batch.command(scene.model, scene.car, throttle, steer)
 state, sensordata = cpu.step(state, ctrl, nstep=17)  # sensordata: (64, 17, n)
@@ -187,7 +187,9 @@ from neoracer_mujoco.physics import Physics
 
 scene = assets.load()
 gpu = batch_warp.WarpBatch(scene, nbatch=4096)
-state = gpu.initial([sim.settle(scene.model)] * 4096, [Physics()] * 4096)
+state = gpu.initial(
+    [sim.settle(scene.model)] * 4096, [scene] * 4096, [Physics()] * 4096
+)
 throttle, steer = jnp.full(4096, 0.1), jnp.zeros(4096)
 ctrl = batch.command(scene.model, scene.car, throttle, steer)
 state, sensordata = gpu.step(state, ctrl, nstep=17)
@@ -195,6 +197,31 @@ pos = batch.read(scene.model, sensordata[:, -1], scene.car.truth.pos)
 ```
 
 Warp computes collisions and constraints with its own code, so its results are close to the CPU version's, not equal: after ten env steps from rest, the car positions are within 1 mm. Without a GPU, JAX runs Warp on the CPU, correctly but much more slowly than `CpuBatch`.
+
+#### Many tracks at once
+
+`initial` takes one `Scene` per row, so a `CpuBatch` can step each row on its own track, as long as every scene has the sizes of the batch's. Generated tracks with a fixed number of wall boxes do (see `boxes_per_wall` under Track generation):
+
+```python
+from neoracer_mujoco import assets, batch, sim
+from neoracer_mujoco.physics import Physics
+from neoracer_mujoco.track_generation import (
+    WallParams,
+    generate_track,
+    settings_for_difficulty,
+    to_spec,
+)
+
+walls = WallParams(boxes_per_wall=192)
+# Seeds 0 to 7 all give a Track, not a NoValidTrack.
+tracks = [generate_track(seed, settings_for_difficulty(1)) for seed in range(8)]
+scenes = [assets.compose(to_spec(t, walls), visuals=False) for t in tracks]
+cpu = batch.CpuBatch(scenes[0], nbatch=8, nthread=4)
+state = cpu.initial([sim.settle(s.model) for s in scenes], scenes, [Physics()] * 8)
+cpu.close()
+```
+
+A `WarpBatch` steps every row on its own scene: MuJoCo Warp collides and casts rays against the geometry of the model it was made from, whatever geometry each environment gets later. For another track on Warp, make another `WarpBatch`.
 
 ### Physics randomization
 
@@ -260,6 +287,10 @@ match generate_track(7, settings_for_difficulty(2)):  # pure geometry, no MuJoCo
 `generate_track(seed, settings)` returns a `Track` or a `NoValidTrack`. A `Track` holds N evenly spaced samples around a closed loop, each with a centerline position, tangent, left normal, curvature and corridor half-width, plus the loop's total length. The same seed always gives the same track. `settings_for_difficulty` gives the limits for difficulty 0 (gentle and wide) to 3 (tight and narrow); use `dataclasses.replace` on the result to change other knobs in `TrackSettings`.
 
 Generation draws a candidate and checks it for corners tighter than the car can take, a loop that touches itself, and a total length outside the target range. Then it moves the control points behind each problem and checks again, instead of drawing the whole loop again. A candidate that cannot be repaired is thrown away and a new one is drawn. If every attempt fails, `generate_track` returns `NoValidTrack`. Then try another seed, a larger `max_attempts` or looser limits.
+
+To train on many tracks at once, a batch steps one track per row, and that needs every track to compile to a model of the same size. By default the walls use as few boxes as `segment_length` and `max_deviation` allow, so each track has its own number. `WallParams(boxes_per_wall=192)` fixes the number: it splits the longest boxes until each wall has 192, which keeps both limits. Over 240 tracks of every difficulty, a wall needed 56 to 161 boxes. `to_spec(track, WallParams(boxes_per_wall=192))` then gives the same sizes for every track.
+
+`lap_distance(track, xy)` gives how far along the centerline, in meters from the start, a point of the scene is, for the progress of a car around a generated track.
 
 | File | Role |
 |---|---|
