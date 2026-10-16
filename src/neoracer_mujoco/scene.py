@@ -36,7 +36,7 @@ class Car:
 
     body: mujoco.MjsBody  # the car's root body
     joint: mujoco.MjsJoint  # its free joint: qpos x, y, z, qw, qx, qy, qz
-    drive: mujoco.MjsActuator  # the drive motor (throttle in [-1, 1], + = forward)
+    drive: mujoco.MjsActuator  # the drive motor (terminal voltage in V, + = forward)
     steer: mujoco.MjsActuator  # the steering servo (rad, + = left)
     # the fl, fr, rl, rr wheel geoms that touch the ground
     wheels: tuple[mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom]
