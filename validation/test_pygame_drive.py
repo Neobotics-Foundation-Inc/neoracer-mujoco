@@ -72,8 +72,8 @@ def test_car_tops_out_then_brakes_when_the_throttle_is_released():
     assert data.bind_scalar(scene.car.drive).velocity[0] < free
     v_release = _speed(scene, data)
     _drive(scene, data, state, 0.0, 0.0, 200)  # 4 s hands off
-    # At zero throttle the motor brakes in proportion to its speed. The time
-    # constant is about 4.5 s, mostly the armature of the wheels.
+    # At zero throttle the motor brakes in proportion to its speed: from full
+    # speed the car loses half of it in about 0.4 s.
     assert _speed(scene, data) < 0.5 * v_release
 
 
@@ -93,5 +93,9 @@ def test_held_steer_input_sets_the_steer_ctrl(steer):
 def test_car_drives_forward_on_every_track(track):
     scene = assets.compose(mujoco.MjSpec.from_file(track))
     data = mujoco.MjData(scene.model)
+    x0 = float(data.bind_scalar(scene.car.joint).qpos[0])
+    # Distance, not the final speed: in 0.5 s at full throttle the car can
+    # reach the scenery ahead of it, such as ramp_course's entry lip, 0.45 m
+    # from the start.
     _drive(scene, data, DriveState(), 1.0, 0.0, 25)  # 0.5 s
-    assert float(data.bind_scalar(scene.car.joint).qvel[0]) > 0.1
+    assert float(data.bind_scalar(scene.car.joint).qpos[0]) - x0 > 0.1

@@ -255,17 +255,16 @@
         V / K, and a voltage of 0 brakes. MuJoCo derives K and R from
         nominal = "voltage stall_torque free_speed".
 
-        PLACEHOLDERS until the motor is measured: gear is 1, so the torque and
-        the speed are those at the wheels, and the playground's numbers give
-        0.765 N·m from rest and a free speed of 141.18 rad/s (a drive force of
-        18 N and a top speed of 6 m/s on its 42.5 mm tyres), on a 7.4 V pack.
-        With the RS545's datasheet, nominal becomes the motor's own voltage,
-        stall torque and no-load speed, gear the reduction (48 / 14) x the
-        differential ratio, and armature the rotor's inertia, which MuJoCo
-        reflects through gear squared.
+        The motor is the car's RS-545SH, from its datasheet at 12 V: 214 mN·m
+        stalled and 24,000 rpm (2513 rad/s) with no load. gear is the
+        reduction from the motor to the wheels, 10.55 (the firmware's
+        OSCORE_GEAR_RATIO_MILLI), and ctrlrange the 11.1 V battery. At the
+        wheels that is 2.09 N·m from rest and a free speed of 220 rad/s,
+        9.4 m/s on the 42.5 mm tyres. The rotor's inertia is not in the
+        datasheet, so the model leaves it out.
         -->
-        <dcmotor name="motor" tendon="drivetrain" nominal="7.4 0.765 141.18"
-                 ctrlrange="-7.4 7.4"/>
+        <dcmotor name="motor" tendon="drivetrain" nominal="12 .214 2513.27"
+                 gear="10.55" ctrlrange="-11.1 11.1"/>
 
         <!--
         The steering servo, as a DC motor with its own position loop: ctrl is
