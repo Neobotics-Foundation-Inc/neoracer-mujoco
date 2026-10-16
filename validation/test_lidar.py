@@ -37,6 +37,35 @@ def test_it_sees_three_quarters_of_a_turn_centered_on_the_front():
     assert not seen[LIDAR.slots // 2]  # straight behind
 
 
+def _wall_ahead(x: float) -> Scene:
+    """The car at the origin facing a wall x (m) ahead, with nothing else in
+    the scan plane."""
+    track = mujoco.MjSpec.from_string(
+        f"""<mujoco>
+        <option timestep="0.002777777777777778" integrator="implicitfast"
+                cone="elliptic" impratio="10"/>
+        <worldbody>
+        <geom type="plane" size="0 0 1"/>
+        <geom type="box" pos="{x + 0.05} 0 1" size=".05 2 1"/>
+        </worldbody></mujoco>"""
+    )
+    return assets.compose(track, visuals=False)
+
+
+@pytest.mark.parametrize(("x", "seen"), [(20.0, True), (30.0, False)])
+def test_it_sees_a_wall_up_to_25_m_away(x, seen):
+    """The LakiBeam1 reaches 25 m on a bright target."""
+    scene = _wall_ahead(x)
+    data = mujoco.MjData(scene.model)
+    mujoco.mj_forward(scene.model, data)
+    site_x = data.bind_scalar(scene.car.lidar).xpos[0]
+    (front,) = lidar.cast(LIDAR, scene.model, data, scene.car, np.array([0]))
+    if seen:
+        assert front == pytest.approx(x - site_x, abs=1e-6)
+    else:
+        assert front == lidar.NO_RETURN
+
+
 def test_a_turn_completes_every_twelve_steps_at_360_hz(corridor):
     model, car = corridor.model, corridor.car
     data = sim.settle(model)
