@@ -275,11 +275,14 @@
         6 V. The motor's torque falls as it speeds up, so it turns the wheels
         at most at its free speed, as a real servo does.
 
-        PLACEHOLDERS until the car's servo is measured: a standard servo at
-        6 V, 1.47 N·m (15 kg·cm) stalled and 0.1 s per 60 degrees (a free
-        speed of 10.5 rad/s), with no gear between it and the wheels. With
-        kp = 50 V/rad and kd = 1 V·s/rad it reaches 90% of a full-lock step
-        in 0.092 s, near the playground's slew of 8 rad/s.
+        The servo is the car's SPT5435LV-180W, from its datasheet at 6.0 V:
+        35 kg·cm (3.43 N·m) stalled and 0.14 s per 60 degrees (7.48 rad/s).
+        Its horn turns 90 degrees over the firmware's 1000 to 2000 us, and the
+        car's driver stops it at 0.625 of that swing, 28.1 degrees, where the
+        wheels reach full lock: steer_input then turns 25.2 degrees, so the
+        horn turns 1.116 times as far. nominal gives the servo at steer_input,
+        through that linkage: 3.83 N·m and 6.70 rad/s. With kp = 50 V/rad and
+        kd = 1 V·s/rad it reaches 90% of a full-lock step in 0.072 s.
 
         ctrlrange is full lock: the car's front wheels stop at 30 degrees
         (measured on the car, 2026-10-16), and 0.4403 rad of steer_input puts
@@ -287,7 +290,7 @@
         wheel then turns 21.7 degrees.
         -->
         <dcmotor name="steer_servo" joint="steer_input" input="pos"
-                 nominal="6 1.47 10.5" controller="50 0 1 0 0 6"
+                 nominal="6 3.83 6.70" controller="50 0 1 0 0 6"
                  ctrlrange="-.4403 .4403"/>
     </actuator>
 
