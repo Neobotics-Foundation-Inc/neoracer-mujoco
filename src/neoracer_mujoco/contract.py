@@ -36,6 +36,9 @@ EXPECTED_ACTUATORS = (DRIVE_ACTUATOR, STEER_ACTUATOR)
 WHEEL_GEOMS = ("fl_wheel", "fr_wheel", "rl_wheel", "rr_wheel")
 
 # --- sensors ----------------------------------------------------------------
+# The site at the centre of the spinning LiDAR (lidar.py). Its +X axis is the
+# scan's bearing 0, and its XY plane is the plane the scan sweeps.
+LIDAR_SITE = "lidar_mount"
 REQUIRED_SENSORS = (
     "imu_accel",
     "imu_gyro",
