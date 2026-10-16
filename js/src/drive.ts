@@ -38,7 +38,7 @@ export function actuatorLimits(model: MjModel, car: Car): Limits {
 /** Write command to data.ctrl: the throttle as that fraction of the battery voltage. */
 export function applyCommand(scene: Scene, data: MjData, command: Command): void {
   const { car, model } = scene;
-  data.ctrl[car.drive] = command.throttle * actuatorLimits(model, car).voltage;
+  data.ctrl[car.drive] = command.throttle * model.actuator_ctrlrange[2 * car.drive + 1]; // V
   data.ctrl[car.steer] = command.steer;
 }
 

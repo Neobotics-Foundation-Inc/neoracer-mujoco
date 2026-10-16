@@ -122,12 +122,17 @@ test('an encoder that the firmware cannot be is refused at the start', () => {
   }
 });
 
-test('a car whose ranges are not symmetric about 0 has no limits', () => {
+test('a car whose ranges are not symmetric about 0 has no limits, but takes direct commands', () => {
   for (const [actuator, range] of [['steer_servo', '-.2 .4'], ['motor', '0 7.4']]) {
     const pattern = new RegExp(`(<[a-z]+ name="${actuator}"[^>]*?ctrlrange=")[^"]*(")`, 's');
     const xml = CAR_XML.replace(pattern, `$1${range}$2`);
     assert.notEqual(xml, CAR_XML, actuator);
     const odd = compose(mj, trackXml, [0, 0, 0], xml);
     assert.throws(() => actuatorLimits(odd.model, odd.car), /ctrlrange/, actuator);
+    // A direct command needs no symmetric range, as sim.apply_command.
+    const data = new mj.MjData(odd.model);
+    applyCommand(odd, data, { throttle: 0.5, steer: 0.1 });
+    assert.equal(data.ctrl[odd.car.steer], 0.1);
+    assert.equal(data.ctrl[odd.car.drive], 0.5 * odd.model.actuator_ctrlrange[2 * odd.car.drive + 1]);
   }
 });
