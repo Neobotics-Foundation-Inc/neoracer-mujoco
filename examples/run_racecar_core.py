@@ -69,24 +69,18 @@ def build_racecar(scene: Scene, steps: int) -> tuple[mujoco.MjData, MujocoRaceca
     return data, MujocoRacecar(scene, data, max_steps=steps)
 
 
-class _SimTime(types.ModuleType):
-    """The time module, with its clocks reading the simulated time of rc."""
-
-    def __init__(self, rc: MujocoRacecar) -> None:
-        super().__init__("time")
-        self._rc = rc
-
-    def __getattr__(self, name: str) -> object:
-        return getattr(time, name)
-
-    def time(self) -> float:
-        return self._rc.clock()
-
-    def monotonic(self) -> float:
-        return self._rc.clock()
-
-    def perf_counter(self) -> float:
-        return self._rc.clock()
+def _sim_time(rc: MujocoRacecar) -> types.ModuleType:
+    """The time module, with its clocks reading the simulated time of rc.
+    A copy of the module's names, so `from time import *` gets them too."""
+    module = types.ModuleType("time", time.__doc__)
+    module.__dict__.update(
+        (name, value) for name, value in vars(time).items() if not name.startswith("_")
+    )
+    for name in ("time", "monotonic", "perf_counter"):
+        module.__dict__[name] = rc.clock
+    for name in ("time_ns", "monotonic_ns", "perf_counter_ns"):
+        module.__dict__[name] = lambda: round(rc.clock() * 1e9)
+    return module
 
 
 @contextlib.contextmanager
@@ -96,8 +90,8 @@ def controller_imports(rc: MujocoRacecar, controller_dir: Path) -> Generator[Non
     In the block, `import racecar_core` gives a fake module whose
     create_racecar() returns rc, and controller_dir is first on sys.path.
     In a file in controller_dir, `import time` gives the time module with
-    its clocks (time, monotonic and perf_counter) reading the simulated
-    time, rc.clock(). A controller that measures its frame time with them
+    its clocks (time, monotonic, perf_counter and their _ns forms) reading
+    the simulated time, rc.clock(). A controller that measures its frame time with them
     then sees the physics step, whatever the speed of the machine. Any other
     module that imports time, as a library does, gets the real one, so its
     timeouts keep running while the physics waits.
@@ -122,7 +116,7 @@ def controller_imports(rc: MujocoRacecar, controller_dir: Path) -> Generator[Non
     shim = types.ModuleType("racecar_core")
     shim.__dict__["create_racecar"] = lambda *args, **kwargs: rc
     sys.modules["racecar_core"] = shim
-    sim_time = _SimTime(rc)
+    sim_time = _sim_time(rc)
     real_import = builtins.__import__
 
     def import_(

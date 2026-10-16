@@ -25,8 +25,8 @@ def _steps(model: mujoco.MjModel, seconds: float) -> int:
 def _drive(
     scene: Scene, throttle: float, steer: float, seconds: float
 ) -> mujoco.MjData:
-    """Settle the car, then hold throttle (N·m per wheel) and steer (rad)
-    for `seconds`. Return the MjData."""
+    """Settle the car, then hold throttle (a fraction of the battery
+    voltage) and steer (rad) for `seconds`. Return the MjData."""
     data = sim.settle(scene.model)
     sim.apply_command(scene.car, data, ControlCommand(throttle=throttle, steer=steer))
     for _ in range(_steps(scene.model, seconds)):
