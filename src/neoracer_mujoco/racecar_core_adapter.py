@@ -215,12 +215,14 @@ class MujocoRacecar:
     changes. Only its `import racecar_core` must give this class.
 
     go() runs each physics step in two halves. mj_step1 brings the
-    positions, velocities and sensors up to data.time; the encoder counts
-    the step, update() reads the car as it is at that time and sets its
-    command, and mj_step2 integrates the step with that command. So
-    update() reads the sensors after the physics step that its last command
-    caused, as in RacecarSim (Unity steps a frame, then calls Python), and
-    no reading lags the car by a step, as it does after a whole mj_step.
+    positions, velocities and sensors up to data.time, and the encoder and
+    the LiDAR count the step that led there; update() reads the car as it
+    is at that time and sets its command, and mj_step2 integrates the next
+    step with that command. go() returns after the first half of a step,
+    with every step counted and the sensors up to date. So update() reads
+    the sensors after the physics step that its last command caused, as in
+    RacecarSim (Unity steps a frame, then calls Python), and no reading
+    lags the car by a step, as it does after a whole mj_step.
 
     max_steps: if None (the default), go() runs until the process stops, as
     on the real car. If it is an int, go() returns after that many steps,
@@ -279,11 +281,8 @@ class MujocoRacecar:
         program.start()
         slow_countdown = self._update_slow_time
         step = 0
+        mujoco.mj_step1(self._model, self._data)
         while self._max_steps is None or step < self._max_steps:
-            mujoco.mj_step1(self._model, self._data)
-            if step > 0:  # the first half-step leaves the car where it started
-                self.lidar.advance()
-                self.physics.advance()
             program.update()
             if program.update_slow is not None:
                 slow_countdown -= self._dt
@@ -291,4 +290,9 @@ class MujocoRacecar:
                     program.update_slow()
                     slow_countdown = self._update_slow_time
             mujoco.mj_step2(self._model, self._data)
+            # The first half of the next step: the sensors at the new time,
+            # so the encoder and the LiDAR count the step just finished.
+            mujoco.mj_step1(self._model, self._data)
+            self.lidar.advance()
+            self.physics.advance()
             step += 1
