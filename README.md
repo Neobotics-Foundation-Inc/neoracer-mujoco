@@ -99,7 +99,7 @@ python3 -m pytest validation/ -v
 | Steering | Ackermann (4th-order polynomial equality constraints) | |
 | Drive | One DC motor (MuJoCo's `dcmotor`) through open differentials to all four wheels | its constants are PLACEHOLDERS |
 | Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m), preloaded to rest at the CAD ride height | ESTIMATED |
-| Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · susp pos · 8-beam LiDAR | |
+| Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · drivetrain angle · susp pos · 8-beam LiDAR | |
 | Time step | 1/360 s, with the implicitfast integrator: 12 steps to a 30 Hz LiDAR scan, 6 to a 60 Hz frame | every track sets the same `<option>` |
 
 ### How closely the model matches the real car
@@ -349,6 +349,8 @@ stable API.
   `mjpython -m examples.track_centering_demo --viewer`.
 
 The package reads the sensors, not the examples. To log the IMU, wheel, steer, suspension and LiDAR values of a scene, call `sensors.read(scene.car.sensors, data)` at each step. `scene.car.sensors` holds the sensor elements of the scene's MjSpec, and `read` binds each one to the data. `lidar_ranges` and `motor_encoder_rad_s` read from the result.
+
+`motor_encoder_rad_s` is the raw speed of the drivetrain. The car reports a different speed: every 20 ms its firmware turns the motor encoder's count over the window into the tyre's surface speed and filters it, 0.95 of the new window to 0.05 of the last value. `encoder.py` computes that speed from the `drive_pos` sensor, one physics step at a time (`encoder.start` and `encoder.step`, with the window and the filter in `EncoderParams`), and the racecar_core adapter returns it from `rc.physics.get_encoder_speed()`.
 
 Add your own demos here — a pure-pursuit follower, a data recorder, etc. — using
 `run.py` as the template for the load → step → control loop.

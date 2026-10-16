@@ -48,6 +48,7 @@ REQUIRED_SENSORS = (
     "fr_wheel_vel",
     "rl_wheel_vel",
     "rr_wheel_vel",
+    "drive_pos",
     "fl_susp_pos",
     "fr_susp_pos",
     "rl_susp_pos",
