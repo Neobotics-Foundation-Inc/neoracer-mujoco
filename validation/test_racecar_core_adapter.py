@@ -7,7 +7,7 @@ physics. The physics tests check the throttle sign and the steer sign on the
 moving car.
 
 racecar_core signs: + speed = forward, + angle = right. contract.py signs:
-+ torque = forward, + steer = left.
++ throttle = forward, + steer = left.
 """
 
 import mujoco
