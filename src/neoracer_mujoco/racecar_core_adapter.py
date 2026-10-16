@@ -130,8 +130,8 @@ class MujocoPhysics:
     """The part of racecar_core.Physics that the simulator has: the speed
     that the car's firmware reports from its motor encoder (encoder.py).
 
-    MujocoRacecar.go() calls advance() after each physics step, as the
-    firmware samples the encoder whatever the program does.
+    MujocoRacecar.go() calls advance() once a step, when the sensors are up
+    to date, as the firmware samples the encoder whatever the program does.
     """
 
     def __init__(self, scene: Scene, data: mujoco.MjData):
@@ -217,9 +217,13 @@ class MujocoRacecar:
     neoracer-labs/ultimate-wall-follower/wall_follower.py, runs without
     changes. Only its `import racecar_core` must give this class.
 
-    go() steps the physics and then calls update(), in the same order as
-    RacecarSim (Unity steps a frame, then calls Python). So update() reads
-    the sensors after the physics step that its last command caused.
+    go() runs each physics step in two halves. mj_step1 brings the
+    positions, velocities and sensors up to data.time; the encoder counts
+    the step, update() reads the car as it is at that time and sets its
+    command, and mj_step2 integrates the step with that command. So
+    update() reads the sensors after the physics step that its last command
+    caused, as in RacecarSim (Unity steps a frame, then calls Python), and
+    no reading lags the car by a step, as it does after a whole mj_step.
 
     max_steps: if None (the default), go() runs until the process stops, as
     on the real car. If it is an int, go() returns after that many steps,
@@ -234,6 +238,10 @@ class MujocoRacecar:
         max_steps: int | None = None,
         held_buttons: Iterable[MujocoController.Button] = (MujocoController.Button.RB,),
     ):
+        # After mj_step, the sensors describe the state before its
+        # integration. mj_forward brings them up to data.time, so the
+        # encoder starts from the angle the drivetrain has now.
+        mujoco.mj_forward(scene.model, data)
         self.drive = MujocoDrive(scene, data)
         self.lidar = MujocoLidar(scene, data)
         self.physics = MujocoPhysics(scene, data)
@@ -275,12 +283,14 @@ class MujocoRacecar:
         slow_countdown = self._update_slow_time
         step = 0
         while self._max_steps is None or step < self._max_steps:
-            mujoco.mj_step(self._model, self._data)
-            self.physics.advance()
+            mujoco.mj_step1(self._model, self._data)
+            if step > 0:  # the first half-step leaves the car where it started
+                self.physics.advance()
             program.update()
             if program.update_slow is not None:
                 slow_countdown -= self._dt
                 if slow_countdown < 0:
                     program.update_slow()
                     slow_countdown = self._update_slow_time
+            mujoco.mj_step2(self._model, self._data)
             step += 1

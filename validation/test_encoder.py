@@ -6,9 +6,11 @@ it in the racecar_core adapter.
 
 import itertools
 
+import mujoco
+import numpy as np
 import pytest
 
-from neoracer_mujoco import encoder, sim
+from neoracer_mujoco import Scene, encoder, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
 from neoracer_mujoco.sensors import WHEEL_RADIUS
@@ -73,3 +75,40 @@ def test_the_adapter_reads_the_car_speed(scene):
     ground = float(data.bind_scalar(car.sensors.imu_linvel).data[0])  # m/s
     assert ground > 1.0
     assert rc.physics.get_encoder_speed() == pytest.approx(ground, rel=0.05)
+
+
+def _wheel_angle(scene: Scene, data: mujoco.MjData) -> float:
+    """The mean of the four wheels' spin angles (rad), read from qpos: the
+    hinge about the axle (+Y) of each wheel's body."""
+    spins = [
+        j
+        for wheel in scene.car.wheels
+        for j in wheel.parent.joints
+        if j.type == mujoco.mjtJoint.mjJNT_HINGE and np.allclose(j.axis, [0, 1, 0])
+    ]
+    return float(np.mean([data.bind_scalar(j).qpos[0] for j in spins]))
+
+
+def test_the_first_window_measures_the_turn_of_the_wheels_in_it(scene):
+    """The car speeds up from rest, on data that mj_forward last updated.
+    The first speed the encoder reports is alpha times the wheels' turn
+    between the first update() and the update() that closes the window,
+    over that time: the encoder reads the angle the car has at each
+    update(), not the one of a step before."""
+    model, car = scene.model, scene.car
+    data = sim.settle(model)
+    mujoco.mj_forward(model, data)
+    rc = MujocoRacecar(scene, data, max_steps=round(0.1 / model.opt.timestep))
+    seen = []  # (s, rad, m/s) at each update()
+    command = ControlCommand(throttle=1.0, steer=0.0)
+    rc.set_start_update(
+        lambda: sim.apply_command(car, data, command),
+        lambda: seen.append(
+            (data.time, _wheel_angle(scene, data), rc.physics.get_encoder_speed())
+        ),
+    )
+    rc.go()
+    t0, a0, _ = seen[0]
+    t1, a1, first = next(x for x in seen if x[2] != 0.0)
+    alpha = encoder.EncoderParams().alpha
+    assert first == pytest.approx(alpha * (a1 - a0) * WHEEL_RADIUS / (t1 - t0))
