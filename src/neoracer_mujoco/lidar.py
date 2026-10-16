@@ -15,9 +15,11 @@ racecar_core scan. It holds the distance (m) to the first geom along its
 ray, or NO_RETURN (-1, as a rangefinder reads) for a blocked slot or no geom
 within range. LidarParams holds the numbers.
 
-PLACEHOLDERS until the LiDAR model is known: the range and the blocked
-sector, centered on the rear. The LiDAR's noise, minimum range and missed
-returns are not modelled.
+The LiDAR is the car's Richbeam LakiBeam1: 30 Hz, 0.25 degrees a sample,
+270 degrees seen and the rear 90 blocked, 25 m of range on a bright target
+(at least 15 m on a dark one, 10% reflectivity). The model sees every geom
+out to 25 m; its noise (2 cm), minimum range and missed returns are not
+modelled.
 """
 
 import functools
@@ -42,10 +44,8 @@ class LidarParams:
 
     slots: int = 1440  # slots a turn
     scan_rate: float = 30.0  # Hz, turns a second
-    max_range: float = 12.0  # m, PLACEHOLDER
-    field: float = (
-        1.5 * math.pi
-    )  # rad of bearings it sees, centered on the front; PLACEHOLDER
+    max_range: float = 25.0  # m, the LakiBeam1's range on a bright target
+    field: float = 1.5 * math.pi  # rad of bearings it sees, centered on the front
 
     def __post_init__(self) -> None:
         if self.slots < 1:
