@@ -222,6 +222,22 @@ def _steer_angle(scene: Scene, data: mujoco.MjData) -> float:
     return float(data.bind_scalar(scene.car.sensors.steer_cmd_pos).data[0])  # rad
 
 
+def test_the_servo_is_the_spt5435lv_on_5_v(scene):
+    """At most 5 V, the servo stalls at 30 kg·cm and turns 60 degrees in
+    0.157 s at its horn: its datasheet (35 kg·cm and 0.14 s at 6.0 V, 29 kg·cm
+    and 0.16 s at 4.8 V) at 5 V. The horn turns 28.125 degrees, 0.625 of its
+    45 to a side, as steer_input turns to full lock."""
+    r, k, *_, vclamp = scene.model.actuator("steer_servo").gainprm[:8]
+    lock = scene.model.actuator("steer_servo").ctrlrange[1]
+    linkage = math.radians(0.625 * 45) / lock  # the horn turns ±45 degrees
+    w = (5.0 - 4.8) / (6.0 - 4.8)
+    stall = (29 + w * (35 - 29)) * 9.80665 / 100  # N·m at the horn
+    free = math.radians(60) / (0.16 + w * (0.14 - 0.16))  # rad/s at the horn
+    assert vclamp == 5.0
+    assert vclamp * k / r == pytest.approx(stall * linkage, rel=1e-3)
+    assert vclamp / k == pytest.approx(free / linkage, rel=1e-3)
+
+
 @pytest.mark.parametrize("hz", [500, 360])
 def test_the_servo_turns_at_a_servos_speed_and_holds_steady(scene, hz):
     """A servo takes tens of ms to reach full lock and then holds it.
