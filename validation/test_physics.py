@@ -12,7 +12,7 @@ import mujoco
 import numpy as np
 import pytest
 
-from neoracer_mujoco import Scene, assets, physics, sim
+from neoracer_mujoco import Scene, assets, physics, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import Physics, PhysicsRanges, Range
 from neoracer_mujoco.scene import find_car
@@ -107,7 +107,8 @@ def test_less_wheel_friction_means_more_slip():
         sim.apply_command(scene.car, data, ControlCommand(throttle=1.0, steer=0.0))
         for _ in range(250):  # 0.5 s
             mujoco.mj_step(model, data)
-        surface = data.bind_scalar(scene.car.sensors.rl_wheel_vel).data[0] * 0.05
+        spin = data.bind_scalar(scene.car.sensors.rl_wheel_vel).data[0]  # rad/s
+        surface = spin * sensors.WHEEL_RADIUS
         speed = data.bind_scalar(scene.car.sensors.imu_linvel).data[0]
         slips.append(surface - speed)  # m/s
     assert slips[0] > slips[1] > slips[2] > 0

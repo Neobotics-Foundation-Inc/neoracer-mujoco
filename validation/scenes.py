@@ -58,7 +58,8 @@ def assert_car_rests(scene: Scene) -> None:
     control: it does not fall through and it does not move."""
     data = sim.settle(scene.model)
     z = float(data.bind_scalar(scene.car.body).xpos[2])
-    assert 0.05 < z < 0.2, f"car z = {z:.3f} m"
+    # The body frame is on the axle line, which rests near the tyre radius.
+    assert 0.03 < z < 0.1, f"car z = {z:.3f} m"
     assert (
         float(np.linalg.norm(data.bind_scalar(scene.car.joint).qvel[:3])) < 0.05
     )  # m/s

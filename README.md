@@ -87,17 +87,18 @@ python3 -m pytest validation/ -v
 
 | Property | Value | Source |
 |---|---|---|
-| Wheelbase | 288 mm | URDF (joint origins) |
-| Track width | 235 mm | URDF (joint origins) |
-| Wheel radius | 50 mm | ESTIMATED — STL bbox |
-| Chassis mass | 1.62 kg | URDF (base_link) |
-| Chassis CoM | ~9 mm ahead of axle center, z≈0.067 m | URDF, re-anchored to axle plane |
-| Chassis inertia | diag (0.00238, 0.00584, 0.00701) kg·m² | URDF (base_link) |
-| Wheel mass | ~0.058 kg each | URDF — verify vs real wheel+tyre |
-| Total mass | 1.86 kg | URDF |
+| Wheelbase | 287.6 mm | production CAD model, measured |
+| Track width | 224 mm | production CAD model, measured |
+| Wheel radius | 42.5 mm | spec (85 mm tyres) |
+| Chassis box | 481 × 241 × 184 mm, from the bottom of the tub to the top of the LiDAR | production CAD model, measured |
+| Chassis mass | 2.755 kg | spec total less the wheels |
+| Chassis CoM | above the middle of the wheelbase, 18.9 mm above the axles | URDF height |
+| Chassis inertia | diag (0.00404, 0.00992, 0.01191) kg·m² | URDF (base_link), scaled by mass |
+| Wheel mass | 58.7 g each | URDF — verify vs real wheel+tyre |
+| Total mass | 3.0 kg | spec |
 | Steering | Ackermann (4th-order polynomial equality constraints) | |
 | Drive | One DC motor (MuJoCo's `dcmotor`) through open differentials to all four wheels | its constants are PLACEHOLDERS |
-| Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m) | ESTIMATED |
+| Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m), preloaded to rest at the CAD ride height | ESTIMATED |
 | Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · susp pos · 8-beam LiDAR | |
 
 ### How closely the model matches the real car
@@ -106,20 +107,21 @@ The model has not yet been checked against recordings of the real car; issue #4 
 
 | Part | Where the value comes from |
 |---|---|
-| Wheelbase and track width | the CAD model, through the URDF |
-| Chassis mass, center of mass and inertia; wheel masses | the URDF; the wheel masses still need a check against a real wheel and tire |
-| Wheel radius | estimated from the bounding box of the wheel mesh |
-| Suspension stiffness and damping | estimated, tuned for 8 to 10 mm of sag at rest |
-| Tire friction (1.5), joint damping and armature | estimated; the damping and armature keep the light wheels numerically stable |
+| Wheelbase, track width, chassis box and the LiDAR's position | measured on the production car's CAD model (the playground's `neoracer-race.glb`) |
+| Total mass (3.0 kg) and tyre diameter (85 mm) | the spec (2026-09-29) |
+| Chassis inertia and center-of-mass height; wheel masses | the URDF of an older CAD model; the inertia is scaled to the spec mass, and nobody has measured either |
+| Suspension stiffness and damping | estimated; the springs are preloaded so the car rests at the CAD ride height |
+| Tire friction (1.5) and wheel joint damping | estimated; the damping, 0.0005 N·m·s/rad per wheel, stands in for drivetrain losses and holds the top speed to 4.35 m/s |
 | Steering servo gain (kp = 25) | estimated, not fitted to the servo's torque or slew rate |
-| Sensor positions | placed by hand: the IMU at the chassis center, the LiDAR 8 cm above it |
+| IMU position | at the center of mass, not measured |
+| Cosmetic meshes | the older CAD model, placed to roughly fill the measured body |
 | Drive: one DC motor through open differentials, on a 7.4 V pack; at the wheels, 0.765 N·m from rest and a free speed of 141 rad/s | the structure is the real car's. The numbers are the playground's estimates (a drive force of 18 N and a top speed of 6 m/s on 42.5 mm tyres) until the RS545's datasheet, the battery and the differential ratio replace them; the gear is 1 and the rotor has no inertia until then |
 
 Known gaps that matter for sim-to-real work:
 
-- The wheels' armature (0.005 kg·m² each, there for numerical stability) is about 70 times the inertia of a real wheel. Through the 50 mm wheels it acts like 8 kg more mass, so the car speeds up and coasts down several times slower than its 1.86 kg allow: at full throttle it reaches 3.6 m/s after 4 s and tops out at 5.1 m/s.
+- At full throttle the car reaches 3.2 m/s after 1 s and tops out at 4.35 m/s, against the motor's free speed of 6.0 m/s at the tyre: the wheel joint damping is the only loss, and its value is a guess.
 - The sensors have no noise, bias or latency, and the LiDAR has 8 beams, while the real one is a spinning scanner. The car has no camera yet (issue #3).
-- The tires slip sideways a little: at full lock the car turns on a 0.74 m radius, against 0.68 m for ideal Ackermann steering.
+- The steering gives under load. At full lock (0.4 rad) and 0.3 m/s, the servo reaches 0.38 rad, the front wheels lag their Ackermann angles by about 0.04 rad, and the car turns on a 0.85 m radius, against 0.70 m for ideal Ackermann steering at 0.4 rad.
 
 ### Actuator interface
 

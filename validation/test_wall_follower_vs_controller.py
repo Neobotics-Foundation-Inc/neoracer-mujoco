@@ -43,7 +43,7 @@ RESOLUTIONS = [24, 270, 540, 1080]
 
 
 def _scan(walls: list[Segment], n: int) -> Scan:
-    return cast_scan(walls, DenseLidarParams(n_beams=n))
+    return cast_scan(walls, DenseLidarParams(n_beams=n), PARAMS.car.lidar_xy_m)
 
 
 def _mirror(walls: list[Segment]) -> list[Segment]:
@@ -299,6 +299,29 @@ def test_median_filter_equals_median_of_each_window():
         np.testing.assert_array_equal(
             _median_filter(PARAMS, angles, ranges), expected, strict=True
         )
+
+
+@pytest.mark.parametrize("lidar_xy_m", [(0.0, 0.0), (-0.0442, 0.0), (0.1, -0.05)])
+def test_obstacle_points_are_in_the_car_frame_wherever_the_lidar_is(lidar_xy_m):
+    # Law: the scan's ranges are from the LiDAR, but a wall across the path
+    # 0.4 m ahead of the car center gives points at x = 0.4 m, wherever the
+    # LiDAR is mounted. The median filter's window holds one beam here, so
+    # each point is its own beam's.
+    car = replace(PARAMS.car, lidar_xy_m=lidar_xy_m)
+    params = replace(PARAMS, car=car, outlier_window_deg=0.1)
+    wall = [((0.4, -0.3), (0.4, 0.3))]
+    angles, ranges = cast_scan(wall, DenseLidarParams(n_beams=360), lidar_xy_m)
+    x, y = obstacle_points(params, angles, ranges)
+    assert len(x) > 10
+    np.testing.assert_allclose(x, 0.4, atol=1e-9)
+    assert np.all(np.abs(y) <= 0.3 + 1e-9)
+
+
+def test_the_car_geometry_has_the_lidar_where_the_model_has_it():
+    scene = assets.load()
+    site = scene.model.bind_scalar(scene.spec.site("lidar_mount")).pos
+    assert PARAMS.car.lidar_xy_m == (site[0], site[1])
+    assert PARAMS.car.lidar_xy_m[0] < 0.0  # behind the wheelbase midpoint
 
 
 def _all_pairs_safe_arc_lengths(angles: np.ndarray, ranges: np.ndarray) -> np.ndarray:

@@ -29,14 +29,14 @@
         <material name="grid" texture="grid" texrepeat="1 1" texuniform="true"
                   reflectance=".2"/>
 
-        <!-- Cosmetic meshes (meters, x=fwd y=left z=up). The chassis mesh is offset
-             +33mm forward, +22mm up from the car-body centre; wheel meshes are already
-             centred on their wheel body origin. None of these affect physics. -->
+        <!-- Cosmetic meshes (meters, x=fwd y=left z=up), from the older osracer CAD
+             model. The wheel meshes are centred on their wheel body origin and scaled
+             from its 50 mm wheels to the 42.5 mm tyres. None of these affect physics. -->
         <mesh name="vis_chassis"  file="meshes/chassis.STL"/>
-        <mesh name="vis_fl_wheel" file="meshes/fl_wheel.STL"/>
-        <mesh name="vis_fr_wheel" file="meshes/fr_wheel.STL"/>
-        <mesh name="vis_rl_wheel" file="meshes/rl_wheel.STL"/>
-        <mesh name="vis_rr_wheel" file="meshes/rr_wheel.STL"/>
+        <mesh name="vis_fl_wheel" file="meshes/fl_wheel.STL" scale=".85 .85 .85"/>
+        <mesh name="vis_fr_wheel" file="meshes/fr_wheel.STL" scale=".85 .85 .85"/>
+        <mesh name="vis_rl_wheel" file="meshes/rl_wheel.STL" scale=".85 .85 .85"/>
+        <mesh name="vis_rr_wheel" file="meshes/rr_wheel.STL" scale=".85 .85 .85"/>
         <mesh name="vis_lidar"    file="meshes/lidar.STL"/>
     </asset>
 
@@ -45,11 +45,11 @@
         <joint damping=".03" actuatorfrcrange="-3 3"/>
 
         <!--
-        Wheel drive joint: hinge about the Y-axis (the axle).
-        armature adds rotational inertia so the light RC wheel doesn't blow up the
-        integrator at near-zero inertia.
-        geom: cylinder, radius 0.050 m, half-width 0.02 m. condim=3 (sliding only);
-        condim=6 adds torsional/rolling contact that chatters on small cylinders.
+        Wheel drive joint: hinge about the Y-axis (the axle). Its inertia is the
+        wheel's own, from the geom: a cylinder of the wheel's mass.
+        geom: cylinder, radius 42.5 mm (the 85 mm tyre of the spec) and half the
+        measured tyre width of 48.25 mm. condim=3 (sliding only); condim=6 adds
+        torsional/rolling contact that chatters on small cylinders.
         mass is set per wheel instance, not here.
         priority=1: in a contact with the floor or a wall, MuJoCo takes the
         friction and the contact softness of the wheel alone, instead of the
@@ -57,8 +57,8 @@
         so changing its friction changes how much the wheel slips.
         -->
         <default class="wheel">
-            <joint type="hinge" axis="0 1 0" armature=".005" damping=".0005"/>
-            <geom type="cylinder" size=".050 .02" zaxis="0 1 0"
+            <joint type="hinge" axis="0 1 0" damping=".0005"/>
+            <geom type="cylinder" size=".0425 .024125" zaxis="0 1 0"
                   friction="1.5 0.1 0.1" condim="3" priority="1"/>
         </default>
 
@@ -76,13 +76,15 @@
         <!--
         Suspension joint: prismatic (slide) along Z. Declared FIRST on each wheel
         body so the equality solver can couple the steer joint correctly.
-        Travel: -.010 m droop to +.015 m jounce. stiffness/damping are tuned to give
-        ~8-10 mm static sag and a slightly overdamped response; replace with the real
-        coil-over spec when measured.
+        Travel: -.010 m droop to +.015 m jounce. stiffness/damping give a slightly
+        overdamped response; replace them with the real coil-over spec when measured.
+        springref preloads each spring with a quarter of the chassis weight
+        (2.7652 kg with the steering body x 9.81 / 4 / 600 N/m = 11.3 mm), so the car rests at the ride
+        height of the CAD model, with the joints near 0.
         -->
         <default class="susp">
             <joint type="slide" axis="0 0 1" range="-.010 .015"
-                   stiffness="600" damping="25"/>
+                   stiffness="600" springref="-.0113" damping="25"/>
         </default>
     </default>
 
@@ -91,48 +93,46 @@
         <geom type="plane" size="5 5 .01" material="grid" friction="1.5 0.1 0.1"/>
 
         <!--
-        Car body. Spawn height = chassis half-height + wheel radius = 0.0806 + 0.050
-        = 0.1306 m, so the wheels start just touching the ground. The car settles
-        ~8-10 mm lower as the suspension compresses under gravity.
+        Car body. The geometry is the production car's, measured from its CAD
+        model (the playground's neoracer-race.glb, 2026). The body frame is at
+        the middle of the wheelbase, on the axle line: wheelbase 287.64 mm,
+        track 224 mm. The car spawns 1 mm above its resting height: the axles
+        at the tyre radius, 42.5 mm.
         -->
-        <body name="car" pos="0 0 .1306">
+        <body name="car" pos="0 0 .0435">
             <freejoint/>
             <light name="top_light" pos="0 0 2" mode="trackcom" diffuse=".4 .4 .4"/>
 
             <!--
-            Mass/inertia for the chassis come straight from the CAD-derived URDF
-            (osracer base_link): mass 1.6211 kg, diagonal inertia tensor below. This
-            explicit <inertial> overrides geom-derived inertia, so the box's mass is ignored.
-            CoM is re-anchored to the axle plane: the URDF axles are NOT centered on
-            base_link (wheelbase center sits at x=-0.0368, z=-0.1004 in URDF), but this
-            model places the wheels symmetrically about the body origin. So the raw URDF
-            CoM (-0.0278 -0.0143 -0.0816) is shifted by the URDF axle-center offset to keep
-            the CoM in the same place relative to the wheels → (+0.0090 +0.0029 -0.0617).
-            Limit: laser/imu/camera mass not lumped in — revisit only if rollover looks wrong.
+            The car weighs 3.0 kg (spec, 2026-09-29), so the chassis is 3.0 kg less
+            the four wheels and the 10 g steering input body: 2.7552 kg. Its inertia
+            is the CAD-derived URDF's (osracer base_link, 1.6211 kg) times
+            2.7552 / 1.6211; nobody has measured
+            it. The CoM is above the middle of the wheelbase, 18.9 mm above the
+            axles (the URDF's height). This explicit <inertial> overrides
+            geom-derived inertia, so the box's mass is ignored.
             -->
-            <inertial pos=".0090 .0029 -.0617" mass="1.6211"
-                      diaginertia=".002377 .0058394 .0070057"/>
+            <inertial pos="0 0 .0189" mass="2.7552"
+                      diaginertia=".0040399 .0099246 .0119069"/>
 
-            <!-- Chassis collision box: 446×268×161 mm (half-sizes below). Collision only;
-                 mass set via <inertial> above. -->
-            <geom name="chassis" type="box" size=".223 .134 .0806"
-                  rgba=".3 .6 .3 0.1" mass="0"/>
-            <!-- Cosmetic chassis mesh (contype/conaffinity=0 → no physics), offset
-                 +33mm fwd, +22mm up from the box centre. -->
+            <!-- Chassis collision box: the measured body, 481×241×184 mm, from the
+                 bottom of the chassis tub (19.5 mm above the ground at rest) to the
+                 top of the LiDAR. Collision only; mass set via <inertial> above. -->
+            <geom name="chassis" type="box" pos=".016865 -.00287 .069"
+                  size=".240635 .12042 .09198" rgba=".3 .6 .3 0.1" mass="0"/>
+            <!-- Cosmetic chassis mesh (contype/conaffinity=0 → no physics). It is the
+                 older osracer CAD model, not the production car, so it only roughly
+                 fills the box; it keeps its old place relative to the wheels. -->
             <geom name="vis_chassis" type="mesh" mass="0" mesh="vis_chassis"
-                  pos="0.033 0 0.022"
+                  pos="0.033 0 0.1026"
                   contype="0" conaffinity="0"
                   rgba=".75 .75 .75 1"/>
 
-            <!-- IMU site at the chassis centre; sensors below reference it. -->
-            <site name="imu" pos="0 0 0" size=".01" rgba="1 1 0 1"/>
+            <!-- IMU site at the centre of mass; sensors below reference it. -->
+            <site name="imu" pos="0 0 .0189" size=".01" rgba="1 1 0 1"/>
 
-            <!--
-            LiDAR mount site, sitting on the top face of the chassis box
-            (half-height .0806) instead of floating 7 cm above it.
-            Adjust the height to match CAD when available.
-            -->
-            <site name="lidar_mount" pos="0 0 .0806" size=".02" rgba="1 0 0 .5"/>
+            <!-- LiDAR mount site: the centre of the LiDAR, as measured. -->
+            <site name="lidar_mount" pos="-.0442 0 .11995" size=".02" rgba="1 0 0 .5"/>
 
             <!--
             LiDAR ray sites: 8 beams at 45° intervals in the horizontal plane.
@@ -149,17 +149,17 @@
             (single-wall placement test) to produce a correctly directional ring.
             Add more beams here (and matching rangefinders below) for richer RL obs.
             -->
-            <site name="lidar_000" pos="0 0 .0806" zaxis="1.000000  0.000000 0" size=".005"/>
-            <site name="lidar_045" pos="0 0 .0806" zaxis="0.707107  0.707107 0" size=".005"/>
-            <site name="lidar_090" pos="0 0 .0806" zaxis="0.000000  1.000000 0" size=".005"/>
-            <site name="lidar_135" pos="0 0 .0806" zaxis="-0.707107 0.707107 0" size=".005"/>
-            <site name="lidar_180" pos="0 0 .0806" zaxis="-1.000000 0.000000 0" size=".005"/>
-            <site name="lidar_225" pos="0 0 .0806" zaxis="-0.707107 -0.707107 0" size=".005"/>
-            <site name="lidar_270" pos="0 0 .0806" zaxis="0.000000  -1.000000 0" size=".005"/>
-            <site name="lidar_315" pos="0 0 .0806" zaxis="0.707107  -0.707107 0" size=".005"/>
+            <site name="lidar_000" pos="-.0442 0 .11995" zaxis="1.000000  0.000000 0" size=".005"/>
+            <site name="lidar_045" pos="-.0442 0 .11995" zaxis="0.707107  0.707107 0" size=".005"/>
+            <site name="lidar_090" pos="-.0442 0 .11995" zaxis="0.000000  1.000000 0" size=".005"/>
+            <site name="lidar_135" pos="-.0442 0 .11995" zaxis="-0.707107 0.707107 0" size=".005"/>
+            <site name="lidar_180" pos="-.0442 0 .11995" zaxis="-1.000000 0.000000 0" size=".005"/>
+            <site name="lidar_225" pos="-.0442 0 .11995" zaxis="-0.707107 -0.707107 0" size=".005"/>
+            <site name="lidar_270" pos="-.0442 0 .11995" zaxis="0.000000  -1.000000 0" size=".005"/>
+            <site name="lidar_315" pos="-.0442 0 .11995" zaxis="0.707107  -0.707107 0" size=".005"/>
             <!-- Cosmetic lidar mesh at the mount site. -->
             <geom name="vis_lidar" type="mesh" mass="0" mesh="vis_lidar"
-                  pos="0 0 0.0806"
+                  pos="-.0442 0 .11995"
                   contype="0" conaffinity="0" rgba=".2 .2 .2 1"/>
 
             <!--
@@ -167,7 +167,7 @@
             this joint (ctrl[4]); the two Ackermann equality constraints below split the
             command into fl_steer and fr_steer with the correct inner/outer differential.
             -->
-            <body name="steer_input_body" pos=".1439 0 .05">
+            <body name="steer_input_body" pos=".14382 0 0">
                 <joint name="steer_input" class="steer" range="-.45 .45"/>
                 <geom type="cylinder" size=".02 .005" contype="0" conaffinity="0"
                       mass=".01" rgba="1 0 0 .3"/>
@@ -182,21 +182,21 @@
               3. fl_drive (hinge Y)  : wheel spin, driven by motor actuator
             All three must stay on the SAME body (see <default class="susp">).
 
-            Position: x=0.1439 (half wheelbase), y=0.1175 (half track),
-            z=-0.0806 (axle at chassis floor). Wheel masses from URDF (~0.058 kg each);
-            inertia is left to MuJoCo's cylinder geom (the URDF's 0.00005 is a placeholder).
+            Position: x=0.14382 (half wheelbase), y=0.112 (half track), z=0 (the
+            axle line). Wheel masses from URDF (~0.058 kg each); inertia is left to
+            MuJoCo's cylinder geom.
             -->
-            <body name="fl_wheel_body" pos=".1439 .1175 -.0806">
+            <body name="fl_wheel_body" pos=".14382 .112 0">
                 <joint name="fl_susp"  class="susp"/>
                 <joint name="fl_steer" class="steer"/>
                 <joint name="fl_drive" class="wheel"/>
-                <geom name="fl_wheel" class="wheel" mass=".0573" rgba=".2 .4 1 0.1"/>
+                <geom name="fl_wheel" class="wheel" mass=".0587" rgba=".2 .4 1 0.1"/>
                 <geom name="vis_fl_wheel" type="mesh" mass="0" mesh="vis_fl_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
 
             <!-- FRONT RIGHT WHEEL — steerable + driven -->
-            <body name="fr_wheel_body" pos=".1439 -.1175 -.0806">
+            <body name="fr_wheel_body" pos=".14382 -.112 0">
                 <joint name="fr_susp"  class="susp"/>
                 <joint name="fr_steer" class="steer"/>
                 <joint name="fr_drive" class="wheel"/>
@@ -206,7 +206,7 @@
             </body>
 
             <!-- REAR LEFT WHEEL — driven only (no steer joint) -->
-            <body name="rl_wheel_body" pos="-.1439 .1175 -.0806">
+            <body name="rl_wheel_body" pos="-.14382 .112 0">
                 <joint name="rl_susp"  class="susp"/>
                 <joint name="rl_drive" class="wheel"/>
                 <geom name="rl_wheel" class="wheel" mass=".0587" rgba=".3 .3 .3 0.1"/>
@@ -215,7 +215,7 @@
             </body>
 
             <!-- REAR RIGHT WHEEL — driven only -->
-            <body name="rr_wheel_body" pos="-.1439 -.1175 -.0806">
+            <body name="rr_wheel_body" pos="-.14382 -.112 0">
                 <joint name="rr_susp"  class="susp"/>
                 <joint name="rr_drive" class="wheel"/>
                 <geom name="rr_wheel" class="wheel" mass=".0587" rgba=".3 .3 .3 0.1"/>
@@ -278,19 +278,19 @@
         fl_steer = arctan(L / (L/tan(δ) − W/2))   (inner wheel, turns more)
         fr_steer = arctan(L / (L/tan(δ) + W/2))   (outer wheel, turns less)
 
-    Wheelbase L = 2 × 0.1439 = 0.2878 m, track W = 2 × 0.1175 = 0.235 m.
-    Coefficients are a least-squares fit to exact Ackermann over |δ| ≤ 0.4 rad
-    (max error < 0.0002 rad).
+    Wheelbase L = 0.28764 m, track W = 0.224 m.
+    Coefficients are a least-squares fit to exact Ackermann over |δ| ≤ 0.45 rad,
+    the range of steer_input (max error < 0.00035 rad).
 
     polycoef: a0 a1 a2 a3 a4  →  y = a0 + a1·x + a2·x² + a3·x³ + a4·x⁴
     -->
     <equality>
         <joint name="ackermann_left"
                joint1="fl_steer" joint2="steer_input"
-               polycoef="-0.00000908 1.00091364 0.41786542 0.14737450 -0.08950548"/>
+               polycoef="-0.00001352 1.00126099 0.39081269 0.12254396 -0.09308329"/>
         <joint name="ackermann_right"
                joint1="fr_steer" joint2="steer_input"
-               polycoef="0.00000908 1.00091364 -0.41786542 0.14737450 0.08950548"/>
+               polycoef="0.00001352 1.00126099 -0.39081269 0.12254396 0.09308329"/>
     </equality>
 
     <sensor>
@@ -313,7 +313,7 @@
         <jointpos name="fr_steer_pos"  joint="fr_steer"/>
 
         <!--
-        Wheel angular velocity (rad/s). Multiply by 0.050 m (wheel_radius) for surface speed in m/s.
+        Wheel angular velocity (rad/s). Multiply by 0.0425 m (wheel_radius) for surface speed in m/s.
         Positive = forward rotation.
         -->
         <jointvel name="fl_wheel_vel" joint="fl_drive"/>
@@ -325,7 +325,7 @@
         Suspension travel (meters).
         Positive = jounce (spring compressed, wheel moved up relative to car body).
         Negative = droop (spring extended).
-        Expected static compression: ~+0.008 to +0.010 m at rest.
+        Near 0 at rest: springref preloads the springs.
         -->
         <jointpos name="fl_susp_pos" joint="fl_susp"/>
         <jointpos name="fr_susp_pos" joint="fr_susp"/>
