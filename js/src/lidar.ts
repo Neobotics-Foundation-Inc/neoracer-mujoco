@@ -72,8 +72,23 @@ function measure(mj: Mujoco, params: LidarParams, scene: Scene, data: MjData, sl
 
 const range = (from: number, to: number) => Array.from({ length: Math.max(to - from, 0) }, (_, i) => from + i);
 
-/** The LiDAR of a car that has stood still at the pose of data for a turn. */
+/** Throw if params is not a scan, as LidarParams in lidar.py checks. */
+function checkParams(params: LidarParams): void {
+  const problems = [
+    Number.isInteger(params.slots) && params.slots >= 1 ? '' : `slots must be an integer >= 1, not ${params.slots}`,
+    params.scanRate > 0 ? '' : `scanRate must be > 0 Hz, not ${params.scanRate}`,
+    params.maxRange > 0 ? '' : `maxRange must be > 0 m, not ${params.maxRange}`,
+    params.field > 0 && params.field <= 2 * Math.PI ? '' : `field must be in (0, 2 pi] rad, not ${params.field}`,
+  ].filter((p) => p !== '');
+  if (problems.length > 0) throw new Error(problems.join('; '));
+}
+
+/**
+ * The LiDAR of a car that has stood still at the pose of data for a turn.
+ * Throw if params is not a scan.
+ */
 export function startLidar(mj: Mujoco, params: LidarParams, scene: Scene, data: MjData): LidarState {
+  checkParams(params);
   const scan = measure(mj, params, scene, data, range(0, params.slots));
   return { head: 0, sweeping: scan, scan };
 }

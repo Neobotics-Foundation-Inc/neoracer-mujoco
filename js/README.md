@@ -11,16 +11,23 @@ import {
 
 const mj = await loadMujoco();
 const scene = compose(mj, trackXml);           // the car at the origin, facing +X
-const data = settle(mj, scene.model);         // at rest on the track
-const dt = scene.model.opt.timestep;          // 1/360 s
+const { model } = scene;
+const data = settle(mj, model);               // at rest on the track
+const dt = model.opt.timestep;                // 1/360 s
 const angle = () => data.sensordata[scene.car.drivePos];
+
+// After mj_step, the sensors and poses are those before its integration.
+// So run each step in two halves, as the Python adapter does: mj_step1
+// brings them up to data.time, the encoder and LiDAR count the step that led
+// there, the program sets its command, and mj_step2 integrates.
+mj.mj_step1(model, data);
 let encoder = startEncoder(ENCODER, angle());
 let lidar = startLidar(mj, LIDAR, scene, data);
-
-// racecar_core's rc.drive.set_speed_angle(0.5, -0.2): half throttle, a little left.
-applyCommand(scene, data, speedAngle(actuatorLimits(scene.model, scene.car), 0.5, -0.2));
 for (let i = 0; i < 360; i++) {
-  mj.mj_step(scene.model, data);
+  // racecar_core's rc.drive.set_speed_angle(0.5, -0.2): half throttle, a little left.
+  applyCommand(scene, data, speedAngle(actuatorLimits(model, scene.car), 0.5, -0.2));
+  mj.mj_step2(model, data);
+  mj.mj_step1(model, data);
   encoder = stepEncoder(ENCODER, encoder, angle(), dt);
   lidar = sweepLidar(mj, LIDAR, scene, data, lidar, dt);
 }

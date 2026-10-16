@@ -107,3 +107,10 @@ test("the car stands where it is put, facing +X, whatever the track's site defau
     assert.ok(Math.abs(xy[0] - 1) < 1e-9 && Math.abs(xy[1] + 2) < 1e-9, site);
   }
 });
+
+test('a LiDAR that is not a scan is refused at the start', () => {
+  const data = settle(mj, model);
+  for (const bad of [{ slots: 1.5 }, { slots: 0 }, { scanRate: 0 }, { maxRange: -1 }, { field: 7 }]) {
+    assert.throws(() => startLidar(mj, { ...LIDAR, ...bad }, scene, data), Error, JSON.stringify(bad));
+  }
+});
