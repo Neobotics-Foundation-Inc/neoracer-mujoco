@@ -181,7 +181,7 @@ def test_controller_converges_to_target_distance_on_corridor():
     state = PDState()
 
     side_distances = []
-    for _ in range(1500):  # 3 s at the 2 ms timestep
+    for _ in range(round(3.0 / dt)):  # 3 s
         readings = sensors.read(car.sensors, data)
         state, control = step(cfg, state, readings, dt)
         sim.apply_command(car, data, control)

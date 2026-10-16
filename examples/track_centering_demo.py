@@ -48,7 +48,7 @@ from neoracer_mujoco.scene import Scene
 
 @dataclass(frozen=True)
 class DemoParams:
-    steps: int = 3000  # physics steps of the headless run; 6 s at a 0.002 s timestep
+    steps: int = 2160  # physics steps of the headless run; 6 s at a 1/360 s timestep
     # m, + = toward the left wall. The demo moves the car by this offset after
     # the settle. The corridor half-width is 0.5 m. Without the offset, the car
     # starts at the center, and the run does not test the correction.
