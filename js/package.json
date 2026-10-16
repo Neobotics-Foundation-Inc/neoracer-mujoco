@@ -1,0 +1,29 @@
+{
+  "name": "neoracer-mujoco",
+  "version": "0.8.0",
+  "description": "The NeoRacer car in MuJoCo's WebAssembly build: put it on a track, drive it, and read its encoder and LiDAR as the real car reports them.",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/embed.mjs && tsc",
+    "test": "npm run build && node --test test/conformance.test.mjs",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "@mujoco/mujoco": "3.16.0"
+  },
+  "devDependencies": {
+    "@mujoco/mujoco": "3.16.0",
+    "@types/node": "22.20.5",
+    "typescript": "6.0.3"
+  }
+}

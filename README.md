@@ -357,6 +357,10 @@ The 8 rangefinder beams are for controllers and policies that need a few cheap d
 Add your own demos here — a pure-pursuit follower, a data recorder, etc. — using
 `run.py` as the template for the load → step → control loop.
 
+## JavaScript package (`js/`)
+
+`js/` is the same car for MuJoCo's WebAssembly build, for a browser or Node. It puts the car on a track given as MJCF, writes commands, and computes the encoder speed and the swept LiDAR scan as the Python package does, with the same numbers. Its tests run the same cases in both, from `js/test/fixtures.py`, and the results agree to 1e-14 m after a second of driving. `validation/test_js_package.py` checks that the names and numbers it copies agree with this package. `js/README.md` shows how to use it.
+
 ## Validation suite (`validation/`)
 
 A standardized gate every car model must clear before it's trained on. The suite

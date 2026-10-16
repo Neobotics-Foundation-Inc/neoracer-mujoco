@@ -57,3 +57,30 @@ jobs:
               assets.compose(mujoco.MjSpec.from_file(track))
           print(len(tracks), 'tracks loaded from', assets.ASSET_DIR)
           "
+
+  # The JS package (js/) against this package: js/test/fixtures.py runs a
+  # set of cases in Python, and npm test runs the same cases in MuJoCo's
+  # WebAssembly build. It runs beside pytest. The scenes leave out the meshes
+  # that only show the car, so the checkout needs no Git LFS objects, and the
+  # runner's own Node runs the tests.
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.15"
+          cache: pip
+
+      - name: Install the package and the JS dependencies
+        run: |
+          pip install -e .
+          npm ci --prefix js --no-audit --no-fund
+
+      - name: Run the JS tests against the Python package
+        run: |
+          python js/test/fixtures.py js/test/fixtures.json
+          npm test --prefix js
