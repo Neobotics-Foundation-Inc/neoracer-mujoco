@@ -272,8 +272,8 @@
         the target angle of steer_input (rad), + = left, and the Ackermann
         constraints below turn the two front wheels from it. The loop's
         voltage is kp (target - angle) - kd x speed, clamped to the servo's
-        5 V supply. The motor's torque falls as it speeds up, so it turns the wheels
-        at most at its free speed, as a real servo does.
+        5 V supply. The motor's torque falls as it speeds up, so it turns the
+        wheels at most at its free speed, as a real servo does.
 
         The servo is the car's SPT5435LV-180W. Its datasheet gives 35 kg·cm and
         0.14 s per 60 degrees at 6.0 V, 29 kg·cm and 0.16 s at 4.8 V; the model
