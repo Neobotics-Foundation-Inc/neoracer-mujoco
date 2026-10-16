@@ -81,7 +81,17 @@ jobs:
           mkdir /tmp/js-check && cd /tmp/js-check
           npm init -y > /dev/null
           npm install --no-audit --no-fund "$GITHUB_WORKSPACE"/dist/neoracer-mujoco-*.tgz @mujoco/mujoco@3.16.0
-          node --input-type=module -e "import { CAR_XML } from 'neoracer-mujoco'; if (!CAR_XML.includes('drivetrain')) throw new Error('no car');"
+          cat > check.mjs <<'EOF'
+          import loadMujoco from '@mujoco/mujoco';
+          import { compose, settle } from 'neoracer-mujoco';
+          const mj = await loadMujoco();
+          const floor = '<mujoco><worldbody><geom type="plane" size="5 5 .1"/></worldbody></mujoco>';
+          const scene = compose(mj, floor);
+          const z = settle(mj, scene.model).qpos[2];
+          if (!(z > 0.02 && z < 0.1)) throw new Error(`the packed car does not rest on the floor: z = ${z} m`);
+          console.log(`the packed car rests at z = ${z.toFixed(4)} m`);
+          EOF
+          node check.mjs
 
       # A manual run creates the tag on the commit that this job built. GitHub
       # refuses to create a tag that already exists, so the run stops instead of
