@@ -1,8 +1,9 @@
 name: Release
 
 # Builds the wheel, checks that the installed wheel can load the car, and
-# attaches the wheel to a GitHub Release. Other repos, such as neoracer-rl,
-# install neoracer-mujoco from that wheel.
+# attaches the wheel, the car as neoracer.mjz and the JS package (js/) to a
+# GitHub Release. Other repos, such as neoracer-rl, install neoracer-mujoco
+# from that wheel.
 #
 # Start a release in one of two ways:
 # - Push a version tag such as v0.2.0. The tag must match the version in pyproject.toml.
@@ -71,11 +72,22 @@ jobs:
           /tmp/wheel-env/bin/python -c "from neoracer_mujoco import assets; assets.write_mjz(assets.DEFAULT_CAR, 'dist/neoracer.mjz')"
           /tmp/wheel-env/bin/python -c "import mujoco; mujoco.MjSpec.from_zip('dist/neoracer.mjz').compile()"
 
+      # The JS package (js/), for MuJoCo's WebAssembly build, as an npm
+      # tarball. It must install and load the car before it is published.
+      - name: Pack the JS package
+        run: |
+          npm ci --prefix js --no-audit --no-fund
+          (cd js && npm pack --pack-destination ../dist)
+          mkdir /tmp/js-check && cd /tmp/js-check
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$GITHUB_WORKSPACE"/dist/neoracer-mujoco-*.tgz @mujoco/mujoco@3.16.0
+          node --input-type=module -e "import { CAR_XML } from 'neoracer-mujoco'; if (!CAR_XML.includes('drivetrain')) throw new Error('no car');"
+
       # A manual run creates the tag on the commit that this job built. GitHub
       # refuses to create a tag that already exists, so the run stops instead of
       # publishing under a tag that points at another commit. --verify-tag stops
       # gh from creating a tag itself.
-      - name: Attach the wheel and neoracer.mjz to a GitHub Release
+      - name: Attach the wheel, neoracer.mjz and the JS package to a GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
@@ -83,4 +95,4 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > /dev/null
           fi
-          gh release create "$TAG" dist/*.whl dist/neoracer.mjz --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --generate-notes
+          gh release create "$TAG" dist/*.whl dist/neoracer.mjz dist/neoracer-mujoco-*.tgz --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --generate-notes

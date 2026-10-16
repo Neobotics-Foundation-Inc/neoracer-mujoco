@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "build": "node scripts/embed.mjs && tsc",
-    "test": "npm run build && node --test",
+    "test": "npm run build && node --test test/conformance.test.mjs",
     "prepack": "npm run build"
   },
   "peerDependencies": {
