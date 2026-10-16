@@ -10,6 +10,7 @@ test_wall_follower_example.py tests the controller callbacks on the adapter dire
 import importlib
 import subprocess
 import sys
+import time
 import types
 from pathlib import Path
 
@@ -105,6 +106,24 @@ def test_cli_fails_clearly_on_missing_controller():
     )
     assert result.returncode != 0
     assert "error:" in result.stderr
+
+
+def test_a_controller_reads_the_simulated_time(tmp_path):
+    """In controller_imports, time.time(), time.monotonic() and
+    time.perf_counter() read the simulated time, so a controller that
+    measures its frame time sees the physics step on any machine. After the
+    block, the real clock is back."""
+    scene = run_racecar_core.load_scene()
+    data, rc = run_racecar_core.build_racecar(scene, steps=10)
+    (tmp_path / "clock_probe.py").write_text(
+        "import time\n\n\ndef now():\n"
+        "    return time.time(), time.monotonic(), time.perf_counter()\n"
+    )
+    with run_racecar_core.controller_imports(rc, tmp_path):
+        probe = importlib.import_module("clock_probe")
+        data.time = 1.25
+        assert probe.now() == (1.25, 1.25, 1.25)
+    assert time.time() > 1e9  # s since 1970
 
 
 def test_controller_imports_restores_the_import_state(tmp_path, monkeypatch):

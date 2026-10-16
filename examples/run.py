@@ -14,7 +14,8 @@ In both modes, the script prints a warning when the roll angle is more than roll
 
 Frame: +X forward, +Y left, +Z up.
 Actuators (see neoracer_mujoco.contract):
-  motor             = throttle in [-1, 1], + = forward
+  motor             = terminal voltage (V), + = forward; sim.apply_command
+                      sends a throttle in [-1, 1] as that fraction of the battery
   steer_servo       = target angle (rad), + = left.
                       Two Ackermann equality constraints set the fl and fr steer angles from it.
 """

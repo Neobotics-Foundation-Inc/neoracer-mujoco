@@ -30,6 +30,7 @@ import contextlib
 import os
 import runpy
 import sys
+import time
 import types
 from collections.abc import Generator
 from pathlib import Path
@@ -66,12 +67,36 @@ def build_racecar(scene: Scene, steps: int) -> tuple[mujoco.MjData, MujocoRaceca
     return data, MujocoRacecar(scene, data, max_steps=steps)
 
 
+class _SimTime(types.ModuleType):
+    """The time module, with its clocks reading the simulated time of rc."""
+
+    def __init__(self, rc: MujocoRacecar) -> None:
+        super().__init__("time")
+        self._rc = rc
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(time, name)
+
+    def time(self) -> float:
+        return self._rc.clock()
+
+    def monotonic(self) -> float:
+        return self._rc.clock()
+
+    def perf_counter(self) -> float:
+        return self._rc.clock()
+
+
 @contextlib.contextmanager
 def controller_imports(rc: MujocoRacecar, controller_dir: Path) -> Generator[None]:
     """Make a controller in controller_dir importable with rc in the with block.
 
     In the block, `import racecar_core` gives a fake module whose
     create_racecar() returns rc, and controller_dir is first on sys.path.
+    `import time` gives the time module with its clocks (time, monotonic and
+    perf_counter) reading the simulated time, rc.clock(). A controller that
+    measures its frame time with them then sees the physics step, whatever
+    the speed of the machine.
 
     A cached module in sys.modules wins over sys.path. So before the block,
     the function moves aside every cached module that has the name of a
@@ -86,19 +111,21 @@ def controller_imports(rc: MujocoRacecar, controller_dir: Path) -> Generator[Non
     hidden = {
         name: module
         for name, module in sys.modules.items()
-        if name == "racecar_core" or name.split(".")[0] in local
+        if name in ("racecar_core", "time") or name.split(".")[0] in local
     }
     for name in hidden:
         del sys.modules[name]
     shim = types.ModuleType("racecar_core")
     shim.__dict__["create_racecar"] = lambda *args, **kwargs: rc
     sys.modules["racecar_core"] = shim
+    sys.modules["time"] = _SimTime(rc)
     sys.path.insert(0, str(controller_dir))
     try:
         yield
     finally:
         sys.path.remove(str(controller_dir))
         sys.modules.pop("racecar_core", None)
+        sys.modules.pop("time", None)
         for name in list(sys.modules):
             file = getattr(sys.modules[name], "__file__", None)
             if file is not None and Path(file).is_relative_to(controller_dir):

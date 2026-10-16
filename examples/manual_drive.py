@@ -24,7 +24,8 @@ A reset puts the car back at its start position, the same as Backspace.
 
 Frame: +X forward, +Y left, +Z up.
 Actuators (see neoracer_mujoco.contract):
-  motor             = throttle in [-1, 1], + = forward
+  motor             = terminal voltage (V), + = forward; sim.apply_command
+                      sends a throttle in [-1, 1] as that fraction of the battery
   steer_servo       = target angle (rad), + = left, range ±0.4
 """
 

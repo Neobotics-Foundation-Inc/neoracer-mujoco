@@ -229,6 +229,10 @@ class MujocoRacecar:
         """The physics step (s)."""
         return self._dt
 
+    def clock(self) -> float:
+        """The simulated time (s): what a controller reads as the time."""
+        return float(self._data.time)
+
     def set_update_slow_time(self, time: float = 1.0) -> None:
         """Set the time (s) between two update_slow calls."""
         self._update_slow_time = time
