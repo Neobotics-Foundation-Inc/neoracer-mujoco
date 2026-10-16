@@ -99,7 +99,7 @@ python3 -m pytest validation/ -v
 | Steering | Ackermann (4th-order polynomial equality constraints) | |
 | Drive | One DC motor (MuJoCo's `dcmotor`) through open differentials to all four wheels | its constants are PLACEHOLDERS |
 | Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m), preloaded to rest at the CAD ride height | ESTIMATED |
-| Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · drivetrain angle · susp pos · 8-beam LiDAR | |
+| Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · drivetrain angle · susp pos · 8 rangefinder beams · a spinning LiDAR of 1440 slots a turn at 30 Hz, its rear quarter blocked (`lidar.py`) | the LiDAR's range (12 m) and blocked sector are PLACEHOLDERS |
 | Time step | 1/360 s, with the implicitfast integrator: 12 steps to a 30 Hz LiDAR scan, 6 to a 60 Hz frame | every track sets the same `<option>` |
 
 ### How closely the model matches the real car
@@ -121,7 +121,7 @@ The model has not yet been checked against recordings of the real car; issue #4 
 Known gaps that matter for sim-to-real work:
 
 - At full throttle the car reaches 3.2 m/s after 1 s and tops out at 4.35 m/s, against the motor's free speed of 6.0 m/s at the tyre: the wheel joint damping is the only loss, and its value is a guess.
-- The sensors have no noise, bias or latency, and the LiDAR has 8 beams, while the real one is a spinning scanner. The car has no camera yet (issue #3).
+- The sensors have no noise, bias or latency, and the LiDAR has no minimum range or missed returns. The car has no camera yet (issue #3).
 - The steering gives under load. At full lock (0.4 rad) and 0.3 m/s, the servo reaches 0.39 rad, the front wheels lag their Ackermann angles by 0.004 rad, and the car turns on a 0.74 m radius, against 0.70 m for ideal Ackermann steering at 0.4 rad: the rest is the tyres' slip. From rest, the servo reaches 90% of a 0.4 rad step in 0.083 s.
 
 ### Actuator interface
@@ -351,6 +351,8 @@ stable API.
 The package reads the sensors, not the examples. To log the IMU, wheel, steer, suspension and LiDAR values of a scene, call `sensors.read(scene.car.sensors, data)` at each step. `scene.car.sensors` holds the sensor elements of the scene's MjSpec, and `read` binds each one to the data. `lidar_ranges` and `motor_encoder_rad_s` read from the result.
 
 `motor_encoder_rad_s` is the raw speed of the drivetrain. The car reports a different speed: every 20 ms its firmware turns the motor encoder's count over the window into the tyre's surface speed and filters it, 0.95 of the new window to 0.05 of the last value. `encoder.py` computes that speed from the `drive_pos` sensor, one physics step at a time (`encoder.start` and `encoder.step`, with the window and the filter in `EncoderParams`), and the racecar_core adapter returns it from `rc.physics.get_encoder_speed()`.
+
+The 8 rangefinder beams are for controllers and policies that need a few cheap distances each step. The real car's LiDAR spins: `lidar.py` measures each of its 1440 slots when the head passes it, so at 360 Hz each physics step casts the 120 slots of a twelfth of a turn, from that step's pose, with one `mj_multiRay` call, and the scan of a moving car is skewed as the real one is. `lidar.start` gives a whole turn from where the car stands and `lidar.sweep` advances one step, with the scan's numbers in `LidarParams`; slot i points i × 0.25° clockwise from the front, and reads −1 where the car blocks the rear or nothing lies within 12 m. The racecar_core adapter returns the last complete turn from `rc.lidar.get_samples()`, in cm, with 0 for no return. The sweep makes a step about two to four times as long, depending on the track's geom count.
 
 Add your own demos here — a pure-pursuit follower, a data recorder, etc. — using
 `run.py` as the template for the load → step → control loop.

@@ -20,9 +20,9 @@ converts between them, so the controllers do not convert them:
 
   1. Steer sign. In racecar_core, + angle = right. In contract.py, the
      steer_servo + = left. MujocoDrive negates the angle.
-  2. LiDAR order and units. racecar_core scans clockwise, in cm, and 0.0
-     means no return. sensors.LIDAR_BEAM_ORDER is counterclockwise, in m,
-     and -1 means no return. MujocoLidar changes the order and the units.
+  2. LiDAR units. racecar_core and lidar.py both scan clockwise from the
+     front, but racecar_core reads cm and 0.0 for no return, where lidar.py
+     reads m and -1. MujocoLidar changes the units.
 
 Some parts of this module do not follow AGENTS.md, because racecar_core
 code needs them as they are: the Button IntEnum, get_samples_async, the
@@ -37,17 +37,9 @@ from enum import IntEnum
 import mujoco
 import numpy as np
 
-from . import contract, encoder, sensors, sim
+from . import contract, encoder, lidar, sim
 from .control.steering import ControlCommand
 from .scene import Scene
-
-# racecar_core scans clockwise from the front. LIDAR_BEAM_ORDER is
-# counterclockwise from the front (see sensors.py). Both orders start at
-# lidar_000 (straight ahead), so the reverse of the other seven beams gives
-# the clockwise order. An array, not a tuple: numpy reads a tuple index as
-# one index per axis.
-_CLOCKWISE = np.array([0, 7, 6, 5, 4, 3, 2, 1])  # indices into LIDAR_BEAM_ORDER
-RACECAR_CORE_BEAM_ORDER = tuple(sensors.LIDAR_BEAM_ORDER[i] for i in _CLOCKWISE)
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -90,40 +82,45 @@ class MujocoDrive:
 
 
 class MujocoLidar:
-    """racecar_core.Lidar backend over neoracer_mujoco.SensorReadings.
+    """racecar_core.Lidar backend over the spinning LiDAR (lidar.py).
 
-    get_samples() returns the same values as library/lidar.py in
-    racecar-neo-library. Units: cm. Order: clockwise. Index 0 points
-    straight ahead. 0.0 means no return.
+    get_samples() returns the last complete turn, as library/lidar.py in
+    racecar-neo-library does: LidarParams.slots samples in cm, clockwise, index 0
+    straight ahead, and 0.0 for no return, as in the blocked rear.
 
-    This backend has 8 beams (assets/neoracer.xml). The other backends have
-    about 720 or 1440 samples. racecar_core tells controllers to index with
-    len(scan) or get_num_samples(), so get_num_samples() returns 8, and the
-    backend does not make up more samples.
+    MujocoRacecar.go() calls advance() once a step, when the poses are up to
+    date, as the LiDAR spins whatever the program does. Before the first step, the scan is a
+    whole turn from where the car stands.
     """
 
     def __init__(self, scene: Scene, data: mujoco.MjData):
-        self._sensors = scene.car.sensors
-        self._data = data
+        self._model, self._car, self._data = scene.model, scene.car, data
+        self._dt = float(scene.model.opt.timestep)  # s
+        self._params = lidar.LidarParams()
+        self._state = lidar.start(self._params, self._model, data, self._car)
+
+    def advance(self) -> None:
+        """Sweep the slots that the head passes in one physics step."""
+        self._state = lidar.sweep(
+            self._params, self._model, self._data, self._car, self._state, self._dt
+        )
 
     def get_samples(self) -> np.ndarray:
-        readings = sensors.read(self._sensors, self._data)
-        meters = sensors.lidar_ranges(readings)[_CLOCKWISE]
-        cm = meters * 100.0
-        # In racecar_core, 0.0 means "no return". A -1 (no hit) and a value
-        # that is not finite both give 0.0. No real distance is negative.
+        cm = self._state.scan * 100.0
+        # In racecar_core, 0.0 means "no return". No real distance is
+        # negative, and lidar.NO_RETURN is -1.
         valid = np.isfinite(cm) & (cm > 0.0)
         return np.where(valid, cm, 0.0).astype(np.float32)
 
     def get_samples_async(self) -> np.ndarray:
         # The name comes from racecar_core, where this method reads the LiDAR
         # when the car is not in "go" mode (Jupyter only on the real car).
-        # This backend has no such mode and reads the current MjData. So the
-        # method is not asynchronous and returns the same as get_samples().
+        # This backend has no such mode, so the method is not asynchronous
+        # and returns the same as get_samples().
         return self.get_samples()
 
     def get_num_samples(self) -> int:
-        return len(RACECAR_CORE_BEAM_ORDER)
+        return self._params.slots
 
 
 class MujocoPhysics:
@@ -218,14 +215,14 @@ class MujocoRacecar:
     changes. Only its `import racecar_core` must give this class.
 
     go() runs each physics step in two halves. mj_step1 brings the
-    positions, velocities and sensors up to data.time, and the encoder
-    counts the step that led there; update() reads the car as it is at that
-    time and sets its command, and mj_step2 integrates the next step with
-    that command. go() returns after the first half of a step, with every
-    step counted and the sensors up to date. So
-    update() reads the sensors after the physics step that its last command
-    caused, as in RacecarSim (Unity steps a frame, then calls Python), and
-    no reading lags the car by a step, as it does after a whole mj_step.
+    positions, velocities and sensors up to data.time, and the encoder and
+    the LiDAR count the step that led there; update() reads the car as it
+    is at that time and sets its command, and mj_step2 integrates the next
+    step with that command. go() returns after the first half of a step,
+    with every step counted and the sensors up to date. So update() reads
+    the sensors after the physics step that its last command caused, as in
+    RacecarSim (Unity steps a frame, then calls Python), and no reading
+    lags the car by a step, as it does after a whole mj_step.
 
     max_steps: if None (the default), go() runs until the process stops, as
     on the real car. If it is an int, go() returns after that many steps,
@@ -294,7 +291,8 @@ class MujocoRacecar:
                     slow_countdown = self._update_slow_time
             mujoco.mj_step2(self._model, self._data)
             # The first half of the next step: the sensors at the new time,
-            # so the encoder counts the step just finished.
+            # so the encoder and the LiDAR count the step just finished.
             mujoco.mj_step1(self._model, self._data)
+            self.lidar.advance()
             self.physics.advance()
             step += 1
