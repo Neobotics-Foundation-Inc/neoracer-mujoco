@@ -112,3 +112,17 @@ def test_the_first_window_measures_the_turn_of_the_wheels_in_it(scene):
     t1, a1, first = next(x for x in seen if x[2] != 0.0)
     alpha = encoder.EncoderParams().alpha
     assert first == pytest.approx(alpha * (a1 - a0) * WHEEL_RADIUS / (t1 - t0))
+
+
+def test_a_bounded_run_counts_its_last_step(scene):
+    """go() with max_steps returns with every step counted: from rest at
+    full throttle, 8 steps at 360 Hz (22 ms) pass the first 20 ms tick, so
+    the encoder reports a speed."""
+    model, car = scene.model, scene.car
+    data = sim.settle(model)
+    rc = MujocoRacecar(scene, data, max_steps=8)
+    command = ControlCommand(throttle=1.0, steer=0.0)
+    rc.set_start_update(lambda: sim.apply_command(car, data, command), lambda: None)
+    rc.go()
+    assert model.opt.timestep == pytest.approx(1 / 360)
+    assert rc.physics.get_encoder_speed() > 0.0
