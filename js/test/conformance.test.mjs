@@ -88,3 +88,22 @@ test('set_speed_angle writes the controls that the Python adapter writes', () =>
     assert.equal(data.ctrl[car.steer], c.steer);
   }
 });
+
+test("the car stands where it is put, facing +X, whatever the track's site defaults", () => {
+  const defaults = [
+    '<site quat="0 0 0 1"/>',
+    '<site euler="0 0 1.2"/>',
+    '<site fromto="0 0 0 1 1 1" size=".01"/>',
+  ];
+  for (const site of defaults) {
+    const xml = trackXml.replace('<default>', `<default>${site}`);
+    assert.notEqual(xml, trackXml);
+    const placed = compose(mj, xml, [1, -2, 0]);
+    const data = new mj.MjData(placed.model);
+    mj.mj_forward(placed.model, data);
+    const b = placed.car.body;
+    assert.deepEqual(Array.from(data.xquat.subarray(4 * b, 4 * b + 4), (x) => Math.round(x * 1e9) / 1e9), [1, 0, 0, 0], site);
+    const xy = Array.from(data.xpos.subarray(3 * b, 3 * b + 2));
+    assert.ok(Math.abs(xy[0] - 1) < 1e-9 && Math.abs(xy[1] + 2) < 1e-9, site);
+  }
+});

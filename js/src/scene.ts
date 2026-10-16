@@ -87,7 +87,12 @@ export function compose(
   // frame to the world body, so the car hangs from a site at pos.
   const world = mj.mjs_findBody(spec, 'world')!;
   const mount = mj.mjs_addSite(world, mj.mjs_getSpecDefault(spec)!)!;
+  // The site takes the track's site defaults: undo any pose they give it,
+  // so the car stands at pos facing +X.
   mount.pos.set(pos);
+  mount.quat.set([1, 0, 0, 0]);
+  mount.alt.type = mj.mjtOrientation.mjORIENTATION_QUAT;
+  mount.fromto.set([NaN, NaN, NaN, NaN, NaN, NaN]);
   const body = mj.mjs_findBody(car, CAR_BODY);
   if (!body) throw new Error(`the car has no "${CAR_BODY}" body`);
   if (!mj.mjs_attach(mount.element, body.element, '', '')) throw new Error(mj.mjs_getError(spec));
