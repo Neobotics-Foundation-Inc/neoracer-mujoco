@@ -126,6 +126,20 @@ def test_a_controller_reads_the_simulated_time(tmp_path):
     assert time.time() > 1e9  # s since 1970
 
 
+def test_a_star_import_gets_the_simulated_clocks(tmp_path):
+    """`from time import *` in a controller gets the simulated clocks and
+    the rest of the time module."""
+    data, rc = run_racecar_core.build_racecar(run_racecar_core.load_scene(), 1)
+    (tmp_path / "star_probe.py").write_text(
+        "from time import *\n\n\ndef now():\n"
+        "    return time(), monotonic(), perf_counter(), monotonic_ns(), sleep\n"
+    )
+    with run_racecar_core.controller_imports(rc, tmp_path):
+        probe = importlib.import_module("star_probe")
+        data.time = 1.25
+        assert probe.now() == (1.25, 1.25, 1.25, 1_250_000_000, time.sleep)
+
+
 def test_a_library_imported_by_a_controller_keeps_the_real_clock(tmp_path):
     """Only the files of the controller read the simulated time. A module
     outside its folder that the controller imports first in the block, as a
