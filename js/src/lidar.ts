@@ -16,11 +16,11 @@ export const NO_RETURN = -1; // what a slot reads with nothing in range
 export interface LidarParams {
   readonly slots: number; // slots a turn
   readonly scanRate: number; // Hz, turns a second
-  readonly maxRange: number; // m, PLACEHOLDER
-  readonly field: number; // rad of bearings it sees, centered on the front; PLACEHOLDER
+  readonly maxRange: number; // m, the LakiBeam1's range on a bright target
+  readonly field: number; // rad of bearings it sees, centered on the front
 }
 
-export const LIDAR: LidarParams = { slots: 1440, scanRate: 30, maxRange: 12, field: 1.5 * Math.PI };
+export const LIDAR: LidarParams = { slots: 1440, scanRate: 30, maxRange: 25, field: 1.5 * Math.PI };
 
 /** Whether it sees slot i: its bearing is in [-field / 2, field / 2). */
 export function isVisible(params: LidarParams, i: number): boolean {
