@@ -1,6 +1,6 @@
 {
   "name": "neoracer-mujoco",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "The NeoRacer car in MuJoCo's WebAssembly build: put it on a track, drive it, and read its encoder and LiDAR as the real car reports them.",
   "license": "GPL-3.0-only",
   "type": "module",
