@@ -21,6 +21,7 @@ _ZERO = SensorReadings(
     fr_wheel_vel=0.0,
     rl_wheel_vel=0.0,
     rr_wheel_vel=0.0,
+    drive_pos=0.0,
     fl_susp_pos=0.0,
     fr_susp_pos=0.0,
     rl_susp_pos=0.0,

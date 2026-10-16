@@ -14,6 +14,7 @@ Sensor map (matches neoracer.xml):
   steer_cmd_pos — virtual steering input angle (rad)
   fl/fr_steer_pos — actual front wheel steer angles (rad)
   fl/fr/rl/rr_wheel_vel — wheel angular velocities (rad/s)
+  drive_pos     — the drivetrain's angle: the mean wheel angle (rad)
   fl/fr/rl/rr_susp_pos  — suspension travel (m; positive = compressed)
   lidar_000..315 — rangefinder distances (m; -1 = no hit)
 """
@@ -55,6 +56,8 @@ class SensorReadings:
     fr_wheel_vel: float
     rl_wheel_vel: float
     rr_wheel_vel: float
+    # rad, the mean of the four wheels' angles, which the motor encoder counts
+    drive_pos: float
     # suspension travel (m; + = compressed)
     fl_susp_pos: float
     fr_susp_pos: float
@@ -94,6 +97,7 @@ class CarSensors:
     fr_wheel_vel: mujoco.MjsSensor
     rl_wheel_vel: mujoco.MjsSensor
     rr_wheel_vel: mujoco.MjsSensor
+    drive_pos: mujoco.MjsSensor
     fl_susp_pos: mujoco.MjsSensor
     fr_susp_pos: mujoco.MjsSensor
     rl_susp_pos: mujoco.MjsSensor
@@ -147,6 +151,7 @@ def read(sensors: CarSensors, data: mujoco.MjData) -> SensorReadings:
         fr_wheel_vel=float(d(s.fr_wheel_vel).data[0]),
         rl_wheel_vel=float(d(s.rl_wheel_vel).data[0]),
         rr_wheel_vel=float(d(s.rr_wheel_vel).data[0]),
+        drive_pos=float(d(s.drive_pos).data[0]),
         fl_susp_pos=float(d(s.fl_susp_pos).data[0]),
         fr_susp_pos=float(d(s.fr_susp_pos).data[0]),
         rl_susp_pos=float(d(s.rl_susp_pos).data[0]),
@@ -165,11 +170,10 @@ def read(sensors: CarSensors, data: mujoco.MjData) -> SensorReadings:
 def motor_encoder_rad_s(sensors: SensorReadings) -> float:
     """The motor encoder reading: angular velocity (rad/s, + = forward).
 
-    The real NeoRacer has one drive motor. neoracer.xml has four wheel joints
-    with the same drive, so this function returns the mean of the four
-    wheel_vel sensors. It gives no encoder ticks, because the drive joints
-    have no <jointpos> sensor. The value is raw: no calibration, filter or
-    quantization.
+    The motor turns with the mean of the four wheels through the open
+    differentials, so this function returns the mean of the four wheel_vel
+    sensors. The value is raw: no window, filter or quantization. For the
+    speed that the car's firmware reports, see encoder.py.
     """
     s = sensors
     return (s.fl_wheel_vel + s.fr_wheel_vel + s.rl_wheel_vel + s.rr_wheel_vel) / 4

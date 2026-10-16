@@ -340,6 +340,14 @@
         <jointvel name="rr_wheel_vel" joint="rr_drive"/>
 
         <!--
+        The drivetrain's angle (rad): the mean of the four wheels' angles,
+        which the motor turns with through the open differentials. The motor
+        encoder counts it; encoder.py turns it into the speed the car's
+        firmware reports.
+        -->
+        <tendonpos name="drive_pos" tendon="drivetrain"/>
+
+        <!--
         Suspension travel (meters).
         Positive = jounce (spring compressed, wheel moved up relative to car body).
         Negative = droop (spring extended).

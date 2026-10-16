@@ -92,6 +92,17 @@ def test_the_drivetrain_is_open_differentials(scene):
         assert data.bind_scalar(joint).qfrc_actuator[0] == pytest.approx(force / 4)
 
 
+def test_drive_pos_is_the_mean_wheel_angle(scene):
+    """drive_pos, which the motor encoder counts, is the mean of the four
+    wheels' spin angles: the angle the motor turns with."""
+    model, car = scene.model, scene.car
+    data = mujoco.MjData(model)
+    for wheel, angle in zip(car.wheels, (1.0, 2.0, 4.0, -3.0), strict=True):
+        data.bind_scalar(_spin_joint(wheel)).qpos = angle  # rad
+    mujoco.mj_forward(model, data)
+    assert data.bind_scalar(car.sensors.drive_pos).data[0] == pytest.approx(1.0)
+
+
 def test_actuator_contract(scene):
     """The car has the actuators of contract.EXPECTED_ACTUATORS and no
     others. Their order in ctrl does not matter: code writes ctrl through

@@ -7,11 +7,11 @@ signatures over a NeoRacer Scene and its MjData. It does not copy or change
 racecar_core. So controller code (`rc.drive`, `rc.lidar`,
 `rc.set_start_update`, `rc.go`) runs in this simulator without changes.
 
-This module has Drive, Lidar, Controller, Display and MujocoRacecar.
-MujocoRacecar is the equivalent of create_racecar(): it connects the other
-parts and runs the start/update/update_slow loop in go(). This module has no
-camera, led, nav, physics, slam, telemetry or vision, because MuJoCo has no
-backend for them yet.
+This module has Drive, Lidar, Physics, Controller, Display and
+MujocoRacecar. MujocoRacecar is the equivalent of create_racecar(): it
+connects the other parts and runs the start/update/update_slow loop in go().
+Physics has only the encoder's speed. This module has no camera, led, nav,
+slam, telemetry or vision, because MuJoCo has no backend for them yet.
 
 Frame: +X forward, +Y left, +Z up.
 
@@ -37,7 +37,7 @@ from enum import IntEnum
 import mujoco
 import numpy as np
 
-from . import contract, sensors, sim
+from . import contract, encoder, sensors, sim
 from .control.steering import ControlCommand
 from .scene import Scene
 
@@ -126,6 +126,32 @@ class MujocoLidar:
         return len(RACECAR_CORE_BEAM_ORDER)
 
 
+class MujocoPhysics:
+    """The part of racecar_core.Physics that the simulator has: the speed
+    that the car's firmware reports from its motor encoder (encoder.py).
+
+    MujocoRacecar.go() calls advance() after each physics step, as the
+    firmware samples the encoder whatever the program does.
+    """
+
+    def __init__(self, scene: Scene, data: mujoco.MjData):
+        self._drive_pos = scene.car.sensors.drive_pos
+        self._data = data
+        self._dt = float(scene.model.opt.timestep)  # s
+        self._encoder = encoder.start(self._angle())
+
+    def _angle(self) -> float:
+        return float(self._data.bind_scalar(self._drive_pos).data[0])  # rad
+
+    def advance(self) -> None:
+        """Count one physics step on the encoder."""
+        self._encoder = encoder.step(self._encoder, self._angle(), self._dt)
+
+    def get_encoder_speed(self) -> float:
+        """The car's speed (m/s) from its motor encoder, + = forward."""
+        return self._encoder.speed
+
+
 class MujocoController:
     """racecar_core.Controller backend. MuJoCo has no gamepad, so a fixed set
     of buttons is held down for the whole run.
@@ -182,8 +208,8 @@ class Program:
 class MujocoRacecar:
     """racecar_core.Racecar backend over MuJoCo.
 
-    It connects MujocoDrive, MujocoLidar, MujocoController and MujocoDisplay
-    to one Scene and MjData, and runs the start/update/update_slow loop in
+    It connects MujocoDrive, MujocoLidar, MujocoPhysics, MujocoController and
+    MujocoDisplay to one Scene and MjData, and runs the start/update/update_slow loop in
     go(). So a racecar_core controller script, for example
     neoracer-labs/ultimate-wall-follower/wall_follower.py, runs without
     changes. Only its `import racecar_core` must give this class.
@@ -207,6 +233,7 @@ class MujocoRacecar:
     ):
         self.drive = MujocoDrive(scene, data)
         self.lidar = MujocoLidar(scene, data)
+        self.physics = MujocoPhysics(scene, data)
         self.controller = MujocoController(held_buttons)
         self.display = MujocoDisplay()
         self._model = scene.model
@@ -246,6 +273,7 @@ class MujocoRacecar:
         step = 0
         while self._max_steps is None or step < self._max_steps:
             mujoco.mj_step(self._model, self._data)
+            self.physics.advance()
             program.update()
             if program.update_slow is not None:
                 slow_countdown -= self._dt
