@@ -105,17 +105,22 @@ def test_required_sensors_present(scene):
     assert not missing, f"missing sensors: {missing}"
 
 
-def test_lidar_sits_on_chassis_top(scene):
-    """The LiDAR mount and its 8 ray sites sit on the top face of the chassis
-    box, in the car body frame. The ray tests use horizontal distances only,
-    so they cannot see this height."""
+def test_lidar_rays_start_at_the_lidar_inside_the_chassis_box(scene):
+    """The LiDAR mount and its 8 ray sites are at one point of the car body,
+    the LiDAR's centre, below the top of the chassis box, which reaches the
+    top of the LiDAR. A rangefinder ignores the geoms of its own body, so the
+    rays leave the car. The ray tests use horizontal distances only, so they
+    cannot see this height."""
     model, spec = scene.model, scene.spec
     chassis = model.bind_scalar(spec.geom("chassis"))
+    bottom = float(chassis.pos[2] - chassis.size[2])
     top = float(chassis.pos[2] + chassis.size[2])
-    for name in ("lidar_mount", *sensors.LIDAR_BEAM_ORDER):
+    mount = model.bind_scalar(spec.site("lidar_mount"))
+    assert bottom < float(mount.pos[2]) < top
+    for name in sensors.LIDAR_BEAM_ORDER:
         site = model.bind_scalar(spec.site(name))
         assert int(site.bodyid[0]) == model.bind_scalar(scene.car.body).id, name
-        assert float(site.pos[2]) == pytest.approx(top), name
+        np.testing.assert_array_equal(site.pos, mount.pos, err_msg=name)
 
 
 def test_total_mass_plausible(scene):

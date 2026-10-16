@@ -27,7 +27,7 @@ import numpy.typing as npt
 
 # This value copies the wheel geom size in assets/neoracer.xml. If you change
 # the XML, change this value.
-WHEEL_RADIUS = 0.050  # m, ESTIMATED: consistent with STL bbox and URDF CoM
+WHEEL_RADIUS = 0.0425  # m, the 85 mm tyre of the spec
 
 type Vec3 = npt.NDArray[np.float64]  # shape (3,)
 type Quat = npt.NDArray[np.float64]  # shape (4,), (w, x, y, z)
