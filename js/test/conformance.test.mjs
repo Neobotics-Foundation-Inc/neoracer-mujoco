@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import loadMujoco from '@mujoco/mujoco';
 
 import {
+  CAR_XML,
   ENCODER,
   LIDAR,
   actuatorLimits,
@@ -112,5 +113,21 @@ test('a LiDAR that is not a scan is refused at the start', () => {
   const data = settle(mj, model);
   for (const bad of [{ slots: 1.5 }, { slots: 0 }, { scanRate: 0 }, { maxRange: -1 }, { field: 7 }]) {
     assert.throws(() => startLidar(mj, { ...LIDAR, ...bad }, scene, data), Error, JSON.stringify(bad));
+  }
+});
+
+test('an encoder that the firmware cannot be is refused at the start', () => {
+  for (const bad of [{ window: 0 }, { window: -0.02 }, { alpha: 0 }, { alpha: -1 }, { alpha: 1.5 }]) {
+    assert.throws(() => startEncoder({ ...ENCODER, ...bad }, 0), Error, JSON.stringify(bad));
+  }
+});
+
+test('a car whose ranges are not symmetric about 0 has no limits', () => {
+  for (const [actuator, range] of [['steer_servo', '-.2 .4'], ['motor', '0 7.4']]) {
+    const pattern = new RegExp(`(<[a-z]+ name="${actuator}"[^>]*?ctrlrange=")[^"]*(")`, 's');
+    const xml = CAR_XML.replace(pattern, `$1${range}$2`);
+    assert.notEqual(xml, CAR_XML, actuator);
+    const odd = compose(mj, trackXml, [0, 0, 0], xml);
+    assert.throws(() => actuatorLimits(odd.model, odd.car), /ctrlrange/, actuator);
   }
 });

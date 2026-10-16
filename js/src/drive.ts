@@ -19,11 +19,20 @@ export interface Limits {
   readonly steerRad: number; // rad
 }
 
+/**
+ * Throw if a range is not symmetric about 0, as contract.actuator_limits
+ * does: speedAngle negates the limit for a negative command.
+ */
 export function actuatorLimits(model: MjModel, car: Car): Limits {
-  return {
-    voltage: model.actuator_ctrlrange[2 * car.drive + 1],
-    steerRad: model.actuator_ctrlrange[2 * car.steer + 1],
-  };
+  const range = (id: number): [number, number] => [model.actuator_ctrlrange[2 * id], model.actuator_ctrlrange[2 * id + 1]];
+  const [low, high] = range(car.drive);
+  const [steerLow, steerHigh] = range(car.steer);
+  const problems = [
+    high > 0 && low === -high ? '' : `the drive ctrlrange is not [-a, a] with a > 0: ${low}, ${high}`,
+    steerHigh > 0 && steerLow === -steerHigh ? '' : `the steer ctrlrange is not [-a, a] with a > 0: ${steerLow}, ${steerHigh}`,
+  ].filter((p) => p !== '');
+  if (problems.length > 0) throw new Error(problems.join('; '));
+  return { voltage: high, steerRad: steerHigh };
 }
 
 /** Write command to data.ctrl: the throttle as that fraction of the battery voltage. */

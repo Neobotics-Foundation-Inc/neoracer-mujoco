@@ -26,8 +26,16 @@ export interface EncoderState {
 // A window closes when less than this is left of it (s).
 const EPS = 1e-9;
 
-/** The encoder of a car at rest, its drivetrain at angle (rad). */
+/**
+ * The encoder of a car at rest, its drivetrain at angle (rad). Throw if the
+ * window is not positive or alpha is not in (0, 1], as EncoderParams does.
+ */
 export function startEncoder(params: EncoderParams, angle: number): EncoderState {
+  const problems = [
+    params.window > 0 ? '' : `window must be > 0 s, not ${params.window}`,
+    params.alpha > 0 && params.alpha <= 1 ? '' : `alpha must be in (0, 1], not ${params.alpha}`,
+  ].filter((p) => p !== '');
+  if (problems.length > 0) throw new Error(problems.join('; '));
   return { angle, span: 0, due: params.window, speed: 0 };
 }
 
