@@ -272,17 +272,22 @@
         the target angle of steer_input (rad), + = left, and the Ackermann
         constraints below turn the two front wheels from it. The loop's
         voltage is kp (target - angle) - kd x speed, clamped to the servo's
-        6 V. The motor's torque falls as it speeds up, so it turns the wheels
-        at most at its free speed, as a real servo does.
+        5 V supply. The motor's torque falls as it speeds up, so it turns the
+        wheels at most at its free speed, as a real servo does.
 
-        The servo is the car's SPT5435LV-180W, from its datasheet at 6.0 V:
-        35 kg·cm (3.43 N·m) stalled and 0.14 s per 60 degrees (7.48 rad/s).
+        The servo is the car's SPT5435LV-180W. Its datasheet gives 35 kg·cm and
+        0.14 s per 60 degrees at 6.0 V, 29 kg·cm and 0.16 s at 4.8 V; the model
+        takes it on the board's 5 V rail (the supply is not documented, issue
+        #115) and interpolates: 30 kg·cm (2.94 N·m) stalled and 0.157 s per
+        60 degrees (6.68 rad/s).
         Its horn turns 90 degrees over the firmware's 1000 to 2000 us, and the
         car's driver stops it at 0.625 of that swing, 28.1 degrees, where the
         wheels reach full lock: steer_input then turns 25.2 degrees, so the
         horn turns 1.116 times as far. nominal gives the servo at steer_input,
-        through that linkage: 3.83 N·m and 6.70 rad/s. With kp = 50 V/rad and
-        kd = 1 V·s/rad it reaches 90% of a full-lock step in 0.072 s.
+        through that linkage: 3.28 N·m and 5.99 rad/s, its loop's voltage
+        clamped to the 5 V supply. With kp = 50 V/rad and kd = 1 V·s/rad it
+        reaches 90% of a full-lock step in 0.078 s, and swings from full left
+        to full right in 0.16 s.
 
         ctrlrange is full lock: the car's front wheels stop at 30 degrees
         (measured on the car, 2026-10-16), and 0.4403 rad of steer_input puts
@@ -290,7 +295,7 @@
         wheel then turns 21.7 degrees.
         -->
         <dcmotor name="steer_servo" joint="steer_input" input="pos"
-                 nominal="6 3.83 6.70" controller="50 0 1 0 0 6"
+                 nominal="5 3.28 5.99" controller="50 0 1 0 0 5"
                  ctrlrange="-.4403 .4403"/>
     </actuator>
 
