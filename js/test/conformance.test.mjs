@@ -8,9 +8,15 @@ import { test } from 'node:test';
 import loadMujoco from '@mujoco/mujoco';
 
 import {
+  CAR_BODY,
   CAR_XML,
+  DRIVE_POS_SENSOR,
   ENCODER,
+  IMU_ACCEL_SENSOR,
+  IMU_GYRO_SENSOR,
   LIDAR,
+  LIDAR_SITE,
+  WHEEL_GEOMS,
   actuatorLimits,
   applyCommand,
   compose,
@@ -36,6 +42,19 @@ const maxDiff = (a, b) => {
 test('the composed scene has the parts and the step of the Python one', () => {
   for (const [name, value] of Object.entries(fixtures.sizes)) assert.equal(model[name], value, name);
   assert.equal(model.opt.timestep, fixtures.timestep);
+});
+
+test("the contract's names are parts of the composed car", () => {
+  const O = mj.mjtObj;
+  const parts = [
+    [O.mjOBJ_BODY, CAR_BODY],
+    [O.mjOBJ_SITE, LIDAR_SITE],
+    [O.mjOBJ_SENSOR, DRIVE_POS_SENSOR],
+    [O.mjOBJ_SENSOR, IMU_ACCEL_SENSOR],
+    [O.mjOBJ_SENSOR, IMU_GYRO_SENSOR],
+    ...WHEEL_GEOMS.map((name) => [O.mjOBJ_GEOM, name]),
+  ];
+  for (const [type, name] of parts) assert.ok(mj.mj_name2id(model, type.value, name) >= 0, name);
 });
 
 test('the car settles where it settles in Python', () => {
