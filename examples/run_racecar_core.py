@@ -26,13 +26,15 @@ Example:
 """
 
 import argparse
+import builtins
 import contextlib
 import os
 import runpy
 import sys
 import time
 import types
-from collections.abc import Generator
+import unittest.mock
+from collections.abc import Generator, Mapping, Sequence
 from pathlib import Path
 
 import mujoco
@@ -93,10 +95,12 @@ def controller_imports(rc: MujocoRacecar, controller_dir: Path) -> Generator[Non
 
     In the block, `import racecar_core` gives a fake module whose
     create_racecar() returns rc, and controller_dir is first on sys.path.
-    `import time` gives the time module with its clocks (time, monotonic and
-    perf_counter) reading the simulated time, rc.clock(). A controller that
-    measures its frame time with them then sees the physics step, whatever
-    the speed of the machine.
+    In a file in controller_dir, `import time` gives the time module with
+    its clocks (time, monotonic and perf_counter) reading the simulated
+    time, rc.clock(). A controller that measures its frame time with them
+    then sees the physics step, whatever the speed of the machine. Any other
+    module that imports time, as a library does, gets the real one, so its
+    timeouts keep running while the physics waits.
 
     A cached module in sys.modules wins over sys.path. So before the block,
     the function moves aside every cached module that has the name of a
@@ -111,21 +115,42 @@ def controller_imports(rc: MujocoRacecar, controller_dir: Path) -> Generator[Non
     hidden = {
         name: module
         for name, module in sys.modules.items()
-        if name in ("racecar_core", "time") or name.split(".")[0] in local
+        if name == "racecar_core" or name.split(".")[0] in local
     }
     for name in hidden:
         del sys.modules[name]
     shim = types.ModuleType("racecar_core")
     shim.__dict__["create_racecar"] = lambda *args, **kwargs: rc
     sys.modules["racecar_core"] = shim
-    sys.modules["time"] = _SimTime(rc)
+    sim_time = _SimTime(rc)
+    real_import = builtins.__import__
+
+    def import_(
+        name: str,
+        globals: Mapping[str, object] | None = None,
+        locals: Mapping[str, object] | None = None,
+        fromlist: Sequence[str] | None = (),
+        level: int = 0,
+    ) -> types.ModuleType:
+        # globals are those of the importing module, so __file__ says who
+        # imports. runpy gives the controller file its own path.
+        file = (globals or {}).get("__file__")
+        if (
+            name == "time"
+            and level == 0
+            and isinstance(file, str)
+            and Path(file).resolve().is_relative_to(controller_dir.resolve())
+        ):
+            return sim_time
+        return real_import(name, globals, locals, fromlist, level)
+
     sys.path.insert(0, str(controller_dir))
     try:
-        yield
+        with unittest.mock.patch.object(builtins, "__import__", import_):
+            yield
     finally:
         sys.path.remove(str(controller_dir))
         sys.modules.pop("racecar_core", None)
-        sys.modules.pop("time", None)
         for name in list(sys.modules):
             file = getattr(sys.modules[name], "__file__", None)
             if file is not None and Path(file).is_relative_to(controller_dir):
