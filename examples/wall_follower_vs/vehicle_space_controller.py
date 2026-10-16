@@ -51,10 +51,14 @@ class CarGeometry:
 
     wheelbase_m: float  # m; front axle to rear axle
     steer_max_rad: float  # rad; steer_servo ctrlrange upper limit
+    # m; the LiDAR's position in the car frame (+X forward, +Y left), from
+    # the car center where the arcs start. A scan's ranges are from here.
+    lidar_xy_m: tuple[float, float]
 
 
 def car_geometry(scene: Scene) -> CarGeometry:
-    """Read the wheelbase and the steering limit from a compiled car scene.
+    """Read the wheelbase, the steering limit and the LiDAR's position from a
+    compiled car scene.
 
     The steer_servo command is the steering angle of the bicycle model.
     neoracer.xml converts it to the two front wheel angles (Ackermann
@@ -65,14 +69,18 @@ def car_geometry(scene: Scene) -> CarGeometry:
     """
     front = scene.spec.body("fl_wheel_body")
     rear = scene.spec.body("rl_wheel_body")
-    if front is None or rear is None:
-        raise ValueError("the scene has no fl_wheel_body or rl_wheel_body")
+    lidar = scene.spec.site("lidar_mount")
+    if front is None or rear is None or lidar is None:
+        raise ValueError("the scene has no fl_wheel_body, rl_wheel_body or lidar_mount")
     model = scene.model
+    # The site is on the car body, so its pos is in the car frame.
+    lidar_x, lidar_y, _ = model.bind_scalar(lidar).pos
     return CarGeometry(
         wheelbase_m=float(
             model.bind_scalar(front).pos[0] - model.bind_scalar(rear).pos[0]
         ),
         steer_max_rad=contract.actuator_limits(model, scene.car).steer_rad,
+        lidar_xy_m=(float(lidar_x), float(lidar_y)),
     )
 
 
@@ -275,8 +283,10 @@ def obstacle_points(
     valid = np.isfinite(filtered) & (filtered > 0.0)
     r = filtered[valid]
     theta = angles_rad[valid]
-    x = r * np.cos(theta)
-    y = r * np.sin(theta)
+    # The ranges are from the LiDAR; the arcs start at the car center.
+    lidar_x, lidar_y = params.car.lidar_xy_m
+    x = lidar_x + r * np.cos(theta)
+    y = lidar_y + r * np.sin(theta)
     if len(x) < 2:
         return x, y
     bridge = np.hypot(np.diff(x), np.diff(y)) <= params.max_segment_gap_m

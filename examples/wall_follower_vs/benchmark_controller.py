@@ -48,7 +48,9 @@ def main() -> None:
     print(f"control period {1000.0 * dt:.1f} ms, {args.iters} timed steps")
     for name, walls in scenes:
         for n in args.n:
-            angles, ranges = cast_scan(walls, DenseLidarParams(n_beams=n))
+            angles, ranges = cast_scan(
+                walls, DenseLidarParams(n_beams=n), params.car.lidar_xy_m
+            )
             state, _ = step(params, VsState(), angles, ranges, dt)  # builds the table
             times_ms = np.empty(args.iters)
             for i in range(args.iters):
