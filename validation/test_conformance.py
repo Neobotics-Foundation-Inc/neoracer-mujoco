@@ -227,8 +227,9 @@ def test_the_servo_is_the_spt5435lv_on_5_v(scene):
     0.157 s at its horn: its datasheet (35 kg·cm and 0.14 s at 6.0 V, 29 kg·cm
     and 0.16 s at 4.8 V) at 5 V. The horn turns 28.125 degrees, 0.625 of its
     45 to a side, as steer_input turns to full lock."""
-    r, k, *_, vclamp = scene.model.actuator("steer_servo").gainprm[:8]
-    lock = scene.model.actuator("steer_servo").ctrlrange[1]
+    servo = scene.model.bind_scalar(scene.car.steer)
+    r, k, *_, vclamp = servo.gainprm[:8]
+    lock = servo.ctrlrange[1]
     linkage = math.radians(0.625 * 45) / lock  # the horn turns ±45 degrees
     w = (5.0 - 4.8) / (6.0 - 4.8)
     stall = (29 + w * (35 - 29)) * 9.80665 / 100  # N·m at the horn
