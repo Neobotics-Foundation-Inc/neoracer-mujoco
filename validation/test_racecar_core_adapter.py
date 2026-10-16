@@ -19,11 +19,13 @@ import pytest
 from neoracer_mujoco import Scene, assets, contract, lidar, sim
 from neoracer_mujoco.racecar_core_adapter import MujocoDrive, MujocoLidar, MujocoRacecar
 
+LIDAR = lidar.LidarParams()
+
 
 @pytest.fixture(scope="module")
 def corridor() -> Scene:
     """The car in loop_corridor.xml, where every ray it does not block meets
-    a wall within lidar.MAX_RANGE."""
+    a wall within the LiDAR's range."""
     track = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xml"))
     return assets.compose(track, visuals=False)
 
@@ -131,11 +133,11 @@ def test_no_return_and_the_blocked_rear_read_zero(scene, corridor):
     nothing, and in the corridor the rear quarter, which the car blocks,
     reads 0.0 too."""
     alone = MujocoLidar(scene, sim.settle(scene.model))
-    assert len(alone.get_samples()) == alone.get_num_samples() == lidar.SLOTS
+    assert len(alone.get_samples()) == alone.get_num_samples() == LIDAR.slots
     assert np.all(alone.get_samples() == 0.0)
     scan = MujocoLidar(corridor, sim.settle(corridor.model)).get_samples()
-    assert np.all(scan[~lidar.VISIBLE] == 0.0)
-    assert np.all(scan[lidar.VISIBLE] > 0.0)
+    assert np.all(scan[~lidar.visible(LIDAR)] == 0.0)
+    assert np.all(scan[lidar.visible(LIDAR)] > 0.0)
 
 
 def test_get_samples_async_matches_get_samples(corridor):

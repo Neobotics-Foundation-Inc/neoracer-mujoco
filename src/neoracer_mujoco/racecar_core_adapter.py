@@ -85,7 +85,7 @@ class MujocoLidar:
     """racecar_core.Lidar backend over the spinning LiDAR (lidar.py).
 
     get_samples() returns the last complete turn, as library/lidar.py in
-    racecar-neo-library does: lidar.SLOTS samples in cm, clockwise, index 0
+    racecar-neo-library does: LidarParams.slots samples in cm, clockwise, index 0
     straight ahead, and 0.0 for no return, as in the blocked rear.
 
     MujocoRacecar.go() calls advance() after each physics step, as the LiDAR
@@ -96,12 +96,13 @@ class MujocoLidar:
     def __init__(self, scene: Scene, data: mujoco.MjData):
         self._model, self._car, self._data = scene.model, scene.car, data
         self._dt = float(scene.model.opt.timestep)  # s
-        self._state = lidar.start(self._model, data, self._car)
+        self._params = lidar.LidarParams()
+        self._state = lidar.start(self._params, self._model, data, self._car)
 
     def advance(self) -> None:
         """Sweep the slots that the head passes in one physics step."""
         self._state = lidar.sweep(
-            self._model, self._data, self._car, self._state, self._dt
+            self._params, self._model, self._data, self._car, self._state, self._dt
         )
 
     def get_samples(self) -> np.ndarray:
@@ -119,7 +120,7 @@ class MujocoLidar:
         return self.get_samples()
 
     def get_num_samples(self) -> int:
-        return lidar.SLOTS
+        return self._params.slots
 
 
 class MujocoPhysics:

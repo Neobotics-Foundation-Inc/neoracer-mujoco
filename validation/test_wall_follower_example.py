@@ -31,7 +31,7 @@ def test_canonical_wall_follower_runs_unmodified_against_mujoco():
 
     # rc.drive, rc.lidar, rc.controller and rc.display work before the
     # controller uses them.
-    assert rc.lidar.get_samples().shape == (lidar.SLOTS,)
+    assert rc.lidar.get_samples().shape == (lidar.LidarParams().slots,)
     rc.drive.stop()
     assert rc.controller.is_down(rc.controller.Button.RB) is True
     rc.display.show_text("ok")  # no-op; must not raise
