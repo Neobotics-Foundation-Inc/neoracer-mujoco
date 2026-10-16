@@ -163,8 +163,8 @@
                   contype="0" conaffinity="0" rgba=".2 .2 .2 1"/>
 
             <!--
-            Virtual steering input — not a physical part. One position actuator drives
-            this joint (ctrl[4]); the two Ackermann equality constraints below split the
+            Virtual steering input — not a physical part. The steering servo drives
+            this joint; the two Ackermann equality constraints below split the
             command into fl_steer and fr_steer with the correct inner/outer differential.
             -->
             <body name="steer_input_body" pos=".14382 0 0">
@@ -264,12 +264,23 @@
                  ctrlrange="-7.4 7.4"/>
 
         <!--
-        Steering servo driving the virtual steer_input joint. The Ackermann
-        constraints split this one command into the correct fl_steer / fr_steer angles.
-        ctrl[4] = target angle in radians, range [-0.4, 0.4].
-        Tune kp to match the real servo's torque and slew rate when measured.
+        The steering servo, as a DC motor with its own position loop: ctrl is
+        the target angle of steer_input (rad), + = left, and the Ackermann
+        constraints below turn the two front wheels from it. The loop's
+        voltage is kp (target - angle) - kd x speed, clamped to the servo's
+        6 V. The motor's torque falls as it speeds up, so it turns the wheels
+        at most at its free speed, as a real servo does.
+
+        PLACEHOLDERS until the car's servo is measured: a standard servo at
+        6 V, 1.47 N·m (15 kg·cm) stalled and 0.1 s per 60 degrees (a free
+        speed of 10.5 rad/s), with no gear between it and the wheels. With
+        kp = 50 V/rad and kd = 0.5 V·s/rad it reaches 90% of a 0.4 rad step
+        in 0.064 s, near the playground's slew of 8 rad/s. A larger kd
+        chatters at 360 Hz.
         -->
-        <position name="steer_servo" joint="steer_input" kp="25" ctrlrange="-.4 .4"/>
+        <dcmotor name="steer_servo" joint="steer_input" input="pos"
+                 nominal="6 1.47 10.5" controller="50 0 .5 0 0 6"
+                 ctrlrange="-.4 .4"/>
     </actuator>
 
     <!--
@@ -283,12 +294,16 @@
     the range of steer_input (max error < 0.00035 rad).
 
     polycoef: a0 a1 a2 a3 a4  →  y = a0 + a1·x + a2·x² + a3·x³ + a4·x⁴
+
+    solref "0.006 1" makes the linkage stiffer than MuJoCo's default (0.02 s):
+    under the tyres' load the wheels then lag their Ackermann angles by 0.004
+    rad, not 0.04. The time constant stays above two time steps at 360 Hz.
     -->
     <equality>
-        <joint name="ackermann_left"
+        <joint name="ackermann_left" solref=".006 1"
                joint1="fl_steer" joint2="steer_input"
                polycoef="-0.00001352 1.00126099 0.39081269 0.12254396 -0.09308329"/>
-        <joint name="ackermann_right"
+        <joint name="ackermann_right" solref=".006 1"
                joint1="fr_steer" joint2="steer_input"
                polycoef="0.00001352 1.00126099 -0.39081269 0.12254396 0.09308329"/>
     </equality>

@@ -45,7 +45,7 @@ class Physics:
     wheel_friction: float = 1.0
     chassis_mass: float = 1.0  # x the mass and the inertia of the car body
     motor_torque: float = 1.0  # x the motor's torque, at every speed
-    steer_stiffness: float = 1.0  # x the stiffness (kp) of the steering servo
+    steer_stiffness: float = 1.0  # x the gain kp of the steering servo's loop
 
     def __post_init__(self) -> None:
         for f in fields(self):
@@ -107,11 +107,10 @@ def apply_physics(model: mujoco.MjModel, scene: Scene, physics: Physics) -> None
     # the free speed V / K.
     motor, motor0 = model.bind_scalar(car.drive), nominal.bind_scalar(car.drive)
     motor.gainprm[0] = motor0.gainprm[0] / physics.motor_torque
-    # A position servo's force is kp * (ctrl - q): gainprm[0] = kp and
-    # biasprm[1] = -kp.
+    # The servo's position loop applies kp (ctrl - q) volts, with
+    # gainprm[4] = kp, so near its target its stiffness is proportional to kp.
     servo, servo0 = model.bind_scalar(car.steer), nominal.bind_scalar(car.steer)
-    servo.gainprm[0] = servo0.gainprm[0] * physics.steer_stiffness
-    servo.biasprm[1] = servo0.biasprm[1] * physics.steer_stiffness
+    servo.gainprm[4] = servo0.gainprm[4] * physics.steer_stiffness
     mujoco.mj_setConst(model, mujoco.MjData(model))
 
 
@@ -122,7 +121,6 @@ FIELDS = (
     "body_mass",
     "body_inertia",
     "actuator_gainprm",
-    "actuator_biasprm",
     "body_subtreemass",
     "body_invweight0",
     "dof_invweight0",

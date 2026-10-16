@@ -112,7 +112,7 @@ The model has not yet been checked against recordings of the real car; issue #4 
 | Chassis inertia and center-of-mass height; wheel masses | the URDF of an older CAD model; the inertia is scaled to the spec mass, and nobody has measured either |
 | Suspension stiffness and damping | estimated; the springs are preloaded so the car rests at the CAD ride height |
 | Tire friction (1.5) and wheel joint damping | estimated; the damping, 0.0005 N·m·s/rad per wheel, stands in for drivetrain losses and holds the top speed to 4.35 m/s |
-| Steering servo gain (kp = 25) | estimated, not fitted to the servo's torque or slew rate |
+| Steering servo: a DC motor with a position loop; 6 V, 1.47 N·m stalled, 0.1 s per 60°, kp 50 V/rad, kd 0.5 V·s/rad | a standard hobby servo's numbers, not the car's own servo's; the loop's gains are picked so it settles without chatter at 500 Hz and at 360 Hz |
 | IMU position | at the center of mass, not measured |
 | Cosmetic meshes | the older CAD model, placed to roughly fill the measured body |
 | Drive: one DC motor through open differentials, on a 7.4 V pack; at the wheels, 0.765 N·m from rest and a free speed of 141 rad/s | the structure is the real car's. The numbers are the playground's estimates (a drive force of 18 N and a top speed of 6 m/s on 42.5 mm tyres) until the RS545's datasheet, the battery and the differential ratio replace them; the gear is 1 and the rotor has no inertia until then |
@@ -121,7 +121,7 @@ Known gaps that matter for sim-to-real work:
 
 - At full throttle the car reaches 3.2 m/s after 1 s and tops out at 4.35 m/s, against the motor's free speed of 6.0 m/s at the tyre: the wheel joint damping is the only loss, and its value is a guess.
 - The sensors have no noise, bias or latency, and the LiDAR has 8 beams, while the real one is a spinning scanner. The car has no camera yet (issue #3).
-- The steering gives under load. At full lock (0.4 rad) and 0.3 m/s, the servo reaches 0.38 rad, the front wheels lag their Ackermann angles by about 0.04 rad, and the car turns on a 0.85 m radius, against 0.70 m for ideal Ackermann steering at 0.4 rad.
+- The steering gives under load. At full lock (0.4 rad) and 0.3 m/s, the servo reaches 0.39 rad, the front wheels lag their Ackermann angles by 0.004 rad, and the car turns on a 0.74 m radius, against 0.70 m for ideal Ackermann steering at 0.4 rad: the rest is the tyres' slip. From rest, the servo reaches 90% of a 0.4 rad step in 0.064 s.
 
 ### Actuator interface
 
@@ -131,6 +131,8 @@ Known gaps that matter for sim-to-real work:
 | steer_servo | rad | + = left turn | `scene.car.steer` |
 
 The motor is MuJoCo's `dcmotor`: its torque is K (V − K ω) / R at a speed ω, so it falls as the wheels speed up, the car settles at a speed roughly proportional to the voltage, and 0 V brakes it. Its ctrlrange is the battery voltage, which `contract.actuator_limits(model, car).voltage` reads. Code above the model speaks of a throttle in [-1, 1], the fraction of the battery voltage that the speed controller applies: `sim.apply_command` and `batch.command` multiply it by the battery voltage.
+
+The steering servo is a `dcmotor` too, with `input="pos"`: its ctrl is a target angle, and its own position loop sets the motor's voltage, so it turns the wheels no faster than the motor's free speed.
 
 Code writes an actuator by binding its element to the data, for example `data.bind_scalar(scene.car.steer).ctrl = 0.2` (see `scene.py`), so it does not depend on the order of the actuators in the XML. `sim.apply_command(scene.car, data, command)` writes a throttle and a steer.
 
@@ -239,7 +241,7 @@ Nobody knows the real car's grip, mass or motor strength exactly, so a controlle
 | `wheel_friction` | the sliding friction of the wheel contacts, and so how much the wheels slip |
 | `chassis_mass` | the mass and inertia of the car body |
 | `motor_torque` | the motor's torque at every speed; its free speed does not change |
-| `steer_stiffness` | the stiffness of the steering servo |
+| `steer_stiffness` | the gain kp of the steering servo's position loop, and so its stiffness near the target |
 
 `PhysicsRanges` gives the interval of each factor (the default changes nothing), `physics.sample` draws a `Physics` from it, and `apply_physics` writes one into a copy of the model:
 
