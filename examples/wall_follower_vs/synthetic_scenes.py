@@ -4,8 +4,8 @@ need no MuJoCo and no random numbers.
 
 A scene is a list of 2D wall segments in the car frame
 (+X forward, +Y left, origin at the car center). cast_scan() casts the beams
-of a DenseLidarParams against the segments. The same scene thus gives a scan
-at any beam count N.
+of a DenseLidarParams against the segments from the LiDAR's position. The
+same scene thus gives a scan at any beam count N.
 """
 
 import math
@@ -34,16 +34,16 @@ def _seg_intersect(a1: Point, a2: Point, b1: Point, b2: Point) -> float | None:
     return None
 
 
-def cast_scan(walls: list[Segment], lidar: DenseLidarParams) -> Scan:
-    """Cast the beams of lidar against walls. Returns (angles_rad, ranges_m).
-    A range is -1.0 if the beam hits no wall within max_range_m."""
+def cast_scan(walls: list[Segment], lidar: DenseLidarParams, origin: Point) -> Scan:
+    """Cast the beams of lidar against walls from origin (m, the LiDAR's
+    position in the car frame). Returns (angles_rad, ranges_m), ranges from
+    origin. A range is -1.0 if the beam hits no wall within max_range_m."""
     angles = scan_angles(lidar)
     ranges = np.full(lidar.n_beams, -1.0)
-    origin = (0.0, 0.0)
     for i, theta in enumerate(angles):
         far = (
-            math.cos(theta) * lidar.max_range_m,
-            math.sin(theta) * lidar.max_range_m,
+            origin[0] + math.cos(theta) * lidar.max_range_m,
+            origin[1] + math.sin(theta) * lidar.max_range_m,
         )
         crossings = [_seg_intersect(origin, far, p1, p2) for p1, p2 in walls]
         hits = [t for t in crossings if t is not None]
