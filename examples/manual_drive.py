@@ -26,7 +26,7 @@ Frame: +X forward, +Y left, +Z up.
 Actuators (see neoracer_mujoco.contract):
   motor             = terminal voltage (V), + = forward; sim.apply_command
                       sends a throttle in [-1, 1] as that fraction of the battery
-  steer_servo       = target angle (rad), + = left, range ±0.4
+  steer_servo       = target angle (rad), + = left, range ±0.4403 (full lock)
 """
 
 import argparse
@@ -60,7 +60,7 @@ class ThrottleParams:
 class SteeringParams:
     rate: float = 1.5  # rad/s toward the limit while a steer key is held
     return_: float = 2.5  # rad/s back to the center while no steer key is held
-    max: float = 0.40  # rad; the steer command limit of the model
+    max: float = 0.4403  # rad; the steer command limit of the model, full lock
 
 
 @dataclass(frozen=True)

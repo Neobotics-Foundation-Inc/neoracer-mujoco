@@ -23,7 +23,7 @@ from neoracer_mujoco.scene import Scene
 class DriveParams:
     """Input shaping for the demo."""
 
-    max_steer: float = 0.40  # rad; the model's Ackermann command limit
+    max_steer: float = 0.4403  # rad; the model's Ackermann command limit, full lock
     throttle_slew: float = 2.5  # 1/s; how fast the applied throttle follows the input
     steer_slew: float = 4.0  # 1/s; smooths digital WASD input, sticks barely notice
     max_dt: float = 0.1  # s; a longer frame is cut, so physics never has to catch up

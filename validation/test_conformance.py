@@ -7,6 +7,7 @@ The `scene` fixture (conftest.py) runs each test once for each car XML.
 """
 
 import copy
+import math
 from dataclasses import fields
 
 import mujoco
@@ -14,7 +15,7 @@ import numpy as np
 import pytest
 
 from neoracer_mujoco import Scene, contract, sensors, sim
-from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco.control.steering import ControlCommand, ShapingConfig
 
 
 def _steps(model: mujoco.MjModel, seconds: float) -> int:
@@ -249,6 +250,29 @@ def test_the_servo_turns_at_a_servos_speed_and_holds_steady(scene, hz):
         mujoco.mj_step(model, data)
         held.append(_steer_angle(scene, data))
     assert np.std(held) < 0.006
+
+
+def test_full_lock_turns_the_inner_wheel_to_30_degrees(scene):
+    """The car's front wheels stop at 30 degrees (measured on the car,
+    2026-10-16): at full lock, the Ackermann constraint turns the inner front
+    wheel there."""
+    lock = contract.actuator_limits(scene.model, scene.car).steer_rad
+    polycoef = scene.model.equality("ackermann_left").data[:5]
+    inner = sum(c * lock**k for k, c in enumerate(polycoef))  # rad
+    assert inner == pytest.approx(math.radians(30), abs=1e-3)
+
+
+def test_the_steer_limits_in_the_code_are_full_lock(scene):
+    """Code that clamps a steer command by its own copy of the limit reaches
+    full lock, the steer servo's ctrlrange, and no further."""
+    # Imported here: manual_drive imports glfw, which no other test needs.
+    from examples import manual_drive
+    from examples.pygame_drive import drive_sim
+
+    lock = contract.actuator_limits(scene.model, scene.car).steer_rad
+    assert manual_drive.SteeringParams().max == pytest.approx(lock)
+    assert drive_sim.DriveParams().max_steer == pytest.approx(lock)
+    assert ShapingConfig().steer_limit == pytest.approx(lock)
 
 
 def test_left_steer_yaws_left(scene):

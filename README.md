@@ -122,7 +122,7 @@ Known gaps that matter for sim-to-real work:
 
 - At full throttle the car reaches 6.5 m/s after 1 s and tops out at 7.7 m/s, against the motor's free speed of 9.4 m/s at the tyre: the wheel joint damping is the only loss, and its value is a guess. The car's firmware caps its speed at 6 m/s with a speed controller that the simulator does not model: a throttle here is a share of the battery voltage.
 - The sensors have no noise, bias or latency, and the LiDAR has no minimum range or missed returns. The car has no camera yet (issue #3).
-- The steering gives under load. At full lock (0.4 rad) and 0.3 m/s, the servo reaches 0.39 rad, the front wheels lag their Ackermann angles by 0.004 rad, and the car turns on a 0.74 m radius, against 0.70 m for ideal Ackermann steering at 0.4 rad: the rest is the tyres' slip. From rest, the servo reaches 90% of a 0.4 rad step in 0.083 s.
+- The steering gives under load. Full lock is 0.4403 rad of steering input, which puts the inner front wheel at the car's measured 30 degrees. At full lock and 0.3 m/s, the servo reaches 0.429 rad (the inner wheel 28.9 degrees), the front wheels lag their Ackermann angles by 0.004 rad, and the car turns on a 0.67 m radius, against 0.61 m for ideal Ackermann steering at full lock: the rest is the tyres' slip. From rest, the servo reaches 90% of a full-lock step in 0.092 s.
 
 ### Actuator interface
 
@@ -137,7 +137,7 @@ The steering servo is a `dcmotor` too, with `input="pos"`: its ctrl is a target 
 
 Code writes an actuator by binding its element to the data, for example `data.bind_scalar(scene.car.steer).ctrl = 0.2` (see `scene.py`), so it does not depend on the order of the actuators in the XML. `sim.apply_command(scene.car, data, command)` writes a throttle and a steer.
 
-Steering command range is ±0.4 rad; the two Ackermann equality constraints split
+Steering command range is ±0.4403 rad, the car's full lock (the inner front wheel at 30 degrees); the two Ackermann equality constraints split
 it into the correct inner/outer front-wheel angles automatically.
 
 ### Truth sensors

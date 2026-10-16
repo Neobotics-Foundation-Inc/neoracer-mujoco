@@ -18,7 +18,7 @@
 
     <!-- Elliptic friction cone + high impratio: MuJoCo's recommended setting for
          wheeled vehicles — stiffens tangential contact so the tires creep less
-         sideways (measured: full-lock radius 0.77 m → 0.74 m vs 0.68 m ideal).
+         sideways (measured at 0.4 rad of steering: full-lock radius 0.77 m → 0.74 m vs 0.68 m ideal).
          The time step is 1/360 s: 12 steps to a 30 Hz LiDAR scan and 6 to a
          60 Hz frame. implicitfast integrates the actuators' speed damping (the
          motors' back-EMF and the servo's kd), which explicit Euler cannot hold
@@ -68,8 +68,9 @@
 
         <!--
         Steering joint: hinge about the Z-axis (vertical).
-        Range -.55 .55 is wider than the ±0.4 rad steer command so the inner front
-        wheel (which turns more under Ackermann, up to ~0.47 rad) is never clamped.
+        Range -.55 .55 is wider than the inner front wheel's angle at full lock
+        (it turns more under Ackermann, up to 30 degrees, 0.52 rad), so it is
+        never clamped.
         -->
         <default class="steer">
             <joint type="hinge" axis="0 0 1" limited="true" range="-.55 .55"
@@ -277,12 +278,17 @@
         PLACEHOLDERS until the car's servo is measured: a standard servo at
         6 V, 1.47 N·m (15 kg·cm) stalled and 0.1 s per 60 degrees (a free
         speed of 10.5 rad/s), with no gear between it and the wheels. With
-        kp = 50 V/rad and kd = 1 V·s/rad it reaches 90% of a 0.4 rad step
-        in 0.083 s, near the playground's slew of 8 rad/s.
+        kp = 50 V/rad and kd = 1 V·s/rad it reaches 90% of a full-lock step
+        in 0.092 s, near the playground's slew of 8 rad/s.
+
+        ctrlrange is full lock: the car's front wheels stop at 30 degrees
+        (measured on the car, 2026-10-16), and 0.4403 rad of steer_input puts
+        the inner one there through the Ackermann constraints below. The outer
+        wheel then turns 21.7 degrees.
         -->
         <dcmotor name="steer_servo" joint="steer_input" input="pos"
                  nominal="6 1.47 10.5" controller="50 0 1 0 0 6"
-                 ctrlrange="-.4 .4"/>
+                 ctrlrange="-.4403 .4403"/>
     </actuator>
 
     <!--
