@@ -350,7 +350,7 @@ stable API.
 
 The package reads the sensors, not the examples. To log the IMU, wheel, steer, suspension and LiDAR values of a scene, call `sensors.read(scene.car.sensors, data)` at each step. `scene.car.sensors` holds the sensor elements of the scene's MjSpec, and `read` binds each one to the data. `lidar_ranges` and `motor_encoder_rad_s` read from the result.
 
-`motor_encoder_rad_s` is the raw speed of the drivetrain. The car reports a different speed: every 20 ms its firmware turns the motor encoder's count over the window into the tyre's surface speed and filters it, 0.95 of the new window to 0.05 of the last value. `encoder.py` computes that speed from the `drive_pos` sensor, one physics step at a time (`encoder.start`, `encoder.step`), and the racecar_core adapter returns it from `rc.physics.get_encoder_speed()`.
+`motor_encoder_rad_s` is the raw speed of the drivetrain. The car reports a different speed: every 20 ms its firmware turns the motor encoder's count over the window into the tyre's surface speed and filters it, 0.95 of the new window to 0.05 of the last value. `encoder.py` computes that speed from the `drive_pos` sensor, one physics step at a time (`encoder.start` and `encoder.step`, with the window and the filter in `EncoderParams`), and the racecar_core adapter returns it from `rc.physics.get_encoder_speed()`.
 
 Add your own demos here — a pure-pursuit follower, a data recorder, etc. — using
 `run.py` as the template for the load → step → control loop.

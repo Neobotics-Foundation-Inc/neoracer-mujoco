@@ -19,9 +19,10 @@ DT = 1 / 360  # s, the car's physics step
 def _spin(omega: float, seconds: float) -> list[encoder.EncoderState]:
     """The encoder after each step of a drivetrain that turns at omega
     (rad/s) from rest, for seconds."""
-    state, states = encoder.start(0.0), []
+    params = encoder.EncoderParams()
+    state, states = encoder.start(params, 0.0), []
     for i in range(1, round(seconds / DT) + 1):
-        state = encoder.step(state, omega * i * DT, DT)
+        state = encoder.step(params, state, omega * i * DT, DT)
         states.append(state)
     return states
 
@@ -47,7 +48,9 @@ def test_the_first_window_reports_most_of_a_speed_step():
     filter keeps 0.05 of the last value, 0."""
     states = _spin(10.0, 0.03)
     first = next(s for s in states if s.span == 0.0)
-    assert first.speed == pytest.approx(0.95 * 10.0 * WHEEL_RADIUS)
+    assert first.speed == pytest.approx(
+        encoder.EncoderParams().alpha * 10.0 * WHEEL_RADIUS
+    )
 
 
 def test_a_steady_speed_reads_the_tyres_surface_speed():
