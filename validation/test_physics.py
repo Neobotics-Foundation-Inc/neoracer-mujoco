@@ -58,8 +58,7 @@ def test_apply_physics_equals_compiling_the_changed_car():
     motor = edited.actuator(car.drive.name)
     motor.gainprm[0] /= CHANGED.motor_torque  # the DC motor's resistance
     servo = edited.actuator(car.steer.name)
-    servo.gainprm[0] *= CHANGED.steer_stiffness
-    servo.biasprm[1] *= CHANGED.steer_stiffness
+    servo.gainprm[4] *= CHANGED.steer_stiffness  # the position loop's kp
     model = edited.compile()  # edited has the truth sensors already
     compiled = Scene(edited, model, find_car(edited, model))
     np.testing.assert_array_equal(

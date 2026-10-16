@@ -206,6 +206,40 @@ def test_motor_encoder_positive_under_forward_throttle(scene):
     )
 
 
+def _steer_angle(scene: Scene, data: mujoco.MjData) -> float:
+    return float(data.bind_scalar(scene.car.sensors.steer_cmd_pos).data[0])  # rad
+
+
+@pytest.mark.parametrize("hz", [500, 360])
+def test_the_servo_turns_at_a_servos_speed_and_holds_steady(scene, hz):
+    """A servo takes tens of ms to reach full lock and then holds it.
+
+    From rest, a 0.4 rad step reaches 90% in 0.03 to 0.15 s: a position
+    actuator that snaps there in a few ms fails. Driving at full lock, the
+    steering angle wobbles by less than 0.006 rad (standard deviation): a
+    servo loop that chatters, as kd = 1 does under explicit Euler at
+    360 Hz (0.01 rad), fails."""
+    model = copy.copy(scene.model)  # an independent MjModel; scene is shared
+    model.opt.timestep = 1.0 / hz
+    data = sim.settle(model)
+    sim.apply_command(scene.car, data, ControlCommand(throttle=0.0, steer=0.4))
+    steps = 0
+    while _steer_angle(scene, data) < 0.9 * 0.4 and steps < _steps(model, 0.5):
+        mujoco.mj_step(model, data)
+        steps += 1
+    assert 0.03 <= steps * model.opt.timestep <= 0.15
+
+    data = sim.settle(model)
+    sim.apply_command(scene.car, data, ControlCommand(throttle=0.3, steer=0.4))
+    for _ in range(_steps(model, 2.0)):
+        mujoco.mj_step(model, data)
+    held = []
+    for _ in range(_steps(model, 0.5)):
+        mujoco.mj_step(model, data)
+        held.append(_steer_angle(scene, data))
+    assert np.std(held) < 0.006
+
+
 def test_left_steer_yaws_left(scene):
     """A + steer yaws the car to the left (+Z). A sign error here inverts the
     steering of every agent."""
