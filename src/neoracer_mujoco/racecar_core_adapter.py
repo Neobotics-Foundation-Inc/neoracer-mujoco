@@ -134,14 +134,17 @@ class MujocoPhysics:
         self._drive_pos = scene.car.sensors.drive_pos
         self._data = data
         self._dt = float(scene.model.opt.timestep)  # s
-        self._encoder = encoder.start(self._angle())
+        self._params = encoder.EncoderParams()
+        self._encoder = encoder.start(self._params, self._angle())
 
     def _angle(self) -> float:
         return float(self._data.bind_scalar(self._drive_pos).data[0])  # rad
 
     def advance(self) -> None:
         """Count one physics step on the encoder."""
-        self._encoder = encoder.step(self._encoder, self._angle(), self._dt)
+        self._encoder = encoder.step(
+            self._params, self._encoder, self._angle(), self._dt
+        )
 
     def get_encoder_speed(self) -> float:
         """The car's speed (m/s) from its motor encoder, + = forward."""

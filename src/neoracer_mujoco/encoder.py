@@ -22,8 +22,20 @@ from dataclasses import dataclass
 
 from .sensors import WHEEL_RADIUS
 
-WINDOW = 0.02  # s, the firmware's control period
-ALPHA = 0.95  # the weight of the new window in the filter
+
+@dataclass(frozen=True)
+class EncoderParams:
+    """How the firmware measures the speed."""
+
+    window: float = 0.02  # s, the firmware's control period
+    alpha: float = 0.95  # the weight of the new window in the filter
+
+    def __post_init__(self) -> None:
+        if not self.window > 0.0:
+            raise ValueError(f"window must be > 0 s, not {self.window}")
+        if not 0.0 < self.alpha <= 1.0:
+            raise ValueError(f"alpha must be in (0, 1], not {self.alpha}")
+
 
 # A window closes when less than this is left of it (s), so that a step that
 # lands on a tick, up to rounding, closes the window.
@@ -35,22 +47,24 @@ class EncoderState:
     """The encoder between two physics steps. Start it with start()."""
 
     angle: float  # rad, the drivetrain's angle when the window opened
-    span: float = 0.0  # s since the window opened
-    due: float = WINDOW  # s until the next 20 ms tick
-    speed: float = 0.0  # m/s, + = forward: the last speed the firmware reported
+    span: float  # s since the window opened
+    due: float  # s until the firmware's next tick
+    speed: float  # m/s, + = forward: the last speed the firmware reported
 
 
-def start(angle: float) -> EncoderState:
+def start(params: EncoderParams, angle: float) -> EncoderState:
     """The encoder of a car at rest, its drivetrain at angle (rad)."""
-    return EncoderState(angle=angle)
+    return EncoderState(angle=angle, span=0.0, due=params.window, speed=0.0)
 
 
-def step(state: EncoderState, angle: float, dt: float) -> EncoderState:
+def step(
+    params: EncoderParams, state: EncoderState, angle: float, dt: float
+) -> EncoderState:
     """The encoder after a physics step of dt (s) that left the drivetrain at
     angle (rad)."""
     span, due = state.span + dt, state.due - dt
     if due >= _EPS:
         return EncoderState(state.angle, span, due, state.speed)
     raw = (angle - state.angle) * WHEEL_RADIUS / span  # m/s over the window
-    speed = ALPHA * raw + (1.0 - ALPHA) * state.speed
-    return EncoderState(angle, 0.0, due + WINDOW, speed)
+    speed = params.alpha * raw + (1.0 - params.alpha) * state.speed
+    return EncoderState(angle, 0.0, due + params.window, speed)
