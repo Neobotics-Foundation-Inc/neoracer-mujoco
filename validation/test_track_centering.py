@@ -197,7 +197,7 @@ def test_controller_stable_on_corridor():
     steer_low, steer_high = model.bind_scalar(car.steer).ctrlrange
     state = PDState()
     min_front = float("inf")
-    for _ in range(1500):  # 3 s at the 2 ms timestep
+    for _ in range(round(3.0 / dt)):  # 3 s
         readings = sensors.read(car.sensors, data)
         state, control = step(CFG, state, readings, dt)
         sim.apply_command(car, data, control)

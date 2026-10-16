@@ -81,11 +81,10 @@ def test_stop_zeros_drive_and_steer(scene):
 
 
 def _drive_for(scene, speed: float, angle: float) -> mujoco.MjData:
-    """Settle the car, then drive with (speed, angle) for 0.8 s (400 steps
-    at the 2 ms timestep)."""
+    """Settle the car, then drive with (speed, angle) for 0.8 s."""
     data = sim.settle(scene.model)
     MujocoDrive(scene, data).set_speed_angle(speed, angle)
-    for _ in range(400):
+    for _ in range(round(0.8 / scene.model.opt.timestep)):
         mujoco.mj_step(scene.model, data)
     return data
 

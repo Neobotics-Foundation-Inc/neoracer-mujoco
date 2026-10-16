@@ -104,7 +104,7 @@ def test_less_wheel_friction_means_more_slip():
         model = _applied(scene, Physics(wheel_friction=friction, motor_torque=3.0))
         data = sim.settle(model)
         sim.apply_command(scene.car, data, ControlCommand(throttle=1.0, steer=0.0))
-        for _ in range(250):  # 0.5 s
+        for _ in range(round(0.5 / model.opt.timestep)):
             mujoco.mj_step(model, data)
         spin = data.bind_scalar(scene.car.sensors.rl_wheel_vel).data[0]  # rad/s
         surface = spin * sensors.WHEEL_RADIUS

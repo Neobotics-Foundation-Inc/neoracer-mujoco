@@ -19,9 +19,13 @@
     <!-- Elliptic friction cone + high impratio: MuJoCo's recommended setting for
          wheeled vehicles — stiffens tangential contact so the tires creep less
          sideways (measured: full-lock radius 0.77 m → 0.74 m vs 0.68 m ideal).
+         The time step is 1/360 s: 12 steps to a 30 Hz LiDAR scan and 6 to a
+         60 Hz frame. implicitfast integrates the actuators' speed damping (the
+         motors' back-EMF and the servo's kd), which explicit Euler cannot hold
+         steady at this step: the servo then chatters.
          When this car is attached to a track scene, MuJoCo keeps the track's
          <option>, so every track in tracks/ sets the same values. -->
-    <option cone="elliptic" impratio="10"/>
+    <option timestep="0.002777777777777778" integrator="implicitfast" cone="elliptic" impratio="10"/>
 
     <asset>
         <texture name="grid" type="2d" builtin="checker" width="512" height="512"
@@ -274,12 +278,11 @@
         PLACEHOLDERS until the car's servo is measured: a standard servo at
         6 V, 1.47 N·m (15 kg·cm) stalled and 0.1 s per 60 degrees (a free
         speed of 10.5 rad/s), with no gear between it and the wheels. With
-        kp = 50 V/rad and kd = 0.5 V·s/rad it reaches 90% of a 0.4 rad step
-        in 0.064 s, near the playground's slew of 8 rad/s. A larger kd
-        chatters at 360 Hz.
+        kp = 50 V/rad and kd = 1 V·s/rad it reaches 90% of a 0.4 rad step
+        in 0.083 s, near the playground's slew of 8 rad/s.
         -->
         <dcmotor name="steer_servo" joint="steer_input" input="pos"
-                 nominal="6 1.47 10.5" controller="50 0 .5 0 0 6"
+                 nominal="6 1.47 10.5" controller="50 0 1 0 0 6"
                  ctrlrange="-.4 .4"/>
     </actuator>
 

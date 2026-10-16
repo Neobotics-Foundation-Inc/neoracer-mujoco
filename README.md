@@ -100,6 +100,7 @@ python3 -m pytest validation/ -v
 | Drive | One DC motor (MuJoCo's `dcmotor`) through open differentials to all four wheels | its constants are PLACEHOLDERS |
 | Suspension | Coil-over approximation (slide Z joint, k=600 N/m, c=25 Ns/m), preloaded to rest at the CAD ride height | ESTIMATED |
 | Sensors | IMU (accel/gyro/quat/vel) · steer · wheel vel · susp pos · 8-beam LiDAR | |
+| Time step | 1/360 s, with the implicitfast integrator: 12 steps to a 30 Hz LiDAR scan, 6 to a 60 Hz frame | every track sets the same `<option>` |
 
 ### How closely the model matches the real car
 
@@ -112,7 +113,7 @@ The model has not yet been checked against recordings of the real car; issue #4 
 | Chassis inertia and center-of-mass height; wheel masses | the URDF of an older CAD model; the inertia is scaled to the spec mass, and nobody has measured either |
 | Suspension stiffness and damping | estimated; the springs are preloaded so the car rests at the CAD ride height |
 | Tire friction (1.5) and wheel joint damping | estimated; the damping, 0.0005 N·m·s/rad per wheel, stands in for drivetrain losses and holds the top speed to 4.35 m/s |
-| Steering servo: a DC motor with a position loop; 6 V, 1.47 N·m stalled, 0.1 s per 60°, kp 50 V/rad, kd 0.5 V·s/rad | a standard hobby servo's numbers, not the car's own servo's; the loop's gains are picked so it settles without chatter at 500 Hz and at 360 Hz |
+| Steering servo: a DC motor with a position loop; 6 V, 1.47 N·m stalled, 0.1 s per 60°, kp 50 V/rad, kd 1 V·s/rad | a standard hobby servo's numbers, not the car's own servo's; the loop's gains are picked so it settles without chatter at the 1/360 s time step |
 | IMU position | at the center of mass, not measured |
 | Cosmetic meshes | the older CAD model, placed to roughly fill the measured body |
 | Drive: one DC motor through open differentials, on a 7.4 V pack; at the wheels, 0.765 N·m from rest and a free speed of 141 rad/s | the structure is the real car's. The numbers are the playground's estimates (a drive force of 18 N and a top speed of 6 m/s on 42.5 mm tyres) until the RS545's datasheet, the battery and the differential ratio replace them; the gear is 1 and the rotor has no inertia until then |
@@ -121,7 +122,7 @@ Known gaps that matter for sim-to-real work:
 
 - At full throttle the car reaches 3.2 m/s after 1 s and tops out at 4.35 m/s, against the motor's free speed of 6.0 m/s at the tyre: the wheel joint damping is the only loss, and its value is a guess.
 - The sensors have no noise, bias or latency, and the LiDAR has 8 beams, while the real one is a spinning scanner. The car has no camera yet (issue #3).
-- The steering gives under load. At full lock (0.4 rad) and 0.3 m/s, the servo reaches 0.39 rad, the front wheels lag their Ackermann angles by 0.004 rad, and the car turns on a 0.74 m radius, against 0.70 m for ideal Ackermann steering at 0.4 rad: the rest is the tyres' slip. From rest, the servo reaches 90% of a 0.4 rad step in 0.064 s.
+- The steering gives under load. At full lock (0.4 rad) and 0.3 m/s, the servo reaches 0.39 rad, the front wheels lag their Ackermann angles by 0.004 rad, and the car turns on a 0.74 m radius, against 0.70 m for ideal Ackermann steering at 0.4 rad: the rest is the tyres' slip. From rest, the servo reaches 90% of a 0.4 rad step in 0.083 s.
 
 ### Actuator interface
 

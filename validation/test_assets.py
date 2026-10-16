@@ -71,7 +71,7 @@ def test_a_scene_without_visuals_senses_the_same(track):
         data = sim.settle(scene.model)
         sim.apply_command(scene.car, data, ControlCommand(throttle=1.0, steer=0.3))
         steps = []
-        for _ in range(300):  # 0.6 s
+        for _ in range(round(0.6 / scene.model.opt.timestep)):
             mujoco.mj_step(scene.model, data)
             steps.append(data.sensordata.copy())
         readings.append(np.array(steps))

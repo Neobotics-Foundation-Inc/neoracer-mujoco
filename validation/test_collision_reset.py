@@ -88,7 +88,7 @@ def test_no_contact_when_driving_down_the_center():
     model = scene.model
     data = sim.settle(model)
     sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.0))
-    for _ in range(500):  # 1 s at the 2 ms timestep
+    for _ in range(round(1.0 / model.opt.timestep)):  # 1 s
         mujoco.mj_step(model, data)
         assert not car_touches_wall(data, scene.car)
 
