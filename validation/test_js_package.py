@@ -49,6 +49,10 @@ def test_the_part_names_are_those_of_contract_py():
         in contract.REQUIRED_SENSORS
     )
     assert json.loads(names["CAR_BODY"].replace("'", '"')) == "car"
+    for sensor in ("IMU_ACCEL_SENSOR", "IMU_GYRO_SENSOR"):
+        assert json.loads(names[sensor].replace("'", '"')) in contract.REQUIRED_SENSORS
+    wheels = names["WHEEL_GEOMS"].removesuffix(" as const")
+    assert tuple(json.loads(wheels.replace("'", '"'))) == contract.WHEEL_GEOMS
 
 
 def test_the_numbers_are_those_of_the_python_package():
