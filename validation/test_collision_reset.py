@@ -11,6 +11,7 @@ from scenes import corridor_scene
 
 from neoracer_mujoco import assets, sim
 from neoracer_mujoco.collision import car_touches_wall, reset_car
+from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.truth import WALLS_BODY
 
 
@@ -86,8 +87,7 @@ def test_no_contact_when_driving_down_the_center():
     scene = corridor_scene()
     model = scene.model
     data = sim.settle(model)
-    for motor in scene.car.drive:
-        data.bind_scalar(motor).ctrl = 0.1  # N·m
+    sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.0))
     for _ in range(500):  # 1 s at the 2 ms timestep
         mujoco.mj_step(model, data)
         assert not car_touches_wall(data, scene.car)

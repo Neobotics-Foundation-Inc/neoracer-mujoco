@@ -7,7 +7,7 @@ physics. The physics tests check the throttle sign and the steer sign on the
 moving car.
 
 racecar_core signs: + speed = forward, + angle = right. contract.py signs:
-+ torque = forward, + steer = left.
++ throttle = forward, + steer = left.
 """
 
 import mujoco
@@ -27,9 +27,9 @@ def _set_beam(scene: Scene, data: mujoco.MjData, name: str, meters: float) -> No
     data.bind_scalar(scene.spec.sensor(name)).data[0] = meters
 
 
-def _drive_ctrl(scene: Scene, data: mujoco.MjData) -> np.ndarray:
-    """The ctrl (N·m) of the fl, fr, rl and rr drive motors."""
-    return np.array([data.bind_scalar(motor).ctrl[0] for motor in scene.car.drive])
+def _drive_ctrl(scene: Scene, data: mujoco.MjData) -> float:
+    """The ctrl of the drive motor: its voltage (V)."""
+    return float(data.bind_scalar(scene.car.drive).ctrl[0])
 
 
 def _steer_ctrl(scene: Scene, data: mujoco.MjData) -> float:
@@ -41,7 +41,7 @@ def _steer_ctrl(scene: Scene, data: mujoco.MjData) -> float:
 
 def test_drive_writes_clipped_and_scaled_commands(scene):
     """For each speed, angle and max_speed, set_speed_angle writes
-    clip(speed, -1, 1) * clip(max_speed, 0, 1) * torque_nm to each drive
+    clip(speed, -1, 1) * clip(max_speed, 0, 1) * voltage to the drive
     motor, and -clip(angle, -1, 1) * steer_rad to the steer servo. The
     minus sign changes the racecar_core steer sign to the contract.py sign."""
     limits = contract.actuator_limits(scene.model, scene.car)
@@ -54,18 +54,18 @@ def test_drive_writes_clipped_and_scaled_commands(scene):
         for speed in grid:
             for angle in grid:
                 drive.set_speed_angle(speed, angle)
-                torque = np.clip(speed, -1.0, 1.0) * scale * limits.torque_nm
+                volts = np.clip(speed, -1.0, 1.0) * scale * limits.voltage
                 steer = -np.clip(angle, -1.0, 1.0) * limits.steer_rad
-                np.testing.assert_allclose(_drive_ctrl(scene, data), torque, atol=1e-12)
+                assert _drive_ctrl(scene, data) == pytest.approx(volts, abs=1e-12)
                 assert _steer_ctrl(scene, data) == pytest.approx(steer, abs=1e-12)
 
 
-def test_new_drive_uses_the_full_torque(scene):
+def test_new_drive_uses_the_full_throttle(scene):
     """A new MujocoDrive has max_speed 1.0."""
     data = mujoco.MjData(scene.model)
     MujocoDrive(scene, data).set_speed_angle(1.0, 0.0)
-    torque_nm = contract.actuator_limits(scene.model, scene.car).torque_nm
-    assert np.all(_drive_ctrl(scene, data) == torque_nm)
+    voltage = contract.actuator_limits(scene.model, scene.car).voltage
+    assert _drive_ctrl(scene, data) == voltage
 
 
 def test_stop_zeros_drive_and_steer(scene):
@@ -73,7 +73,7 @@ def test_stop_zeros_drive_and_steer(scene):
     drive = MujocoDrive(scene, data)
     drive.set_speed_angle(1.0, 1.0)
     drive.stop()
-    assert np.all(_drive_ctrl(scene, data) == 0.0)
+    assert _drive_ctrl(scene, data) == 0.0
     assert _steer_ctrl(scene, data) == 0.0
 
 

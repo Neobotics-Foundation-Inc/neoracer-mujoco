@@ -14,7 +14,8 @@ In both modes, the script prints a warning when the roll angle is more than roll
 
 Frame: +X forward, +Y left, +Z up.
 Actuators (see neoracer_mujoco.contract):
-  fl/fr/rl/rr_motor = wheel torque (N·m), + = forward
+  motor             = terminal voltage (V), + = forward; sim.apply_command
+                      sends a throttle in [-1, 1] as that fraction of the battery
   steer_servo       = target angle (rad), + = left.
                       Two Ackermann equality constraints set the fl and fr steer angles from it.
 """
@@ -39,7 +40,7 @@ type Mode = Literal["safe", "full"]
 class DriveParams:
     """Inputs of the demo controller and the log settings. The defaults are safe mode."""
 
-    throttle_nm: float = 0.08  # N·m per wheel; top speed stays near 1.5 m/s
+    throttle: float = 0.42  # in [-1, 1]
     steer_amp_rad: float = 0.15  # rad; amplitude of the steer sine
     steer_freq_hz: float = 0.30  # Hz; frequency of the steer sine
     # m/s; above this speed the throttle is 0 and the car coasts. None = no limit.
@@ -63,7 +64,7 @@ MODES: frozendict[Mode, DriveParams] = frozendict(
     {
         "safe": DriveParams(),
         "full": DriveParams(
-            throttle_nm=0.35,
+            throttle=1.0,
             steer_amp_rad=0.35,
             steer_freq_hz=0.40,
             speed_limit_ms=None,
@@ -83,11 +84,11 @@ def _roll_pitch_deg(q: sensors.Quat) -> tuple[float, float]:
 
 
 def _command(params: DriveParams, t: float, speed_ms: float) -> ControlCommand:
-    """The command at time t (s): a constant throttle (N·m) and a sinusoidal
+    """The command at time t (s): a constant throttle and a sinusoidal
     steer (rad). If the speed (m/s) is at or above the speed limit, the throttle is 0."""
     steer = params.steer_amp_rad * math.sin(2 * math.pi * params.steer_freq_hz * t)
     limit = params.speed_limit_ms
-    throttle = 0.0 if limit is not None and speed_ms >= limit else params.throttle_nm
+    throttle = 0.0 if limit is not None and speed_ms >= limit else params.throttle
     return ControlCommand(throttle=throttle, steer=steer)
 
 
@@ -141,7 +142,7 @@ def main() -> None:
 
     print(f"NeoRacer viewer — mode={args.mode}")
     print(
-        f"  throttle={params.throttle_nm} N·m  steer_amp={params.steer_amp_rad} rad  "
+        f"  throttle={params.throttle}  steer_amp={params.steer_amp_rad} rad  "
         f"speed_limit={params.speed_limit_ms} m/s"
     )
     print()

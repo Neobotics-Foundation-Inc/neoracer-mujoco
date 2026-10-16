@@ -1,48 +1,28 @@
 """
-Physics for the pygame driving demo: a DC-motor throttle model and slewed
-steering on top of a compiled NeoRacer scene. drive.py owns the window, the
-input and the camera.
+Physics for the pygame driving demo: slewed throttle and steering on top of
+a compiled NeoRacer scene. The motor itself, its torque falling with speed
+and its braking when the throttle is released, is the car's (neoracer.xml).
+drive.py owns the window, the input and the camera.
 
 Frame: +X forward, +Y left, +Z up. The throttle and steer inputs are in
 [-1, 1]; + throttle = forward, + steer = left (contract.py).
 
     params, state = DriveParams(), DriveState()
-    wheels = drive_wheel_joints(scene)  # once per scene
     state = next_state(params, state, throttle, steer, dt)
-    apply_and_step(scene, data, params, wheels, state, dt)
+    apply_and_step(scene, data, params, state, dt)
 """
 
 from dataclasses import dataclass
 
 import mujoco
-import numpy as np
-import numpy.typing as npt
 
 from neoracer_mujoco.scene import Scene
-
-# the spin joint of each drive wheel: fl, fr, rl, rr
-type WheelJoints = tuple[
-    mujoco.MjsJoint, mujoco.MjsJoint, mujoco.MjsJoint, mujoco.MjsJoint
-]
 
 
 @dataclass(frozen=True)
 class DriveParams:
-    """Motor and steering tuning for the demo."""
+    """Input shaping for the demo."""
 
-    # N·m per wheel at full throttle. 0.35 launches like a rocket; below about
-    # 0.15 the car cannot carry enough speed over the ramp in ramp_course.xml.
-    max_torque: float = 0.15
-    # N·m per rad/s of wheel spin: the back-EMF of a DC motor. It sets the top
-    # speed (about max_torque / motor_damping rad/s, about 1.9 m/s with rolling
-    # friction) and brakes the car when the throttle is released.
-    motor_damping: float = 0.0025
-    # N·m of rolling resistance per wheel. Back-EMF alone fades near zero speed
-    # and leaves the car creeping.
-    roll_friction: float = 0.02
-    # N·m per rad/s; the rolling friction grows at this rate from zero spin to
-    # roll_friction, so it does not flip sign at every step near zero speed.
-    roll_friction_slope: float = 0.05
     max_steer: float = 0.40  # rad; the model's Ackermann command limit
     throttle_slew: float = 2.5  # 1/s; how fast the applied throttle follows the input
     steer_slew: float = 4.0  # 1/s; smooths digital WASD input, sticks barely notice
@@ -56,20 +36,6 @@ class DriveState:
 
     throttle: float = 0.0  # in [-1, 1]
     steer: float = 0.0  # in [-1, 1]
-
-
-def drive_wheel_joints(scene: Scene) -> WheelJoints:
-    """The wheel spin joint of each drive actuator, in the order of
-    scene.car.drive (fl, fr, rl, rr)."""
-
-    def spin_joint(motor: mujoco.MjsActuator) -> mujoco.MjsJoint:
-        joint = scene.spec.joint(motor.target)
-        if joint is None:
-            raise ValueError(f"actuator {motor.name} drives no joint of the scene")
-        return joint
-
-    fl, fr, rl, rr = scene.car.drive
-    return (spin_joint(fl), spin_joint(fr), spin_joint(rl), spin_joint(rr))
 
 
 def frame_dt(p: DriveParams, dt: float) -> float:
@@ -95,34 +61,18 @@ def next_state(
     )
 
 
-def wheel_torque(
-    p: DriveParams, throttle: float, wheel_spin: npt.NDArray[np.float64]
-) -> npt.NDArray[np.float64]:
-    """Torque (N·m) for each drive wheel: the commanded torque minus back-EMF
-    drag and a smoothed rolling friction. At zero throttle the drag brakes the
-    car; at full throttle drive and drag balance at the top speed."""
-    torque = throttle * p.max_torque - p.motor_damping * wheel_spin
-    torque -= np.clip(
-        wheel_spin * p.roll_friction_slope, -p.roll_friction, p.roll_friction
-    )
-    return np.clip(torque, -p.max_torque, p.max_torque)
-
-
 def apply_and_step(
     scene: Scene,
     data: mujoco.MjData,
     p: DriveParams,
-    wheels: WheelJoints,
     state: DriveState,
     dt: float,
 ) -> None:
     """Write the commands of state to data.ctrl and step the physics dt (s)."""
     car = scene.car
     data.bind_scalar(car.steer).ctrl = state.steer * p.max_steer
-    spin = np.array([data.bind_scalar(joint).qvel[0] for joint in wheels])
-    torque = wheel_torque(p, state.throttle, spin)
-    for motor, t in zip(car.drive, torque, strict=True):
-        data.bind_scalar(motor).ctrl = t
+    voltage = scene.model.bind_scalar(car.drive).ctrlrange[1]  # V, full throttle
+    data.bind_scalar(car.drive).ctrl = state.throttle * voltage
     end = data.time + frame_dt(p, dt)
     while data.time < end:
         mujoco.mj_step(scene.model, data)

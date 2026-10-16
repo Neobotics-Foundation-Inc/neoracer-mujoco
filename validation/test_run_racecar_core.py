@@ -10,6 +10,7 @@ test_wall_follower_example.py tests the controller callbacks on the adapter dire
 import importlib
 import subprocess
 import sys
+import time
 import types
 from pathlib import Path
 
@@ -105,6 +106,63 @@ def test_cli_fails_clearly_on_missing_controller():
     )
     assert result.returncode != 0
     assert "error:" in result.stderr
+
+
+def test_a_controller_reads_the_simulated_time(tmp_path):
+    """In controller_imports, time.time(), time.monotonic() and
+    time.perf_counter() read the simulated time, so a controller that
+    measures its frame time sees the physics step on any machine. After the
+    block, the real clock is back."""
+    scene = run_racecar_core.load_scene()
+    data, rc = run_racecar_core.build_racecar(scene, steps=10)
+    (tmp_path / "clock_probe.py").write_text(
+        "import time\n\n\ndef now():\n"
+        "    return time.time(), time.monotonic(), time.perf_counter()\n"
+    )
+    with run_racecar_core.controller_imports(rc, tmp_path):
+        probe = importlib.import_module("clock_probe")
+        data.time = 1.25
+        assert probe.now() == (1.25, 1.25, 1.25)
+    assert time.time() > 1e9  # s since 1970
+
+
+def test_a_star_import_gets_the_simulated_clocks(tmp_path):
+    """`from time import *` in a controller gets the simulated clocks and
+    the rest of the time module."""
+    data, rc = run_racecar_core.build_racecar(run_racecar_core.load_scene(), 1)
+    (tmp_path / "star_probe.py").write_text(
+        "from time import *\n\n\ndef now():\n"
+        "    return time(), monotonic(), perf_counter(), monotonic_ns(), sleep\n"
+    )
+    with run_racecar_core.controller_imports(rc, tmp_path):
+        probe = importlib.import_module("star_probe")
+        data.time = 1.25
+        assert probe.now() == (1.25, 1.25, 1.25, 1_250_000_000, time.sleep)
+
+
+def test_a_library_imported_by_a_controller_keeps_the_real_clock(tmp_path):
+    """Only the files of the controller read the simulated time. A module
+    outside its folder that the controller imports first in the block, as a
+    library, gets the real time module, during the block and after it."""
+    controller, library = tmp_path / "controller", tmp_path / "library"
+    controller.mkdir()
+    library.mkdir()
+    (library / "clock_library.py").write_text(
+        "import time\nfrom time import monotonic\n"
+    )
+    (controller / "clock_user.py").write_text("import clock_library\nimport time\n")
+    _data, rc = run_racecar_core.build_racecar(run_racecar_core.load_scene(), 1)
+    sys.path.insert(0, str(library))
+    try:
+        with run_racecar_core.controller_imports(rc, controller):
+            user = importlib.import_module("clock_user")
+            assert user.time is not time
+            assert user.clock_library.time is time
+            assert user.clock_library.monotonic is time.monotonic
+        assert sys.modules["time"] is time
+    finally:
+        sys.path.remove(str(library))
+        sys.modules.pop("clock_library", None)
 
 
 def test_controller_imports_restores_the_import_state(tmp_path, monkeypatch):

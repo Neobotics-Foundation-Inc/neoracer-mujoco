@@ -250,7 +250,7 @@ def run_loop_trial(
                 f"R={turn_radius_m(vs_params, result.target_steer_deg):5.2f}m "
                 f"straight_clear={result.straight_clear_m:.2f}m {detail} "
                 f"steer={result.command.steer:+.3f}rad "
-                f"throttle={result.command.throttle:.4f}N·m "
+                f"throttle={result.command.throttle:.4f} "
                 f"lap_angle={math.degrees(cum_angle):+7.1f}deg"
             )
         if verbose and label(result) != prev_label:

@@ -24,7 +24,8 @@ A reset puts the car back at its start position, the same as Backspace.
 
 Frame: +X forward, +Y left, +Z up.
 Actuators (see neoracer_mujoco.contract):
-  fl/fr/rl/rr_motor = wheel torque (N·m), + = forward
+  motor             = terminal voltage (V), + = forward; sim.apply_command
+                      sends a throttle in [-1, 1] as that fraction of the battery
   steer_servo       = target angle (rad), + = left, range ±0.4
 """
 
@@ -50,9 +51,9 @@ type SteerKey = Literal["left", "right", "center"]
 
 @dataclass(frozen=True)
 class ThrottleParams:
-    accel: float = 0.8  # N·m/s added while a throttle key is held
-    coast: float = 0.6  # N·m/s removed while no throttle key is held
-    max: float = 0.35  # N·m per wheel; the throttle stays in [-max, max]
+    accel: float = 2.3  # 1/s added while a throttle key is held
+    coast: float = 1.7  # 1/s removed while no throttle key is held
+    max: float = 1.0  # the throttle stays in [-max, max]
 
 
 @dataclass(frozen=True)
@@ -102,7 +103,7 @@ def update(
     steer_key: SteerKey,
 ) -> ControlCommand:
     """The command for the next frame, from the command of this frame, the
-    frame time dt (s) and the held keys. The throttle (N·m) and the steer (rad)
+    frame time dt (s) and the held keys. The throttle and the steer (rad)
     stay within the limits in params."""
     tp, sp = params.throttle, params.steering
     match pedal:

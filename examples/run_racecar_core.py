@@ -26,12 +26,15 @@ Example:
 """
 
 import argparse
+import builtins
 import contextlib
 import os
 import runpy
 import sys
+import time
 import types
-from collections.abc import Generator
+import unittest.mock
+from collections.abc import Generator, Mapping, Sequence
 from pathlib import Path
 
 import mujoco
@@ -66,12 +69,32 @@ def build_racecar(scene: Scene, steps: int) -> tuple[mujoco.MjData, MujocoRaceca
     return data, MujocoRacecar(scene, data, max_steps=steps)
 
 
+def _sim_time(rc: MujocoRacecar) -> types.ModuleType:
+    """The time module, with its clocks reading the simulated time of rc.
+    A copy of the module's names, so `from time import *` gets them too."""
+    module = types.ModuleType("time", time.__doc__)
+    module.__dict__.update(
+        (name, value) for name, value in vars(time).items() if not name.startswith("_")
+    )
+    for name in ("time", "monotonic", "perf_counter"):
+        module.__dict__[name] = rc.clock
+    for name in ("time_ns", "monotonic_ns", "perf_counter_ns"):
+        module.__dict__[name] = lambda: round(rc.clock() * 1e9)
+    return module
+
+
 @contextlib.contextmanager
 def controller_imports(rc: MujocoRacecar, controller_dir: Path) -> Generator[None]:
     """Make a controller in controller_dir importable with rc in the with block.
 
     In the block, `import racecar_core` gives a fake module whose
     create_racecar() returns rc, and controller_dir is first on sys.path.
+    In a file in controller_dir, `import time` gives the time module with
+    its clocks (time, monotonic, perf_counter and their _ns forms) reading
+    the simulated time, rc.clock(). A controller that measures its frame time with them
+    then sees the physics step, whatever the speed of the machine. Any other
+    module that imports time, as a library does, gets the real one, so its
+    timeouts keep running while the physics waits.
 
     A cached module in sys.modules wins over sys.path. So before the block,
     the function moves aside every cached module that has the name of a
@@ -93,9 +116,32 @@ def controller_imports(rc: MujocoRacecar, controller_dir: Path) -> Generator[Non
     shim = types.ModuleType("racecar_core")
     shim.__dict__["create_racecar"] = lambda *args, **kwargs: rc
     sys.modules["racecar_core"] = shim
+    sim_time = _sim_time(rc)
+    real_import = builtins.__import__
+
+    def import_(
+        name: str,
+        globals: Mapping[str, object] | None = None,
+        locals: Mapping[str, object] | None = None,
+        fromlist: Sequence[str] | None = (),
+        level: int = 0,
+    ) -> types.ModuleType:
+        # globals are those of the importing module, so __file__ says who
+        # imports. runpy gives the controller file its own path.
+        file = (globals or {}).get("__file__")
+        if (
+            name == "time"
+            and level == 0
+            and isinstance(file, str)
+            and Path(file).resolve().is_relative_to(controller_dir.resolve())
+        ):
+            return sim_time
+        return real_import(name, globals, locals, fromlist, level)
+
     sys.path.insert(0, str(controller_dir))
     try:
-        yield
+        with unittest.mock.patch.object(builtins, "__import__", import_):
+            yield
     finally:
         sys.path.remove(str(controller_dir))
         sys.modules.pop("racecar_core", None)

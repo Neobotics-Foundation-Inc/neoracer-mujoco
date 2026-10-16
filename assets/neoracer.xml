@@ -226,17 +226,42 @@
         </body>
     </worldbody>
 
+    <!--
+    Drivetrain: one motor turns all four wheels through open differentials.
+    An open differential gives each wheel the same torque and turns the motor
+    at the mean speed of the wheels. The fixed tendon below does both: its
+    velocity is the mean wheel speed (rad/s), and a force f on it puts f/4 on
+    each wheel. Drivetrain losses are not modelled.
+    -->
+    <tendon>
+        <fixed name="drivetrain">
+            <joint joint="fl_drive" coef=".25"/>
+            <joint joint="fr_drive" coef=".25"/>
+            <joint joint="rl_drive" coef=".25"/>
+            <joint joint="rr_drive" coef=".25"/>
+        </fixed>
+    </tendon>
+
     <actuator>
         <!--
-        AWD drivetrain: one torque motor per wheel. Equal torque to all four wheels
-        approximates the real car's centre-diff split. gear=1 is stable at this scale;
-        gear>=2 causes wheelies. ctrl[0..3] = torque in N·m, positive = forward.
-        Replace gear/ctrlrange with the real motor+ESC torque mapping when characterised.
+        The motor, as MuJoCo's DC motor model. ctrl is the voltage at its
+        terminals (V), + = forward: the speed controller (ESC) applies the
+        battery voltage times the throttle. Its torque is K (V - K w) / R for
+        a speed w, so it is largest from rest, falls to 0 at the free speed
+        V / K, and a voltage of 0 brakes. MuJoCo derives K and R from
+        nominal = "voltage stall_torque free_speed".
+
+        PLACEHOLDERS until the motor is measured: gear is 1, so the torque and
+        the speed are those at the wheels, and the playground's numbers give
+        0.765 N·m from rest and a free speed of 141.18 rad/s (a drive force of
+        18 N and a top speed of 6 m/s on its 42.5 mm tyres), on a 7.4 V pack.
+        With the RS545's datasheet, nominal becomes the motor's own voltage,
+        stall torque and no-load speed, gear the reduction (48 / 14) x the
+        differential ratio, and armature the rotor's inertia, which MuJoCo
+        reflects through gear squared.
         -->
-        <motor name="fl_motor" joint="fl_drive" gear="1" ctrlrange="-1 1"/>
-        <motor name="fr_motor" joint="fr_drive" gear="1" ctrlrange="-1 1"/>
-        <motor name="rl_motor" joint="rl_drive" gear="1" ctrlrange="-1 1"/>
-        <motor name="rr_motor" joint="rr_drive" gear="1" ctrlrange="-1 1"/>
+        <dcmotor name="motor" tendon="drivetrain" nominal="7.4 0.765 141.18"
+                 ctrlrange="-7.4 7.4"/>
 
         <!--
         Steering servo driving the virtual steer_input joint. The Ackermann

@@ -83,7 +83,7 @@ def main() -> None:
                 print(
                     f"t={data.time:6.2f}s target={result.target_steer_deg:+6.2f}deg "
                     f"R={turn_radius_m(vs_params, result.target_steer_deg):5.2f}m "
-                    f"throttle={result.command.throttle:.4f}N·m {label(result)}"
+                    f"throttle={result.command.throttle:.4f} {label(result)}"
                 )
                 last_print_s = data.time
 

@@ -78,7 +78,7 @@ class DemoParams:
 
 @dataclass(frozen=True)
 class CenteringReport:
-    """The result of the headless run. Distances in m, steer in rad, throttle in N·m."""
+    """The result of the headless run. Distances in m, steer in rad, throttle in [-1, 1]."""
 
     distance_traveled_x: float
     mean_abs_lateral_error: float
@@ -313,7 +313,7 @@ def main() -> None:
     print(f"  mean |steer|                  : {report.mean_abs_steer:.3f} rad")
     print(f"  max  |steer|                  : {report.max_abs_steer:.3f} rad")
     print(f"  steer stayed within ±limits   : {report.steer_within_limits}")
-    print(f"  mean throttle                 : {report.mean_throttle:+.3f} N·m")
+    print(f"  mean throttle                 : {report.mean_throttle:+.3f}")
     print(f"  min front clearance seen      : {report.min_front_distance:.3f} m")
     print(f"  upright for entire run        : {report.upright_throughout}")
     print(f"  all qpos/qvel finite          : {report.finite_throughout}")
