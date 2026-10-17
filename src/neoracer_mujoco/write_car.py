@@ -1,9 +1,10 @@
 """
 Write the NeoRacer (neoracer_spec.neoracer.NEORACER) into a folder of car
-files: its numbers into the car XML there, in place, and its settings beside
-the model as JSON. Run it after a change to the car:
+files: its numbers into the car XML there, in place. Run it after a change
+to the car, with the TypeScript generator for the JS package:
 
     python -m neoracer_mujoco.write_car assets
+    python -m neoracer_spec.typescript js/src/spec.ts
 """
 
 import os
@@ -22,5 +23,3 @@ if __name__ == "__main__":
         text = mjcf.car_xml(derive(NEORACER).model, f.read())
     with open(xml, "w", encoding="utf-8") as f:
         f.write(text)
-    with open(os.path.join(folder, export.SETTINGS_NAME), "w", encoding="utf-8") as f:
-        f.write(export.settings_json(NEORACER))

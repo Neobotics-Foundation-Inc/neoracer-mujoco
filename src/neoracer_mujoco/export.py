@@ -1,7 +1,7 @@
 """
-A car's model for the simulators: its XML, an MjSpec of it, the settings
-beside the model as JSON, and a folder of files that MuJoCo without Python
-loads, the browser's WebAssembly build included.
+A car's model for the simulators: its XML, an MjSpec of it, and a folder
+of files that MuJoCo without Python loads, the browser's WebAssembly build
+included. The settings beside the model are derive(car) (neoracer_spec).
 
 The XML is assets/neoracer.xml with the numbers that the car's parts give
 (neoracer_spec.mjcf.car_xml), so a variant of the NeoRacer is a car of its
@@ -12,8 +12,6 @@ own:
     write(car, "dist/slow")               # dist/slow/neoracer.mjz for the web
 """
 
-import dataclasses
-import json
 import os
 import shutil
 
@@ -27,7 +25,6 @@ from . import assets
 
 XML_NAME = "neoracer.xml"
 MJZ_NAME = "neoracer.mjz"
-SETTINGS_NAME = "neoracer.json"
 
 
 def car_xml(car: Spec) -> str:
@@ -43,20 +40,11 @@ def spec(car: Spec) -> mujoco.MjSpec:
     return s
 
 
-def settings_json(car: Spec) -> str:
-    """The settings beside the car's model, its DerivedParams less the model,
-    as JSON with the field names of the Python dataclasses, for code that has
-    no Python."""
-    settings = dataclasses.asdict(derive(car))
-    del settings["model"]
-    return json.dumps(settings, indent=2) + "\n"
-
-
 def write(car: Spec, folder: str | os.PathLike[str]) -> None:
     """Write to folder the car's XML (XML_NAME), the mesh files it names, an
     archive of them (MJZ_NAME, assets.write_mjz) that MjSpec.from_zip and
-    MuJoCo's WebAssembly build load, and its settings (SETTINGS_NAME). folder
-    must not be assets/, whose XML the car's is made from."""
+    MuJoCo's WebAssembly build load. folder must not be assets/, whose XML
+    the car's is made from."""
     if os.path.realpath(folder) == os.path.realpath(assets.ASSET_DIR):
         raise ValueError(f"{folder} is assets/, the NeoRacer's own folder")
     text = car_xml(car)
@@ -70,5 +58,3 @@ def write(car: Spec, folder: str | os.PathLike[str]) -> None:
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copyfile(source, target)
     assets.write_mjz(xml, os.path.join(folder, MJZ_NAME))
-    with open(os.path.join(folder, SETTINGS_NAME), "w", encoding="utf-8") as f:
-        f.write(settings_json(car))

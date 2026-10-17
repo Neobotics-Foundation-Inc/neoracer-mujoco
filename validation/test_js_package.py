@@ -56,14 +56,12 @@ def test_the_part_names_are_those_of_contract_py():
 
 
 def test_the_numbers_are_those_of_the_python_package():
-    """The LiDAR's and the encoder's settings come from assets/neoracer.json,
-    which test_export.py holds to the Python package's; the rest are copies."""
-    embed = (_JS / "scripts" / "embed.mjs").read_text()
-    assert "assets/neoracer.json" in embed
-    assert "CAR_SETTINGS.lidar" in (_JS / "src" / "lidar.ts").read_text()
+    """The LiDAR's and the encoder's settings come from src/spec.ts, which
+    test_typescript.py holds to the Python package's; the rest are copies."""
+    assert "NEORACER_PARAMS.lidar" in (_JS / "src" / "lidar.ts").read_text()
     encoder_ts = (_JS / "src" / "encoder.ts").read_text()
-    assert "CAR_SETTINGS.encoder" in encoder_ts
-    assert "CAR_SETTINGS.wheel_radius" in encoder_ts
+    assert "NEORACER_PARAMS.encoder" in encoder_ts
+    assert "NEORACER_PARAMS.wheel_radius" in encoder_ts
     assert float(_constants("lidar")["NO_RETURN"]) == lidar.NO_RETURN
     assert int(_constants("scene")["SETTLE_STEPS"]) == sim.SETTLE_STEPS
 

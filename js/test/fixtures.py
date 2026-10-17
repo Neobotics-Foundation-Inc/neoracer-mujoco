@@ -6,6 +6,7 @@ Run it from the repository with the package installed:
     python js/test/fixtures.py js/test/fixtures.json
 """
 
+import dataclasses
 import json
 import math
 import os
@@ -16,6 +17,8 @@ import mujoco
 from neoracer_mujoco import assets, encoder, lidar, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.racecar_core_adapter import MujocoDrive
+from neoracer_spec.derive import derive
+from neoracer_spec.neoracer import NEORACER
 
 TRACK = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
 DRIVE = ControlCommand(throttle=0.5, steer=0.2)
@@ -96,6 +99,7 @@ def main(out: str) -> None:
         "sweep": {"poses": poses, "scan": sweep.scan.tolist(), "head": sweep.head},
         "encoder": {"angles": angles, "speeds": speeds},
         "commands": commands,
+        "params": dataclasses.asdict(derive(NEORACER)),
     }
     with open(out, "w") as f:
         json.dump(fixtures, f)
