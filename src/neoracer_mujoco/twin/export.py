@@ -40,11 +40,15 @@ def spec(car: Car) -> mujoco.MjSpec:
 def write(car: Car, folder: str | os.PathLike[str]) -> None:
     """Write to folder the car's XML (XML_NAME), the mesh files it names, and
     an archive of them (MJZ_NAME, assets.write_mjz) that MjSpec.from_zip and
-    MuJoCo's WebAssembly build load."""
+    MuJoCo's WebAssembly build load. folder must not be assets/, whose XML
+    the car's is made from."""
+    if os.path.realpath(folder) == os.path.realpath(assets.ASSET_DIR):
+        raise ValueError(f"{folder} is assets/, the NeoRacer's own folder")
+    text = car_xml(car)
     xml = os.path.join(folder, XML_NAME)
     os.makedirs(folder, exist_ok=True)
     with open(xml, "w", encoding="utf-8") as f:
-        f.write(car_xml(car))
+        f.write(text)
     for mesh in spec(car).meshes:
         source = os.path.join(assets.ASSET_DIR, mesh.file)
         target = os.path.join(folder, mesh.file)

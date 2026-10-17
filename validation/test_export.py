@@ -50,3 +50,10 @@ def test_a_written_archive_loads_to_the_cars_model(tmp_path):
         "geom_size",
     ):
         np.testing.assert_array_equal(getattr(archived, field), getattr(direct, field))
+
+
+def test_writing_into_assets_is_refused():
+    with pytest.raises(ValueError, match="assets"):
+        export.write(SLOW, assets.ASSET_DIR)
+    with open(assets.DEFAULT_CAR, encoding="utf-8") as f:
+        assert export.car_xml(NEORACER) == f.read()
