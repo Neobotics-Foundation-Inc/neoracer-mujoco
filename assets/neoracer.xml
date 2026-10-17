@@ -281,10 +281,11 @@
         wheels at most at its free speed, as a real servo does.
 
         The servo is the car's SPT5435LV-180W. Its datasheet gives 35 kg·cm and
-        0.14 s per 60 degrees at 6.0 V, 29 kg·cm and 0.16 s at 4.8 V; the model
-        takes it on the board's 5 V rail (the supply is not documented, issue
-        #115) and interpolates: 30 kg·cm (2.94 N·m) stalled and 0.157 s per
-        60 degrees (6.68 rad/s).
+        0.14 s per 60 degrees at 6.0 V, 29 kg·cm and 0.16 s at 4.8 V. The
+        servo header runs on the OSCORE board's 5 V rail, VCC_5V_IO (the
+        NeoRacer docs, hardware/oscore-board), so the model interpolates to
+        5 V: 30 kg·cm (2.94 N·m) stalled and 0.157 s per 60 degrees
+        (6.68 rad/s).
         Its horn turns 90 degrees over the firmware's 1000 to 2000 us, and the
         car's driver stops it at 0.625 of that swing, 28.1 degrees, where the
         wheels reach full lock: steer_input then turns 25.2 degrees, so the
