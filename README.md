@@ -34,10 +34,10 @@ import mujoco
 from neoracer_mujoco import load, read, sim
 from neoracer_mujoco.control.steering import ControlCommand
 
-scene = load()                      # assets/neoracer.xml, compiled
-data = sim.settle(scene.model)      # the car at rest on the floor
+scene = load()  # assets/neoracer.xml, compiled
+data = sim.settle(scene.model)  # the car at rest on the floor
 sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.2))
-for _ in range(360):                # 1 s at 360 Hz
+for _ in range(360):  # 1 s at 360 Hz
     mujoco.mj_step(scene.model, data)
 print(read(scene.car.sensors, data))
 ```
