@@ -20,15 +20,19 @@ beside any speed a program acts on.
 
 from dataclasses import dataclass
 
+from . import hardware
 from .sensors import WHEEL_RADIUS
+
+_ENCODER = hardware.Hardware().encoder
 
 
 @dataclass(frozen=True)
 class EncoderParams:
-    """How the firmware measures the speed."""
+    """How the firmware measures the speed. The defaults are the car's
+    (hardware.MotorEncoder)."""
 
-    window: float = 0.02  # s, the firmware's control period
-    alpha: float = 0.95  # the weight of the new window in the filter
+    window: float = _ENCODER.report_period  # s, the firmware's control period
+    alpha: float = _ENCODER.filter_weight  # the weight of the new window in the filter
 
     def __post_init__(self) -> None:
         if not self.window > 0.0:

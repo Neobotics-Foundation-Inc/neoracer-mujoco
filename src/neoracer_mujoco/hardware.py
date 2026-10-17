@@ -2,7 +2,10 @@
 The NeoRacer's hardware, from its datasheets and measurements, and the
 numbers of the car model (assets/neoracer.xml) that follow from it.
 
-The dataclasses hold what was read off a datasheet or measured on the car.
+The dataclasses hold what was read off a datasheet or measured on the car,
+every sensor included, even where the simulator does not model a value yet.
+The sensors' settings in lidar.py, encoder.py and sensors.py take their
+defaults from them.
 The functions below derive the model's parameters from them: the drive
 motor's and the steering servo's dcmotor settings, the steering lock and the
 Ackermann polynomials, the springs' preload, and the chassis' mass and
@@ -18,6 +21,7 @@ Frame: +X forward, +Y left, +Z up. Lengths in m, angles in rad unless named.
 import math
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 
@@ -123,6 +127,57 @@ class Steering:
 
 
 @dataclass(frozen=True)
+class MotorEncoder:
+    """The Hall-effect encoder on the drive motor's shaft (NeoRacer docs,
+    hardware/sensors/encoders), and how the firmware reads it."""
+
+    pulses_per_turn: int = 1024  # a motor turn, as the firmware sets it
+    max_speed_rpm: float = 20_000.0  # rpm, the encoder's rating
+    # Every report_period the firmware turns the count over the period into
+    # the tyre's surface speed, and low-pass filters it with this weight on
+    # the new period.
+    report_period: float = 0.02  # s, the firmware's control period
+    filter_weight: float = 0.95
+
+
+@dataclass(frozen=True)
+class Imu:
+    """The OSCORE board's IMU: a QMI8658A accelerometer and gyroscope and a
+    QMC6309 magnetometer (NeoRacer docs, hardware/sensors/imu). The ranges are
+    the widest the chips have; the firmware's settings are not documented."""
+
+    rate: float = 200.0  # Hz
+    accel_range_g: float = 16.0  # g
+    gyro_range_dps: float = 2048.0  # degrees/s
+    magnetometer_range_gauss: float = 30.0  # gauss
+
+
+@dataclass(frozen=True)
+class Lidar:
+    """The LakiBeam L1 (NeoRacer docs, hardware/sensors/lidar)."""
+
+    scan_rate: float = 30.0  # Hz, turns a second
+    resolution_degrees: float = 0.25  # between two samples
+    field_degrees: float = 270.0  # of bearings it sees, centered on the front
+    range_bright: float = 25.0  # m at least, on a target of 90% reflectivity
+    range_dark: float = 15.0  # m at least, on a target of 10% reflectivity
+    accuracy: float = 0.02  # m
+
+
+@dataclass(frozen=True)
+class Camera:
+    """The front camera (NeoRacer docs, hardware/sensors/camera). The
+    simulator has no camera yet."""
+
+    width: int = 1920  # pixels
+    height: int = 1200  # pixels
+    fps: float = 120.0  # Hz
+    fov_degrees: float = 130.0
+    focal_length: float = 0.0027  # m
+    shutter: Literal["global", "rolling"] = "global"
+
+
+@dataclass(frozen=True)
 class Hardware:
     chassis: Chassis = Chassis()
     suspension: Suspension = Suspension()
@@ -130,6 +185,10 @@ class Hardware:
     motor: DriveMotor = DriveMotor()
     servo: SteeringServo = SteeringServo()
     steering: Steering = Steering()
+    encoder: MotorEncoder = MotorEncoder()
+    imu: Imu = Imu()
+    lidar: Lidar = Lidar()
+    camera: Camera = Camera()
 
     def __post_init__(self) -> None:
         # steer_input's range and the Ackermann fit must cover full lock.
