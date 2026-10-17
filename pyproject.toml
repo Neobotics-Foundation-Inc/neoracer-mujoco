@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neoracer-mujoco"
-version = "0.10.0"
+version = "0.11.0"
 description = "MuJoCo simulation baseline + reusable toolbox for the NeoRacer 1/12-scale RC car."
 readme = "README.md"
 requires-python = ">=3.15"
