@@ -156,7 +156,7 @@ Run these in a clone of the repository.
 | `python -m examples.manual_drive` | drive with the arrow keys, with a chase camera |
 | `python -m examples.pygame_drive.drive` | drive with WASD or a gamepad, with a LiDAR radar and a lap timer (`pip install -e ".[demo]"`) |
 | `python -m examples.track_centering_demo` | the PD track-centering controller on the straight corridor |
-| `python -m examples.track_generation` | generate tracks and describe them; `--drive` drives one in the viewer |
+| `python -m examples.track_generation` | generate tracks and describe them; `mjpython -m examples.track_generation --drive` drives one in the viewer |
 | `python examples/run_racecar_core.py CONTROLLER.py` | run a `racecar_core` controller in the simulator |
 
 ## JavaScript package
