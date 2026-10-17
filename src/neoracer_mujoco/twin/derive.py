@@ -58,6 +58,8 @@ class ModelParams:
     chassis_mass: float  # kg
     chassis_inertia: Vec3  # kg·m^2
     com_height: float  # m
+    box_center: Vec3  # m, the chassis' collision box
+    box_half_size: Vec3  # m
     imu_position: Vec3  # m
     lidar_position: Vec3  # m
     half_wheelbase: float  # m
@@ -197,6 +199,8 @@ def model(car: Car) -> ModelParams:
         chassis_mass=precise(chassis_mass(car)),
         chassis_inertia=_precise3(chassis_inertia(car)),
         com_height=precise(c.com_height),
+        box_center=_precise3(c.box_center),
+        box_half_size=_precise3(c.box_half_size),
         imu_position=_precise3(car.imu.position),
         lidar_position=_precise3(car.lidar.position),
         half_wheelbase=precise(c.wheelbase / 2),

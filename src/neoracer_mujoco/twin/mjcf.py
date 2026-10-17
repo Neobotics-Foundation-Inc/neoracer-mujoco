@@ -53,6 +53,8 @@ def car_xml(p: ModelParams, xml: str) -> str:
         (r"<inertial\s", "mass", number(p.chassis_mass)),
         (r"<inertial\s", "diaginertia", numbers(*p.chassis_inertia)),
         (r"<inertial\s", "pos", numbers(0, 0, p.com_height)),
+        (r'<geom name="chassis"', "pos", numbers(*p.box_center)),
+        (r'<geom name="chassis"', "size", numbers(*p.box_half_size)),
         (r'<site name="imu"', "pos", numbers(*p.imu_position)),
         (r'<site name="lidar_mount"', "pos", numbers(*p.lidar_position)),
         (r'<geom name="vis_lidar"', "pos", numbers(*p.lidar_position)),

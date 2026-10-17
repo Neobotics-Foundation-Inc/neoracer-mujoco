@@ -30,6 +30,24 @@ def test_the_xml_holds_the_numbers_derived_from_the_parts():
     assert mjcf.car_xml(derive.model(CAR), xml) == xml
 
 
+@pytest.mark.parametrize(
+    "replace",
+    [
+        lambda c: dataclasses.replace(c, box_center=(0.02, 0.0, 0.07)),
+        lambda c: dataclasses.replace(c, box_half_size=(0.2, 0.1, 0.09)),
+        lambda c: dataclasses.replace(c, wheelbase=0.29),
+        lambda c: dataclasses.replace(c, com_height=0.02),
+    ],
+)
+def test_a_change_to_the_chassis_changes_the_xml(replace):
+    """Every chassis value reaches the model: a car with one of them changed
+    gets a different XML."""
+    with open(assets.DEFAULT_CAR) as f:
+        xml = f.read()
+    car = dataclasses.replace(CAR, chassis=replace(CAR.chassis))
+    assert mjcf.car_xml(derive.model(car), xml) != xml
+
+
 def test_the_sensor_settings_are_the_sensor_modules_defaults():
     s = derive.settings(CAR)
     assert s.lidar == lidar.LidarParams()
