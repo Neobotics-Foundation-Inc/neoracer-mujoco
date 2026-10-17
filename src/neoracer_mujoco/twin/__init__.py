@@ -9,6 +9,7 @@ The car's digital twin: from what the car is to what the simulators run.
                         LiDAR's scan, the encoder's filter, the steer limit
                         (Settings)
     mjcf.car_xml        ModelParams written into the car's XML
+    export              a car's XML, MjSpec, and folder with its .mjz
 
 Each step is a pure function from one type to the next. A variant of the
 car is a variant of its parts: dataclasses.replace(NEORACER, motor=...).

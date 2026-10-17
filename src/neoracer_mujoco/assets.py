@@ -53,12 +53,14 @@ def load(path: str | os.PathLike[str] = DEFAULT_CAR) -> Scene:
 
 def compose(
     track: mujoco.MjSpec,
-    car_path: str | os.PathLike[str] = DEFAULT_CAR,
+    car: str | os.PathLike[str] | mujoco.MjSpec = DEFAULT_CAR,
     pos: Position = (0.0, 0.0, 0.0),
     visuals: bool = True,
 ) -> Scene:
     """Compile the track with the car's "car" body attached at pos (m),
-    facing +X. track is not changed: the car is attached to a copy.
+    facing +X. The car is a car XML's path or a car's MjSpec, such as
+    twin.export.spec(car) for a variant. Neither track nor a car's MjSpec is
+    changed: the car is attached from copies.
 
     Only the car body is attached, so the track keeps its own floor and
     <option>, and the track XML never names the car file.
@@ -71,7 +73,11 @@ def compose(
         compose(mujoco.MjSpec.from_file(os.path.join(TRACK_DIR, "f1_track.xml")))
     """
     scene = track.copy()
-    car = mujoco.MjSpec.from_file(str(car_path))
+    car = (
+        car.copy()
+        if isinstance(car, mujoco.MjSpec)
+        else mujoco.MjSpec.from_file(str(car))
+    )
     frame = scene.worldbody.add_frame()
     frame.pos = np.array(pos)
     if not visuals:
