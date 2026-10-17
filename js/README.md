@@ -35,4 +35,4 @@ for (let i = 0; i < 360; i++) {
 // 1440 distances in m, clockwise from the front, -1 for no return.
 ```
 
-The scene has no meshes that only show the car: render the car with your own model of it. To build and test it, run `npm ci` and then, from the repository root with the Python package installed, `python js/test/fixtures.py js/test/fixtures.json` and `npm test` in `js/`.
+The scene has no meshes that only show the car: render the car with your own model of it. `spec` holds the car's specification, generated from the Python package's: `spec.NEORACER`, each value with its source and status, and `spec.NEORACER_PARAMS`, the parameters derived from it, with their TypeScript types. To build and test it, run `npm ci` and then, from the repository root with the Python package installed, `python js/test/fixtures.py js/test/fixtures.json` and `npm test` in `js/`.

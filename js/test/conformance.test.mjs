@@ -25,6 +25,7 @@ import {
   startEncoder,
   startLidar,
   stepEncoder,
+  spec,
   sweepLidar,
 } from '../dist/index.js';
 
@@ -154,4 +155,10 @@ test('a car whose ranges are not symmetric about 0 has no limits, but takes dire
     assert.equal(data.ctrl[odd.car.steer], 0.1);
     assert.equal(data.ctrl[odd.car.drive], 0.5 * odd.model.actuator_ctrlrange[2 * odd.car.drive + 1]);
   }
+});
+
+test("the NeoRacer's parameters are Python's derive(NEORACER)", () => {
+  assert.deepEqual(spec.NEORACER_PARAMS, fixtures.params);
+  assert.equal(LIDAR.slots, spec.NEORACER_PARAMS.lidar.slots);
+  assert.equal(spec.NEORACER.chassis.wheelbase.status.kind, 'Measured');
 });

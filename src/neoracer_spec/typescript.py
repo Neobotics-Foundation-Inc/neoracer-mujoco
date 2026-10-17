@@ -1,0 +1,245 @@
+"""
+The specification and its derivation as TypeScript, for the JS package: an
+interface for each dataclass, a type for each type alias, and the
+NeoRacer's Spec (NEORACER) and DerivedParams (NEORACER_PARAMS) as values
+that the TypeScript compiler checks against them.
+
+    float, int          number
+    str, bool           string, boolean
+    Literal["a", "b"]   "a" | "b"
+    tuple[A, B]         readonly [A, B]
+    tuple[A, ...]       readonly A[]
+    X | Y               X | Y
+    Sourced[T]          Sourced<T>, from the generic dataclass
+
+A dataclass that is one of a union of dataclasses, as Measured is of
+Status, gets a field `kind`, its name, so that TypeScript tells them apart.
+Field names stay as in Python. js/src/spec.ts is what module() writes; a
+test holds it there. After a change to the spec, run
+
+    python -m neoracer_spec.typescript js/src/spec.ts
+"""
+
+import ast
+import dataclasses
+import inspect
+import io
+import json
+import math
+import sys
+import textwrap
+import tokenize
+import types
+import typing
+from collections.abc import Iterator
+
+from . import derive
+from .neoracer import NEORACER
+from .spec import Spec
+
+type _Named = type | typing.TypeAliasType
+
+
+def _members(t: object) -> tuple[object, ...]:
+    """The members of the union t, or () if t is not a union."""
+    if isinstance(t, typing.TypeAliasType):
+        return _members(t.__value__)
+    if typing.get_origin(t) in (types.UnionType, typing.Union):
+        return typing.get_args(t)
+    return ()
+
+
+def _parts(t: object) -> Iterator[object]:
+    """The types that t names directly."""
+    if isinstance(t, typing.TypeAliasType):
+        yield t.__value__
+    elif dataclasses.is_dataclass(t) and isinstance(t, type):
+        yield from typing.get_type_hints(t).values()
+    else:
+        yield from typing.get_args(t)
+        origin = typing.get_origin(t)
+        if origin is not None and origin is not typing.Literal:
+            yield origin
+
+
+def _named(roots: tuple[type, ...]) -> list[_Named]:
+    """The dataclasses and type aliases that roots reach, each after those it
+    names."""
+    seen: list[_Named] = []
+
+    def visit(t: object) -> None:
+        if typing.get_origin(t) is typing.Literal:
+            return
+        named = isinstance(t, typing.TypeAliasType) or (
+            dataclasses.is_dataclass(t) and isinstance(t, type)
+        )
+        if named and t in seen:
+            return
+        for part in _parts(t):
+            visit(part)
+        if named:
+            seen.append(t)
+
+    for root in roots:
+        visit(root)
+    return seen
+
+
+def _tagged(named: list[_Named]) -> set[type]:
+    """The dataclasses that are members of a union of dataclasses."""
+    tagged: set[type] = set()
+    for t in named:
+        hints = (
+            [t.__value__]
+            if isinstance(t, typing.TypeAliasType)
+            else typing.get_type_hints(t).values()
+        )
+        for hint in hints:
+            members = _members(hint)
+            if len(members) > 1 and all(dataclasses.is_dataclass(m) for m in members):
+                tagged.update(m for m in members if isinstance(m, type))
+    return tagged
+
+
+def _type(t: object) -> str:
+    """t as a TypeScript type."""
+    if isinstance(t, typing.TypeVar):
+        return t.__name__
+    if isinstance(t, typing.TypeAliasType):
+        return t.__name__
+    if t is float or t is int:
+        return "number"
+    if t is str:
+        return "string"
+    if t is bool:
+        return "boolean"
+    origin, args = typing.get_origin(t), typing.get_args(t)
+    if origin is typing.Literal:
+        return " | ".join(json.dumps(a) for a in args)
+    if origin in (types.UnionType, typing.Union):
+        return " | ".join(_type(a) for a in args)
+    if origin is tuple:
+        if len(args) == 2 and args[1] is Ellipsis:
+            inner = _type(args[0])
+            return f"readonly ({inner})[]" if " | " in inner else f"readonly {inner}[]"
+        return f"readonly [{', '.join(_type(a) for a in args)}]"
+    if dataclasses.is_dataclass(origin) and isinstance(origin, type):
+        return f"{origin.__name__}<{', '.join(_type(a) for a in args)}>"
+    if dataclasses.is_dataclass(t) and isinstance(t, type):
+        return t.__name__
+    raise TypeError(f"no TypeScript type for {t!r}")
+
+
+def _doc(t: object) -> str:
+    """The first paragraph of t's docstring as a TSDoc comment, or ""."""
+    doc = getattr(t, "__doc__", None) or ""
+    # A dataclass with no docstring gets one from its signature.
+    if not doc or doc.startswith(f"{getattr(t, '__name__', '')}("):
+        return ""
+    text = " ".join(doc.strip().split("\n\n")[0].split())
+    return f"/** {text} */\n"
+
+
+def _comments(t: type) -> dict[str, tuple[list[str], str]]:
+    """Each field's comments in t's source: the lines of comment just above
+    it, and the comment that ends its line."""
+    source = textwrap.dedent(inspect.getsource(t))
+    tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+    comments = {
+        t.start[0]: (
+            t.string.removeprefix("#").strip(),
+            t.line.lstrip().startswith("#"),
+        )
+        for t in tokens
+        if t.type == tokenize.COMMENT
+    }
+    (cls,) = ast.parse(source).body
+    assert isinstance(cls, ast.ClassDef)
+    fields = {}
+    for node in cls.body:
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            above, line = [], node.lineno - 1
+            while line in comments and comments[line][1]:
+                above.insert(0, comments[line][0])
+                line -= 1
+            end = comments.get(node.end_lineno or 0, ("", True))
+            fields[node.target.id] = (above, "" if end[1] else end[0])
+    return fields
+
+
+def _declaration(t: _Named, tagged: set[type]) -> str:
+    if isinstance(t, typing.TypeAliasType):
+        params = "".join(f"<{p.__name__}>" for p in t.__type_params__)
+        return f"export type {t.__name__}{params} = {_type(t.__value__)};\n"
+    params = ", ".join(p.__name__ for p in getattr(t, "__type_params__", ()))
+    name = f"{t.__name__}<{params}>" if params else t.__name__
+    lines = [f"{_doc(t)}export interface {name} {{"]
+    if t in tagged:
+        lines.append(f"  readonly kind: {json.dumps(t.__name__)};")
+    comments = _comments(t)
+    for field, hint in typing.get_type_hints(t).items():
+        above, end = comments.get(field, ([], ""))
+        lines += [f"  // {c}" for c in above]
+        lines.append(
+            f"  readonly {field}: {_type(hint)};" + (f" // {end}" if end else "")
+        )
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def _value(x: object, tagged: set[type], indent: str = "") -> str:
+    """x as a TypeScript literal."""
+    inner = indent + "  "
+    if isinstance(x, bool):
+        return "true" if x else "false"
+    if isinstance(x, int | float):
+        if not math.isfinite(x):
+            raise ValueError(f"{x} has no TypeScript literal")
+        return repr(x)
+    if isinstance(x, str):
+        return json.dumps(x, ensure_ascii=False)
+    if isinstance(x, tuple):
+        items = [_value(v, tagged, inner) for v in x]
+        if all("\n" not in i for i in items) and sum(map(len, items)) < 60:
+            return f"[{', '.join(items)}]"
+        return "[\n" + "".join(f"{inner}{i},\n" for i in items) + f"{indent}]"
+    if dataclasses.is_dataclass(x) and not isinstance(x, type):
+        fields = [
+            (f.name, _value(getattr(x, f.name), tagged, inner))
+            for f in dataclasses.fields(x)
+        ]
+        if type(x) in tagged:
+            fields.insert(0, ("kind", json.dumps(type(x).__name__)))
+        body = "".join(f"{inner}{name}: {value},\n" for name, value in fields)
+        return "{\n" + body + f"{indent}}}"
+    raise TypeError(f"no TypeScript literal for {x!r}")
+
+
+def module() -> str:
+    """The TypeScript module of the types of Spec and DerivedParams, with
+    NEORACER and derive(NEORACER) as NEORACER_PARAMS."""
+    named = _named((Spec, derive.DerivedParams))
+    tagged = _tagged(named)
+    spec = _value(NEORACER, tagged)
+    params = _value(derive.derive(NEORACER), tagged)
+    header = (
+        "// Generated by python -m neoracer_spec.typescript from src/neoracer_spec."
+        " Do not edit.\n"
+    )
+    neoracer = (
+        "/** The NeoRacer, each value with its source. */\n"
+        f"export const NEORACER = {spec} as const satisfies Spec;\n"
+    )
+    neoracer_params = (
+        "/** What the simulators run for the NeoRacer: derive(NEORACER). */\n"
+        f"export const NEORACER_PARAMS = {params} as const satisfies DerivedParams;\n"
+    )
+    declarations = [_declaration(t, tagged) for t in named]
+    return "\n".join([header, *declarations, neoracer, neoracer_params])
+
+
+if __name__ == "__main__":
+    (path,) = sys.argv[1:]
+    text = module()
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
