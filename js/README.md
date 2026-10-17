@@ -2,6 +2,10 @@
 
 This package runs the NeoRacer car in MuJoCo's WebAssembly build (`@mujoco/mujoco`, the same MuJoCo version as the Python package) in a browser or in Node. It carries the car's MJCF, puts the car on a track that you give as MJCF, and drives it and reads its encoder and LiDAR the way the Python package does. Its tests run the same cases in both and compare the results.
 
+```sh
+npm install @mujoco/mujoco@3.16.0 https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.11.0/neoracer-mujoco-0.11.0.tgz
+```
+
 ```js
 import loadMujoco from '@mujoco/mujoco';
 import {
@@ -35,4 +39,8 @@ for (let i = 0; i < 360; i++) {
 // 1440 distances in m, clockwise from the front, -1 for no return.
 ```
 
-The scene has no meshes that only show the car: render the car with your own model of it. `spec` holds the car's specification, generated from the Python package's: `spec.NEORACER`, each value with its source and status, and `spec.NEORACER_PARAMS`, the parameters derived from it, with their TypeScript types. To build and test it, run `npm ci` and then, from the repository root with the Python package installed, `python js/test/fixtures.py js/test/fixtures.json` and `npm test` in `js/`.
+The scene has no meshes that only show the car: render the car with your own model of it.
+
+`spec` holds the car's specification, typed and generated from the Python package's (`src/spec.ts`): `spec.NEORACER`, each value with its source and status, and `spec.NEORACER_PARAMS`, the parameters derived from it.
+
+To build and test the package, run `npm ci` in `js/`, then, from the repository root with the Python package installed, `python js/test/fixtures.py js/test/fixtures.json` and `npm test --prefix js`.
