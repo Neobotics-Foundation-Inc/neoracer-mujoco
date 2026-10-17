@@ -24,7 +24,7 @@ def scene():
 
 def test_the_xml_holds_the_numbers_derived_from_the_parts():
     """The checked-in XML is what car_xml writes: after a change to the car,
-    run python -m neoracer_mujoco.write_car_xml assets/neoracer.xml."""
+    run python -m neoracer_mujoco.write_car assets."""
     with open(assets.DEFAULT_CAR) as f:
         xml = f.read()
     assert mjcf.car_xml(derive.model(CAR), xml) == xml

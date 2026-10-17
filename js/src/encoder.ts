@@ -4,16 +4,19 @@
 // the new window. A window closes at the first step on or after each tick
 // and is measured over its own length.
 
+import { CAR_SETTINGS } from './generated/car.js';
+
 /** How the firmware measures the speed. */
 export interface EncoderParams {
   readonly window: number; // s, the firmware's control period
   readonly alpha: number; // the weight of the new window in the filter
 }
 
-export const ENCODER: EncoderParams = { window: 0.02, alpha: 0.95 };
+/** The NeoRacer's, from assets/neoracer.json: encoder.EncoderParams() in Python. */
+export const ENCODER: EncoderParams = { window: CAR_SETTINGS.encoder.window, alpha: CAR_SETTINGS.encoder.alpha };
 
-/** The tyre's radius (m), as sensors.WHEEL_RADIUS: the 85 mm tyre of the spec. */
-export const WHEEL_RADIUS = 0.0425;
+/** The tyre's radius (m) that the speed is measured at, from assets/neoracer.json: sensors.WHEEL_RADIUS in Python. */
+export const WHEEL_RADIUS: number = CAR_SETTINGS.wheel_radius;
 
 /** The encoder between two physics steps. */
 export interface EncoderState {

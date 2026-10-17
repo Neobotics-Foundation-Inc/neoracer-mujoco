@@ -6,7 +6,7 @@ of the XML, its structure and its comments, as it is. The checked-in
 assets/neoracer.xml is what car_xml writes for twin.neoracer.NEORACER; a
 test holds it there. After a change to the car, run
 
-    python -m neoracer_mujoco.write_car_xml assets/neoracer.xml
+    python -m neoracer_mujoco.write_car assets
 """
 
 import re

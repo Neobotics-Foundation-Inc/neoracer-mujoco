@@ -25,6 +25,13 @@ def test_the_neoracers_xml_is_the_checked_in_xml():
         assert export.car_xml(NEORACER) == f.read()
 
 
+def test_the_neoracers_settings_are_the_checked_in_json():
+    """After a change to the car, run python -m neoracer_mujoco.write_car assets."""
+    path = os.path.join(assets.ASSET_DIR, export.SETTINGS_NAME)
+    with open(path, encoding="utf-8") as f:
+        assert export.settings_json(NEORACER) == f.read()
+
+
 def test_a_variant_compiles_with_its_parts():
     scene = compile_scene(export.spec(SLOW))
     motor = scene.model.bind_scalar(scene.car.drive)
@@ -42,6 +49,8 @@ def test_a_written_archive_loads_to_the_cars_model(tmp_path):
     export.write(SLOW, tmp_path)
     archived = mujoco.MjSpec.from_zip(str(tmp_path / export.MJZ_NAME)).compile()
     direct = export.spec(SLOW).compile()
+    settings = (tmp_path / export.SETTINGS_NAME).read_text(encoding="utf-8")
+    assert settings == export.settings_json(SLOW)
     for field in (
         "body_mass",
         "body_inertia",
