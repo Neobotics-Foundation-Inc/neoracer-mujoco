@@ -67,13 +67,13 @@
         </default>
 
         <!--
-        Steering joint: hinge about the Z-axis (vertical).
-        Range -.55 .55 is wider than the inner front wheel's angle at full lock
-        (it turns more under Ackermann, up to 30 degrees, 0.52 rad), so it is
-        never clamped.
+        Steering joint: hinge about the Z-axis (vertical). Its range is wider
+        than the inner front wheel's angle at the edge of steer_input's range
+        (hardware.wheel_steer_range), so it never opposes the Ackermann
+        constraints.
         -->
         <default class="steer">
-            <joint type="hinge" axis="0 0 1" limited="true" range="-.55 .55"
+            <joint type="hinge" axis="0 0 1" limited="true" range="-.551706 .551706"
                    damping=".001" armature=".0002" frictionloss=".01"
                    actuatorfrcrange="-100 100"/>
         </default>

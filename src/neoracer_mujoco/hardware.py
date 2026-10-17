@@ -116,6 +116,10 @@ class Steering:
     # steer_input's range (rad), over which the Ackermann polynomials fit.
     # It is wider than full lock, so the fit covers every command.
     fit_range: float = 0.45
+    # The front wheels' steer joints reach this far (rad) beyond the inner
+    # wheel's angle at fit_range, so their limits never oppose the Ackermann
+    # constraints.
+    wheel_range_margin: float = 0.015
 
 
 @dataclass(frozen=True)
@@ -215,6 +219,13 @@ def ackermann(hw: Hardware) -> np.ndarray:
     return np.polynomial.polynomial.polyfit(x, y, 4)
 
 
+def wheel_steer_range(hw: Hardware) -> float:
+    """How far (rad) each front wheel's steer joint turns: past the inner
+    wheel's angle at the edge of steer_input's range."""
+    inner = left_wheel_angle(hw.chassis, hw.steering.fit_range)
+    return inner + hw.steering.wheel_range_margin
+
+
 def sprung_mass(chassis: Chassis) -> float:
     """The mass on the springs (kg): the car less its four wheels."""
     return chassis.mass - 4 * chassis.wheel_mass
@@ -272,6 +283,7 @@ def car_xml(hw: Hardware, xml: str) -> str:
     c = hw.chassis
     x, y, r = c.wheelbase / 2, c.track / 2, c.wheel_radius
     lock, poly = steer_lock(hw), ackermann(hw)
+    wheel_steer = wheel_steer_range(hw)
     edits = [
         # The car spawns 1 mm above its resting height: the axles at the tyre
         # radius.
@@ -297,6 +309,11 @@ def car_xml(hw: Hardware, xml: str) -> str:
             number(hw.suspension.stiffness),
         ),
         (r'<default class="susp">\s*<joint', "springref", number(springref(hw))),
+        (
+            r'<default class="steer">\s*<joint',
+            "range",
+            numbers(-wheel_steer, wheel_steer),
+        ),
         (
             r'<dcmotor name="motor"',
             "nominal",

@@ -100,6 +100,21 @@ def test_the_ackermann_polynomials_follow_ideal_ackermann_steering():
     np.testing.assert_allclose(right, -left[::-1])
 
 
+def test_the_front_wheels_turn_as_far_as_the_ackermann_constraints_ask(scene):
+    """Over steer_input's whole range, the polynomials keep each front wheel
+    inside its steer joint's range."""
+    model = scene.model
+    lo, hi = model.joint("steer_input").range
+    for name, joint in [
+        ("ackermann_left", "fl_steer"),
+        ("ackermann_right", "fr_steer"),
+    ]:
+        poly = model.equality(name).data[:5]
+        angles = np.polynomial.polynomial.polyval(np.linspace(lo, hi, 101), poly)
+        j_lo, j_hi = model.joint(joint).range
+        assert j_lo < angles.min() and angles.max() < j_hi
+
+
 def test_the_springs_hold_the_sprung_weight_at_rest():
     weight = hardware.sprung_mass(HW.chassis) * hardware.G
     assert -4 * HW.suspension.stiffness * hardware.springref(HW) == pytest.approx(
