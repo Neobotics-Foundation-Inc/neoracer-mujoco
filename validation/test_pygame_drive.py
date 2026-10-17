@@ -73,7 +73,7 @@ def test_car_tops_out_then_brakes_when_the_throttle_is_released():
     v_release = _speed(scene, data)
     _drive(scene, data, state, 0.0, 0.0, 200)  # 4 s hands off
     # At zero throttle the motor brakes in proportion to its speed: from full
-    # speed the car loses half of it in about 0.4 s.
+    # speed the car loses half of it in about 0.35 s.
     assert _speed(scene, data) < 0.5 * v_release
 
 

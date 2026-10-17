@@ -256,15 +256,20 @@
         V / K, and a voltage of 0 brakes. MuJoCo derives K and R from
         nominal = "voltage stall_torque free_speed".
 
-        The motor is the car's RS-545SH, from its datasheet at 12 V: 214 mN·m
-        stalled and 24,000 rpm (2513 rad/s) with no load. gear is the
-        reduction from the motor to the wheels, 10.55 (the firmware's
-        OSCORE_GEAR_RATIO_MILLI), and ctrlrange the 11.1 V battery. At the
-        wheels that is 2.09 N·m from rest and a free speed of 220 rad/s,
-        9.4 m/s on the 42.5 mm tyres. The rotor's inertia is not in the
-        datasheet, so the model leaves it out.
+        The motor is the car's RS-545, which turns at about 11,000 rpm
+        (1152 rad/s) with no load (the NeoRacer docs, hardware/drivetrain).
+        No RS-545 datasheet lists that speed, so the model takes it at 12 V
+        and scales the stall torque from the RS-545SH-4075's datasheet at 12 V
+        (79.3 mN·m, 9,300 rpm): rewound in the same frame, a motor's stall
+        torque at a given voltage is proportional to its free speed, so
+        93.8 mN·m. The RS-545SH at 24,000 rpm and 214 mN·m gives the same
+        ratio within 5%. gear is the reduction from the motor to the wheels,
+        10.55 (the firmware's OSCORE_GEAR_RATIO_MILLI), and ctrlrange the
+        11.1 V battery. At the wheels that is 0.92 N·m from rest and a free
+        speed of 101 rad/s, 4.3 m/s on the 42.5 mm tyres. The rotor's inertia
+        is not in the datasheet, so the model leaves it out.
         -->
-        <dcmotor name="motor" tendon="drivetrain" nominal="12 .214 2513.27"
+        <dcmotor name="motor" tendon="drivetrain" nominal="12 .0938 1151.92"
                  gear="10.55" ctrlrange="-11.1 11.1"/>
 
         <!--

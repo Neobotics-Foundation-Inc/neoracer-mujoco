@@ -222,6 +222,16 @@ def _steer_angle(scene: Scene, data: mujoco.MjData) -> float:
     return float(data.bind_scalar(scene.car.sensors.steer_cmd_pos).data[0])  # rad
 
 
+def test_the_motor_is_an_rs545_at_11000_rpm(scene):
+    """At 12 V the motor turns at the docs' 11,000 rpm with no load, and its
+    stall torque is the RS-545SH-4075's (79.3 mN·m at 9,300 rpm) scaled to
+    that speed."""
+    r, k = scene.model.bind_scalar(scene.car.drive).gainprm[:2]
+    rpm = 2 * math.pi / 60  # rad/s
+    assert 12 / k == pytest.approx(11000 * rpm, rel=1e-3)
+    assert 12 * k / r == pytest.approx(79.3e-3 * 11000 / 9300, rel=1e-3)
+
+
 def test_the_servo_is_the_spt5435lv_on_5_v(scene):
     """At most 5 V, the servo stalls at 30 kg·cm and turns 60 degrees in
     0.157 s at its horn: its datasheet (35 kg·cm and 0.14 s at 6.0 V, 29 kg·cm
