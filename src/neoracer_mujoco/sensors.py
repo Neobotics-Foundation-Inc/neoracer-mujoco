@@ -26,10 +26,10 @@ import mujoco
 import numpy as np
 import numpy.typing as npt
 
-from .twin.neoracer import NEORACER
+from neoracer_spec.neoracer import NEORACER
 
 # The tyre's radius, which the car model's wheel geoms also have.
-WHEEL_RADIUS = NEORACER.wheel.radius  # m
+WHEEL_RADIUS = NEORACER.wheel.radius.value  # m
 
 type Vec3 = npt.NDArray[np.float64]  # shape (3,)
 type Quat = npt.NDArray[np.float64]  # shape (4,), (w, x, y, z)

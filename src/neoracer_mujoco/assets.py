@@ -59,7 +59,7 @@ def compose(
 ) -> Scene:
     """Compile the track with the car's "car" body attached at pos (m),
     facing +X. The car is a car XML's path or a car's MjSpec, such as
-    twin.export.spec(car) for a variant. Neither track nor a car's MjSpec is
+    export.spec(car) for a variant. Neither track nor a car's MjSpec is
     changed: the car is attached from copies.
 
     Only the car body is attached, so the track keeps its own floor and
