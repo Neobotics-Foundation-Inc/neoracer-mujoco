@@ -24,7 +24,7 @@ uv pip install -e ".[dev]"
 python -m pytest validation/
 ```
 
-`environment.yml` makes the same environment with conda.
+`environment.yml` makes the same environment with conda; then run `pip install -e ".[dev]"` in it.
 
 ## Quick start
 
@@ -42,7 +42,7 @@ for _ in range(360):  # 1 s at 360 Hz
 print(read(scene.car.sensors, data))
 ```
 
-`assets.compose(track)` puts the car on a track, given as an MjSpec: one of `assets/tracks/` or a generated one. To watch the car, run `mjpython -m examples.run`.
+`assets.compose(track)` puts the car on a track, given as an MjSpec: one of `assets/tracks/` or a generated one. To watch the car, run `mjpython -m examples.run` in a clone: the examples are not in the wheel.
 
 ## The car
 
@@ -116,7 +116,7 @@ pos = batch.read(scene.model, sensordata[:, -1], scene.car.truth.pos)  # (64, 3)
 cpu.close()
 ```
 
-- **Same results as one car.** A row of `CpuBatch` steps the same, bit for bit, as one MjData. Warp's results are close but not equal: after ten steps from rest the cars are within 1 mm.
+- **Same results as one car.** Each `step` starts the constraint solver cold, and a row of `CpuBatch` then steps the same, bit for bit, as one MjData stepped the same way. Warp's results are close but not equal: after ten steps from rest the cars are within 1 mm.
 - **Speed.** On 4 cores, 64 rows run 7,000 to 8,000 env steps a second.
 - **Leave out the visuals.** Build a batch's scenes with `visuals=False`. That drops the meshes that only show the car, and the model shrinks from 35 MB to 1.6 MB with the same physics.
 - **Many tracks.** A `CpuBatch` can step each row on its own track if every track compiles to a model of the same size: generate them with `WallParams(boxes_per_wall=192)`.
@@ -147,6 +147,8 @@ A `Track` is a closed corridor that runs counterclockwise, held as evenly spaced
 Only `mjcf.py` uses MuJoCo; the rest is numpy and scipy.
 
 ## Examples
+
+Run these in a clone of the repository.
 
 | Command | What it does |
 |---|---|
