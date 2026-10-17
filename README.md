@@ -64,6 +64,7 @@ python3 -m pytest validation/ -v
 ├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
 │   ├── contract.py        — the car contract (single source of truth)
 │   ├── hardware.py        — the car's datasheets and measurements, and the model numbers derived from them
+│   ├── write_car_xml.py   — writes those numbers into a car XML
 │   ├── assets.py          — cars() / load() / compose(): find and compile a Scene
 │   ├── scene.py           — Scene (spec + model) and Car, the car's parts as spec elements
 │   ├── sensors.py         — SensorReadings, find_sensors() + read()
@@ -107,7 +108,7 @@ python3 -m pytest validation/ -v
 
 The model has not yet been checked against recordings of the real car; issue #4 tracks that system identification. Until then, treat the simulator as a tool for developing and comparing controllers, not as a prediction of the real car's lap times or speeds.
 
-The car's datasheet and measured values are dataclasses in `hardware.py`, and the model's numbers are derived from them: the motor's and the servo's `nominal`, full lock, the Ackermann polynomials, the springs' preload, the chassis' mass and inertia, and the wheels' positions. A test fails if `neoracer.xml` does not hold those numbers. To change the car, change `hardware.py` and run `python -m neoracer_mujoco.hardware assets/neoracer.xml`.
+The car's datasheet and measured values are dataclasses in `hardware.py`, and the model's numbers are derived from them: the motor's and the servo's `nominal`, full lock, the Ackermann polynomials, the springs' preload, the chassis' mass and inertia, and the wheels' positions. A test fails if `neoracer.xml` does not hold those numbers. To change the car, change `hardware.py` and run `python -m neoracer_mujoco.write_car_xml assets/neoracer.xml`.
 
 | Part | Where the value comes from |
 |---|---|

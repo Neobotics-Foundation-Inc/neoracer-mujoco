@@ -22,7 +22,7 @@ def scene():
 
 def test_the_xml_holds_the_numbers_derived_from_the_hardware():
     """The checked-in XML is what car_xml writes: after a change to the
-    hardware, run python -m neoracer_mujoco.hardware assets/neoracer.xml."""
+    hardware, run python -m neoracer_mujoco.write_car_xml assets/neoracer.xml."""
     with open(assets.DEFAULT_CAR) as f:
         xml = f.read()
     assert hardware.car_xml(HW, xml) == xml
@@ -65,14 +65,19 @@ def test_the_servo_turns_its_horn_to_the_drivers_lock_at_full_lock(scene):
     assert servo.gainprm[7] == HW.servo.supply
 
 
-def test_the_servo_at_steer_input_is_its_rating_through_the_linkage():
-    """Torque times speed, the servo's power, is the same at the horn and at
-    steer_input."""
+def test_the_servo_at_steer_input_is_its_rating_through_the_linkage(scene):
+    """The compiled servo stalls at the horn's torque times the linkage and
+    runs free at the horn's speed over it, the linkage being the horn's angle
+    at the driver's lock over full lock."""
+    servo = scene.model.bind_scalar(scene.car.steer)
+    r, k, *_, vclamp = servo.gainprm[:8]
+    horn = HW.steering.driver_lock * HW.servo.horn_half_range_degrees
+    linkage = math.radians(horn) / servo.ctrlrange[1]
     rating = hardware.servo_rating(HW.servo)
-    _, stall, free = hardware.servo_nominal(HW)
-    horn_stall = rating.stall_torque_kgf_cm * hardware.KGF_CM
-    horn_free = math.radians(60) / rating.seconds_per_60_degrees
-    assert stall * free == pytest.approx(horn_stall * horn_free)
+    horn_stall = rating.stall_torque_kgf_cm * 9.80665 / 100  # N·m
+    horn_free = math.radians(60) / rating.seconds_per_60_degrees  # rad/s
+    assert vclamp * k / r == pytest.approx(horn_stall * linkage, rel=1e-5)
+    assert vclamp / k == pytest.approx(horn_free / linkage, rel=1e-5)
 
 
 def test_full_lock_turns_the_inner_wheel_to_the_measured_lock():
@@ -105,6 +110,12 @@ def test_the_springs_hold_the_sprung_weight_at_rest():
 def test_the_car_weighs_the_spec(scene):
     car = scene.model.bind_scalar(scene.car.body)
     assert car.subtreemass[0] == pytest.approx(HW.chassis.mass)
+
+
+def test_hardware_whose_full_lock_leaves_the_fit_range_is_refused():
+    steering = dataclasses.replace(HW.steering, inner_lock_degrees=31.0)
+    with pytest.raises(ValueError, match="fit_range"):
+        Hardware(steering=steering)
 
 
 @pytest.mark.parametrize(

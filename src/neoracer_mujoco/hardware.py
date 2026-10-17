@@ -10,14 +10,13 @@ inertia. car_xml writes them into the car's XML, and the checked-in XML is
 what car_xml writes for Hardware(): a test holds it there. To change the car,
 change a dataclass here and run
 
-    python -m neoracer_mujoco.hardware assets/neoracer.xml
+    python -m neoracer_mujoco.write_car_xml assets/neoracer.xml
 
 Frame: +X forward, +Y left, +Z up. Lengths in m, angles in rad unless named.
 """
 
 import math
 import re
-import sys
 from dataclasses import dataclass
 
 import numpy as np
@@ -128,6 +127,14 @@ class Hardware:
     servo: SteeringServo = SteeringServo()
     steering: Steering = Steering()
 
+    def __post_init__(self) -> None:
+        # steer_input's range and the Ackermann fit must cover full lock.
+        if not steer_lock(self) < self.steering.fit_range:
+            raise ValueError(
+                f"full lock, {steer_lock(self)} rad of steer_input, is not inside"
+                f" fit_range, {self.steering.fit_range} rad"
+            )
+
 
 type DcMotor = tuple[float, float, float]  # V, N·m, rad/s: MJCF's nominal
 
@@ -150,7 +157,10 @@ def motor_nominal(motor: DriveMotor) -> DcMotor:
 def servo_rating(servo: SteeringServo) -> ServoRating:
     """The servo's rating at its supply, interpolated between its datasheet's."""
     w = (servo.supply - servo.low.voltage) / (servo.high.voltage - servo.low.voltage)
-    lerp = lambda a, b: a + w * (b - a)
+
+    def lerp(a: float, b: float) -> float:
+        return a + w * (b - a)
+
     return ServoRating(
         servo.supply,
         lerp(servo.low.stall_torque_kgf_cm, servo.high.stall_torque_kgf_cm),
@@ -269,6 +279,7 @@ def car_xml(hw: Hardware, xml: str) -> str:
         (r"<inertial\s", "mass", number(chassis_mass(c))),
         (r"<inertial\s", "diaginertia", numbers(*chassis_inertia(c))),
         (r"<inertial\s", "pos", numbers(0, 0, c.com_height)),
+        (r'<site name="imu"', "pos", numbers(0, 0, c.com_height)),
         (r'<body name="steer_input_body"', "pos", numbers(x, 0, 0)),
         (
             r'<geom type="cylinder" size="[^"]*" contype',
@@ -331,11 +342,3 @@ def car_xml(hw: Hardware, xml: str) -> str:
     for element, attribute, value in edits:
         xml = _set(xml, element, attribute, value)
     return xml
-
-
-if __name__ == "__main__":
-    (path,) = sys.argv[1:]
-    with open(path) as f:
-        text = car_xml(Hardware(), f.read())
-    with open(path, "w") as f:
-        f.write(text)
