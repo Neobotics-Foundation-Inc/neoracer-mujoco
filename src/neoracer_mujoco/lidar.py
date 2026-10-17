@@ -15,11 +15,9 @@ racecar_core scan. It holds the distance (m) to the first geom along its
 ray, or NO_RETURN (-1, as a rangefinder reads) for a blocked slot or no geom
 within range. LidarParams holds the numbers.
 
-The LiDAR is the car's Richbeam LakiBeam1: 30 Hz, 0.25 degrees a sample,
-270 degrees seen and the rear 90 blocked, 25 m of range on a bright target
-(at least 15 m on a dark one, 10% reflectivity). The model sees every geom
-out to 25 m; its noise (2 cm), minimum range and missed returns are not
-modelled.
+LidarParams defaults to the car's LakiBeam L1 (hardware.Lidar). The model
+sees every geom out to its range on a bright target; its range on a dark
+one, its accuracy, a minimum range and missed returns are not modelled.
 """
 
 import functools
@@ -30,6 +28,7 @@ import mujoco
 import numpy as np
 import numpy.typing as npt
 
+from . import hardware
 from .scene import Car
 
 NO_RETURN = -1.0  # what a slot reads with nothing in range, as a rangefinder
@@ -38,14 +37,18 @@ type Scan = npt.NDArray[np.float64]  # shape (slots,), m
 type Slots = npt.NDArray[np.intp]  # slot indices
 
 
+_LIDAR = hardware.Hardware().lidar
+
+
 @dataclass(frozen=True)
 class LidarParams:
-    """The LiDAR's scan."""
+    """The LiDAR's scan. The defaults are the car's LiDAR (hardware.Lidar)."""
 
-    slots: int = 1440  # slots a turn
-    scan_rate: float = 30.0  # Hz, turns a second
-    max_range: float = 25.0  # m, the LakiBeam1's range on a bright target
-    field: float = 1.5 * math.pi  # rad of bearings it sees, centered on the front
+    slots: int = round(360 / _LIDAR.resolution_degrees)  # slots a turn
+    scan_rate: float = _LIDAR.scan_rate  # Hz, turns a second
+    max_range: float = _LIDAR.range_bright  # m, its range on a bright target
+    # rad of bearings it sees, centered on the front
+    field: float = math.radians(_LIDAR.field_degrees)
 
     def __post_init__(self) -> None:
         if self.slots < 1:
