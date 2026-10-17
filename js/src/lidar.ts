@@ -8,6 +8,7 @@
 
 import type { MjData } from '@mujoco/mujoco';
 
+import { CAR_SETTINGS } from './generated/car.js';
 import type { Mujoco, Scene } from './scene.js';
 
 export const NO_RETURN = -1; // what a slot reads with nothing in range
@@ -20,7 +21,13 @@ export interface LidarParams {
   readonly field: number; // rad of bearings it sees, centered on the front
 }
 
-export const LIDAR: LidarParams = { slots: 1440, scanRate: 30, maxRange: 25, field: 1.5 * Math.PI };
+/** The NeoRacer's LiDAR, from assets/neoracer.json: lidar.LidarParams() in Python. */
+export const LIDAR: LidarParams = {
+  slots: CAR_SETTINGS.lidar.slots,
+  scanRate: CAR_SETTINGS.lidar.scan_rate,
+  maxRange: CAR_SETTINGS.lidar.max_range,
+  field: CAR_SETTINGS.lidar.field,
+};
 
 /** Whether it sees slot i: its bearing is in [-field / 2, field / 2). */
 export function isVisible(params: LidarParams, i: number): boolean {

@@ -1,0 +1,14 @@
+{
+  "lidar": {
+    "slots": 1440,
+    "scan_rate": 30.0,
+    "max_range": 25.0,
+    "field": 4.71238898038469
+  },
+  "encoder": {
+    "window": 0.02,
+    "alpha": 0.95
+  },
+  "wheel_radius": 0.0425,
+  "steer_lock": 0.440491
+}

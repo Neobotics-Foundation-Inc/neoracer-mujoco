@@ -10,7 +10,7 @@ import re
 import tomllib
 from pathlib import Path
 
-from neoracer_mujoco import contract, encoder, lidar, sensors, sim
+from neoracer_mujoco import contract, lidar, sim
 
 _REPO = Path(__file__).resolve().parent.parent
 _JS = _REPO / "js"
@@ -56,18 +56,14 @@ def test_the_part_names_are_those_of_contract_py():
 
 
 def test_the_numbers_are_those_of_the_python_package():
-    enc = _constants("encoder")
-    assert float(enc["WHEEL_RADIUS"]) == sensors.WHEEL_RADIUS
-    assert _fields(enc["ENCODER"]) == {"window": 0.02, "alpha": 0.95}
-    assert _fields(enc["ENCODER"])["window"] == encoder.EncoderParams().window
-    assert _fields(enc["ENCODER"])["alpha"] == encoder.EncoderParams().alpha
-    params = lidar.LidarParams()
-    assert _fields(_constants("lidar")["LIDAR"]) == {
-        "slots": params.slots,
-        "scanRate": params.scan_rate,
-        "maxRange": params.max_range,
-        "field": params.field,
-    }
+    """The LiDAR's and the encoder's settings come from assets/neoracer.json,
+    which test_export.py holds to the Python package's; the rest are copies."""
+    embed = (_JS / "scripts" / "embed.mjs").read_text()
+    assert "assets/neoracer.json" in embed
+    assert "CAR_SETTINGS.lidar" in (_JS / "src" / "lidar.ts").read_text()
+    encoder_ts = (_JS / "src" / "encoder.ts").read_text()
+    assert "CAR_SETTINGS.encoder" in encoder_ts
+    assert "CAR_SETTINGS.wheel_radius" in encoder_ts
     assert float(_constants("lidar")["NO_RETURN"]) == lidar.NO_RETURN
     assert int(_constants("scene")["SETTLE_STEPS"]) == sim.SETTLE_STEPS
 
