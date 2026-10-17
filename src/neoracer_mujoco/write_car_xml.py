@@ -1,17 +1,18 @@
 """
-Write the numbers that hardware.py derives from the car's hardware into a car
-XML, in place:
+Write the NeoRacer's model numbers (twin.derive.model of twin.neoracer's
+NEORACER) into a car XML, in place:
 
     python -m neoracer_mujoco.write_car_xml assets/neoracer.xml
 """
 
 import sys
 
-from . import hardware
+from .twin import derive, mjcf
+from .twin.neoracer import NEORACER
 
 if __name__ == "__main__":
     (path,) = sys.argv[1:]
     with open(path) as f:
-        text = hardware.car_xml(hardware.Hardware(), f.read())
+        text = mjcf.car_xml(derive.model(NEORACER), f.read())
     with open(path, "w") as f:
         f.write(text)

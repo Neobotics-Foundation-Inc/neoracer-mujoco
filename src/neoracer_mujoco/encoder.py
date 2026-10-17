@@ -20,16 +20,17 @@ beside any speed a program acts on.
 
 from dataclasses import dataclass
 
-from . import hardware
 from .sensors import WHEEL_RADIUS
+from .twin import parts
+from .twin.neoracer import NEORACER
 
-_ENCODER = hardware.Hardware().encoder
+_ENCODER = NEORACER.encoder
 
 
 @dataclass(frozen=True)
 class EncoderParams:
     """How the firmware measures the speed. The defaults are the car's
-    (hardware.MotorEncoder)."""
+    (of(NEORACER.encoder))."""
 
     window: float = _ENCODER.report_period  # s, the firmware's control period
     alpha: float = _ENCODER.filter_weight  # the weight of the new window in the filter
@@ -39,6 +40,11 @@ class EncoderParams:
             raise ValueError(f"window must be > 0 s, not {self.window}")
         if not 0.0 < self.alpha <= 1.0:
             raise ValueError(f"alpha must be in (0, 1], not {self.alpha}")
+
+
+def of(part: parts.MotorEncoder) -> EncoderParams:
+    """How the firmware measures the speed from the encoder part."""
+    return EncoderParams(window=part.report_period, alpha=part.filter_weight)
 
 
 # A window closes when less than this is left of it (s), so that a step that

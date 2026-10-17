@@ -16,8 +16,9 @@ from dataclasses import dataclass
 
 import mujoco
 
-from neoracer_mujoco import hardware
 from neoracer_mujoco.scene import Scene
+from neoracer_mujoco.twin import derive
+from neoracer_mujoco.twin.neoracer import NEORACER
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,7 @@ class DriveParams:
     """Input shaping for the demo."""
 
     # rad, the model's Ackermann command limit, full lock
-    max_steer: float = hardware.steer_lock(hardware.Hardware())
+    max_steer: float = derive.steer_lock(NEORACER)
     throttle_slew: float = 2.5  # 1/s; how fast the applied throttle follows the input
     steer_slew: float = 4.0  # 1/s; smooths digital WASD input, sticks barely notice
     max_dt: float = 0.1  # s; a longer frame is cut, so physics never has to catch up
