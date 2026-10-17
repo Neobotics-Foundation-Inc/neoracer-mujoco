@@ -15,7 +15,7 @@ racecar_core scan. It holds the distance (m) to the first geom along its
 ray, or NO_RETURN (-1, as a rangefinder reads) for a blocked slot or no geom
 within range. LidarParams holds the numbers.
 
-LidarParams defaults to the car's LakiBeam L1 (hardware.Lidar). The model
+LidarParams defaults to the NeoRacer's LakiBeam L1 (of, twin.neoracer). The model
 sees every geom out to its range on a bright target; its range on a dark
 one, its accuracy, a minimum range and missed returns are not modelled.
 """
@@ -28,8 +28,9 @@ import mujoco
 import numpy as np
 import numpy.typing as npt
 
-from . import hardware
 from .scene import Car
+from .twin import parts
+from .twin.neoracer import NEORACER
 
 NO_RETURN = -1.0  # what a slot reads with nothing in range, as a rangefinder
 
@@ -37,12 +38,12 @@ type Scan = npt.NDArray[np.float64]  # shape (slots,), m
 type Slots = npt.NDArray[np.intp]  # slot indices
 
 
-_LIDAR = hardware.Hardware().lidar
+_LIDAR = NEORACER.lidar
 
 
 @dataclass(frozen=True)
 class LidarParams:
-    """The LiDAR's scan. The defaults are the car's LiDAR (hardware.Lidar)."""
+    """The LiDAR's scan. The defaults are the NeoRacer's LiDAR: of(NEORACER.lidar)."""
 
     slots: int = round(360 / _LIDAR.resolution_degrees)  # slots a turn
     scan_rate: float = _LIDAR.scan_rate  # Hz, turns a second
@@ -59,6 +60,17 @@ class LidarParams:
             raise ValueError(f"max_range must be > 0 m, not {self.max_range}")
         if not 0.0 < self.field <= 2 * math.pi:
             raise ValueError(f"field must be in (0, 2 pi] rad, not {self.field}")
+
+
+def of(part: parts.Lidar) -> LidarParams:
+    """The scan of the LiDAR part: a slot every sample, out to its range on a
+    bright target."""
+    return LidarParams(
+        slots=round(360 / part.resolution_degrees),
+        scan_rate=part.scan_rate,
+        max_range=part.range_bright,
+        field=math.radians(part.field_degrees),
+    )
 
 
 def bearings(params: LidarParams) -> npt.NDArray[np.float64]:

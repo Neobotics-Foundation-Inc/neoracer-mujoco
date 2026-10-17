@@ -16,7 +16,8 @@ The caller makes it once, from the model timestep or the env config.
 
 from dataclasses import dataclass
 
-from .. import hardware
+from ..twin import derive
+from ..twin.neoracer import NEORACER
 
 
 @dataclass(frozen=True)
@@ -45,7 +46,7 @@ class ShapingConfig:
     # each wheel did before the motor model, and cruises at about 2 m/s.
     target_throttle: float = 0.5
     # rad, full lock: the steer_servo's ctrlrange
-    steer_limit: float = hardware.steer_lock(hardware.Hardware())
+    steer_limit: float = derive.steer_lock(NEORACER)
     steer_slew_limit: float = 3.0  # rad/s max steering rate of change
     steer_slowdown_gain: float = 0.6  # throttle cut fraction at full steer deflection
     # m; at this front clearance or less, the throttle is 0

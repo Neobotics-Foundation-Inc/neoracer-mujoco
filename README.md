@@ -59,11 +59,11 @@ python3 -m pytest validation/ -v
 .
 ├── README.md              — this file
 ├── assets/
-│   ├── neoracer.xml       — MuJoCo MJCF model, its numbers written from hardware.py
+│   ├── neoracer.xml       — MuJoCo MJCF model, its numbers written from twin/
 │   └── meshes/            — visual STL meshes (cosmetic; mass="0")
 ├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
 │   ├── contract.py        — the car contract (single source of truth)
-│   ├── hardware.py        — the car's datasheets and measurements, and the model numbers derived from them
+│   ├── twin/              — the car's digital twin: its parts with their sources (neoracer.py), and the model numbers and settings derived from them
 │   ├── write_car_xml.py   — writes those numbers into a car XML
 │   ├── assets.py          — cars() / load() / compose(): find and compile a Scene
 │   ├── scene.py           — Scene (spec + model) and Car, the car's parts as spec elements
@@ -108,7 +108,7 @@ python3 -m pytest validation/ -v
 
 The model has not yet been checked against recordings of the real car; issue #4 tracks that system identification. Until then, treat the simulator as a tool for developing and comparing controllers, not as a prediction of the real car's lap times or speeds.
 
-The car's datasheet and measured values are dataclasses in `hardware.py`, and the model's numbers are derived from them: the motor's and the servo's `nominal`, full lock, the Ackermann polynomials, the springs' preload, the chassis' mass and inertia, and the wheels' positions. A test fails if `neoracer.xml` does not hold those numbers. `hardware.py` also describes every sensor from the NeoRacer docs (the LakiBeam L1 LiDAR, the QMI8658A IMU and QMC6309 magnetometer, the motor encoder and the camera), including values the simulator does not model yet, such as the LiDAR's accuracy and the camera; `LidarParams` and `EncoderParams` default to them. To change the car, change `hardware.py` and run `python -m neoracer_mujoco.write_car_xml assets/neoracer.xml`.
+What the car is lives in one place, `twin/neoracer.py`: the NeoRacer part by part (chassis, wheels, suspension, battery, motor, ESC, steering servo, steering, the firmware's speed loop, the motor encoder, the IMU, the LiDAR and the camera), each value with its source, marked ESTIMATED or ASSUMED where nobody measured it, and INCONSISTENT where sources disagree. The part types are in `twin/parts.py`. Pure functions in `twin/derive.py` turn a car into the model's numbers (`model`: the motor's and the servo's `nominal`, full lock, the Ackermann polynomials, the springs' preload, the chassis' mass and inertia, positions) and into the settings beside the model (`settings`: the LiDAR's scan, the encoder's filter, full lock); `LidarParams` and `EncoderParams` default to the NeoRacer's. A test fails if `neoracer.xml` does not hold the model's numbers. To change the car, change `twin/neoracer.py` and run `python -m neoracer_mujoco.write_car_xml assets/neoracer.xml`; a variant is `dataclasses.replace(NEORACER, ...)`.
 
 | Part | Where the value comes from |
 |---|---|
