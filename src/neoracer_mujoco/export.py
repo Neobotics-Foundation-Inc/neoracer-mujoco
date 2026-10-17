@@ -4,9 +4,10 @@ beside the model as JSON, and a folder of files that MuJoCo without Python
 loads, the browser's WebAssembly build included.
 
 The XML is assets/neoracer.xml with the numbers that the car's parts give
-(mjcf.car_xml), so a variant of the NeoRacer is a car of its own:
+(neoracer_spec.mjcf.car_xml), so a variant of the NeoRacer is a car of its
+own:
 
-    car = dataclasses.replace(NEORACER, battery=Battery(7.4))
+    car = dataclasses.replace(NEORACER, battery=Battery(chosen(7.4, "slower")))
     scene = compose(track, spec(car))     # CPU, or a batch on the GPU
     write(car, "dist/slow")               # dist/slow/neoracer.mjz for the web
 """
@@ -18,35 +19,40 @@ import shutil
 
 import mujoco
 
-from .. import assets
-from . import derive, mjcf
-from .parts import Car
+from neoracer_spec import mjcf
+from neoracer_spec.derive import derive
+from neoracer_spec.spec import Spec
+
+from . import assets
 
 XML_NAME = "neoracer.xml"
 MJZ_NAME = "neoracer.mjz"
 SETTINGS_NAME = "neoracer.json"
 
 
-def car_xml(car: Car) -> str:
+def car_xml(car: Spec) -> str:
     """The car's MJCF: the NeoRacer's XML with car's numbers."""
     with open(assets.DEFAULT_CAR, encoding="utf-8") as f:
-        return mjcf.car_xml(derive.model(car), f.read())
+        return mjcf.car_xml(derive(car).model, f.read())
 
 
-def spec(car: Car) -> mujoco.MjSpec:
+def spec(car: Spec) -> mujoco.MjSpec:
     """The car's MjSpec. Its meshes are read from assets/."""
     s = mujoco.MjSpec.from_string(car_xml(car))
     s.modelfiledir = assets.ASSET_DIR
     return s
 
 
-def settings_json(car: Car) -> str:
-    """The settings beside the car's model (derive.settings) as JSON, with the
-    field names of the Python dataclasses, for code that has no Python."""
-    return json.dumps(dataclasses.asdict(derive.settings(car)), indent=2) + "\n"
+def settings_json(car: Spec) -> str:
+    """The settings beside the car's model, its DerivedParams less the model,
+    as JSON with the field names of the Python dataclasses, for code that has
+    no Python."""
+    settings = dataclasses.asdict(derive(car))
+    del settings["model"]
+    return json.dumps(settings, indent=2) + "\n"
 
 
-def write(car: Car, folder: str | os.PathLike[str]) -> None:
+def write(car: Spec, folder: str | os.PathLike[str]) -> None:
     """Write to folder the car's XML (XML_NAME), the mesh files it names, an
     archive of them (MJZ_NAME, assets.write_mjz) that MjSpec.from_zip and
     MuJoCo's WebAssembly build load, and its settings (SETTINGS_NAME). folder

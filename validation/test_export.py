@@ -1,5 +1,5 @@
 """
-Laws for neoracer_mujoco.twin.export: any car, the NeoRacer or a variant of
+Laws for neoracer_mujoco.export: any car, the NeoRacer or a variant of
 it, gives an MjSpec that compiles and composes onto a track, and a folder
 whose archive loads to the same model.
 """
@@ -11,13 +11,15 @@ import mujoco
 import numpy as np
 import pytest
 
-from neoracer_mujoco import assets
+from neoracer_mujoco import assets, export
 from neoracer_mujoco.scene import compile_scene
-from neoracer_mujoco.twin import export
-from neoracer_mujoco.twin.neoracer import NEORACER
-from neoracer_mujoco.twin.parts import Battery
+from neoracer_spec.neoracer import NEORACER
+from neoracer_spec.provenance import chosen
+from neoracer_spec.spec import Battery
 
-SLOW = dataclasses.replace(NEORACER, battery=Battery(voltage=7.4))
+SLOW = dataclasses.replace(
+    NEORACER, battery=Battery(voltage=chosen(7.4, "a slower car"))
+)
 
 
 def test_the_neoracers_xml_is_the_checked_in_xml():

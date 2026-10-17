@@ -16,8 +16,8 @@ The caller makes it once, from the model timestep or the env config.
 
 from dataclasses import dataclass
 
-from ..twin import derive
-from ..twin.neoracer import NEORACER
+from neoracer_spec import derive
+from neoracer_spec.neoracer import NEORACER
 
 
 @dataclass(frozen=True)

@@ -69,7 +69,7 @@
         <!--
         Steering joint: hinge about the Z-axis (vertical). Its range is wider
         than the inner front wheel's angle at the edge of steer_input's range
-        (twin.derive.wheel_steer_range), so it never opposes the Ackermann
+        (neoracer_spec.derive.wheel_steer_range), so it never opposes the Ackermann
         constraints.
         -->
         <default class="steer">
@@ -84,7 +84,7 @@
         Travel: -.010 m droop to +.015 m jounce. stiffness/damping give a slightly
         overdamped response; replace them with the real coil-over spec when measured.
         springref preloads each spring with a quarter of the sprung weight
-        (twin.derive.spring_ref), so the car rests at the ride height of the CAD
+        (neoracer_spec.derive.spring_ref), so the car rests at the ride height of the CAD
         model, with the joints near 0.
         -->
         <default class="susp">
@@ -102,7 +102,7 @@
         model (the playground's neoracer-race.glb, 2026). The body frame is at
         the middle of the wheelbase, on the axle line. The car spawns 1 mm
         above its resting height, the axles at the tyre radius. The wheelbase,
-        the track and the radius are the car's (twin.neoracer).
+        the track and the radius are the car's (neoracer_spec.neoracer).
         -->
         <body name="car" pos="0 0 .0435">
             <freejoint/>
@@ -111,7 +111,7 @@
             <!--
             The chassis' mass is the car's less the four wheels and the steering
             input body, and its inertia the CAD-derived URDF's scaled to that
-            mass (twin.derive.chassis_mass, chassis_inertia); nobody has
+            mass (neoracer_spec.derive.chassis_mass, chassis_inertia); nobody has
             measured it. The CoM is above the middle of the wheelbase, at the
             URDF's height above the axles. This explicit <inertial> overrides
             geom-derived inertia, so the box's mass is ignored.
@@ -257,7 +257,7 @@
 
         The motor is the car's RS-545. nominal is its rated voltage, stall
         torque and free speed, gear its reduction to the wheels and ctrlrange
-        the battery's voltage, all from twin.neoracer (motor, battery). The
+        the battery's voltage, all from neoracer_spec.neoracer (motor, battery). The
         rotor's inertia is not known, so the model leaves it out.
         -->
         <dcmotor name="motor" tendon="drivetrain" nominal="12 .0937957 1151.92"
@@ -275,7 +275,7 @@
         torque and free speed at steer_input, through the linkage from its
         horn, controller its loop's kp, ki, kd and voltage clamp, and
         ctrlrange full lock, where the inner front wheel reaches the angle
-        measured on the car: all from twin.neoracer (servo, steering).
+        measured on the car: all from neoracer_spec.neoracer (servo, steering).
         -->
         <dcmotor name="steer_servo" joint="steer_input" input="pos"
                  nominal="5 3.2785 5.99818" controller="50 0 1 0 0 5"
@@ -289,7 +289,7 @@
         fr_steer = arctan(L / (L/tan(δ) + W/2))   (outer wheel, turns less)
 
     L is the wheelbase and W the track. The coefficients are a least-squares
-    fit to these over the range of steer_input (twin.derive.ackermann_left).
+    fit to these over the range of steer_input (neoracer_spec.derive.ackermann_left).
 
     polycoef: a0 a1 a2 a3 a4  →  y = a0 + a1·x + a2·x² + a3·x³ + a4·x⁴
 

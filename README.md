@@ -59,11 +59,12 @@ python3 -m pytest validation/ -v
 .
 ├── README.md              — this file
 ├── assets/
-│   ├── neoracer.xml       — MuJoCo MJCF model, its numbers written from twin/
+│   ├── neoracer.xml       — MuJoCo MJCF model, its numbers written from neoracer_spec
 │   └── meshes/            — visual STL meshes (cosmetic; mass="0")
+├── src/neoracer_spec/     — the car's specification, every value with its source, and the parameters derived from it; no MuJoCo
 ├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
 │   ├── contract.py        — the car contract (single source of truth)
-│   ├── twin/              — the car's digital twin: its parts with their sources (neoracer.py), the model numbers and settings derived from them, and its XML, MjSpec and .mjz (export.py)
+│   ├── export.py          — any car's XML, MjSpec, and folder with its .mjz
 │   ├── write_car.py       — writes the NeoRacer into assets/: the XML's numbers and neoracer.json
 │   ├── assets.py          — cars() / load() / compose(): find and compile a Scene
 │   ├── scene.py           — Scene (spec + model) and Car, the car's parts as spec elements
@@ -108,7 +109,7 @@ python3 -m pytest validation/ -v
 
 The model has not yet been checked against recordings of the real car; issue #4 tracks that system identification. Until then, treat the simulator as a tool for developing and comparing controllers, not as a prediction of the real car's lap times or speeds.
 
-What the car is lives in one place, `twin/neoracer.py`: the NeoRacer part by part (chassis, wheels, suspension, battery, motor, ESC, steering servo, steering, the firmware's speed loop, the motor encoder, the IMU, the LiDAR and the camera), each value with its source, marked ESTIMATED or ASSUMED where nobody measured it, and INCONSISTENT where sources disagree. The part types are in `twin/parts.py`. Pure functions in `twin/derive.py` turn a car into the model's numbers (`model`: the motor's and the servo's `nominal`, full lock, the Ackermann polynomials, the springs' preload, the chassis' mass and inertia, positions) and into the settings beside the model (`settings`: the LiDAR's scan, the encoder's filter, full lock); `LidarParams` and `EncoderParams` default to the NeoRacer's. A test fails if `neoracer.xml` does not hold the model's numbers. To change the car, change `twin/neoracer.py` and run `python -m neoracer_mujoco.write_car assets`; a variant is `dataclasses.replace(NEORACER, ...)`. `twin/export.py` turns any car into its XML, an MjSpec (`assets.compose(track, export.spec(car))` puts it on a track, for CPU or GPU training) and a folder with its `.mjz` archive for MuJoCo's WebAssembly build (`export.write(car, folder)`).
+What the car is lives in one place, `neoracer_spec/neoracer.py`: the NeoRacer part by part (chassis, wheels, suspension, battery, motor, ESC, steering servo, steering, the firmware's speed loop, the motor encoder, the IMU, the LiDAR and the camera). Every value is a `Sourced[T]` (`neoracer_spec/provenance.py`): the value, how we know it (measured, documented, assumed, estimated, or chosen for the model), its source, and the values that other sources give where they disagree. `provenance.walk(NEORACER)` lists them all by path, so a program can ask which values are estimated or disputed. The part types are in `neoracer_spec/spec.py`. Pure functions in `neoracer_spec/derive.py` turn a `Spec` into `DerivedParams`: the model's numbers (`ModelParams`: the motor's and the servo's `nominal`, full lock, the Ackermann polynomials, the springs' preload, the chassis' mass and inertia, positions), the LiDAR's scan, the encoder's filter and full lock; `LidarParams` and `EncoderParams` default to the NeoRacer's. `neoracer_spec` needs only numpy, not MuJoCo, and keeps to the Python 3.12 syntax of the browser's Pyodide. A test fails if `neoracer.xml` does not hold the model's numbers. To change the car, change `neoracer_spec/neoracer.py` and run `python -m neoracer_mujoco.write_car assets`; a variant is `dataclasses.replace(NEORACER, ...)`. `neoracer_mujoco/export.py` turns any car into its XML, an MjSpec (`assets.compose(track, export.spec(car))` puts it on a track, for CPU or GPU training) and a folder with its `.mjz` archive for MuJoCo's WebAssembly build (`export.write(car, folder)`).
 
 | Part | Where the value comes from |
 |---|---|

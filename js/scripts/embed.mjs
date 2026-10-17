@@ -1,7 +1,7 @@
 // Write src/generated/car.ts: the car's MJCF, assets/neoracer.xml, as a
 // string, so a browser bundle needs no file access to load the car, and the
 // settings beside the model, assets/neoracer.json (neoracer_mujoco's
-// twin.export.settings_json), as an object.
+// export.settings_json), as an object.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 const xml = readFileSync(new URL('../../assets/neoracer.xml', import.meta.url), 'utf8');

@@ -17,8 +17,8 @@ from dataclasses import dataclass
 import mujoco
 
 from neoracer_mujoco.scene import Scene
-from neoracer_mujoco.twin import derive
-from neoracer_mujoco.twin.neoracer import NEORACER
+from neoracer_spec import derive
+from neoracer_spec.neoracer import NEORACER
 
 
 @dataclass(frozen=True)

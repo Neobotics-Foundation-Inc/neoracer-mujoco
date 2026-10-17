@@ -3,8 +3,8 @@ The car model's numbers (derive.ModelParams) written into the car's XML.
 
 car_xml sets each number in the start tag that holds it and leaves the rest
 of the XML, its structure and its comments, as it is. The checked-in
-assets/neoracer.xml is what car_xml writes for twin.neoracer.NEORACER; a
-test holds it there. After a change to the car, run
+assets/neoracer.xml is what car_xml writes for neoracer.NEORACER; a test
+holds it there. After a change to the car, run
 
     python -m neoracer_mujoco.write_car assets
 """

@@ -53,7 +53,7 @@ allowed-unresolved-imports = ["jax", "jax.numpy", "mujoco.mjx"]
 exclude = ["users", "validation/testdata", "examples/ultimate_wall_follower", "typings"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/neoracer_mujoco"]
+packages = ["src/neoracer_mujoco", "src/neoracer_spec"]
 
 # assets/ stays at the repo root, so that users can open the XML files in other
 # MuJoCo tools. The wheel copies it into the package, where assets.py finds it.
