@@ -192,17 +192,8 @@ NEORACER = Spec(
                 voltage=6.0, stall_torque_kgf_cm=35.0, seconds_per_60_degrees=0.14
             ),
             SPT5435,
-            note="the docs' 20 kg·cm stall torque fits no line of this datasheet",
-            conflicts=(
-                Alternative(
-                    ServoRating(
-                        voltage=6.0,
-                        stall_torque_kgf_cm=20.0,
-                        seconds_per_60_degrees=0.14,
-                    ),
-                    DOCS_DRIVETRAIN,
-                ),
-            ),
+            note="the docs (hardware/drivetrain) give a 20 kg·cm stall torque, at"
+            " no stated voltage or speed, which fits no line of this datasheet",
         ),
         supply=documented(5.0, DOCS_OSCORE, note="the servo header runs on VCC_5V_IO"),
         horn_half_range_degrees=assumed(
@@ -276,12 +267,14 @@ NEORACER = Spec(
         accel_range_g=documented(
             4.0,
             FIRMWARE_IMU,
-            note="the model's IMU does not saturate: a crash in the simulator"
-            " reads far past 4 g",
-            conflicts=(Alternative(16.0, DOCS_IMU),),
+            note="the firmware's scale, of the chip's 2 to 16 g (docs); the"
+            " model's IMU does not saturate: a crash in the simulator reads far"
+            " past 4 g",
         ),
         gyro_range_dps=documented(
-            1024.0, FIRMWARE_IMU, conflicts=(Alternative(2048.0, DOCS_IMU),)
+            1024.0,
+            FIRMWARE_IMU,
+            note="the firmware's scale, of the chip's 16 to 2048 degrees/s (docs)",
         ),
         magnetometer_range_gauss=documented(30.0, DOCS_IMU),
     ),
