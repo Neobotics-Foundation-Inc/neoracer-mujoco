@@ -16,6 +16,8 @@ The caller makes it once, from the model timestep or the env config.
 
 from dataclasses import dataclass
 
+from .. import hardware
+
 
 @dataclass(frozen=True)
 class ControlCommand:
@@ -42,9 +44,8 @@ class ShapingConfig:
     # base forward drive command, in [-1, 1]. From rest it pushes as 0.1 N·m on
     # each wheel did before the motor model, and cruises at about 2 m/s.
     target_throttle: float = 0.5
-    steer_limit: float = (
-        0.4403  # rad; the steer_servo ctrlrange in neoracer.xml, full lock
-    )
+    # rad, full lock: the steer_servo's ctrlrange
+    steer_limit: float = hardware.steer_lock(hardware.Hardware())
     steer_slew_limit: float = 3.0  # rad/s max steering rate of change
     steer_slowdown_gain: float = 0.6  # throttle cut fraction at full steer deflection
     # m; at this front clearance or less, the throttle is 0

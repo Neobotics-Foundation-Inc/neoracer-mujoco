@@ -26,9 +26,10 @@ import mujoco
 import numpy as np
 import numpy.typing as npt
 
-# This value copies the wheel geom size in assets/neoracer.xml. If you change
-# the XML, change this value.
-WHEEL_RADIUS = 0.0425  # m, the 85 mm tyre of the spec
+from . import hardware
+
+# The tyre's radius, which hardware.car_xml also writes into the wheel geoms.
+WHEEL_RADIUS = hardware.Hardware().chassis.wheel_radius  # m
 
 type Vec3 = npt.NDArray[np.float64]  # shape (3,)
 type Quat = npt.NDArray[np.float64]  # shape (4,), (w, x, y, z)

@@ -59,10 +59,12 @@ python3 -m pytest validation/ -v
 .
 ├── README.md              — this file
 ├── assets/
-│   ├── neoracer.xml       — MuJoCo MJCF model (the source of truth)
+│   ├── neoracer.xml       — MuJoCo MJCF model, its numbers written from hardware.py
 │   └── meshes/            — visual STL meshes (cosmetic; mass="0")
 ├── src/neoracer_mujoco/   — importable package (the reusable toolbox)
 │   ├── contract.py        — the car contract (single source of truth)
+│   ├── hardware.py        — the car's datasheets and measurements, and the model numbers derived from them
+│   ├── write_car_xml.py   — writes those numbers into a car XML
 │   ├── assets.py          — cars() / load() / compose(): find and compile a Scene
 │   ├── scene.py           — Scene (spec + model) and Car, the car's parts as spec elements
 │   ├── sensors.py         — SensorReadings, find_sensors() + read()
@@ -106,6 +108,8 @@ python3 -m pytest validation/ -v
 
 The model has not yet been checked against recordings of the real car; issue #4 tracks that system identification. Until then, treat the simulator as a tool for developing and comparing controllers, not as a prediction of the real car's lap times or speeds.
 
+The car's datasheet and measured values are dataclasses in `hardware.py`, and the model's numbers are derived from them: the motor's and the servo's `nominal`, full lock, the Ackermann polynomials, the springs' preload, the chassis' mass and inertia, and the wheels' positions. A test fails if `neoracer.xml` does not hold those numbers. To change the car, change `hardware.py` and run `python -m neoracer_mujoco.write_car_xml assets/neoracer.xml`.
+
 | Part | Where the value comes from |
 |---|---|
 | Wheelbase, track width, chassis box and the LiDAR's position | measured on the production car's CAD model (the playground's `neoracer-race.glb`) |
@@ -122,7 +126,7 @@ Known gaps that matter for sim-to-real work:
 
 - At full throttle the car reaches 3.0 m/s after 1 s and tops out at 3.5 m/s, against the motor's free speed of 4.3 m/s at the tyre: the wheel joint damping is the only loss, and its value is a guess. The car's firmware runs a speed controller that the simulator does not model (issue #118): a throttle here is a share of the battery voltage. The firmware caps the speed at 6 m/s, which this motor does not reach.
 - The sensors have no noise, bias or latency, and the LiDAR has no minimum range or missed returns. The car has no camera yet (issue #3).
-- The steering gives under load. Full lock is 0.4403 rad of steering input, which puts the inner front wheel at the car's measured 30 degrees. At full lock and 0.3 m/s, the servo reaches 0.429 rad (the inner wheel 28.9 degrees), the front wheels lag their Ackermann angles by 0.004 rad, and the car turns on a 0.67 m radius, against 0.61 m for ideal Ackermann steering at full lock: the rest is the tyres' slip. From rest, the servo reaches 90% of a full-lock step in 0.078 s and swings from full left to full right in 0.16 s; people who drive the car find the real steering slower (issue #115).
+- The steering gives under load. Full lock is 0.4405 rad of steering input, which puts the inner front wheel at the car's measured 30 degrees. At full lock and 0.3 m/s, the servo reaches 0.429 rad (the inner wheel 28.9 degrees), the front wheels lag their Ackermann angles by 0.004 rad, and the car turns on a 0.67 m radius, against 0.61 m for ideal Ackermann steering at full lock: the rest is the tyres' slip. From rest, the servo reaches 90% of a full-lock step in 0.078 s and swings from full left to full right in 0.16 s; people who drive the car find the real steering slower (issue #115).
 
 ### Actuator interface
 
@@ -137,7 +141,7 @@ The steering servo is a `dcmotor` too, with `input="pos"`: its ctrl is a target 
 
 Code writes an actuator by binding its element to the data, for example `data.bind_scalar(scene.car.steer).ctrl = 0.2` (see `scene.py`), so it does not depend on the order of the actuators in the XML. `sim.apply_command(scene.car, data, command)` writes a throttle and a steer.
 
-Steering command range is ±0.4403 rad, the car's full lock (the inner front wheel at 30 degrees); the two Ackermann equality constraints split
+Steering command range is ±0.4405 rad, the car's full lock (the inner front wheel at 30 degrees); the two Ackermann equality constraints split
 it into the correct inner/outer front-wheel angles automatically.
 
 ### Truth sensors
