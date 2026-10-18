@@ -28,5 +28,5 @@ def test_a_steady_part_throttle_turn_does_not_shimmy(lock_share):
         sim.apply_command(car, data, command)
         mujoco.mj_step(model, data)
         if step >= 6 * rate:
-            yaw_rates.append(data.sensor("imu_gyro").data[2])
+            yaw_rates.append(data.bind_scalar(car.sensors.imu_gyro).data[2])
     assert np.std(yaw_rates) < 0.02
