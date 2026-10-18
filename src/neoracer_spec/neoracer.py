@@ -238,6 +238,14 @@ NEORACER = Spec(
         fit_range=chosen(0.45, "wider than full lock"),
         wheel_range_margin=chosen(0.015, "so the joint limits never bind"),
         input_body_mass=chosen(0.01, "a light virtual body"),
+        armature=estimated(
+            0.002,
+            "tuned in simulation, not measured: the servo's rotor inertia and"
+            " gear ratio are not known. Of 0.0002, 0.002 and 0.005, the smallest"
+            " that stops the car shimmying at 15 to 30 Hz in part-throttle turns"
+            " at the 1/360 s step; 0.0002 left the servo-held steering ringing"
+            " near 60 Hz, faster than the step resolves",
+        ),
     ),
     speed_controller=SpeedController(
         period=documented(0.02, FIRMWARE, note="CONTROL_INTERVAL"),

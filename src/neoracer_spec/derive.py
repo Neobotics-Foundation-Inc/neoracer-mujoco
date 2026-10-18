@@ -151,6 +151,7 @@ class ModelParams:
     jounce: float  # m
     steer_input_range: float  # rad
     wheel_steer_range: float  # rad
+    steer_armature: float  # kg·m²
     motor: DcMotorParams
     servo: ServoParams
     ackermann_left: Polynomial  # the left wheel's angle from the steering input
@@ -292,6 +293,7 @@ def model(spec: Spec) -> ModelParams:
         jounce=precise(s.jounce.value),
         steer_input_range=precise(spec.steering.fit_range.value),
         wheel_steer_range=precise(wheel_steer_range(spec)),
+        steer_armature=precise(spec.steering.armature.value),
         motor=DcMotorParams(
             nominal=_precise3(m_nominal),
             gear=precise(motor.gear_ratio.value),

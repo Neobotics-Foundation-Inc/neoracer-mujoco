@@ -70,11 +70,14 @@
         Steering joint: hinge about the Z-axis (vertical). Its range is wider
         than the inner front wheel's angle at the edge of steer_input's range
         (neoracer_spec.derive.wheel_steer_range), so it never opposes the Ackermann
-        constraints.
+        constraints. Its armature stands for the servo's rotor, seen through its
+        gears; it is an estimate (neoracer_spec.neoracer, steering), and at less
+        the steering rings faster than the 1/360 s step resolves and the car
+        shimmies in part-throttle turns.
         -->
         <default class="steer">
             <joint type="hinge" axis="0 0 1" limited="true" range="-.551706 .551706"
-                   damping=".001" armature=".0002" frictionloss=".01"
+                   damping=".001" armature=".002" frictionloss=".01"
                    actuatorfrcrange="-100 100"/>
         </default>
 
