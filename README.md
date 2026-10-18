@@ -13,7 +13,7 @@ The package is not on PyPI. Each [GitHub Release](https://github.com/Neobotics-F
 - the JS package as an npm tarball.
 
 ```sh
-pip install https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.11.1/neoracer_mujoco-0.11.1-py3-none-any.whl
+pip install https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.11.2/neoracer_mujoco-0.11.2-py3-none-any.whl
 ```
 
 To work on the package, clone it with [Git LFS](https://git-lfs.com) installed (the meshes in `assets/meshes/` are LFS objects) and install it editable on Python 3.15:

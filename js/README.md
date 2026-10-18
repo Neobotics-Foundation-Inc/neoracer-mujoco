@@ -3,7 +3,7 @@
 This package runs the NeoRacer car in MuJoCo's WebAssembly build (`@mujoco/mujoco`, the same MuJoCo version as the Python package) in a browser or in Node. It carries the car's MJCF, puts the car on a track that you give as MJCF, and drives it and reads its encoder and LiDAR the way the Python package does. Its tests run the same cases in both and compare the results.
 
 ```sh
-npm install @mujoco/mujoco@3.16.0 https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.11.1/neoracer-mujoco-0.11.1.tgz
+npm install @mujoco/mujoco@3.16.0 https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.11.2/neoracer-mujoco-0.11.2.tgz
 ```
 
 ```js
