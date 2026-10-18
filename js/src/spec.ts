@@ -533,7 +533,7 @@ export const NEORACER = {
           name: "docs",
           where: "neoracer-docs, hardware/drivetrain",
         },
-        why: "the docs give about 11,000 rpm with no load but no voltage and no torque; taken at 12 V, the RS-545 range's rated voltage, and the nearest RS-545 winding rewound to it (spec.rewound). The firmware's speed loop reaches 7.35 m/s at full pulse and limits at 6 m/s, both beyond this motor's 4.3 m/s free speed. The website claims up to 25 km/h (6.9 m/s), which needs about 16,500 rpm at the motor through the 10.55 reduction on 42.5 mm tyres, and 6 m/s needs 14,200",
+        why: "the docs give about 11,000 rpm with no load but no voltage and no torque; taken at 12 V, the RS-545 range's rated voltage, and the nearest RS-545 winding rewound to it (spec.rewound). The firmware's speed loop reaches 7.35 m/s at full pulse and limits at 6 m/s, both beyond this motor's 4.3 m/s free speed. The website claims up to 25 km/h (6.9 m/s), which needs about 16,500 rpm at the motor through the 10.55 reduction and the 42.5 mm tyre radius, and 6 m/s needs 14,200",
       },
       note: "",
       conflicts: [

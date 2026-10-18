@@ -175,7 +175,7 @@ NEORACER = Spec(
             " speed loop reaches 7.35 m/s at full pulse and limits at 6 m/s, both"
             " beyond this motor's 4.3 m/s free speed. The website claims up to 25"
             " km/h (6.9 m/s), which needs about 16,500 rpm at the motor through"
-            " the 10.55 reduction on 42.5 mm tyres, and 6 m/s needs 14,200",
+            " the 10.55 reduction and the 42.5 mm tyre radius, and 6 m/s needs 14,200",
             conflicts=(Alternative(DcMotorRating(12.0, 0.214, 24_000.0), RS545SH),),
         ),
         gear_ratio=documented(
