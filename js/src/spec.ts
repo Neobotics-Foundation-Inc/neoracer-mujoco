@@ -403,7 +403,7 @@ export const NEORACER = {
           where: "Koneshka's specification, 2026-09-29: about 3 kg, a custom RS545 brushed motor, a 14T pinion on a 48T spur, 85 mm tyres",
         },
       },
-      note: "the firmware's OSCORE_WHEEL_RADIUS_UM (42500) agrees; nobody has measured a tyre",
+      note: "the firmware's OSCORE_WHEEL_RADIUS_UM (42500) agrees, and Koneshka confirmed the 85 mm tyre on 2026-08-22; the docs' 80 mm is out of date",
       conflicts: [
         {
           value: 0.04,
@@ -533,7 +533,7 @@ export const NEORACER = {
           name: "docs",
           where: "neoracer-docs, hardware/drivetrain",
         },
-        why: "the docs give about 11,000 rpm with no load but no voltage and no torque; taken at 12 V, the RS-545 range's rated voltage, and the nearest RS-545 winding rewound to it (spec.rewound). The firmware's speed loop reaches 7.35 m/s at full pulse and limits at 6 m/s, both beyond this motor's 4.3 m/s free speed",
+        why: "the docs give about 11,000 rpm with no load but no voltage and no torque; taken at 12 V, the RS-545 range's rated voltage, and the nearest RS-545 winding rewound to it (spec.rewound). The firmware's speed loop reaches 7.35 m/s at full pulse and limits at 6 m/s, both beyond this motor's 4.3 m/s free speed. The website claims up to 25 km/h (6.9 m/s), which needs about 16,500 rpm at the motor through the 10.55 reduction on 42.5 mm tyres, and 6 m/s needs 14,200",
       },
       note: "",
       conflicts: [
@@ -559,7 +559,7 @@ export const NEORACER = {
           where: "neoracer-pcb-firmware, firmware/source/main/Kconfig.projbuild",
         },
       },
-      note: "OSCORE_GEAR_RATIO_MILLI = 10550; the spec's 14T pinion on a 48T spur is 3.43:1 of it, and the rest, presumably the differentials, is not documented",
+      note: "OSCORE_GEAR_RATIO_MILLI = 10550: the 14T pinion on the 48T spur (Koneshka confirmed the spur on 2026-08-25) is 3.43:1, and the differentials the remaining 3.08:1; their tooth counts are not documented",
       conflicts: [],
     },
   },
@@ -610,14 +610,23 @@ export const NEORACER = {
     supply: {
       value: 5.0,
       status: {
-        kind: "Documented",
+        kind: "Assumed",
         source: {
-          name: "docs",
-          where: "neoracer-docs, hardware/oscore-board",
+          name: "schematic",
+          where: "OSCORE schematic, pin header block: the servo's power pin is VCC_ESC, which only the ESC's red wire (its BEC) feeds",
         },
+        why: "the ESC's BEC powers the servo, and nobody has measured its voltage; 5 V is the docs' value (oscore-board), which puts the header on VCC_5V_IO",
       },
-      note: "the servo header runs on VCC_5V_IO",
-      conflicts: [],
+      note: "",
+      conflicts: [
+        {
+          value: 11.1,
+          source: {
+            name: "manual",
+            where: "OSCORE manual, table 4.2.1: VCC_ESC = VCC_IN through, 9 to 26 V",
+          },
+        },
+      ],
     },
     horn_half_range_degrees: {
       value: 45.0,
@@ -881,13 +890,13 @@ export const NEORACER = {
     rate: {
       value: 200.0,
       status: {
-        kind: "Documented",
+        kind: "Measured",
         source: {
-          name: "docs",
-          where: "neoracer-docs, hardware/sensors/imu",
+          name: "team",
+          where: "measured on the car by the team, 2026-07-21: /imu/fused and /odom at 200 Hz",
         },
       },
-      note: "the QMI8658A and the QMC6309; the firmware averages 5 samples of the chip's 1000 Hz",
+      note: "the QMI8658A and the QMC6309; the firmware averages 5 samples of the chip's 1000 Hz, and the docs give the same 200 Hz",
       conflicts: [],
     },
     accel_range_g: {

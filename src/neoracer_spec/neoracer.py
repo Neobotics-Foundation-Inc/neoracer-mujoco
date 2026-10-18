@@ -58,6 +58,18 @@ SPEC = Source(
     " motor, a 14T pinion on a 48T spur, 85 mm tyres",
 )
 TEAM = Source("team", "measured or stated by the team, 2026-10-16")
+TEAM_RATES = Source(
+    "team",
+    "measured on the car by the team, 2026-07-21: /imu/fused and /odom at 200 Hz",
+)
+OSCORE_SCHEMATIC = Source(
+    "schematic",
+    "OSCORE schematic, pin header block: the servo's power pin is VCC_ESC, which"
+    " only the ESC's red wire (its BEC) feeds",
+)
+OSCORE_MANUAL = Source(
+    "manual", "OSCORE manual, table 4.2.1: VCC_ESC = VCC_IN through, 9 to 26 V"
+)
 DOCS_CHASSIS = Source("docs", "neoracer-docs, hardware/chassis-and-cad")
 DOCS_DRIVETRAIN = Source("docs", "neoracer-docs, hardware/drivetrain")
 DOCS_OSCORE = Source("docs", "neoracer-docs, hardware/oscore-board")
@@ -122,8 +134,8 @@ NEORACER = Spec(
         radius=documented(
             0.0425,
             SPEC,
-            note="the firmware's OSCORE_WHEEL_RADIUS_UM (42500) agrees; nobody"
-            " has measured a tyre",
+            note="the firmware's OSCORE_WHEEL_RADIUS_UM (42500) agrees, and Koneshka"
+            " confirmed the 85 mm tyre on 2026-08-22; the docs' 80 mm is out of date",
             conflicts=(
                 Alternative(0.040, DOCS_DRIVETRAIN),
                 Alternative(0.040, DOCS_CHASSIS),
@@ -161,15 +173,17 @@ NEORACER = Spec(
             " torque; taken at 12 V, the RS-545 range's rated voltage, and the"
             " nearest RS-545 winding rewound to it (spec.rewound). The firmware's"
             " speed loop reaches 7.35 m/s at full pulse and limits at 6 m/s, both"
-            " beyond this motor's 4.3 m/s free speed",
+            " beyond this motor's 4.3 m/s free speed. The website claims up to 25"
+            " km/h (6.9 m/s), which needs about 16,500 rpm at the motor through"
+            " the 10.55 reduction on 42.5 mm tyres, and 6 m/s needs 14,200",
             conflicts=(Alternative(DcMotorRating(12.0, 0.214, 24_000.0), RS545SH),),
         ),
         gear_ratio=documented(
             10.55,
             FIRMWARE_KCONFIG,
-            note="OSCORE_GEAR_RATIO_MILLI = 10550; the spec's 14T pinion on a 48T"
-            " spur is 3.43:1 of it, and the rest, presumably the differentials, is"
-            " not documented",
+            note="OSCORE_GEAR_RATIO_MILLI = 10550: the 14T pinion on the 48T spur"
+            " (Koneshka confirmed the spur on 2026-08-25) is 3.43:1, and the"
+            " differentials the remaining 3.08:1; their tooth counts are not documented",
         ),
     ),
     esc=Esc(
@@ -195,7 +209,14 @@ NEORACER = Spec(
             note="the docs (hardware/drivetrain) give a 20 kg·cm stall torque, at"
             " no stated voltage or speed, which fits no line of this datasheet",
         ),
-        supply=documented(5.0, DOCS_OSCORE, note="the servo header runs on VCC_5V_IO"),
+        supply=assumed(
+            5.0,
+            OSCORE_SCHEMATIC,
+            "the ESC's BEC powers the servo, and nobody has measured its voltage;"
+            " 5 V is the docs' value (oscore-board), which puts the header on"
+            " VCC_5V_IO",
+            conflicts=(Alternative(11.1, OSCORE_MANUAL),),
+        ),
         horn_half_range_degrees=assumed(
             45.0,
             SPT5435,
@@ -258,11 +279,11 @@ NEORACER = Spec(
             "at the centre of mass; the IMU is on the OSCORE board, whose place"
             " on the car is not measured",
         ),
-        rate=documented(
+        rate=measured(
             200.0,
-            DOCS_IMU,
+            TEAM_RATES,
             note="the QMI8658A and the QMC6309; the firmware averages 5 samples of"
-            " the chip's 1000 Hz",
+            " the chip's 1000 Hz, and the docs give the same 200 Hz",
         ),
         accel_range_g=documented(
             4.0,
