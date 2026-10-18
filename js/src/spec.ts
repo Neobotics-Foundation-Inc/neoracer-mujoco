@@ -148,6 +148,9 @@ export interface Steering {
   // The model's virtual body that the steering input turns, between the
   // servo and the Ackermann constraints. Its mass comes off the chassis'.
   readonly input_body_mass: Sourced<number>; // kg
+  // Inertia added at the steering input and at each front wheel's steer
+  // joint: the servo's rotor, seen through its gears, turns with them.
+  readonly armature: Sourced<number>; // kg·m²
 }
 
 /** The firmware's speed loop: a PID on the encoder's speed, with a feed-forward, driving the ESC's pulse. */
@@ -273,6 +276,7 @@ export interface ModelParams {
   readonly jounce: number; // m
   readonly steer_input_range: number; // rad
   readonly wheel_steer_range: number; // rad
+  readonly steer_armature: number; // kg·m²
   readonly motor: DcMotorParams;
   readonly servo: ServoParams;
   readonly ackermann_left: Polynomial; // the left wheel's angle from the steering input
@@ -712,6 +716,15 @@ export const NEORACER = {
       note: "",
       conflicts: [],
     },
+    armature: {
+      value: 0.002,
+      status: {
+        kind: "Estimated",
+        why: "tuned in simulation, not measured: the servo's rotor inertia and gear ratio are not known. Of 0.0002, 0.002 and 0.005, the smallest that stops the car shimmying at 15 to 30 Hz in part-throttle turns at the 1/360 s step; 0.0002 left the servo-held steering ringing near 60 Hz, faster than the step resolves",
+      },
+      note: "",
+      conflicts: [],
+    },
   },
   speed_controller: {
     period: {
@@ -1147,6 +1160,7 @@ export const NEORACER_PARAMS = {
     jounce: 0.015,
     steer_input_range: 0.45,
     wheel_steer_range: 0.551706,
+    steer_armature: 0.002,
     motor: {
       nominal: [12.0, 0.0937957, 1151.92],
       gear: 10.55,

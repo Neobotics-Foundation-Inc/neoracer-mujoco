@@ -140,6 +140,9 @@ class Steering:
     # The model's virtual body that the steering input turns, between the
     # servo and the Ackermann constraints. Its mass comes off the chassis'.
     input_body_mass: Sourced[float]  # kg
+    # Inertia added at the steering input and at each front wheel's steer
+    # joint: the servo's rotor, seen through its gears, turns with them.
+    armature: Sourced[float]  # kg·m²
 
 
 @dataclass(frozen=True)

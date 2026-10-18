@@ -76,6 +76,11 @@ def car_xml(p: ModelParams, xml: str) -> str:
             "range",
             numbers(-p.wheel_steer_range, p.wheel_steer_range),
         ),
+        (
+            r'<default class="steer">\s*<joint',
+            "armature",
+            number(p.steer_armature),
+        ),
         (r'<dcmotor name="motor"', "nominal", numbers(*m.nominal)),
         (r'<dcmotor name="motor"', "gear", number(m.gear)),
         (r'<dcmotor name="motor"', "ctrlrange", numbers(-m.ctrl_limit, m.ctrl_limit)),
