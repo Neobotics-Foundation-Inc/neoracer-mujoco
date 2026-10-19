@@ -26,6 +26,8 @@ python -m pytest validation/
 
 `environment.yml` makes the same environment with conda; then run `pip install -e ".[dev]"` in it.
 
+With [Nix](https://nixos.org), `nix develop` makes it for you: Python 3.15 with the package installed editable in `.venv` (the `dev` and `demo` extras), and Node for `js/`. Edit a file and run it, for example `python examples/run_racecar_core.py my_controller.py`, or any command under [Examples](#examples).
+
 ## Quick start
 
 ```python
