@@ -32,7 +32,8 @@
     }:
     let
       inherit (nixpkgs) lib;
-      systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      # MuJoCo has no wheel for Intel macOS.
+      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
       forAll = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
       workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
     in
@@ -100,9 +101,15 @@
             // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
               LD_LIBRARY_PATH = lib.makeLibraryPath libs;
             };
+            # The editable package is the checkout nix develop runs in, so it
+            # must run inside one.
             shellHook = ''
               unset PYTHONPATH
-              export REPO_ROOT=$(git rev-parse --show-toplevel)
+              export REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+              if [ ! -f "$REPO_ROOT/src/neoracer_mujoco/__init__.py" ]; then
+                echo "nix develop: run it inside the neoracer-mujoco checkout" >&2
+                exit 1
+              fi
             '';
           };
         }
