@@ -13,9 +13,81 @@
         "url": "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz"
       }
     },
+    "pyproject-build-systems": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "pyproject-nix": [
+          "pyproject-nix"
+        ],
+        "uv2nix": [
+          "uv2nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791170410,
+        "narHash": "sha256-pyru9MpuXRiyq0Bd4q0nHpL4T6HCuZT4B+alcgAYE4A=",
+        "ref": "refs/heads/master",
+        "rev": "953d35d03a51dbecaf3feb3fb679eb63e90ebeb4",
+        "revCount": 89,
+        "type": "git",
+        "url": "https://github.com/pyproject-nix/build-system-pkgs"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://github.com/pyproject-nix/build-system-pkgs"
+      }
+    },
+    "pyproject-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791657700,
+        "narHash": "sha256-vcCAvhtA7hG+/gOge29hYHy7I/dLkIsr5nLx4sFEQic=",
+        "ref": "refs/heads/master",
+        "rev": "ddc400a6883b042646d0940e65971bb7f7e96107",
+        "revCount": 573,
+        "type": "git",
+        "url": "https://github.com/pyproject-nix/pyproject.nix"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://github.com/pyproject-nix/pyproject.nix"
+      }
+    },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "pyproject-build-systems": "pyproject-build-systems",
+        "pyproject-nix": "pyproject-nix",
+        "uv2nix": "uv2nix"
+      }
+    },
+    "uv2nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "pyproject-nix": [
+          "pyproject-nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792151315,
+        "narHash": "sha256-PMtgvHuGijoIAtPtrBm7kJOI6fxzX4LYPAIK+QVGY+Y=",
+        "ref": "refs/heads/master",
+        "rev": "7aba73a3d85454f1118f8cf9de97979b4d26bcac",
+        "revCount": 510,
+        "type": "git",
+        "url": "https://github.com/pyproject-nix/uv2nix"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://github.com/pyproject-nix/uv2nix"
       }
     }
   },
