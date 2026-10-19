@@ -62,11 +62,12 @@
                   })
                 ]
               );
-          # The jax extra is left out: jaxlib has no Python 3.15 wheels.
+          # jax runs on the CPU here: a GPU needs jax[cuda12] or jax[cuda13].
           python = pythonSet.mkVirtualEnv "neoracer-mujoco-dev" {
             neoracer-mujoco = [
               "dev"
               "demo"
+              "jax"
             ];
           };
           # What the wheels load at run time on Linux: OpenGL and GLFW for the
