@@ -91,6 +91,7 @@
               python
               pkgs.uv
               pkgs.nodejs_22
+              pkgs.git
               pkgs.git-lfs
             ];
             env = {
@@ -106,7 +107,7 @@
             # must run inside one.
             shellHook = ''
               unset PYTHONPATH
-              export REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+              export REPO_ROOT=$(${pkgs.git}/bin/git rev-parse --show-toplevel 2>/dev/null)
               if [ ! -f "$REPO_ROOT/src/neoracer_mujoco/__init__.py" ]; then
                 echo "nix develop: run it inside the neoracer-mujoco checkout" >&2
                 exit 1
