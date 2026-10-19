@@ -53,10 +53,15 @@
               LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libs;
             };
             # .venv on nixpkgs' Python 3.15, with the package installed
-            # editable: an edit to src/ takes effect on the next run.
+            # editable: an edit to src/ takes effect on the next run. A .venv
+            # on any other Python (made outside Nix, or on a Python an update
+            # replaced) is made again. A failed install ends the shell.
             shellHook = ''
-              [ -d .venv ] || uv venv -q --python ${python}/bin/python3.15 .venv
-              uv pip install -q --python .venv/bin/python -e ".[dev,demo]"
+              if [ "$(.venv/bin/python -c 'import sys; print(sys.base_prefix)' 2>/dev/null)" != "${python}" ]; then
+                uv venv -q --clear --python ${python}/bin/python3.15 .venv
+              fi
+              uv pip install -q --python .venv/bin/python -e ".[dev,demo]" \
+                || { echo "nix develop: installing the package into .venv failed" >&2; exit 1; }
               . .venv/bin/activate
             '';
           };
