@@ -204,9 +204,10 @@ def _circle(side: float) -> Circle:
 def test_the_full_lock_circles():
     """At full lock each way, the model's rear axle turns on the car's
     radius within 3%, its encoder over-reads by the car's share within
-    0.015, and its yaw rate reaches 95% within 0.03 s of the car's. The
-    over-read comes from the locked center shaft: the encoder sees a speed
-    between the rear and the front axles'."""
+    0.015, and its yaw rate reaches 95% within 0.04 s of the car's: the
+    car's servo is 13 ms slower to the right than to the left, the model's
+    is the same both ways. The over-read comes from the locked center shaft:
+    the encoder sees a speed between the rear and the front axles'."""
     s, o = V2.steering, V2.odometry
     for side, radius, overread, to_lock in [
         (
@@ -226,7 +227,7 @@ def test_the_full_lock_circles():
             c = _circle(side)
             assert c.radius == pytest.approx(radius, rel=0.03)
             assert c.overread == pytest.approx(overread, abs=0.015)
-            assert c.to_lock == pytest.approx(to_lock, abs=0.03)
+            assert c.to_lock == pytest.approx(to_lock, abs=0.04)
 
 
 # --- the LiDAR ---------------------------------------------------------------
