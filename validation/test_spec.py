@@ -7,6 +7,7 @@ browser's Pyodide.
 """
 
 import ast
+import builtins
 import dataclasses
 import math
 import os
@@ -316,3 +317,72 @@ def test_the_spec_keeps_to_the_python_of_pyodide():
     for path in sorted(pathlib.Path(neoracer_spec.__file__).parent.glob("*.py")):
         source = path.read_text(encoding="utf-8")
         ast.parse(source, filename=path.name, feature_version=(3, 12))
+
+
+def _type_params(params: list[ast.type_param]) -> set[str]:
+    return {
+        p.name
+        for p in params
+        if isinstance(p, ast.TypeVar | ast.ParamSpec | ast.TypeVarTuple)
+    }
+
+
+def _named_before_defined(tree: ast.Module) -> list[str]:
+    """The names that the module's annotations use before it defines them,
+    when Python 3.12 evaluates them: a class's when it defines the class, a
+    function's when it defines the function. None when the module postpones
+    its annotations."""
+    if any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == "__future__"
+        and any(alias.name == "annotations" for alias in node.names)
+        for node in tree.body
+    ):
+        return []
+    defined, early = set(dir(builtins)), []
+
+    def check(annotations: list[ast.expr | None], scope: set[str]) -> None:
+        for annotation in annotations:
+            for n in ast.walk(annotation) if annotation else ():
+                if isinstance(n, ast.Name) and n.id not in scope:
+                    early.append(n.id)
+
+    def signature(f: ast.FunctionDef, scope: set[str]) -> None:
+        a = f.args
+        args = a.posonlyargs + a.args + a.kwonlyargs + [a.vararg, a.kwarg]
+        own = scope | _type_params(f.type_params)
+        check([x.annotation for x in args if x] + [f.returns], own)
+
+    for node in tree.body:
+        match node:
+            case ast.Import() | ast.ImportFrom():
+                defined |= {(a.asname or a.name).split(".")[0] for a in node.names}
+            case ast.ClassDef():
+                scope = defined | _type_params(node.type_params)
+                for item in node.body:
+                    if isinstance(item, ast.AnnAssign):
+                        check([item.annotation], scope)
+                    elif isinstance(item, ast.FunctionDef):
+                        signature(item, scope)
+                defined.add(node.name)
+            case ast.FunctionDef():
+                signature(node, defined)
+                defined.add(node.name)
+            case ast.AnnAssign(target=ast.Name(id=name)):
+                check([node.annotation], defined)
+                defined.add(name)
+            case ast.Assign():
+                defined |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+            case ast.TypeAlias(name=ast.Name(id=name)):
+                defined.add(name)
+    return early
+
+
+def test_the_spec_imports_on_the_python_of_pyodide():
+    """Python 3.12 evaluates annotations as it defines what they annotate,
+    so a module whose types name types defined below them postpones its
+    annotations (from __future__ import annotations): Pyodide can import
+    every module of the package."""
+    for path in sorted(pathlib.Path(neoracer_spec.__file__).parent.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.name)
+        assert _named_before_defined(tree) == [], path.name
