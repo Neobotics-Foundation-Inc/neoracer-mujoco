@@ -13,7 +13,7 @@ import mujoco
 import numpy as np
 import pytest
 
-from neoracer_mujoco import Scene, contract, sensors, sim
+from neoracer_mujoco import Scene, contract, load, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand, ShapingConfig
 
 
@@ -25,8 +25,8 @@ def _steps(model: mujoco.MjModel, seconds: float) -> int:
 def _drive(
     scene: Scene, throttle: float, steer: float, seconds: float
 ) -> mujoco.MjData:
-    """Settle the car, then hold throttle (a fraction of the battery
-    voltage) and steer (rad) for `seconds`. Return the MjData."""
+    """Settle the car, then hold throttle (in [-1, 1]) and steer (rad) for
+    `seconds`. Return the MjData."""
     data = sim.settle(scene.model)
     sim.apply_command(scene.car, data, ControlCommand(throttle=throttle, steer=steer))
     for _ in range(_steps(scene.model, seconds)):
@@ -67,9 +67,13 @@ def _spin_joint(wheel: mujoco.MjsGeom) -> mujoco.MjsJoint:
 
 def test_the_drivetrain_is_open_differentials(scene):
     """Whatever the speeds of the wheels, the motor turns at their mean and
-    each wheel gets a quarter of the motor's force: the laws of open
-    differentials."""
-    model, car = scene.model, scene.car
+    each wheel gets a quarter of the drive's force: the laws of open
+    differentials. A locked center shaft adds a constraint, not a force of
+    the drive. The model has no latency here, so that the force is there at
+    once."""
+    model = copy.copy(scene.model)  # an independent MjModel; scene is shared
+    model.actuator_delay[:] = 0.0
+    car = scene.car
     data = sim.settle(model)
     spins = [_spin_joint(w) for w in car.wheels]
     for joint, speed in zip(spins, (10.0, 20.0, 35.0, -5.0), strict=True):
@@ -77,9 +81,13 @@ def test_the_drivetrain_is_open_differentials(scene):
     sim.apply_command(car, data, ControlCommand(throttle=1.0, steer=0.0))
     mujoco.mj_forward(model, data)
     motor, motor_model = data.bind_scalar(car.drive), model.bind_scalar(car.drive)
-    gear = motor_model.gear[0]
-    assert motor.velocity[0] / gear == pytest.approx(np.mean([10, 20, 35, -5]))
-    force = motor.force[0] * gear  # on the drivetrain
+    assert motor.velocity[0] / motor_model.gear[0] == pytest.approx(
+        np.mean([10, 20, 35, -5])
+    )
+    force = sum(  # on the drivetrain
+        data.bind_scalar(a).force[0] * model.bind_scalar(a).gear[0]
+        for a in car.throttled
+    )
     assert force != 0.0
     for joint in spins:
         assert data.bind_scalar(joint).qfrc_actuator[0] == pytest.approx(force / 4)
@@ -97,25 +105,29 @@ def test_drive_pos_is_the_mean_wheel_angle(scene):
 
 
 def test_actuator_contract(scene):
-    """The car has the actuators of contract.EXPECTED_ACTUATORS and no
-    others. Their order in ctrl does not matter: code writes ctrl through
-    scene.car."""
-    names = sorted(a.name for a in scene.spec.actuators)
-    assert names == sorted(contract.EXPECTED_ACTUATORS), f"got {names}"
+    """The car has the actuators of contract.REQUIRED_ACTUATORS, and the
+    throttle drives each of its others. Their order in ctrl does not matter:
+    code writes ctrl through scene.car."""
+    names = {a.name for a in scene.spec.actuators}
+    assert set(contract.REQUIRED_ACTUATORS) <= names, f"got {sorted(names)}"
+    driven = {a.name for a in (*scene.car.throttled, scene.car.steer)}
+    assert driven == names, f"got {sorted(names)}"
 
 
-def test_lidar_rays_start_at_the_lidar_inside_the_chassis_box(scene):
+def test_lidar_rays_start_at_the_lidar_inside_a_collision_box(scene):
     """The LiDAR mount and its 8 ray sites are at one point of the car body,
-    the LiDAR's centre, below the top of the chassis box, which reaches the
-    top of the LiDAR. A rangefinder ignores the geoms of its own body, so the
-    rays leave the car. The ray tests use horizontal distances only, so they
-    cannot see this height."""
+    the LiDAR's centre, inside one of the car body's collision boxes, which
+    reaches the top of the LiDAR. A rangefinder ignores the geoms of its own
+    body, so the rays leave the car. The ray tests use horizontal distances
+    only, so they cannot see this height."""
     model, spec = scene.model, scene.spec
-    chassis = model.bind_scalar(spec.geom("chassis"))
-    bottom = float(chassis.pos[2] - chassis.size[2])
-    top = float(chassis.pos[2] + chassis.size[2])
     mount = model.bind_scalar(spec.site("lidar_mount"))
-    assert bottom < float(mount.pos[2]) < top
+    boxes = [
+        model.bind_scalar(g)
+        for g in scene.car.body.geoms
+        if g.type == mujoco.mjtGeom.mjGEOM_BOX and (g.contype or g.conaffinity)
+    ]
+    assert any(np.all(np.abs(mount.pos - b.pos) < b.size) for b in boxes)
     for name in sensors.LIDAR_BEAM_ORDER:
         site = model.bind_scalar(spec.site(name))
         assert int(site.bodyid[0]) == model.bind_scalar(scene.car.body).id, name
@@ -189,8 +201,9 @@ def _steer_angle(scene: Scene, data: mujoco.MjData) -> float:
 def test_the_servo_turns_at_a_servos_speed_and_holds_steady(scene):
     """A servo takes tens of ms to reach full lock and then holds it.
 
-    From rest, a 0.4 rad step reaches 90% in 0.03 to 0.15 s: a position
-    actuator that snaps there in a few ms fails. Driving at full lock, the
+    From rest, a 0.4 rad step reaches 90% in 0.03 to 0.15 s after the
+    car's latency: a position actuator that snaps there in a few ms fails.
+    Driving at full lock, the
     steering angle wobbles by less than 0.006 rad (standard deviation): a
     servo loop that chatters, as kd = 1 does under explicit Euler at
     360 Hz (0.01 rad), fails."""
@@ -201,7 +214,8 @@ def test_the_servo_turns_at_a_servos_speed_and_holds_steady(scene):
     while _steer_angle(scene, data) < 0.9 * 0.4 and steps < _steps(model, 0.5):
         mujoco.mj_step(model, data)
         steps += 1
-    assert 0.03 <= steps * model.opt.timestep <= 0.15
+    latency = float(model.actuator_delay[model.bind_scalar(scene.car.steer).id])  # s
+    assert 0.03 <= steps * model.opt.timestep - latency <= 0.15
 
     data = sim.settle(model)
     sim.apply_command(scene.car, data, ControlCommand(throttle=0.3, steer=0.4))
@@ -214,13 +228,15 @@ def test_the_servo_turns_at_a_servos_speed_and_holds_steady(scene):
     assert np.std(held) < 0.006
 
 
-def test_the_steer_limits_in_the_code_are_full_lock(scene):
+def test_the_steer_limits_in_the_code_are_full_lock():
     """Code that clamps a steer command by its own copy of the limit reaches
-    full lock, the steer servo's ctrlrange, and no further."""
+    full lock, the steer servo's ctrlrange, and no further. The copies are
+    the NeoRacer's, the default car's."""
     # Imported here: manual_drive imports glfw, which no other test needs.
     from examples import manual_drive
     from examples.pygame_drive import drive_sim
 
+    scene = load()
     lock = contract.actuator_limits(scene.model, scene.car).steer_rad
     assert manual_drive.SteeringParams().max == pytest.approx(lock)
     assert drive_sim.DriveParams().max_steer == pytest.approx(lock)

@@ -44,7 +44,8 @@ class Physics:
     # contacts (the wheels have contact priority). Below 1 the wheels slip more.
     wheel_friction: float = 1.0
     chassis_mass: float = 1.0  # x the mass and the inertia of the car body
-    motor_torque: float = 1.0  # x the motor's torque, at every speed
+    # x the motor's torque, at every speed; x the gain of a speed controller
+    motor_torque: float = 1.0
     steer_stiffness: float = 1.0  # x the gain kp of the steering servo's loop
 
     def __post_init__(self) -> None:
@@ -102,11 +103,16 @@ def apply_physics(model: mujoco.MjModel, scene: Scene, physics: Physics) -> None
     body, body0 = model.bind_scalar(car.body), nominal.bind_scalar(car.body)
     body.mass = body0.mass * physics.chassis_mass
     body.inertia = body0.inertia * physics.chassis_mass
-    # The DC motor's torque is K (V - K w) / R, with gainprm[0] = R and
-    # gainprm[1] = K. Dividing R scales the torque at every speed and keeps
-    # the free speed V / K.
-    motor, motor0 = model.bind_scalar(car.drive), nominal.bind_scalar(car.drive)
-    motor.gainprm[0] = motor0.gainprm[0] / physics.motor_torque
+    # A DC motor's torque, the NeoRacer's, is K (V - K w) / R, with
+    # gainprm[0] = R and gainprm[1] = K. Dividing R scales the torque at
+    # every speed and keeps the free speed V / K. A speed controller's force,
+    # the RACECAR Neo V2's, is its gains times ctrl and the speed.
+    for actuator in car.throttled:
+        a, a0 = model.bind_scalar(actuator), nominal.bind_scalar(actuator)
+        if a0.gaintype[0] == mujoco.mjtGain.mjGAIN_DCMOTOR:
+            a.gainprm[0] = a0.gainprm[0] / physics.motor_torque
+        else:
+            a.gainprm[:3] = a0.gainprm[:3] * physics.motor_torque
     # The servo's position loop applies kp (ctrl - q) volts, with
     # gainprm[4] = kp, so near its target its stiffness is proportional to kp.
     servo, servo0 = model.bind_scalar(car.steer), nominal.bind_scalar(car.steer)

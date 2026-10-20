@@ -176,13 +176,18 @@ def test_reset_gives_the_done_rows_the_state_and_physics_of_initial():
 
 
 def test_command_rejects_a_model_with_other_actuators():
+    """command writes every ctrl of the car's: an actuator that the car does
+    not drive, with no throttle map, is not the car's."""
     spec = mujoco.MjSpec.from_file(assets.DEFAULT_CAR)
     spec.add_actuator(
         name="extra", target="steer_input", trntype=mujoco.mjtTrn.mjTRN_JOINT
     )
-    scene = compile_scene(spec)
+    with pytest.raises(ValueError, match="extra needs 3 user numbers"):
+        compile_scene(spec)
+    scene = assets.load()
+    model = spec.compile()
     with pytest.raises(ValueError, match="actuators"):
-        batch.command(scene.model, scene.car, np.zeros(1), np.zeros(1))
+        batch.command(model, scene.car, np.zeros(1), np.zeros(1))
 
 
 def test_step_rejects_zero_steps():

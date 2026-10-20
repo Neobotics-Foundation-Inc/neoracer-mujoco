@@ -36,8 +36,11 @@ class Car:
 
     body: mujoco.MjsBody  # the car's root body
     joint: mujoco.MjsJoint  # its free joint: qpos x, y, z, qw, qx, qy, qz
-    drive: mujoco.MjsActuator  # the drive motor (terminal voltage in V, + = forward)
+    drive: mujoco.MjsActuator  # the drive motor (contract.py), + = forward
     steer: mujoco.MjsActuator  # the steering servo (rad, + = left)
+    # The actuators that the throttle drives (contract.throttle_map): the
+    # motor first, then any others the car has.
+    throttled: tuple[mujoco.MjsActuator, ...]
     # the fl, fr, rl, rr wheel geoms that touch the ground
     wheels: tuple[mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom]
     lidar: mujoco.MjsSite  # the centre of the spinning LiDAR (lidar.py)
@@ -58,7 +61,8 @@ class Scene:
 def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel) -> Car:
     """Find the parts of the car in spec, which model was compiled from.
     Raise ValueError if the car body has no free joint, or an actuator, a
-    wheel geom, the LiDAR site or a sensor of contract.py is missing."""
+    wheel geom, the LiDAR site or a sensor of contract.py is missing, or an
+    actuator's user numbers are not a throttle map."""
     problems: list[str] = []
     body = spec.body(CAR_BODY)
     if body is None:
@@ -66,8 +70,19 @@ def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel) -> Car:
     joints = body.joints
     if len(joints) != 1 or joints[0].type != mujoco.mjtJoint.mjJNT_FREE:
         problems.append(f'the "{CAR_BODY}" body needs exactly one free joint')
-    actuators = {name: spec.actuator(name) for name in contract.EXPECTED_ACTUATORS}
+    actuators = {name: spec.actuator(name) for name in contract.REQUIRED_ACTUATORS}
     problems += [f"actuator {n} is missing" for n, a in actuators.items() if a is None]
+    others = [a for a in spec.actuators if a.name not in contract.REQUIRED_ACTUATORS]
+    problems += [
+        f"actuator {a.name} needs {contract.THROTTLE_MAP_SIZE} user numbers"
+        for a in others
+        if len(a.userdata) != contract.THROTTLE_MAP_SIZE
+    ]
+    motor = actuators[contract.DRIVE_ACTUATOR]
+    if motor is not None and len(motor.userdata) not in (0, contract.THROTTLE_MAP_SIZE):
+        problems.append(
+            f"actuator {motor.name} needs 0 or {contract.THROTTLE_MAP_SIZE} user numbers"
+        )
     wheels = {name: spec.geom(name) for name in contract.WHEEL_GEOMS}
     problems += [f"wheel geom {n} is missing" for n, g in wheels.items() if g is None]
     lidar = spec.site(contract.LIDAR_SITE)
@@ -81,6 +96,7 @@ def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel) -> Car:
         joint=joints[0],
         drive=actuators[contract.DRIVE_ACTUATOR],
         steer=actuators[contract.STEER_ACTUATOR],
+        throttled=(actuators[contract.DRIVE_ACTUATOR], *others),
         wheels=(wheels[wfl], wheels[wfr], wheels[wrl], wheels[wrr]),
         lidar=lidar,
         sensors=sensors.find_sensors(spec, model),
