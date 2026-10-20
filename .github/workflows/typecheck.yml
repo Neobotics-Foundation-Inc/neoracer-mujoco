@@ -33,7 +33,7 @@ jobs:
         run: >-
           pybind11-stubgen mujoco mujoco.viewer mujoco.rollout -o typings --exit-code
           --ignore-invalid-expressions '^(mujoco::python::.*|std::byte)$'
-          --ignore-unresolved-names '^(NoneType|_abc\._abc_data|mjs[A-Za-z]+_)$'
+          --ignore-unresolved-names '^(ArrayLike|NoneType|_abc\._abc_data|mjs[A-Za-z]+_)$'
 
       - name: ty
         run: ty check --output-format github
