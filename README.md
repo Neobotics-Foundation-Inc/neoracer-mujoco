@@ -16,8 +16,8 @@ The Gymnasium environment and the reinforcement learning live in [neoracer-rl](h
 from neoracer_spec.neoracer import NEORACER
 
 wheelbase = NEORACER.chassis.wheelbase
-wheelbase.value      # 0.28764 (m)
-wheelbase.status     # Measured(source=Source(name='CAD', ...))
+wheelbase.value  # 0.28764 (m)
+wheelbase.status  # Measured(source=Source(name='CAD', ...))
 wheelbase.conflicts  # the docs say 0.280, the ROS driver 0.285
 ```
 
@@ -52,9 +52,9 @@ MuJoCo compiles an `MjSpec`, the editable form of a model, into an `MjModel`, th
 ```python
 @dataclass(frozen=True)
 class Scene:
-    spec: mujoco.MjSpec    # what was compiled
+    spec: mujoco.MjSpec  # what was compiled
     model: mujoco.MjModel  # the compiled model
-    car: Car               # the car's parts, as elements of spec
+    car: Car  # the car's parts, as elements of spec
 ```
 
 `Car` holds the car's body, free joint, two actuators, wheel geoms, LiDAR site and sensors. Each one is an element of `spec`. Code binds an element to the model or to the data where it uses it, and never computes an index. With `data` an `MjData` of the scene's model:
@@ -82,7 +82,7 @@ data = sim.settle(scene.model)  # the car at rest on the floor
 sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.2))
 for _ in range(360):  # 1 s at 360 Hz
     mujoco.mj_step(scene.model, data)
-read(scene.car.sensors, data)  # IMU, steering angles, wheel speeds, suspension, rangefinders
+read(scene.car.sensors, data)  # IMU, steering angles, wheel speeds, ...
 ```
 
 The throttle is a share of the battery's 11.1 V, from -1 to 1. The steer is the steering angle in radians, + to the left, up to full lock at 0.4405.
@@ -106,7 +106,11 @@ scene = assets.compose(track)
 
 ```python
 from neoracer_mujoco.track_generation import (
-    NoValidTrack, Track, generate_track, settings_for_difficulty, to_spec,
+    NoValidTrack,
+    Track,
+    generate_track,
+    settings_for_difficulty,
+    to_spec,
 )
 
 match generate_track(7, settings_for_difficulty(1)):
@@ -127,7 +131,7 @@ from neoracer_mujoco.track_generation import lap_distance
 data = sim.settle(scene.model)
 ...  # drive, as in the loop above
 xy = data.bind_scalar(scene.car.truth.pos).data[:2]
-lap_distance(track, xy)            # m along the centerline from the start
+lap_distance(track, xy)  # m along the centerline from the start
 car_touches_wall(data, scene.car)  # True while the car touches a wall
 ```
 
@@ -166,7 +170,10 @@ from dataclasses import replace
 from neoracer_mujoco import export
 from neoracer_spec.provenance import estimated
 
-heavy = replace(NEORACER, chassis=replace(NEORACER.chassis, mass=estimated(3.5, "with a camera mount")))
+heavy = replace(
+    NEORACER,
+    chassis=replace(NEORACER.chassis, mass=estimated(3.5, "with a camera mount")),
+)
 scene = assets.compose(to_spec(track), export.spec(heavy))
 ```
 
