@@ -27,19 +27,6 @@ XML_NAME = "neoracer.xml"
 MJZ_NAME = "neoracer.mjz"
 
 
-def car_xml(car: Spec) -> str:
-    """The car's MJCF: the NeoRacer's XML with car's numbers."""
-    with open(assets.DEFAULT_CAR, encoding="utf-8") as f:
-        return mjcf.car_xml(derive(car).model, f.read())
-
-
-def spec(car: Spec) -> mujoco.MjSpec:
-    """The car's MjSpec. Its meshes are read from assets/."""
-    s = mujoco.MjSpec.from_string(car_xml(car))
-    s.modelfiledir = assets.ASSET_DIR
-    return s
-
-
 def write(car: Spec, folder: str | os.PathLike[str]) -> None:
     """Write to folder the car's XML (XML_NAME), the mesh files it names, an
     archive of them (MJZ_NAME, assets.write_mjz) that MjSpec.from_zip and
@@ -58,3 +45,16 @@ def write(car: Spec, folder: str | os.PathLike[str]) -> None:
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copyfile(source, target)
     assets.write_mjz(xml, os.path.join(folder, MJZ_NAME))
+
+
+def car_xml(car: Spec) -> str:
+    """The car's MJCF: the NeoRacer's XML with car's numbers."""
+    with open(assets.DEFAULT_CAR, encoding="utf-8") as f:
+        return mjcf.car_xml(derive(car).model, f.read())
+
+
+def spec(car: Spec) -> mujoco.MjSpec:
+    """The car's MjSpec. Its meshes are read from assets/."""
+    s = mujoco.MjSpec.from_string(car_xml(car))
+    s.modelfiledir = assets.ASSET_DIR
+    return s

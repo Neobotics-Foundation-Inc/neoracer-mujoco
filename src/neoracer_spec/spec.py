@@ -22,6 +22,47 @@ type Vec3 = tuple[float, float, float]
 
 
 @dataclass(frozen=True)
+class Spec:
+    chassis: Chassis
+    wheel: Wheel
+    suspension: Suspension
+    battery: Battery
+    motor: DriveMotor
+    esc: Esc
+    servo: SteeringServo
+    steering: Steering
+    speed_controller: SpeedController
+    encoder: MotorEncoder
+    imu: Imu
+    lidar: Lidar
+    camera: Camera
+    visuals: Visuals
+
+    def __post_init__(self) -> None:
+        c, s = self.chassis, self.steering
+        lock = ackermann.steer_for_inner(
+            c.wheelbase.value,
+            c.track.value,
+            math.radians(s.inner_lock_degrees.value),
+        )
+        if not lock < s.fit_range.value:
+            raise ValueError(
+                f"full lock, {lock} rad of steering input, is not inside"
+                f" fit_range, {s.fit_range.value} rad"
+            )
+
+
+@dataclass(frozen=True)
+class Chassis:
+    wheelbase: Sourced[float]  # m, between the front and rear axles
+    track: Sourced[float]  # m, between the left and right wheels' centres
+    mass: Sourced[float]  # kg, the whole car, wheels included
+    com_height: Sourced[float]  # m, the chassis' centre of mass above the axles
+    inertia: Sourced[InertiaReference]  # scaled to the chassis' mass
+    collision_box: Sourced[Box]  # the body less the wheels
+
+
+@dataclass(frozen=True)
 class InertiaReference:
     """A body whose inertia is known, to scale to another of the same shape:
     its principal moments about its centre of mass, and its mass."""
@@ -34,16 +75,6 @@ class InertiaReference:
 class Box:
     center: Vec3  # m
     half_size: Vec3  # m
-
-
-@dataclass(frozen=True)
-class Chassis:
-    wheelbase: Sourced[float]  # m, between the front and rear axles
-    track: Sourced[float]  # m, between the left and right wheels' centres
-    mass: Sourced[float]  # kg, the whole car, wheels included
-    com_height: Sourced[float]  # m, the chassis' centre of mass above the axles
-    inertia: Sourced[InertiaReference]  # scaled to the chassis' mass
-    collision_box: Sourced[Box]  # the body less the wheels
 
 
 @dataclass(frozen=True)
@@ -70,6 +101,12 @@ class Battery:
 
 
 @dataclass(frozen=True)
+class DriveMotor:
+    rating: Sourced[DcMotorRating]
+    gear_ratio: Sourced[float]  # motor turns per wheel turn
+
+
+@dataclass(frozen=True)
 class DcMotorRating:
     """A DC motor's datasheet line: at voltage, its torque from rest and its
     speed with no load."""
@@ -89,25 +126,10 @@ def rewound(rating: DcMotorRating, free_speed_rpm: float) -> DcMotorRating:
 
 
 @dataclass(frozen=True)
-class DriveMotor:
-    rating: Sourced[DcMotorRating]
-    gear_ratio: Sourced[float]  # motor turns per wheel turn
-
-
-@dataclass(frozen=True)
 class Esc:
     # What the motor does at neutral throttle: short its windings (brake) or
     # leave them open (coast).
     neutral: Sourced[Literal["brake", "coast"]]
-
-
-@dataclass(frozen=True)
-class ServoRating:
-    """A hobby servo's datasheet line, in the units it is rated in."""
-
-    voltage: float  # V
-    stall_torque_kgf_cm: float  # kgf·cm
-    seconds_per_60_degrees: float  # s, with no load
 
 
 @dataclass(frozen=True)
@@ -121,6 +143,15 @@ class SteeringServo:
     # The servo's own position loop, the model's.
     kp: Sourced[float]  # V/rad
     kd: Sourced[float]  # V·s/rad
+
+
+@dataclass(frozen=True)
+class ServoRating:
+    """A hobby servo's datasheet line, in the units it is rated in."""
+
+    voltage: float  # V
+    stall_torque_kgf_cm: float  # kgf·cm
+    seconds_per_60_degrees: float  # s, with no load
 
 
 @dataclass(frozen=True)
@@ -193,13 +224,6 @@ class Lidar:
 
 
 @dataclass(frozen=True)
-class Resolution:
-    width: int  # pixels
-    height: int  # pixels
-    fps: float  # Hz
-
-
-@dataclass(frozen=True)
 class Camera:
     position: Sourced[Vec3]  # m, the lens
     sensor: Sourced[Resolution]  # the sensor's most
@@ -210,38 +234,14 @@ class Camera:
 
 
 @dataclass(frozen=True)
+class Resolution:
+    width: int  # pixels
+    height: int  # pixels
+    fps: float  # Hz
+
+
+@dataclass(frozen=True)
 class Visuals:
     # The wheels' radius in the cosmetic wheel meshes, which are scaled to the
     # tyre.
     mesh_wheel_radius: Sourced[float]  # m
-
-
-@dataclass(frozen=True)
-class Spec:
-    chassis: Chassis
-    wheel: Wheel
-    suspension: Suspension
-    battery: Battery
-    motor: DriveMotor
-    esc: Esc
-    servo: SteeringServo
-    steering: Steering
-    speed_controller: SpeedController
-    encoder: MotorEncoder
-    imu: Imu
-    lidar: Lidar
-    camera: Camera
-    visuals: Visuals
-
-    def __post_init__(self) -> None:
-        c, s = self.chassis, self.steering
-        lock = ackermann.steer_for_inner(
-            c.wheelbase.value,
-            c.track.value,
-            math.radians(s.inner_lock_degrees.value),
-        )
-        if not lock < s.fit_range.value:
-            raise ValueError(
-                f"full lock, {lock} rad of steering input, is not inside"
-                f" fit_range, {s.fit_range.value} rad"
-            )
