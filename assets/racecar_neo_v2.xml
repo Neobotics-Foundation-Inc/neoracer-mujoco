@@ -29,8 +29,10 @@
         <!-- Cosmetic meshes (meters, in the car body's frame), one per part and
              color: RacecarSim's model of the car, RacecarNeoV2.fbx, decimated.
              Its wheelbase is 225 mm, so it is placed by its rear axle, and its
-             front wheels are 5 mm behind the model's. Each wheel's meshes are
-             centred on the wheel. None of these affect physics. -->
+             front wheels are 5 mm behind the model's. Its payload, everything
+             on the chassis' body posts, is lowered 6.6 mm, so that its LiDAR is
+             at the measured height. Each wheel's meshes are centred on the
+             wheel. None of these affect physics. -->
         <mesh name="vis_body_1f1f1f" file="meshes/racecar_neo_v2/body_1f1f1f.STL"/>
         <mesh name="vis_body_424242" file="meshes/racecar_neo_v2/body_424242.STL"/>
         <mesh name="vis_body_bac4cc" file="meshes/racecar_neo_v2/body_bac4cc_metal.STL"/>
@@ -116,20 +118,21 @@
             <inertial pos=".00492767 0 .0635799" mass="2.19"
                       diaginertia=".00783188 .0186176 .0164286"/>
 
-            <!-- Collision boxes: RacecarSim's, fitted to its model. Collision
-                 only; the mass is in <inertial>. "chassis" is the tub, from 20.5
-                 mm above the floor. -->
+            <!-- Collision boxes: RacecarSim's, fitted to its model, with the
+                 payload's lowered as its meshes are. Collision only; the mass
+                 is in <inertial>. "chassis" is the tub, from 20.5 mm above the
+                 floor. -->
             <geom name="chassis" type="box" pos=".0136 0 .02525" size=".1646 .1045 .04075"
                   rgba=".3 .6 .3 .1" mass="0"/>
             <geom name="rear_bumper" type="box" pos="-.1489 0 .0078" size=".0274 .0925 .0272"
                   rgba=".3 .6 .3 .1" mass="0"/>
-            <geom name="shell_rear" type="box" pos="-.03375 0 .1085" size=".10125 .1 .0425"
+            <geom name="shell_rear" type="box" pos="-.03375 0 .1019" size=".10125 .1 .0425"
                   rgba=".3 .6 .3 .1" mass="0"/>
-            <geom name="shell_front" type="box" pos=".11625 0 .0935" size=".04875 .0525 .0275"
+            <geom name="shell_front" type="box" pos=".11625 0 .0869" size=".04875 .0525 .0275"
                   rgba=".3 .6 .3 .1" mass="0"/>
-            <geom name="lidar_stack" type="box" pos=".1235 0 .138" size=".035 .035 .017"
+            <geom name="lidar_stack" type="box" pos=".1235 0 .1314" size=".035 .035 .017"
                   rgba=".3 .6 .3 .1" mass="0"/>
-            <geom name="lidar_head" type="box" pos=".12325 0 .16475" size=".035 .035 .00975"
+            <geom name="lidar_head" type="box" pos=".12325 0 .15815" size=".035 .035 .00975"
                   rgba=".3 .6 .3 .1" mass="0"/>
 
             <geom class="visual" mesh="vis_body_1f1f1f" rgba=".098 .098 .098 1"/>
@@ -188,11 +191,11 @@
             past them. Their meshes are in the body's.
             -->
             <body name="antennas">
-                <geom name="antenna_left" type="cylinder" pos="-.145 .0449 .1665"
-                      size=".0045 .0725" contype="0" conaffinity="0" mass="0"
+                <geom name="antenna_left" type="cylinder" pos="-.145 .0449 .1632"
+                      size=".0045 .0758" contype="0" conaffinity="0" mass="0"
                       rgba=".1 .1 .1 .3"/>
-                <geom name="antenna_right" type="cylinder" pos="-.145 -.0449 .1665"
-                      size=".0045 .0725" contype="0" conaffinity="0" mass="0"
+                <geom name="antenna_right" type="cylinder" pos="-.145 -.0449 .1632"
+                      size=".0045 .0758" contype="0" conaffinity="0" mass="0"
                       rgba=".1 .1 .1 .3"/>
             </body>
 

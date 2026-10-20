@@ -358,19 +358,21 @@ RACECAR_NEO_V2 = RacecarNeoV2(
                 NamedBox(
                     "rear_bumper", (-0.0339, 0.0, 0.0438), (0.0274, 0.0925, 0.0272)
                 ),
-                NamedBox("shell_rear", (0.08125, 0.0, 0.1445), (0.10125, 0.1, 0.0425)),
+                NamedBox("shell_rear", (0.08125, 0.0, 0.1379), (0.10125, 0.1, 0.0425)),
                 NamedBox(
-                    "shell_front", (0.23125, 0.0, 0.1295), (0.04875, 0.0525, 0.0275)
+                    "shell_front", (0.23125, 0.0, 0.1229), (0.04875, 0.0525, 0.0275)
                 ),
-                NamedBox("lidar_stack", (0.2385, 0.0, 0.174), (0.035, 0.035, 0.017)),
+                NamedBox("lidar_stack", (0.2385, 0.0, 0.1674), (0.035, 0.035, 0.017)),
                 NamedBox(
-                    "lidar_head", (0.23825, 0.0, 0.20075), (0.035, 0.035, 0.00975)
+                    "lidar_head", (0.23825, 0.0, 0.19415), (0.035, 0.035, 0.00975)
                 ),
             ),
             RACECARSIM,
-            note="its boxes, fitted to its model. Its model's front is 293 mm"
-            " ahead of the rear axle and its LiDAR 210.5 mm tall, where the car's"
-            " are 287.5 and 205 mm (Footprint)",
+            note="its boxes, fitted to its model, with those of the payload on the"
+            " chassis' body posts 6.6 mm lower, as the model's meshes are: its"
+            " model has the LiDAR 6.6 mm, the camera 7 and the IMU 8.5 mm higher"
+            " than they are measured. Its model's front is 293 mm ahead of the"
+            " rear axle, where the car's is 287.5 (Footprint)",
         ),
         antenna_x=measured(-0.030, RACECARSIM_MODEL),
         antenna_y=measured(
@@ -379,7 +381,9 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             note="the reference car's scans see them 0.27 m behind the LiDAR,"
             " 8.5 degrees to its left and 11 to its right",
         ),
-        antenna_bottom=measured(0.130, RACECARSIM_MODEL),
+        antenna_bottom=measured(
+            0.1234, RACECARSIM_MODEL, note="130 mm, lowered with the payload"
+        ),
         antenna_diameter=measured(
             0.009,
             RACECARSIM_MODEL,
