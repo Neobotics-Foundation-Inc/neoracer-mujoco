@@ -25,6 +25,8 @@ origin at the middle of the wheelbase on the axle line. The spec's positions
 are in base_link, on the floor below the rear axle; body() moves them.
 """
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass, replace
 

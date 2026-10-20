@@ -35,6 +35,8 @@ Frame: the car's base_link, on the floor below the middle of the rear axle
 field's name says otherwise.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal
 
