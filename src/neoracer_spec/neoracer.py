@@ -42,6 +42,7 @@ from .spec import (
     rewound,
 )
 
+# The sources of NEORACER's values.
 CAD = Source(
     "CAD",
     "the production car's CAD model: the Playground's neoracer-race.glb,"

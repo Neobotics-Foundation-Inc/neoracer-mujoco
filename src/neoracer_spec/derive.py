@@ -10,6 +10,8 @@ digits (precise), so the code and the XML hold the same floats.
 Frame: +X forward, +Y left, +Z up; angles in rad.
 """
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 
@@ -28,25 +30,34 @@ from .spec import (
 )
 
 G = 9.81  # m/s^2, MuJoCo's gravity
-KGF_CM = 9.80665 / 100  # N·m in a kgf·cm, at standard gravity, as servos are rated
-
 type Nominal = tuple[float, float, float]  # V, N·m, rad/s: a dcmotor's nominal
 type Polynomial = tuple[float, float, float, float, float]  # a0..a4
 
 
-def precise(x: float) -> float:
-    """x to the model's precision, 6 significant digits."""
-    return float(f"{x:.6g}")
+@dataclass(frozen=True)
+class DerivedParams:
+    """Everything the simulators need, derived from a Spec."""
+
+    model: ModelParams
+    lidar: LidarParams
+    encoder: EncoderParams
+    wheel_radius: float  # m, that the encoder's speed is measured at
+    steer_lock: float  # rad of steering input, full lock
 
 
-def rad_s(rpm: float) -> float:
-    return rpm * 2.0 * math.pi / 60.0
+def derive(spec: Spec) -> DerivedParams:
+    return DerivedParams(
+        model=model(spec),
+        lidar=lidar_params(spec.lidar),
+        encoder=encoder_params(spec.encoder),
+        wheel_radius=precise(spec.wheel.radius.value),
+        steer_lock=steer_lock(spec),
+    )
 
 
-# --- the settings beside the model -------------------------------------------
+# --- the settings beside the model --------------------------------------------
 
 _LIDAR = NEORACER.lidar
-_ENCODER = NEORACER.encoder
 
 
 @dataclass(frozen=True)
@@ -81,6 +92,9 @@ def lidar_params(lidar: Lidar) -> LidarParams:
     )
 
 
+_ENCODER = NEORACER.encoder
+
+
 @dataclass(frozen=True)
 class EncoderParams:
     """How the firmware measures the speed from the motor encoder. The
@@ -104,23 +118,7 @@ def encoder_params(encoder: MotorEncoder) -> EncoderParams:
     )
 
 
-# --- the model's numbers -----------------------------------------------------
-
-
-@dataclass(frozen=True)
-class DcMotorParams:
-    nominal: Nominal  # at the shaft
-    gear: float  # shaft turns per turn of what it drives
-    ctrl_limit: float  # V, |ctrl| at most
-
-
-@dataclass(frozen=True)
-class ServoParams:
-    nominal: Nominal  # at the steering input, through the linkage
-    kp: float  # V/rad
-    kd: float  # V·s/rad
-    voltage_limit: float  # V, the loop's clamp
-    lock: float  # rad of steering input, |ctrl| at most
+# --- the model's numbers ------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -158,107 +156,19 @@ class ModelParams:
 
 
 @dataclass(frozen=True)
-class DerivedParams:
-    """Everything the simulators need, derived from a Spec."""
-
-    model: ModelParams
-    lidar: LidarParams
-    encoder: EncoderParams
-    wheel_radius: float  # m, that the encoder's speed is measured at
-    steer_lock: float  # rad of steering input, full lock
+class DcMotorParams:
+    nominal: Nominal  # at the shaft
+    gear: float  # shaft turns per turn of what it drives
+    ctrl_limit: float  # V, |ctrl| at most
 
 
-def nominal(rating: DcMotorRating) -> Nominal:
-    return (rating.voltage, rating.stall_torque, rad_s(rating.free_speed_rpm))
-
-
-def servo_rating(servo: SteeringServo) -> ServoRating:
-    """The servo's rating at its supply, interpolated between its datasheet's
-    two lines."""
-    lo, hi, supply = servo.low.value, servo.high.value, servo.supply.value
-    w = (supply - lo.voltage) / (hi.voltage - lo.voltage)
-
-    def lerp(a: float, b: float) -> float:
-        return a + w * (b - a)
-
-    return ServoRating(
-        supply,
-        lerp(lo.stall_torque_kgf_cm, hi.stall_torque_kgf_cm),
-        lerp(lo.seconds_per_60_degrees, hi.seconds_per_60_degrees),
-    )
-
-
-def steer_lock(spec: Spec) -> float:
-    """Full lock (rad of steering input), where the inner front wheel reaches
-    its lock, to the model's precision."""
-    c = spec.chassis
-    inner = math.radians(spec.steering.inner_lock_degrees.value)
-    return precise(ackermann.steer_for_inner(c.wheelbase.value, c.track.value, inner))
-
-
-def linkage_ratio(spec: Spec) -> float:
-    """How far the servo's horn turns per radian of steering input: at full
-    lock it is at driver_lock of its half range."""
-    lock = spec.steering.driver_lock.value * spec.servo.horn_half_range_degrees.value
-    return math.radians(lock) / steer_lock(spec)
-
-
-def servo_nominal(spec: Spec) -> Nominal:
-    """The servo at the steering input, through the linkage: its supply, its
-    stall torque and its free speed."""
-    rating, ratio = servo_rating(spec.servo), linkage_ratio(spec)
-    free = math.radians(60.0) / rating.seconds_per_60_degrees  # rad/s at the horn
-    return (rating.voltage, rating.stall_torque_kgf_cm * KGF_CM * ratio, free / ratio)
-
-
-def ackermann_left(spec: Spec) -> Polynomial:
-    """The left wheel's angle as a 4th-order polynomial of the steering input,
-    a least-squares fit to ideal Ackermann steering over its range. The right
-    wheel's is its mirror image, (-a0, a1, -a2, a3, -a4)."""
-    l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
-    r = spec.steering.fit_range.value
-    # An even count of points leaves out 0, where left_wheel divides by 0.
-    x = np.linspace(-r, r, 400)
-    y = [ackermann.left_wheel(l, w, s) for s in x]
-    a0, a1, a2, a3, a4 = (float(a) for a in np.polynomial.polynomial.polyfit(x, y, 4))
-    return (a0, a1, a2, a3, a4)
-
-
-def wheel_steer_range(spec: Spec) -> float:
-    """How far (rad) each front wheel's steer joint turns: past the inner
-    wheel's angle at the edge of the steering input's range."""
-    l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
-    s = spec.steering
-    return ackermann.left_wheel(l, w, s.fit_range.value) + s.wheel_range_margin.value
-
-
-def sprung_mass(spec: Spec) -> float:
-    """The mass on the springs (kg): the car less its four wheels."""
-    return spec.chassis.mass.value - 4 * spec.wheel.mass.value
-
-
-def chassis_mass(spec: Spec) -> float:
-    """The chassis body's mass (kg): the sprung mass less the steering input's
-    body."""
-    return sprung_mass(spec) - spec.steering.input_body_mass.value
-
-
-def chassis_inertia(spec: Spec) -> Vec3:
-    """The chassis' principal inertia (kg·m^2): its reference's, scaled to its
-    mass."""
-    ref = spec.chassis.inertia.value
-    k = chassis_mass(spec) / ref.mass
-    return (ref.inertia[0] * k, ref.inertia[1] * k, ref.inertia[2] * k)
-
-
-def spring_ref(spec: Spec) -> float:
-    """The springs' rest position (m): each holds a quarter of the sprung
-    weight with its joint at 0."""
-    return -sprung_mass(spec) * G / 4 / spec.suspension.stiffness.value
-
-
-def _precise3(v: Vec3) -> Vec3:
-    return (precise(v[0]), precise(v[1]), precise(v[2]))
+@dataclass(frozen=True)
+class ServoParams:
+    nominal: Nominal  # at the steering input, through the linkage
+    kp: float  # V/rad
+    kd: float  # V·s/rad
+    voltage_limit: float  # V, the loop's clamp
+    lock: float  # rad of steering input, |ctrl| at most
 
 
 def model(spec: Spec) -> ModelParams:
@@ -316,11 +226,106 @@ def model(spec: Spec) -> ModelParams:
     )
 
 
-def derive(spec: Spec) -> DerivedParams:
-    return DerivedParams(
-        model=model(spec),
-        lidar=lidar_params(spec.lidar),
-        encoder=encoder_params(spec.encoder),
-        wheel_radius=precise(spec.wheel.radius.value),
-        steer_lock=steer_lock(spec),
+def ackermann_left(spec: Spec) -> Polynomial:
+    """The left wheel's angle as a 4th-order polynomial of the steering input,
+    a least-squares fit to ideal Ackermann steering over its range. The right
+    wheel's is its mirror image, (-a0, a1, -a2, a3, -a4)."""
+    l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
+    r = spec.steering.fit_range.value
+    # An even count of points leaves out 0, where left_wheel divides by 0.
+    x = np.linspace(-r, r, 400)
+    y = [ackermann.left_wheel(l, w, s) for s in x]
+    a0, a1, a2, a3, a4 = (float(a) for a in np.polynomial.polynomial.polyfit(x, y, 4))
+    return (a0, a1, a2, a3, a4)
+
+
+def nominal(rating: DcMotorRating) -> Nominal:
+    return (rating.voltage, rating.stall_torque, rad_s(rating.free_speed_rpm))
+
+
+def rad_s(rpm: float) -> float:
+    return rpm * 2.0 * math.pi / 60.0
+
+
+KGF_CM = 9.80665 / 100  # N·m in a kgf·cm, at standard gravity, as servos are rated
+
+
+def servo_nominal(spec: Spec) -> Nominal:
+    """The servo at the steering input, through the linkage: its supply, its
+    stall torque and its free speed."""
+    rating, ratio = servo_rating(spec.servo), linkage_ratio(spec)
+    free = math.radians(60.0) / rating.seconds_per_60_degrees  # rad/s at the horn
+    return (rating.voltage, rating.stall_torque_kgf_cm * KGF_CM * ratio, free / ratio)
+
+
+def servo_rating(servo: SteeringServo) -> ServoRating:
+    """The servo's rating at its supply, interpolated between its datasheet's
+    two lines."""
+    lo, hi, supply = servo.low.value, servo.high.value, servo.supply.value
+    w = (supply - lo.voltage) / (hi.voltage - lo.voltage)
+
+    def lerp(a: float, b: float) -> float:
+        return a + w * (b - a)
+
+    return ServoRating(
+        supply,
+        lerp(lo.stall_torque_kgf_cm, hi.stall_torque_kgf_cm),
+        lerp(lo.seconds_per_60_degrees, hi.seconds_per_60_degrees),
     )
+
+
+def linkage_ratio(spec: Spec) -> float:
+    """How far the servo's horn turns per radian of steering input: at full
+    lock it is at driver_lock of its half range."""
+    lock = spec.steering.driver_lock.value * spec.servo.horn_half_range_degrees.value
+    return math.radians(lock) / steer_lock(spec)
+
+
+def steer_lock(spec: Spec) -> float:
+    """Full lock (rad of steering input), where the inner front wheel reaches
+    its lock, to the model's precision."""
+    c = spec.chassis
+    inner = math.radians(spec.steering.inner_lock_degrees.value)
+    return precise(ackermann.steer_for_inner(c.wheelbase.value, c.track.value, inner))
+
+
+def chassis_mass(spec: Spec) -> float:
+    """The chassis body's mass (kg): the sprung mass less the steering input's
+    body."""
+    return sprung_mass(spec) - spec.steering.input_body_mass.value
+
+
+def sprung_mass(spec: Spec) -> float:
+    """The mass on the springs (kg): the car less its four wheels."""
+    return spec.chassis.mass.value - 4 * spec.wheel.mass.value
+
+
+def chassis_inertia(spec: Spec) -> Vec3:
+    """The chassis' principal inertia (kg·m^2): its reference's, scaled to its
+    mass."""
+    ref = spec.chassis.inertia.value
+    k = chassis_mass(spec) / ref.mass
+    return (ref.inertia[0] * k, ref.inertia[1] * k, ref.inertia[2] * k)
+
+
+def spring_ref(spec: Spec) -> float:
+    """The springs' rest position (m): each holds a quarter of the sprung
+    weight with its joint at 0."""
+    return -sprung_mass(spec) * G / 4 / spec.suspension.stiffness.value
+
+
+def wheel_steer_range(spec: Spec) -> float:
+    """How far (rad) each front wheel's steer joint turns: past the inner
+    wheel's angle at the edge of the steering input's range."""
+    l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
+    s = spec.steering
+    return ackermann.left_wheel(l, w, s.fit_range.value) + s.wheel_range_margin.value
+
+
+def precise(x: float) -> float:
+    """x to the model's precision, 6 significant digits."""
+    return float(f"{x:.6g}")
+
+
+def _precise3(v: Vec3) -> Vec3:
+    return (precise(v[0]), precise(v[1]), precise(v[2]))

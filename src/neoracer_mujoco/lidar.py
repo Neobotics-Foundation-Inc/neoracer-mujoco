@@ -33,34 +33,8 @@ from neoracer_spec.derive import LidarParams
 from .scene import Car
 
 NO_RETURN = -1.0  # what a slot reads with nothing in range, as a rangefinder
-
 type Scan = npt.NDArray[np.float64]  # shape (slots,), m
 type Slots = npt.NDArray[np.intp]  # slot indices
-
-
-def bearings(params: LidarParams) -> npt.NDArray[np.float64]:
-    """Each slot's bearing (rad), clockwise from the front."""
-    return np.arange(params.slots, dtype=np.float64) * (2 * math.pi / params.slots)
-
-
-@functools.cache
-def visible(params: LidarParams) -> npt.NDArray[np.bool_]:
-    """The slots it sees: bearings in [-field / 2, field / 2)."""
-    b = bearings(params)
-    return (b < params.field / 2) | (b >= 2 * math.pi - params.field / 2)
-
-
-@functools.cache
-def _rays(params: LidarParams) -> npt.NDArray[np.float64]:
-    """Each slot's ray in the site frame, shape (slots, 3). Clockwise from +X
-    is toward -Y."""
-    b = bearings(params)
-    return np.stack([np.cos(b), -np.sin(b), np.zeros(params.slots)], axis=1)
-
-
-# The part of a slot below which the head has not reached it: a step that
-# lands on a slot, up to rounding, does not measure it.
-_EPS = 1e-9
 
 
 @dataclass(frozen=True)
@@ -70,6 +44,68 @@ class LidarState:
     head: float  # slots of the turn in progress already measured, in [0, slots)
     sweeping: Scan  # the turn in progress; slots at or past head are stale
     scan: Scan  # the last complete turn: what the LiDAR reports
+
+
+def start(
+    params: LidarParams, model: mujoco.MjModel, data: mujoco.MjData, car: Car
+) -> LidarState:
+    """The LiDAR of a car that has stood still at the pose of data for a
+    turn: its scan is complete, and a new turn begins."""
+    scan = _measure(params, model, data, car, np.arange(params.slots))
+    return LidarState(head=0.0, sweeping=scan, scan=scan)
+
+
+# The part of a slot below which the head has not reached it: a step that
+# lands on a slot, up to rounding, does not measure it.
+_EPS = 1e-9
+
+
+def sweep(
+    params: LidarParams,
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    car: Car,
+    state: LidarState,
+    dt: float,
+) -> LidarState:
+    """The LiDAR after a physics step of dt (s), less than a turn, that left
+    the car at the pose of data: it measures the slots that its head passed."""
+    n = params.slots
+    end = state.head + n * params.scan_rate * dt
+    if not 0 < end - state.head < n:
+        raise ValueError(f"a step of {dt} s is not between 0 and a turn")
+    slots = np.arange(math.ceil(state.head - _EPS), math.ceil(end - _EPS))
+    values = _measure(params, model, data, car, slots % n)
+    sweeping, scan = state.sweeping.copy(), state.scan
+    done = slots < n
+    sweeping[slots[done]] = values[done]
+    if end >= n - _EPS:  # the turn is complete
+        scan, sweeping = sweeping, np.full(n, NO_RETURN)
+        sweeping[slots[~done] - n] = values[~done]
+        end -= n
+    return LidarState(head=max(end, 0.0), sweeping=sweeping, scan=scan)
+
+
+def _measure(
+    params: LidarParams,
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    car: Car,
+    slots: Slots,
+) -> Scan:
+    """cast for any slots: a blocked one reads NO_RETURN."""
+    out = np.full(len(slots), NO_RETURN)
+    seen = visible(params)[slots]
+    if seen.any():
+        out[seen] = cast(params, model, data, car, slots[seen])
+    return out
+
+
+@functools.cache
+def visible(params: LidarParams) -> npt.NDArray[np.bool_]:
+    """The slots it sees: bearings in [-field / 2, field / 2)."""
+    b = bearings(params)
+    return (b < params.field / 2) | (b >= 2 * math.pi - params.field / 2)
 
 
 def cast(
@@ -103,51 +139,14 @@ def cast(
     return np.where((geom >= 0) & (dist <= params.max_range), dist, NO_RETURN)
 
 
-def _measure(
-    params: LidarParams,
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    car: Car,
-    slots: Slots,
-) -> Scan:
-    """cast for any slots: a blocked one reads NO_RETURN."""
-    out = np.full(len(slots), NO_RETURN)
-    seen = visible(params)[slots]
-    if seen.any():
-        out[seen] = cast(params, model, data, car, slots[seen])
-    return out
+@functools.cache
+def _rays(params: LidarParams) -> npt.NDArray[np.float64]:
+    """Each slot's ray in the site frame, shape (slots, 3). Clockwise from +X
+    is toward -Y."""
+    b = bearings(params)
+    return np.stack([np.cos(b), -np.sin(b), np.zeros(params.slots)], axis=1)
 
 
-def start(
-    params: LidarParams, model: mujoco.MjModel, data: mujoco.MjData, car: Car
-) -> LidarState:
-    """The LiDAR of a car that has stood still at the pose of data for a
-    turn: its scan is complete, and a new turn begins."""
-    scan = _measure(params, model, data, car, np.arange(params.slots))
-    return LidarState(head=0.0, sweeping=scan, scan=scan)
-
-
-def sweep(
-    params: LidarParams,
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    car: Car,
-    state: LidarState,
-    dt: float,
-) -> LidarState:
-    """The LiDAR after a physics step of dt (s), less than a turn, that left
-    the car at the pose of data: it measures the slots that its head passed."""
-    n = params.slots
-    end = state.head + n * params.scan_rate * dt
-    if not 0 < end - state.head < n:
-        raise ValueError(f"a step of {dt} s is not between 0 and a turn")
-    slots = np.arange(math.ceil(state.head - _EPS), math.ceil(end - _EPS))
-    values = _measure(params, model, data, car, slots % n)
-    sweeping, scan = state.sweeping.copy(), state.scan
-    done = slots < n
-    sweeping[slots[done]] = values[done]
-    if end >= n - _EPS:  # the turn is complete
-        scan, sweeping = sweeping, np.full(n, NO_RETURN)
-        sweeping[slots[~done] - n] = values[~done]
-        end -= n
-    return LidarState(head=max(end, 0.0), sweeping=sweeping, scan=scan)
+def bearings(params: LidarParams) -> npt.NDArray[np.float64]:
+    """Each slot's bearing (rad), clockwise from the front."""
+    return np.arange(params.slots, dtype=np.float64) * (2 * math.pi / params.slots)

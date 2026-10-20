@@ -50,16 +50,6 @@ class NoValidTrack:
 type Generated = Track | NoValidTrack
 
 
-def left_edge(track: Track) -> Points:
-    """Points on the left-hand boundary of the corridor."""
-    return track.center + track.half_width[:, None] * track.left_normal
-
-
-def right_edge(track: Track) -> Points:
-    """Points on the right-hand boundary of the corridor."""
-    return track.center - track.half_width[:, None] * track.left_normal
-
-
 def generate_track(seed: int, settings: TrackSettings) -> Generated:
     """Generate one closed-loop racetrack.
 
@@ -129,3 +119,13 @@ def generate_track(seed: int, settings: TrackSettings) -> Generated:
 
     # Every attempt was rejected, each after its repairs failed to save it.
     return NoValidTrack(seed=seed, attempts=settings.max_attempts)
+
+
+def left_edge(track: Track) -> Points:
+    """Points on the left-hand boundary of the corridor."""
+    return track.center + track.half_width[:, None] * track.left_normal
+
+
+def right_edge(track: Track) -> Points:
+    """Points on the right-hand boundary of the corridor."""
+    return track.center - track.half_width[:, None] * track.left_normal
