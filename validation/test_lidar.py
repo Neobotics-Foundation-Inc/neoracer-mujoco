@@ -52,18 +52,19 @@ def _wall_ahead(x: float) -> Scene:
     return assets.compose(track, visuals=False)
 
 
-@pytest.mark.parametrize(("x", "seen"), [(20.0, True), (30.0, False)])
-def test_it_sees_a_wall_up_to_25_m_away(x, seen):
-    """The LakiBeam1 reaches 25 m on a bright target."""
-    scene = _wall_ahead(x)
-    data = mujoco.MjData(scene.model)
-    mujoco.mj_forward(scene.model, data)
-    site_x = data.bind_scalar(scene.car.lidar).xpos[0]
-    (front,) = lidar.cast(LIDAR, scene.model, data, scene.car, np.array([0]))
-    if seen:
-        assert front == pytest.approx(x - site_x, abs=1e-6)
-    else:
-        assert front == lidar.NO_RETURN
+def test_it_sees_a_wall_up_to_25_m_away():
+    """The LakiBeam1 reaches 25 m on a bright target: it sees a wall 20 m
+    ahead and not one 30 m ahead."""
+    for x in (20.0, 30.0):
+        scene = _wall_ahead(x)
+        data = mujoco.MjData(scene.model)
+        mujoco.mj_forward(scene.model, data)
+        site_x = data.bind_scalar(scene.car.lidar).xpos[0]
+        (front,) = lidar.cast(LIDAR, scene.model, data, scene.car, np.array([0]))
+        if x < 25.0:
+            assert front == pytest.approx(x - site_x, abs=1e-6)
+        else:
+            assert front == lidar.NO_RETURN
 
 
 def test_a_turn_completes_every_twelve_steps_at_360_hz(corridor):
@@ -98,19 +99,21 @@ def test_each_slot_reads_the_pose_of_the_step_that_passed_it(corridor):
     np.testing.assert_array_equal(state.scan[half:], after.scan[half:])
 
 
-@pytest.mark.parametrize("hz", [360, 500, 1000, 60])
-def test_a_turn_measures_every_slot_whatever_the_step(corridor, hz):
+def test_a_turn_measures_every_slot_whatever_the_step(corridor):
     """Move the car, then sweep one turn at a step that need not divide it:
     the next complete scan has no slot left from before the move."""
     model, car = corridor.model, corridor.car
-    data = sim.settle(model)
-    state = lidar.start(LIDAR, model, data, car)
-    _shift(corridor, data, -0.2)
-    first = state.scan
-    for _ in range(math.ceil(hz / LIDAR.scan_rate)):
-        state = lidar.sweep(LIDAR, model, data, car, state, 1 / hz)
-    assert state.scan is not first
-    np.testing.assert_array_equal(state.scan, lidar.start(LIDAR, model, data, car).scan)
+    for hz in (360, 500, 1000, 60):
+        data = sim.settle(model)
+        state = lidar.start(LIDAR, model, data, car)
+        _shift(corridor, data, -0.2)
+        first = state.scan
+        for _ in range(math.ceil(hz / LIDAR.scan_rate)):
+            state = lidar.sweep(LIDAR, model, data, car, state, 1 / hz)
+        assert state.scan is not first, f"{hz} Hz"
+        np.testing.assert_array_equal(
+            state.scan, lidar.start(LIDAR, model, data, car).scan, err_msg=f"{hz} Hz"
+        )
 
 
 def test_a_step_of_a_turn_or_more_is_refused(corridor):

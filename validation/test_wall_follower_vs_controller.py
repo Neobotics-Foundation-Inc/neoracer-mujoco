@@ -81,106 +81,88 @@ def _forward_blocked_side_open(open_side: Side, wall_x_m: float = 1.0) -> list[S
             assert_never(open_side)
 
 
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_straight_corridor_prefers_straight(n):
-    target_deg = _best_center_deg(*_scan(corridor_walls(), n))
-    assert abs(target_deg) < 2.0, (
-        f"N={n}: expected about 0 deg, got {target_deg:.2f} deg"
-    )
+def test_a_straight_corridor_keeps_the_straight_arc():
+    """At every resolution, the target in a straight corridor is straight
+    ahead, and the side walls leave the straight arc clear to the horizon,
+    the same at every resolution."""
+    straight_m = []
+    for n in RESOLUTIONS:
+        target_deg = _best_center_deg(*_scan(corridor_walls(), n))
+        assert abs(target_deg) < 2.0, f"N={n}: target {target_deg:.2f} deg"
+        safe_m = safe_arc_lengths(PARAMS, *_scan(corridor_walls(half_width_m=0.4), n))
+        straight_m.append(safe_m[TABLE.straight_index])
+    assert max(straight_m) - min(straight_m) < 1e-6, straight_m
+    assert straight_m[0] >= PARAMS.planning_horizon_m - 1e-6
 
 
-@pytest.mark.parametrize("open_side", ["left", "right"])
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_side_opening_prefers_arc_toward_it(n, open_side: Side):
-    safe_m = safe_arc_lengths(PARAMS, *_scan(_forward_blocked_side_open(open_side), n))
-    straight_m = safe_m[TABLE.straight_index]
-    best = int(np.argmax(safe_m))
-    assert straight_m < 1.5, f"N={n}: expected the wall to block the straight arc"
-    assert safe_m[best] > straight_m + 0.5, (
-        f"N={n}: expected a turning arc to go at least 0.5 m farther than straight "
-        f"({safe_m[best]:.2f} m vs {straight_m:.2f} m)"
-    )
-    sign = 1.0 if open_side == "left" else -1.0
-    assert sign * TABLE.steer_deg[best] > 0, (
-        f"N={n}: the best arc turns away from the {open_side} opening "
-        f"({TABLE.steer_deg[best]:.2f} deg)"
-    )
+def test_a_blocked_road_with_one_side_open_turns_into_the_opening():
+    """With a wall 0.8 m ahead and one side open, at every resolution, the
+    straight arc is blocked, and the longest arc turns toward the opening
+    and reaches within 0.1 m of the horizon."""
+    for n in RESOLUTIONS:
+        for open_side in ("left", "right"):
+            case = f"N={n}, {open_side} open"
+            walls = _forward_blocked_side_open(open_side, wall_x_m=0.8)
+            safe_m = safe_arc_lengths(PARAMS, *_scan(walls, n))
+            best = int(np.argmax(safe_m))
+            assert safe_m[TABLE.straight_index] < 1.5, case
+            assert safe_m[best] > PARAMS.planning_horizon_m - 0.1, case
+            sign = 1.0 if open_side == "left" else -1.0
+            assert sign * TABLE.steer_deg[best] > 0, case
 
 
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_mirrored_scene_mirrors_safe_arc_lengths(n):
+def test_mirrored_scene_mirrors_safe_arc_lengths():
     # Law: if the scene is mirrored in y, the safe arc lengths are mirrored
     # over the candidate grid. The tolerance is one arc sample, for rounding
     # at the clearance radius.
-    rng = np.random.default_rng(n)
-    scenes = [_forward_blocked_side_open("right")] + [
-        _random_walls(rng) for _ in range(10)
-    ]
-    for walls in scenes:
-        safe_m = safe_arc_lengths(PARAMS, *_scan(walls, n))
-        mirrored_m = safe_arc_lengths(PARAMS, *_scan(_mirror(walls), n))
-        np.testing.assert_allclose(
-            mirrored_m, safe_m[::-1], atol=PARAMS.arc_sample_ds_m
-        )
+    for n in RESOLUTIONS:
+        rng = np.random.default_rng(n)
+        scenes = [_forward_blocked_side_open("right")] + [
+            _random_walls(rng) for _ in range(10)
+        ]
+        for walls in scenes:
+            safe_m = safe_arc_lengths(PARAMS, *_scan(walls, n))
+            mirrored_m = safe_arc_lengths(PARAMS, *_scan(_mirror(walls), n))
+            np.testing.assert_allclose(
+                mirrored_m,
+                safe_m[::-1],
+                atol=PARAMS.arc_sample_ds_m,
+                err_msg=f"N={n}, walls={walls}",
+            )
 
 
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_mirrored_scene_mirrors_steer(n):
+def test_mirrored_scene_mirrors_steer():
     # Law: from the start state, a mirrored scene gives the same result case
     # and a steer command of the opposite sign.
-    rng = np.random.default_rng(1000 + n)
-    for _ in range(10):
-        walls = _random_walls(rng)
-        _, result = step(PARAMS, VsState(), *_scan(walls, n), DT)
-        _, mirrored = step(PARAMS, VsState(), *_scan(_mirror(walls), n), DT)
-        assert type(mirrored) is type(result), f"walls={walls}"
-        assert mirrored.command.steer == pytest.approx(
-            -result.command.steer, abs=1e-3
-        ), f"walls={walls}"
+    for n in RESOLUTIONS:
+        rng = np.random.default_rng(1000 + n)
+        for _ in range(10):
+            walls = _random_walls(rng)
+            _, result = step(PARAMS, VsState(), *_scan(walls, n), DT)
+            _, mirrored = step(PARAMS, VsState(), *_scan(_mirror(walls), n), DT)
+            assert type(mirrored) is type(result), f"N={n}, walls={walls}"
+            assert mirrored.command.steer == pytest.approx(
+                -result.command.steer, abs=1e-3
+            ), f"N={n}, walls={walls}"
 
 
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_negotiable_corner_finds_feasible_arc(n):
-    # A wall 0.8 m ahead with the right side open. The straight arc is
-    # blocked, but an arc of moderate curvature reaches the full horizon.
-    safe_m = safe_arc_lengths(
-        PARAMS, *_scan(_forward_blocked_side_open("right", wall_x_m=0.8), n)
-    )
-    assert safe_m.max() > PARAMS.planning_horizon_m - 0.1, (
-        f"N={n}: expected an arc within 0.1 m of the horizon, got {safe_m.max():.2f} m"
-    )
-
-
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_inside_min_turn_radius_no_arc_escapes(n):
+def test_inside_min_turn_radius_no_arc_escapes():
     # A corner 0.3 m ahead is much closer than the minimum turn radius
     # (about 0.68 m). No arc, not even at full lock, can turn away in time.
     walls = [
         ((0.3, -2.0), (0.3, 0.05)),  # wall almost straight ahead
         ((0.3, 0.05), (0.5, 2.0)),  # corner to the left
     ]
-    safe_m = safe_arc_lengths(PARAMS, *_scan(walls, n))
-    assert safe_m.max() < 1.0, (
-        f"N={n}: expected every safe arc length below 1.0 m, got {safe_m.max():.2f} m"
-    )
+    for n in RESOLUTIONS:
+        safe_m = safe_arc_lengths(PARAMS, *_scan(walls, n))
+        assert safe_m.max() < 1.0, f"N={n}: longest safe arc {safe_m.max():.2f} m"
 
 
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_side_wall_only_keeps_straight_clear(n):
-    safe_m = safe_arc_lengths(PARAMS, *_scan([((-2.0, 0.5), (12.0, 0.5))], n))
-    assert safe_m[TABLE.straight_index] >= PARAMS.planning_horizon_m - 1e-6, (
-        f"N={n}: a side wall shortened the straight arc to "
-        f"{safe_m[TABLE.straight_index]:.2f} m"
-    )
-
-
-@pytest.mark.parametrize("n", RESOLUTIONS)
-def test_narrow_corridor_has_no_region(n):
+def test_narrow_corridor_has_no_region():
     # The corridor half-width of 0.15 m is less than the clearance radius.
-    safe_m = safe_arc_lengths(PARAMS, *_scan(corridor_walls(half_width_m=0.15), n))
-    assert extract_regions(PARAMS, safe_m) == (), (
-        f"N={n}: expected no usable arc in a corridor narrower than the car"
-    )
+    for n in RESOLUTIONS:
+        safe_m = safe_arc_lengths(PARAMS, *_scan(corridor_walls(half_width_m=0.15), n))
+        assert extract_regions(PARAMS, safe_m) == (), f"N={n}"
 
 
 def test_target_changes_little_with_resolution():
@@ -192,28 +174,16 @@ def test_target_changes_little_with_resolution():
     )
 
 
-def test_dense_side_walls_do_not_shorten_straight_arc():
-    straight_m = [
-        safe_arc_lengths(PARAMS, *_scan(corridor_walls(half_width_m=0.4), n))[
-            TABLE.straight_index
-        ]
-        for n in RESOLUTIONS
-    ]
-    assert max(straight_m) - min(straight_m) < 1e-6, (
-        f"the straight safe arc length (m) changed with N: {straight_m}"
-    )
-    assert straight_m[0] >= PARAMS.planning_horizon_m - 1e-6
-
-
-@pytest.mark.parametrize("n", [270, 1080])
-def test_single_outlier_changes_target_at_most_one_slew_step(n):
-    angles, ranges = _scan(corridor_walls(half_width_m=0.5), n)
-    ranges = ranges.copy()
-    ranges[len(ranges) // 2] = 0.08  # m; one false close return straight ahead
-    state, first = step(PARAMS, VsState(), angles, ranges, DT)
-    _, second = step(PARAMS, state, angles, ranges, DT)
+def test_single_outlier_changes_target_at_most_one_slew_step():
     max_step_deg = PARAMS.max_slew_deg_per_s * DT
-    assert abs(second.target_steer_deg - first.target_steer_deg) <= max_step_deg + 1e-6
+    for n in (270, 1080):
+        angles, ranges = _scan(corridor_walls(half_width_m=0.5), n)
+        ranges = ranges.copy()
+        ranges[len(ranges) // 2] = 0.08  # m; one false close return straight ahead
+        state, first = step(PARAMS, VsState(), angles, ranges, DT)
+        _, second = step(PARAMS, state, angles, ranges, DT)
+        change = abs(second.target_steer_deg - first.target_steer_deg)
+        assert change <= max_step_deg + 1e-6, f"N={n}"
 
 
 def test_no_path_keeps_state_and_recovers_toward_closer_option():
@@ -249,13 +219,10 @@ def test_no_path_keeps_state_and_recovers_toward_closer_option():
     )
 
 
-@pytest.mark.parametrize(
-    "bad",
-    [{"n_candidates": 80}, {"n_candidates": 1}, {"planning_horizon_m": 0.0}],
-)
-def test_params_reject_a_grid_without_a_straight_path_or_horizon(bad):
-    with pytest.raises(ValueError):
-        replace(PARAMS, **bad)
+def test_params_reject_a_grid_without_a_straight_path_or_horizon():
+    for bad in [{"n_candidates": 80}, {"n_candidates": 1}, {"planning_horizon_m": 0.0}]:
+        with pytest.raises(ValueError):
+            replace(PARAMS, **bad)
 
 
 def test_arc_spacing_is_at_most_arc_sample_ds():
@@ -301,27 +268,20 @@ def test_median_filter_equals_median_of_each_window():
         )
 
 
-@pytest.mark.parametrize("lidar_xy_m", [(0.0, 0.0), (-0.0442, 0.0), (0.1, -0.05)])
-def test_obstacle_points_are_in_the_car_frame_wherever_the_lidar_is(lidar_xy_m):
+def test_obstacle_points_are_in_the_car_frame_wherever_the_lidar_is():
     # Law: the scan's ranges are from the LiDAR, but a wall across the path
     # 0.4 m ahead of the car center gives points at x = 0.4 m, wherever the
     # LiDAR is mounted. The median filter's window holds one beam here, so
     # each point is its own beam's.
-    car = replace(PARAMS.car, lidar_xy_m=lidar_xy_m)
-    params = replace(PARAMS, car=car, outlier_window_deg=0.1)
     wall = [((0.4, -0.3), (0.4, 0.3))]
-    angles, ranges = cast_scan(wall, DenseLidarParams(n_beams=360), lidar_xy_m)
-    x, y = obstacle_points(params, angles, ranges)
-    assert len(x) > 10
-    np.testing.assert_allclose(x, 0.4, atol=1e-9)
-    assert np.all(np.abs(y) <= 0.3 + 1e-9)
-
-
-def test_the_car_geometry_has_the_lidar_where_the_model_has_it():
-    scene = assets.load()
-    site = scene.model.bind_scalar(scene.spec.site("lidar_mount")).pos
-    assert PARAMS.car.lidar_xy_m == (site[0], site[1])
-    assert PARAMS.car.lidar_xy_m[0] < 0.0  # behind the wheelbase midpoint
+    for lidar_xy_m in [(0.0, 0.0), (-0.0442, 0.0), (0.1, -0.05)]:
+        car = replace(PARAMS.car, lidar_xy_m=lidar_xy_m)
+        params = replace(PARAMS, car=car, outlier_window_deg=0.1)
+        angles, ranges = cast_scan(wall, DenseLidarParams(n_beams=360), lidar_xy_m)
+        x, y = obstacle_points(params, angles, ranges)
+        assert len(x) > 10, lidar_xy_m
+        np.testing.assert_allclose(x, 0.4, atol=1e-9, err_msg=str(lidar_xy_m))
+        assert np.all(np.abs(y) <= 0.3 + 1e-9), lidar_xy_m
 
 
 def _all_pairs_safe_arc_lengths(angles: np.ndarray, ranges: np.ndarray) -> np.ndarray:

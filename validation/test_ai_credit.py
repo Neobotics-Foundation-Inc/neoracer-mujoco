@@ -8,8 +8,6 @@ import importlib.util
 import io
 from pathlib import Path
 
-import pytest
-
 _SPEC = importlib.util.spec_from_file_location(
     "ai_credit", Path(__file__).parents[1] / ".github" / "ai_credit.py"
 )
@@ -55,14 +53,9 @@ PEOPLE_LINES = (
 )
 
 
-@pytest.mark.parametrize("line", AI_LINES)
-def test_line_that_credits_a_tool_is_found(line):
-    assert ai_credit.credits_ai(line)
-
-
-@pytest.mark.parametrize("line", PEOPLE_LINES)
-def test_line_that_credits_a_person_is_kept(line):
-    assert not ai_credit.credits_ai(line)
+def test_a_line_that_credits_a_tool_is_found_and_a_person_is_kept():
+    assert [line for line in AI_LINES if not ai_credit.credits_ai(line)] == []
+    assert [line for line in PEOPLE_LINES if ai_credit.credits_ai(line)] == []
 
 
 def test_clean_removes_the_credit_and_the_separator_it_leaves():
@@ -84,18 +77,17 @@ def test_clean_keeps_the_end_when_the_credit_was_not_there():
     assert ai_credit.clean(text) == "Fix the lap counter.\n\nDetails\n\n---\n"
 
 
-def test_clean_leaves_text_without_credit_unchanged():
+def test_clean_is_idempotent_and_leaves_text_without_credit_unchanged():
+    for line in AI_LINES:
+        once = ai_credit.clean("Title\n\n" + line + "\n")
+        assert ai_credit.clean(once) == once == "Title\n", line
     text = "Fix the lap counter.\n\n---\n\nNo trailing newline"
     assert ai_credit.clean(text) == text
 
 
-@pytest.mark.parametrize("text", [line + "\n" for line in AI_LINES])
-def test_clean_is_idempotent(text):
-    once = ai_credit.clean("Title\n\n" + text)
-    assert ai_credit.clean(once) == once == "Title\n"
-
-
-def test_check_says_that_a_person_must_own_the_change(monkeypatch, capsys):
+def test_check_fails_on_a_tool_credit_and_passes_a_person(monkeypatch, capsys):
+    """check exits 1 on a line that credits a tool, with an error that says a
+    person must own the change, and exits 0 silently on a person's credit."""
     monkeypatch.setattr("sys.stdin", io.StringIO(AI_LINES[0] + "\n"))
     assert ai_credit.main(["check"]) == 1
     out = capsys.readouterr().out
@@ -103,8 +95,6 @@ def test_check_says_that_a_person_must_own_the_change(monkeypatch, capsys):
     error = next(line for line in out.splitlines() if line.startswith("::error "))
     assert "owned by a person" in error and "takes responsibility" in error
 
-
-def test_check_passes_text_without_credit(monkeypatch, capsys):
     monkeypatch.setattr("sys.stdin", io.StringIO(PEOPLE_LINES[0] + "\n"))
     assert ai_credit.main(["check"]) == 0
     assert capsys.readouterr().out == ""

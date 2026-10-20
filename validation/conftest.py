@@ -10,7 +10,8 @@ import pytest
 from neoracer_mujoco import cars, load
 
 
-@pytest.fixture(params=cars(), ids=os.path.basename)
+@pytest.fixture(scope="session", params=cars(), ids=os.path.basename)
 def scene(request):
-    """A freshly compiled Scene for each car."""
+    """A Scene for each car, compiled once and shared by the tests: a test
+    that changes the model changes a copy."""
     return load(request.param)

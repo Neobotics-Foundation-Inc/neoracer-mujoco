@@ -244,10 +244,17 @@ class Stamped[T]:
   `type Vec3 = npt.NDArray[np.float64]  # shape (3,)`.
 - Mark a known limit with `# Limit:`. Say when it matters and what to do then.
 
-## 12. Tests state laws
+## 12. Few tests: golden runs and laws
 
-- Prefer a test that states a law to a test with one example value.
-  Examples of laws: a mirrored scene gives a mirrored command; a parse then a print gives the input; a second reset changes nothing.
+- Build the code from small pure functions, type to type, each doing one job.
+  Test a function while you build it, then trust it: keep its test only if it states a law or guards a bug that nothing else would catch.
+- The suite keeps two kinds of tests:
+  golden tests, which run the whole thing (the car settling and driving on every track, a controller lap, the JS package against Python) and fail when something is badly broken;
+  and laws, the invariants that must hold: a mirrored scene gives a mirrored command; a parse then a print gives the input; a second reset changes nothing.
+- Do not test what the types prove or what another test already checks.
+  Every test costs time on each run and tokens to read.
+- Write one test for each law, and loop over its cases inside it, not with `parametrize`.
+  Name the case in the assert message, or wrap the loop body in `with case(name):` (validation/cases.py).
 - Test pure functions directly, without the simulator.
   Use the simulator for the physics conformance tests.
 

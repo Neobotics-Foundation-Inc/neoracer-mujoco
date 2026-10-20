@@ -46,17 +46,13 @@ def _dataclasses(root: type) -> set[type]:
     return found
 
 
-@pytest.mark.parametrize(
-    "cls",
-    sorted(
-        _dataclasses(Spec) | _dataclasses(derive.DerivedParams),
-        key=lambda c: c.__name__,
-    ),
-    ids=lambda c: c.__name__,
-)
-def test_each_dataclass_is_an_interface_with_its_fields(cls):
-    fields = [f.name for f in dataclasses.fields(cls)]
-    assert [f for f in _interfaces()[cls.__name__] if f != "kind"] == fields
+def test_each_dataclass_is_an_interface_with_its_fields():
+    interfaces = _interfaces()
+    for cls in _dataclasses(Spec) | _dataclasses(derive.DerivedParams):
+        assert dataclasses.is_dataclass(cls)
+        fields = [f.name for f in dataclasses.fields(cls)]
+        got = [f for f in interfaces[cls.__name__] if f != "kind"]
+        assert got == fields, cls.__name__
 
 
 def test_the_statuses_carry_their_kind():

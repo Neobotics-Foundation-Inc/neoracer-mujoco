@@ -29,38 +29,30 @@ def _spin(omega: float, seconds: float) -> list[encoder.EncoderState]:
     return states
 
 
-def test_windows_close_fifty_times_a_second():
+def test_windows_close_on_the_firmwares_ticks():
     """The step does not divide 20 ms, but the windows close on the firmware's
-    20 ms ticks: 50 in a second, of seven or eight steps each."""
+    20 ms ticks: 50 in a second, of seven or eight steps each, and the speed
+    changes only when a window closes."""
     states = _spin(10.0, 1.0)
     closes = [i for i, s in enumerate(states) if s.span == 0.0]
     assert len(closes) == 50
     assert {b - a for a, b in itertools.pairwise(closes)} == {7, 8}
-
-
-def test_the_speed_changes_only_when_a_window_closes():
-    states = _spin(10.0, 0.5)
     for last, state in itertools.pairwise(states):
         if state.span != 0.0:
             assert state.speed == last.speed
 
 
-def test_the_first_window_reports_most_of_a_speed_step():
-    """From rest, the first window at a steady speed reports 0.95 of it: the
-    filter keeps 0.05 of the last value, 0."""
-    states = _spin(10.0, 0.03)
-    first = next(s for s in states if s.span == 0.0)
-    assert first.speed == pytest.approx(
-        encoder.EncoderParams().alpha * 10.0 * WHEEL_RADIUS
-    )
-
-
-def test_a_steady_speed_reads_the_tyres_surface_speed():
+def test_the_filter_converges_to_the_tyres_surface_speed():
     """Each window measures its own length, so at a steady speed every window
-    reads omega * r, whether it ran seven steps or eight, and the filter
-    converges to it."""
+    reads omega * r, whether it ran seven steps or eight. From rest, the
+    filter, which keeps 1 - alpha of its last value, then reports
+    (1 - (1 - alpha)^k) omega r at the k-th window."""
     omega = -12.0  # rad/s, backward
-    assert _spin(omega, 0.5)[-1].speed == pytest.approx(omega * WHEEL_RADIUS)
+    alpha = encoder.EncoderParams().alpha
+    windows = [s.speed for s in _spin(omega, 0.5) if s.span == 0.0]
+    for k, speed in enumerate(windows, start=1):
+        expected = (1 - (1 - alpha) ** k) * omega * WHEEL_RADIUS
+        assert speed == pytest.approx(expected), f"window {k}"
 
 
 def test_the_adapter_reads_the_car_speed(scene):

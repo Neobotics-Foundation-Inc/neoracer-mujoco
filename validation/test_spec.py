@@ -37,7 +37,8 @@ def scene():
 
 
 def test_every_value_of_the_spec_has_a_source():
-    """Each part's every field is a Sourced, and walk finds them all."""
+    """Each part's every field is a Sourced, walk finds them all, and every
+    conflict a value lists disagrees with it."""
     paths = []
     for part in dataclasses.fields(CAR):
         p = getattr(CAR, part.name)
@@ -46,9 +47,6 @@ def test_every_value_of_the_spec_has_a_source():
             assert isinstance(getattr(p, f.name), Sourced), path
             paths.append(path)
     assert [path for path, _ in provenance.walk(CAR)] == paths
-
-
-def test_a_conflict_disagrees_with_the_value():
     for path, s in provenance.walk(CAR):
         for alt in s.conflicts:
             assert alt.value != s.value, path
@@ -65,32 +63,36 @@ def test_the_xml_holds_the_numbers_derived_from_the_spec():
 BOX = CAR.chassis.collision_box.value
 
 
-@pytest.mark.parametrize(
-    "replace",
-    [
-        lambda c: dataclasses.replace(
-            c,
-            collision_box=value(
-                c.collision_box, spec.Box((0.02, 0.0, 0.07), BOX.half_size)
-            ),
-        ),
-        lambda c: dataclasses.replace(
-            c,
-            collision_box=value(
-                c.collision_box, spec.Box(BOX.center, (0.2, 0.1, 0.09))
-            ),
-        ),
-        lambda c: dataclasses.replace(c, wheelbase=value(c.wheelbase, 0.29)),
-        lambda c: dataclasses.replace(c, com_height=value(c.com_height, 0.02)),
-    ],
-)
-def test_a_change_to_the_chassis_changes_the_xml(replace):
+def test_a_change_to_the_chassis_changes_the_xml():
     """Every chassis value reaches the model: a car with one of them changed
     gets a different XML."""
     with open(assets.DEFAULT_CAR) as f:
         xml = f.read()
-    car = dataclasses.replace(CAR, chassis=replace(CAR.chassis))
-    assert mjcf.car_xml(derive.model(car), xml) != xml
+    c = CAR.chassis
+    for name, chassis in [
+        (
+            "collision box center",
+            dataclasses.replace(
+                c,
+                collision_box=value(
+                    c.collision_box, spec.Box((0.02, 0.0, 0.07), BOX.half_size)
+                ),
+            ),
+        ),
+        (
+            "collision box size",
+            dataclasses.replace(
+                c,
+                collision_box=value(
+                    c.collision_box, spec.Box(BOX.center, (0.2, 0.1, 0.09))
+                ),
+            ),
+        ),
+        ("wheelbase", dataclasses.replace(c, wheelbase=value(c.wheelbase, 0.29))),
+        ("com_height", dataclasses.replace(c, com_height=value(c.com_height, 0.02))),
+    ]:
+        car = dataclasses.replace(CAR, chassis=chassis)
+        assert mjcf.car_xml(derive.model(car), xml) != xml, name
 
 
 def test_the_derived_settings_are_the_sensor_modules_defaults():
@@ -111,41 +113,34 @@ def test_the_drive_motor_turns_at_its_free_speed_and_stalls_at_its_torque(scene)
     assert free == pytest.approx(math.radians(rating.free_speed_rpm * 6), rel=1e-5)
 
 
-@pytest.mark.parametrize("factor", [0.5, 2.0])
-def test_a_rewound_motor_stalls_in_proportion_to_its_free_speed(factor):
+def test_a_rewound_motor_stalls_in_proportion_to_its_free_speed():
     rating = CAR.motor.rating.value
-    faster = spec.rewound(rating, rating.free_speed_rpm * factor)
-    assert faster.stall_torque == pytest.approx(rating.stall_torque * factor)
-    assert faster.voltage == rating.voltage
+    for factor in (0.5, 2.0):
+        faster = spec.rewound(rating, rating.free_speed_rpm * factor)
+        assert faster.stall_torque == pytest.approx(rating.stall_torque * factor)
+        assert faster.voltage == rating.voltage
 
 
-@pytest.mark.parametrize("rating", [CAR.servo.low.value, CAR.servo.high.value])
-def test_the_servo_has_its_datasheet_rating_at_a_rated_voltage(rating):
-    servo = dataclasses.replace(
-        CAR.servo, supply=value(CAR.servo.supply, rating.voltage)
-    )
-    assert derive.servo_rating(servo) == pytest.approx(rating)
-
-
-def test_the_servo_turns_its_horn_to_the_drivers_lock_at_full_lock(scene):
-    """At full lock, the steering input times the linkage is the horn at
-    driver_lock of its half range, and the servo's loop is clamped to its
-    supply."""
-    servo = scene.model.bind_scalar(scene.car.steer)
-    lock = servo.ctrlrange[1]
-    horn = CAR.steering.driver_lock.value * CAR.servo.horn_half_range_degrees.value
-    assert lock * derive.linkage_ratio(CAR) == pytest.approx(math.radians(horn))
-    assert servo.gainprm[7] == CAR.servo.supply.value
+def test_the_servo_has_its_datasheet_rating_at_a_rated_voltage():
+    for rating in (CAR.servo.low.value, CAR.servo.high.value):
+        servo = dataclasses.replace(
+            CAR.servo, supply=value(CAR.servo.supply, rating.voltage)
+        )
+        assert derive.servo_rating(servo) == pytest.approx(rating), rating.voltage
 
 
 def test_the_servo_at_the_steering_input_is_its_rating_through_the_linkage(scene):
-    """The compiled servo stalls at the horn's torque times the linkage and
-    runs free at the horn's speed over it, the linkage being the horn's angle
-    at the driver's lock over full lock."""
+    """The linkage is the horn's angle at the driver's lock of its half range
+    over full lock. The compiled servo stalls at the horn's torque times the
+    linkage, runs free at the horn's speed over it, and its loop is clamped
+    to its supply."""
     servo = scene.model.bind_scalar(scene.car.steer)
     r, k, *_, vclamp = servo.gainprm[:8]
+    lock = servo.ctrlrange[1]
     horn = CAR.steering.driver_lock.value * CAR.servo.horn_half_range_degrees.value
-    linkage = math.radians(horn) / servo.ctrlrange[1]
+    linkage = math.radians(horn) / lock
+    assert derive.linkage_ratio(CAR) == pytest.approx(linkage)
+    assert vclamp == CAR.servo.supply.value
     rating = derive.servo_rating(CAR.servo)
     horn_stall = rating.stall_torque_kgf_cm * 9.80665 / 100  # N·m
     horn_free = math.radians(60) / rating.seconds_per_60_degrees  # rad/s
@@ -213,12 +208,10 @@ def test_a_car_whose_full_lock_leaves_the_fit_range_is_refused():
         dataclasses.replace(CAR, steering=steering)
 
 
-@pytest.mark.parametrize(
-    "x", [0.0, 0.1, -0.2, 3.0, 1151.917, -0.0000136675, 0.0425 + 0.001]
-)
-def test_a_number_reads_back_at_the_models_precision(x):
-    assert float(mjcf.number(x)) == derive.precise(x)
-    assert derive.precise(x) == pytest.approx(x, rel=5e-6)
+def test_a_number_reads_back_at_the_models_precision():
+    for x in (0.0, 0.1, -0.2, 3.0, 1151.917, -0.0000136675, 0.0425 + 0.001):
+        assert float(mjcf.number(x)) == derive.precise(x), x
+        assert derive.precise(x) == pytest.approx(x, rel=5e-6), x
 
 
 def test_the_spec_runs_without_mujoco():
@@ -232,12 +225,9 @@ def test_the_spec_runs_without_mujoco():
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-@pytest.mark.parametrize(
-    "path",
-    sorted(pathlib.Path(neoracer_spec.__file__).parent.glob("*.py")),
-    ids=lambda p: p.name,
-)
-def test_the_spec_keeps_to_the_python_of_pyodide(path):
+def test_the_spec_keeps_to_the_python_of_pyodide():
     """The browser's Pyodide runs Python 3.12: the package keeps to its
     syntax."""
-    ast.parse(path.read_text(encoding="utf-8"), feature_version=(3, 12))
+    for path in sorted(pathlib.Path(neoracer_spec.__file__).parent.glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        ast.parse(source, filename=path.name, feature_version=(3, 12))

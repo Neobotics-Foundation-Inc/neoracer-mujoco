@@ -128,13 +128,16 @@ def test_sample_draws_each_factor_from_its_range():
         assert p.steer_stiffness == 1.0
 
 
-@pytest.mark.parametrize(
-    ("low", "high"),
-    [(0.0, 1.0), (-0.5, 1.0), (1.2, 1.1), (1.0, math.inf), (math.nan, 1.0)],
-)
-def test_a_range_needs_0_below_low_below_high(low, high):
-    with pytest.raises(ValueError, match="range"):
-        Range(low, high)
+def test_a_range_needs_0_below_low_below_high():
+    for low, high in [
+        (0.0, 1.0),
+        (-0.5, 1.0),
+        (1.2, 1.1),
+        (1.0, math.inf),
+        (math.nan, 1.0),
+    ]:
+        with pytest.raises(ValueError, match="range"):
+            Range(low, high)
 
 
 def test_a_range_of_one_value_takes_no_draw():
@@ -145,10 +148,10 @@ def test_a_range_of_one_value_takes_no_draw():
     assert rng.uniform() == np.random.default_rng(0).uniform()
 
 
-@pytest.mark.parametrize("bad", [0.0, -1.0, math.inf, math.nan])
-def test_a_physics_factor_must_be_finite_and_positive(bad):
-    with pytest.raises(ValueError, match="chassis_mass"):
-        Physics(chassis_mass=bad)
+def test_a_physics_factor_must_be_finite_and_positive():
+    for bad in (0.0, -1.0, math.inf, math.nan):
+        with pytest.raises(ValueError, match="chassis_mass"):
+            Physics(chassis_mass=bad)
 
 
 def test_field_rows_gives_each_row_its_physics():
@@ -157,8 +160,7 @@ def test_field_rows_gives_each_row_its_physics():
     scene = _scene()
     a, b = Physics(), CHANGED
     rows = physics.field_rows(scene, [a, b, a, b, b])
+    models = {a: _applied(scene, a), b: _applied(scene, b)}
     for name in physics.FIELDS:
-        expected = [
-            np.asarray(physics.field(_applied(scene, p), name)) for p in (a, b, a, b, b)
-        ]
+        expected = [np.asarray(physics.field(models[p], name)) for p in (a, b, a, b, b)]
         np.testing.assert_array_equal(rows[name], np.stack(expected), err_msg=name)

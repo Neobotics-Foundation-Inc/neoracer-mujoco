@@ -32,15 +32,15 @@ def _speed(scene, data) -> float:
     return float(np.linalg.norm(data.bind_scalar(scene.car.joint).qvel[0:2]))  # vx, vy
 
 
-@pytest.mark.parametrize("throttle", [-3.0, -1.0, 0.3, 1.0, 3.0])
-def test_next_state_reaches_the_clipped_input_without_overshoot(throttle):
-    state, seen = DriveState(), []
-    for _ in range(100):
-        state = next_state(P, state, throttle, -throttle, DT)
-        seen.append(state.throttle)
-    target = max(-1.0, min(1.0, throttle))
-    assert state.throttle == target and state.steer == -target
-    assert all(abs(t) <= abs(target) for t in seen)
+def test_next_state_reaches_the_clipped_input_without_overshoot():
+    for throttle in (-3.0, -1.0, 0.3, 1.0, 3.0):
+        state, seen = DriveState(), []
+        for _ in range(100):
+            state = next_state(P, state, throttle, -throttle, DT)
+            seen.append(state.throttle)
+        target = max(-1.0, min(1.0, throttle))
+        assert state.throttle == target and state.steer == -target, throttle
+        assert all(abs(t) <= abs(target) for t in seen), throttle
 
 
 def test_next_state_cuts_a_long_frame():
@@ -77,25 +77,26 @@ def test_car_tops_out_then_brakes_when_the_throttle_is_released():
     assert _speed(scene, data) < 0.5 * v_release
 
 
-@pytest.mark.parametrize("steer", [-1.0, -0.5, 0.5, 1.0])
-def test_held_steer_input_sets_the_steer_ctrl(steer):
+def test_held_steer_input_sets_the_steer_ctrl():
     """A steer input in [-1, 1], held for 1 s, writes steer * max_steer (rad)
     to the steer servo."""
     scene = assets.load()
-    data = mujoco.MjData(scene.model)
-    _drive(scene, data, DriveState(), 0.0, steer, 50)  # 1 s
-    assert data.bind_scalar(scene.car.steer).ctrl[0] == pytest.approx(
-        steer * P.max_steer
-    )
+    for steer in (-1.0, -0.5, 0.5, 1.0):
+        data = mujoco.MjData(scene.model)
+        _drive(scene, data, DriveState(), 0.0, steer, 50)  # 1 s
+        assert data.bind_scalar(scene.car.steer).ctrl[0] == pytest.approx(
+            steer * P.max_steer
+        ), steer
 
 
-@pytest.mark.parametrize("track", assets.tracks(), ids=os.path.basename)
-def test_car_drives_forward_on_every_track(track):
-    scene = assets.compose(mujoco.MjSpec.from_file(track))
-    data = mujoco.MjData(scene.model)
-    x0 = float(data.bind_scalar(scene.car.joint).qpos[0])
-    # Distance, not the final speed: in 0.5 s at full throttle the car can
-    # reach the scenery ahead of it, such as ramp_course's entry lip, 0.45 m
-    # from the start.
-    _drive(scene, data, DriveState(), 1.0, 0.0, 25)  # 0.5 s
-    assert float(data.bind_scalar(scene.car.joint).qpos[0]) - x0 > 0.1
+def test_car_drives_forward_on_every_track():
+    for track in assets.tracks():
+        scene = assets.compose(mujoco.MjSpec.from_file(track))
+        data = mujoco.MjData(scene.model)
+        x0 = float(data.bind_scalar(scene.car.joint).qpos[0])
+        # Distance, not the final speed: in 0.5 s at full throttle the car can
+        # reach the scenery ahead of it, such as ramp_course's entry lip, 0.45 m
+        # from the start.
+        _drive(scene, data, DriveState(), 1.0, 0.0, 25)  # 0.5 s
+        moved = float(data.bind_scalar(scene.car.joint).qpos[0]) - x0
+        assert moved > 0.1, os.path.basename(track)

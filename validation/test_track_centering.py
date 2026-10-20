@@ -1,21 +1,19 @@
 """
 Laws for neoracer_mujoco.control.track_centering.
 
-The pure-logic tests call step() and compute_signals() with fake
-SensorReadings and do not use the simulator. The last test runs the
-controller on the car in straight_corridor.xml.
+The tests call step() and compute_signals() with fake SensorReadings and
+do not use the simulator. test_steering.py has the laws of the steer and
+throttle shaping, and test_track_centering_demo.py runs the controller on
+the car.
 
 Steer sign: + = left (contract.py).
 """
 
-import mujoco
 import numpy as np
 import pytest
 from fake_sensors import beams, mirror, random_beams
-from scenes import corridor_scene
 
-from neoracer_mujoco import sensors, sim
-from neoracer_mujoco.control import PDState
+from neoracer_mujoco.control import PDState, steering
 from neoracer_mujoco.control.track_centering import (
     TrackCenteringConfig,
     compute_signals,
@@ -33,11 +31,6 @@ def _random_state(rng: np.random.Generator) -> PDState:
         prev_error=float(rng.uniform(-3.0, 3.0)),
         prev_steer=float(rng.uniform(-limit, limit)),
     )
-
-
-def test_equal_left_right_is_neutral():
-    _, control = step(CFG, PDState(), beams(), DT)
-    assert control.steer == pytest.approx(0.0, abs=1e-9)
 
 
 def test_mirrored_scene_gives_mirrored_command():
@@ -98,61 +91,22 @@ def test_nose_toward_left_wall_steers_right():
         assert control.steer < 0.0
 
 
-def test_steer_never_exceeds_the_steer_limit():
-    rng = np.random.default_rng(3)
-    for _ in range(500):
-        _, control = step(CFG, _random_state(rng), random_beams(rng), DT)
-        assert abs(control.steer) <= CFG.shaping.steer_limit
-
-
-def test_steer_saturates_at_the_steer_limit():
-    readings = beams(
-        lidar_045=10.0,
-        lidar_090=10.0,
-        lidar_135=10.0,
-        lidar_225=0.05,
-        lidar_270=0.05,
-        lidar_315=0.05,
-    )
-    state = PDState()
-    for _ in range(200):  # 4 s: the steer rate limit lets the steer reach its limit
-        state, control = step(CFG, state, readings, DT)
-    assert control.steer == pytest.approx(CFG.shaping.steer_limit, abs=1e-6)
-
-
-def test_step_is_a_pure_function():
-    """step() keeps no hidden state: the same (state, readings) gives the
-    same result, also after calls with other inputs."""
-    rng = np.random.default_rng(4)
-    cases = [(_random_state(rng), random_beams(rng)) for _ in range(200)]
-    first = [step(CFG, state, readings, DT) for state, readings in cases]
-    again = [step(CFG, state, readings, DT) for state, readings in reversed(cases)]
-    assert first == again[::-1]
-
-
-def test_invalid_readings_trigger_safe_fallback():
-    """If every beam is NaN, the corrupt count is above
-    CFG.max_corrupt_beams. step() then returns the fallback command."""
-    readings = beams(**{name: float("nan") for name in LIDAR_BEAM_ORDER})
-    assert compute_signals(readings, CFG).n_corrupt > CFG.max_corrupt_beams
-    _, control = step(CFG, PDState(), readings, DT)
-    assert control.throttle == pytest.approx(
-        CFG.shaping.target_throttle * CFG.shaping.safe_fallback_throttle_fraction
-    )
-    assert abs(control.steer) < 0.05, (
-        "fallback must not issue an extreme steering command"
-    )
-
-
-def test_infinite_readings_also_trigger_fallback():
+def test_too_many_corrupt_beams_give_the_fallback():
+    """If every beam is NaN, or every beam infinite, the corrupt count is
+    above CFG.max_corrupt_beams, and step() returns steering.fallback."""
     infinities = (float("inf"), float("-inf"))
-    readings = beams(
-        **{name: infinities[i % 2] for i, name in enumerate(LIDAR_BEAM_ORDER)}
-    )
-    _, control = step(CFG, PDState(), readings, DT)
-    assert control.throttle == pytest.approx(
-        CFG.shaping.target_throttle * CFG.shaping.safe_fallback_throttle_fraction
-    )
+    state = PDState(prev_error=0.4, prev_steer=0.2)
+    for name, readings in [
+        ("nan", beams(**{n: float("nan") for n in LIDAR_BEAM_ORDER})),
+        (
+            "inf",
+            beams(**{n: infinities[i % 2] for i, n in enumerate(LIDAR_BEAM_ORDER)}),
+        ),
+    ]:
+        assert compute_signals(readings, CFG).n_corrupt > CFG.max_corrupt_beams, name
+        assert step(CFG, state, readings, DT) == steering.fallback(
+            CFG.shaping, state, DT
+        ), name
 
 
 def test_no_hit_reading_is_not_treated_as_corrupt():
@@ -162,51 +116,3 @@ def test_no_hit_reading_is_not_treated_as_corrupt():
     signals = compute_signals(readings, CFG)
     assert signals.n_corrupt == 0
     assert signals.lateral_error == pytest.approx(0.0)
-
-
-def test_throttle_decreases_for_sharp_steering_correction():
-    _, straight = step(CFG, PDState(), beams(), DT)
-    state = PDState()
-    readings = beams(lidar_045=0.2, lidar_090=0.2, lidar_135=0.2)
-    for _ in range(200):  # 4 s
-        state, sharp = step(CFG, state, readings, DT)
-    assert sharp.throttle < straight.throttle
-
-
-def test_throttle_decreases_for_close_forward_obstacle():
-    _, clear = step(CFG, PDState(), beams(lidar_000=CFG.max_beam_range), DT)
-    _, blocked = step(CFG, PDState(), beams(lidar_000=0.1), DT)
-    assert blocked.throttle < clear.throttle
-    assert blocked.throttle == pytest.approx(0.0, abs=1e-9)
-
-
-# --- physics integration: the compiled car in the corridor --------------------
-
-
-def test_controller_stable_on_corridor():
-    """Run the controller on the car in the corridor for 3 s. The values stay
-    finite, the steer stays in the actuator range, the car stays upright and
-    it does not drive into a wall."""
-    scene = corridor_scene()
-    model, car = scene.model, scene.car
-    data = sim.settle(model)
-    data.bind_scalar(car.joint).qpos[1] += 0.25  # m, toward the left wall
-    mujoco.mj_forward(model, data)
-
-    dt = model.opt.timestep
-    steer_low, steer_high = model.bind_scalar(car.steer).ctrlrange
-    state = PDState()
-    min_front = float("inf")
-    for _ in range(round(3.0 / dt)):  # 3 s
-        readings = sensors.read(car.sensors, data)
-        state, control = step(CFG, state, readings, dt)
-        sim.apply_command(car, data, control)
-        mujoco.mj_step(model, data)
-
-        assert steer_low <= control.steer <= steer_high
-        assert np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel))
-        min_front = min(min_front, compute_signals(readings, CFG).front_distance)
-
-    upright_cos = sim.car_upright_cos(data, car)
-    assert upright_cos > 0.7, "car should not have flipped during the run"
-    assert min_front > 0.05, "controller should not have driven straight into a wall"
