@@ -27,7 +27,7 @@
                   reflectance=".2"/>
 
         <!-- Cosmetic meshes (meters, in the car body's frame), one per part and
-             color: RacecarSim's model of the car, RacecarNeoV2.fbx, decimated.
+             color: RacecarSim's model of the car, RacecarNeoV2.fbx.
              Its wheelbase is 225 mm, so it is placed by its rear axle, and its
              front wheels are 5 mm behind the model's. Its payload, everything
              on the chassis' body posts, is lowered 6.6 mm, so that its LiDAR is
