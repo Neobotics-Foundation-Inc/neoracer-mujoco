@@ -26,7 +26,7 @@ are in base_link, on the floor below the rear axle; body() moves them.
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -325,8 +325,13 @@ class ModelParams:
 
 def model(spec: RacecarNeoV2) -> ModelParams:
     c, sh, w, s = spec.chassis, spec.shape, spec.wheel, spec.suspension
+    drop = sh.payload_drop.value
     top = spec.footprint.antenna_top.value
-    bottom = sh.antenna_bottom.value
+    bottom = sh.antenna_bottom.value - drop
+    payload = tuple(
+        replace(b, center=(b.center[0], b.center[1], b.center[2] - drop))
+        for b in sh.payload_boxes.value
+    )
     refs = spring_refs(spec)
     return ModelParams(
         # 1 mm above its resting height, the axles at the tyre radius
@@ -336,7 +341,7 @@ def model(spec: RacecarNeoV2) -> ModelParams:
         chassis_inertia=_precise3(chassis_inertia(spec)),
         boxes=tuple(
             Box(b.name, _precise3(body(spec, b.center)), _precise3(b.half_size))
-            for b in sh.boxes.value
+            for b in sh.chassis_boxes.value + payload
         ),
         antenna_center=_precise3(
             body(spec, (sh.antenna_x.value, sh.antenna_y.value, (top + bottom) / 2))

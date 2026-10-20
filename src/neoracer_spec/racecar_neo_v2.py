@@ -25,6 +25,11 @@ ratings, and the car's firmware holds a speed rather than a voltage. So its
 parts are its own types, not those of spec.py, and derive_v2.py turns them
 into its MuJoCo model.
 
+For the designer of RacecarSim's model of the car, racecarsim_questions
+lists where that model disagrees with the car, as conflicts from
+RACECARSIM_MODEL or from MODEL, the worksheet's column that checks it, and
+the values the spec takes from it unchecked or corrects.
+
 Frame: the car's base_link, on the floor below the middle of the rear axle
 (REP-103): +X forward, +Y left, +Z up. Values are in SI units unless a
 field's name says otherwise.
@@ -35,6 +40,8 @@ from typing import Literal
 
 from .provenance import (
     Alternative,
+    Assumed,
+    Calibrated,
     Source,
     Sourced,
     assumed,
@@ -43,6 +50,7 @@ from .provenance import (
     documented,
     estimated,
     measured,
+    walk,
 )
 from .spec import Vec3
 
@@ -167,11 +175,18 @@ class NamedBox:
 
 @dataclass(frozen=True)
 class Shape:
-    """What the car's body collides with, and what the LiDAR sees of it."""
+    """What the car's body collides with, and what the LiDAR sees of it.
 
-    # The body less the wheels and the antennas, as boxes.
-    boxes: Sourced[tuple[NamedBox, ...]]
-    # Two upright whips at the rear, one each side, within the LiDAR's sweep.
+    The payload is everything on the chassis' body posts. Its values here are
+    as RacecarSim's model has it; the car's payload is payload_drop lower."""
+
+    # The chassis less the wheels, and the payload less the antennas, as boxes.
+    chassis_boxes: Sourced[tuple[NamedBox, ...]]
+    payload_boxes: Sourced[tuple[NamedBox, ...]]
+    payload_drop: Sourced[float]  # m
+    payload_bottom: Sourced[float]  # m, z of its underside
+    # Two upright whips at the payload's rear, one each side, within the
+    # LiDAR's sweep.
     antenna_x: Sourced[float]  # m, of their axes
     antenna_y: Sourced[float]  # m, of the left one's axis; the right one's is -y
     antenna_bottom: Sourced[float]  # m, z; Footprint.antenna_top is their top
@@ -336,8 +351,19 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         ride_height=assumed(0.0205, MODEL, "the model's; not yet measured"),
     ),
     footprint=Footprint(
-        front=measured(0.2875, C_L, conflicts=(Alternative(0.286, M_Z),)),
-        rear=measured(-0.0597, C_L, conflicts=(Alternative(-0.059, M_Z),)),
+        front=measured(
+            0.2875,
+            C_L,
+            conflicts=(Alternative(0.286, M_Z), Alternative(0.2933, RACECARSIM_MODEL)),
+        ),
+        rear=measured(
+            -0.0597,
+            C_L,
+            conflicts=(
+                Alternative(-0.059, M_Z),
+                Alternative(-0.0613, RACECARSIM_MODEL),
+            ),
+        ),
         left=measured(0.1045, C_L, conflicts=(Alternative(0.104, M_Z),)),
         right=measured(
             -0.1045,
@@ -352,27 +378,43 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         antenna_top=measured(0.275, C_L, conflicts=(Alternative(0.267, MODEL),)),
     ),
     shape=Shape(
-        boxes=measured(
+        chassis_boxes=measured(
             (
                 NamedBox("chassis", (0.1286, 0.0, 0.06125), (0.1646, 0.1045, 0.04075)),
                 NamedBox(
                     "rear_bumper", (-0.0339, 0.0, 0.0438), (0.0274, 0.0925, 0.0272)
                 ),
-                NamedBox("shell_rear", (0.08125, 0.0, 0.1379), (0.10125, 0.1, 0.0425)),
+            ),
+            RACECARSIM,
+            note="its boxes, fitted to its model",
+        ),
+        payload_boxes=measured(
+            (
+                NamedBox("shell_rear", (0.08125, 0.0, 0.1445), (0.10125, 0.1, 0.0425)),
                 NamedBox(
-                    "shell_front", (0.23125, 0.0, 0.1229), (0.04875, 0.0525, 0.0275)
+                    "shell_front", (0.23125, 0.0, 0.1295), (0.04875, 0.0525, 0.0275)
                 ),
-                NamedBox("lidar_stack", (0.2385, 0.0, 0.1674), (0.035, 0.035, 0.017)),
+                NamedBox("lidar_stack", (0.2385, 0.0, 0.174), (0.035, 0.035, 0.017)),
                 NamedBox(
-                    "lidar_head", (0.23825, 0.0, 0.19415), (0.035, 0.035, 0.00975)
+                    "lidar_head", (0.23825, 0.0, 0.20075), (0.035, 0.035, 0.00975)
                 ),
             ),
             RACECARSIM,
-            note="its boxes, fitted to its model, with those of the payload on the"
-            " chassis' body posts 6.6 mm lower, as the model's meshes are: its"
-            " model has the LiDAR 6.6 mm, the camera 7 and the IMU 8.5 mm higher"
-            " than they are measured. Its model's front is 293 mm ahead of the"
-            " rear axle, where the car's is 287.5 (Footprint)",
+            note="its boxes, fitted to its model",
+        ),
+        payload_drop=calibrated(
+            0.0066,
+            RACECARSIM_MODEL,
+            "the car's LiDAR, 195 mm high, which RacecarSim's model has at 201.6",
+            note="its model has the camera 7 mm and the IMU 8.5 mm higher than they"
+            " are measured, too. The MuJoCo model's meshes are lowered by it",
+        ),
+        payload_bottom=assumed(
+            0.100,
+            RACECARSIM_MODEL,
+            "not yet measured. In RacecarSim's model it is about 30 mm above the"
+            " chassis' parts below it, so that the payload looks to float over"
+            " them; in photos of the car the payload looks to reach lower",
         ),
         antenna_x=measured(-0.030, RACECARSIM_MODEL),
         antenna_y=measured(
@@ -381,9 +423,7 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             note="the reference car's scans see them 0.27 m behind the LiDAR,"
             " 8.5 degrees to its left and 11 to its right",
         ),
-        antenna_bottom=measured(
-            0.1234, RACECARSIM_MODEL, note="130 mm, lowered with the payload"
-        ),
+        antenna_bottom=measured(0.130, RACECARSIM_MODEL),
         antenna_diameter=measured(
             0.009,
             RACECARSIM_MODEL,
@@ -630,3 +670,16 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         pitch_degrees=measured(0.0, C_L),
     ),
 )
+
+
+def racecarsim_questions(spec: RacecarNeoV2) -> list[tuple[str, Sourced[object]]]:
+    """The values where RacecarSim's model of the car disagrees with the car,
+    or that the spec takes from it unchecked or corrects, with their paths:
+    what the model's designer could fix, or have measured."""
+    models = (MODEL, RACECARSIM_MODEL)
+    return [
+        (path, s)
+        for path, s in walk(spec)
+        if any(a.source in models for a in s.conflicts)
+        or (isinstance(s.status, Assumed | Calibrated) and s.status.source in models)
+    ]

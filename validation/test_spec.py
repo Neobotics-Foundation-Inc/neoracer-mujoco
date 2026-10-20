@@ -20,7 +20,15 @@ import pytest
 
 import neoracer_spec
 from neoracer_mujoco import assets, encoder, lidar, sim
-from neoracer_spec import ackermann, derive, derive_v2, mjcf, provenance, spec
+from neoracer_spec import (
+    ackermann,
+    derive,
+    derive_v2,
+    mjcf,
+    provenance,
+    racecar_neo_v2,
+    spec,
+)
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.provenance import Sourced
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
@@ -117,6 +125,29 @@ def test_the_v2_rests_in_the_middle_of_its_travel():
     data = sim.settle(scene.model)
     for name in ("fl_susp", "fr_susp", "rl_susp", "rr_susp"):
         assert abs(data.joint(name).qpos[0]) < 0.001, name
+
+
+def test_the_v2_spec_lists_its_questions_for_racecarsim():
+    """racecarsim_questions finds where RacecarSim's model of the V2 is not
+    the car: each value with a conflict from that model, and each the spec
+    takes from it unchecked or corrects."""
+    questions = racecar_neo_v2.racecarsim_questions(RACECAR_NEO_V2)
+    assert [path for path, _ in questions] == [
+        "chassis.wheelbase",
+        "chassis.ride_height",
+        "footprint.front",
+        "footprint.rear",
+        "footprint.right",
+        "footprint.lidar_top",
+        "footprint.antenna_top",
+        "shape.payload_drop",
+        "shape.payload_bottom",
+        "lidar.position",
+        "lidar.samples",
+        "lidar.scan_rate",
+        "imu.position",
+        "camera.bottom",
+    ]
 
 
 def test_a_change_to_the_chassis_changes_the_xml():

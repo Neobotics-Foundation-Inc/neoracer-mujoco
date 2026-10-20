@@ -284,6 +284,7 @@ The RACECAR Neo V2's model drives a reference car's calibration runs as the car 
 - **Speed.** After a start the car's speed peaks about 15% above its steady speed for a second; the model's does not. In a long full-lock circle the car slows to 0.56 m/s, the model to 0.59 to 0.61 m/s.
 - **Mass, springs and tyres.** The inertia, the springs and the wheels' mass are RacecarSim's estimates. The tyres' grip is fitted, and MuJoCo's contacts are not a tyre model: at full lock the model's yaw rate wobbles by 3% at about 20 Hz.
 - **Steering.** The servo's deadband and the linkage's play, which make the car drift up to 2.7 degrees a metre at command 0, are not modelled.
+- **Shape.** The meshes and the collision boxes are RacecarSim's model of the car, with the payload lowered 6.6 mm to put the LiDAR at its measured height. Even so, the model's payload floats over the chassis, where the car's looks to reach lower; nobody has measured how low. `racecar_neo_v2.racecarsim_questions` lists where RacecarSim's model and the car disagree, for the model's designer.
 - **Sensors.** The encoder over-reads in a full-lock turn by 3.4 to 3.6%, where the car's reads 2.5 to 4.2% high. The sensors have no noise or bias, and there is no camera.
 
 ## Citing

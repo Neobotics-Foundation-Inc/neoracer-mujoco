@@ -30,9 +30,10 @@
              color: RacecarSim's model of the car, RacecarNeoV2.fbx.
              Its wheelbase is 225 mm, so it is placed by its rear axle, and its
              front wheels are 5 mm behind the model's. Its payload, everything
-             on the chassis' body posts, is lowered 6.6 mm, so that its LiDAR is
-             at the measured height. Each wheel's meshes are centred on the
-             wheel. None of these affect physics. -->
+             on the chassis' body posts, is lowered 6.6 mm, the spec's
+             Shape.payload_drop, so that its LiDAR is at the measured height.
+             Each wheel's meshes are centred on the wheel. None of these affect
+             physics. -->
         <mesh name="vis_body_1f1f1f" file="meshes/racecar_neo_v2/body_1f1f1f.STL"/>
         <mesh name="vis_body_424242" file="meshes/racecar_neo_v2/body_424242.STL"/>
         <mesh name="vis_body_bac4cc" file="meshes/racecar_neo_v2/body_bac4cc_metal.STL"/>
