@@ -41,6 +41,8 @@ python -m neoracer_mujoco.write_car assets          # the numbers in assets/neor
 python -m neoracer_spec.typescript js/src/spec.ts   # the spec as TypeScript, for js/
 ```
 
+A second car, the RACECAR Neo V2, has a spec in `src/neoracer_spec/racecar_neo_v2.py`, taken from its measurement worksheet. That worksheet measures what the car does, such as its turning radius and its speed at each command, rather than its motor's and servo's ratings. So the V2's parts have their own types, and the car has no model yet.
+
 ## A scene
 
 MuJoCo compiles an `MjSpec`, the editable model, into an `MjModel`, the arrays it simulates. A `Scene` keeps both, along with the car's parts:

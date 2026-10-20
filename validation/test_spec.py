@@ -1,6 +1,6 @@
 """
-Laws for neoracer_spec: every value of the NeoRacer's specification has a
-source, the car's XML holds the numbers derived from it, each derivation
+Laws for neoracer_spec: every value of a car's specification has a source,
+the NeoRacer's XML holds the numbers derived from its spec, each derivation
 keeps what it derives from, the settings beside the model are the sensor
 modules' defaults, and the package runs without MuJoCo in the Python of the
 browser's Pyodide.
@@ -21,6 +21,7 @@ from neoracer_mujoco import assets, encoder, lidar
 from neoracer_spec import ackermann, derive, mjcf, provenance, spec
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.provenance import Sourced
+from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
 
 CAR = NEORACER
 MODEL = derive.model(CAR)
@@ -36,20 +37,22 @@ def scene():
     return assets.load()
 
 
-def test_every_value_of_the_spec_has_a_source():
-    """Each part's every field is a Sourced, walk finds them all, and every
-    conflict a value lists disagrees with it."""
-    paths = []
-    for part in dataclasses.fields(CAR):
-        p = getattr(CAR, part.name)
-        for f in dataclasses.fields(p):
-            path = f"{part.name}.{f.name}"
-            assert isinstance(getattr(p, f.name), Sourced), path
-            paths.append(path)
-    assert [path for path, _ in provenance.walk(CAR)] == paths
-    for path, s in provenance.walk(CAR):
-        for alt in s.conflicts:
-            assert alt.value != s.value, path
+def test_every_value_of_a_car_has_a_source():
+    """In every car's spec, each part's every field is a Sourced, walk finds
+    them all, and every conflict a value lists disagrees with it."""
+    for car in (NEORACER, RACECAR_NEO_V2):
+        paths = []
+        for part in dataclasses.fields(car):
+            p = getattr(car, part.name)
+            for f in dataclasses.fields(p):
+                path = f"{type(car).__name__}.{part.name}.{f.name}"
+                assert isinstance(getattr(p, f.name), Sourced), path
+                paths.append(path)
+        walked = [f"{type(car).__name__}.{path}" for path, _ in provenance.walk(car)]
+        assert walked == paths
+        for path, s in provenance.walk(car):
+            for alt in s.conflicts:
+                assert alt.value != s.value, path
 
 
 def test_the_xml_holds_the_numbers_derived_from_the_spec():
