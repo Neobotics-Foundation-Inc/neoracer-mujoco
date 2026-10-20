@@ -235,6 +235,8 @@ class Stamped[T]:
 - Order a module from the top down. It starts with what it is for: its main type, or the functions that callers use.
   What they use follows, in the order they use it.
   Python 3.14 evaluates annotations lazily, so a type can name types defined below it.
+  `neoracer_spec` also runs on the browser's Python 3.12, so a module there whose types name types below them
+  starts with `from __future__ import annotations`.
 - Put a constant just above its first use, unless it is part of the module's interface, like the names in `contract.py`.
   A car's sources go just above the car's values, under one comment.
 - Load package files with `importlib.resources`, not with paths built from `__file__`.

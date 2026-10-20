@@ -11,6 +11,8 @@ Frame: +X forward, +Y left, +Z up. A position is in the car's body frame:
 its origin at the middle of the wheelbase, on the axle line.
 """
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 from typing import Literal

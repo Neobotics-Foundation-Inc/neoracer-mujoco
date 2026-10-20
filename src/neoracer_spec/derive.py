@@ -10,6 +10,8 @@ digits (precise), so the code and the XML hold the same floats.
 Frame: +X forward, +Y left, +Z up; angles in rad.
 """
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 
