@@ -37,11 +37,32 @@ The simulators don't read the spec directly. `derive(spec)` computes what they n
 After you edit the spec, regenerate the two files that come from it. A test fails if either one is stale.
 
 ```sh
-python -m neoracer_mujoco.write_car assets          # the numbers in assets/neoracer.xml
+python -m neoracer_mujoco.write_car assets          # the numbers in the cars' XML in assets/
 python -m neoracer_spec.typescript js/src/spec.ts   # the spec as TypeScript, for js/
 ```
 
-A second car, the RACECAR Neo V2, has a spec in `src/neoracer_spec/racecar_neo_v2.py`. Its values come from its measurement worksheet and from the calibration runs of a reference car. Those sources measure what the car does, such as its turning radius and its speed at each command, rather than its motor's and servo's ratings. Values that a calibration fitted against a reference, such as the LiDAR's mounting angle, are `Calibrated`. So the V2's parts have their own types, and the car has no model yet.
+## The RACECAR Neo V2
+
+A second car, the RACECAR Neo V2, has a spec in `src/neoracer_spec/racecar_neo_v2.py` and a model in `assets/racecar_neo_v2.xml`. Its values come from its measurement worksheet, from the calibration runs of a reference car, and from RacecarSim, the RACECAR Neo simulator in Unity, whose model of the car gives its shape and its meshes. These sources measure what the car does, such as its turning radius and its speed at each command, rather than its motor's and servo's ratings. So the V2's parts have their own types, and `derive_v2` turns them into the model's numbers. Values fitted against a reference are `Calibrated`: the LiDAR's mounting angle, and the model's own fits to the reference car's runs, such as the gain of its speed controller. `validation/test_racecar_neo_v2.py` drives those runs on the model and holds it to them.
+
+The V2's firmware holds a speed, so its throttle is a speed command. At 0 the car coasts to a stop on its drag brake; any other throttle holds at least 0.6 m/s, and 1 holds 1.07 m/s. The steer is in radians, as on the NeoRacer, and the car reaches its steering stops at about half of full lock to the right:
+
+```python
+import os
+
+from neoracer_mujoco import assets, lidar, sim
+from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_spec import derive_v2
+from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
+
+scene = assets.load(os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml"))
+params = derive_v2.derive(RACECAR_NEO_V2)  # its LiDAR has 1080 samples a turn
+data = sim.settle(scene.model)
+sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.0))  # 0.84 m/s
+scan = lidar.start(params.lidar, scene.model, data, scene.car).scan
+```
+
+The `racecar_core` adapter still has the NeoRacer's LiDAR and encoder.
 
 ## A scene
 
@@ -152,9 +173,9 @@ state.scan  # the last full turn: 1440 distances (m), clockwise from the front
 python examples/run_racecar_core.py my_controller.py
 ```
 
-## Another car
+## A variant of the NeoRacer
 
-A different car is a different `Spec`. The model is derived from the spec, so everything that depends on a change follows it. For example, a heavier chassis also gets more inertia, and a spring preload that carries the extra weight:
+A variant of the NeoRacer is a different `Spec`. The model is derived from the spec, so everything that depends on a change follows it. For example, a heavier chassis also gets more inertia, and a spring preload that carries the extra weight:
 
 ```python
 from dataclasses import replace
@@ -210,7 +231,7 @@ cpu.close()
   - controllers, in `control/`;
   - the `racecar_core` adapter.
 - Code that two modules share goes in a module both of them import. For example, the steering limits and throttle shaping that both controllers use are in `control/steering.py`.
-- `assets/` holds `neoracer.xml` (its structure is written by hand and its numbers by `write_car`), the meshes (Git LFS objects) and the tracks.
+- `assets/` holds `neoracer.xml` and `racecar_neo_v2.xml` (their structure is written by hand and their numbers by `write_car`), the meshes (Git LFS objects) and the tracks.
 - `js/` is the same car in MuJoCo's WebAssembly build. See [js/README.md](js/README.md).
 - `examples/` holds runnable programs, `validation/` the tests, and `users/<github-name>/` personal experiments.
 
@@ -250,14 +271,20 @@ Run these from a clone; the examples aren't in the wheel.
 | `python -m examples.track_generation` | generate tracks and describe them; add `--drive` under `mjpython` to drive one |
 | `python examples/run_racecar_core.py CONTROLLER.py` | run a `racecar_core` program in the simulator |
 
-## How close the model is to the real car
+## How close the models are to the real cars
 
-Nobody has checked the model against recordings of the real car yet (issue #4). Use it to develop and compare controllers, not to predict lap times. These are the known gaps:
+Nobody has checked the NeoRacer's model against recordings of the real car yet (issue #4). Use it to develop and compare controllers, not to predict lap times. These are the known gaps:
 - **Speed.** At full throttle the car tops out at about 3.5 m/s, from the RS-545 motor at the docs' 11,000 rpm. The wheel damping is a guess that stands in for every drivetrain loss. The firmware's speed controller isn't modelled, so the throttle is a fraction of the battery voltage (issue #118).
 - **Mass and inertia.** The 3.0 kg total comes from the spec; nobody has weighed the car. The inertia and the height of the centre of mass come from an older car's URDF.
 - **Tyres and suspension.** The tyre friction and the springs are estimates.
 - **Steering.** At full lock the inner front wheel turns to the measured 30 degrees. The model's servo swings from full left to full right in 0.16 s. People who drive the real car find its steering slower (issue #115).
 - **Sensors.** They have no noise, bias or latency, and the IMU never saturates. The LiDAR has no minimum range and never misses a return. There is no camera (issue #3).
+
+The RACECAR Neo V2's model drives a reference car's calibration runs as the car did: its steady speeds within 1%, its stops, its arcs at every steering command, its full-lock radii and its yaw rate after a full-lock command. These are the known gaps:
+- **Speed.** After a start the car's speed peaks about 15% above its steady speed for a second; the model's does not. In a long full-lock circle the car slows to 0.56 m/s, the model to 0.59 to 0.61 m/s.
+- **Mass, springs and tyres.** The inertia, the springs and the wheels' mass are RacecarSim's estimates. The tyres' grip is fitted, and MuJoCo's contacts are not a tyre model: at full lock the model's yaw rate wobbles by 3% at about 20 Hz.
+- **Steering.** The servo's deadband and the linkage's play, which make the car drift up to 2.7 degrees a metre at command 0, are not modelled.
+- **Sensors.** The encoder over-reads in a full-lock turn by 3.4 to 3.6%, where the car's reads 2.5 to 4.2% high. The sensors have no noise or bias, and there is no camera.
 
 ## Citing
 
