@@ -32,7 +32,6 @@ import mujoco
 import numpy as np
 
 WALLS_BODY = "walls"
-
 type Name = Literal["truth_pos", "truth_zaxis", "truth_wall_contact"]
 POS: Name = "truth_pos"
 ZAXIS: Name = "truth_zaxis"
@@ -48,6 +47,30 @@ class TruthSensors:
     # The number of contacts between a geom of the car's body tree and a geom
     # of the walls body. Zero when the car touches no wall.
     wall_contact: mujoco.MjsSensor
+
+
+def add_sensors(spec: mujoco.MjSpec, car_body: str) -> None:
+    """Add the truth sensors of the body named car_body to spec, and an empty
+    walls body if spec has none. A truth sensor that spec already has stays,
+    so the spec of a Scene can be compiled again. Raise ValueError if spec
+    has a sensor with the name of a truth sensor but other settings."""
+    if spec.body(WALLS_BODY) is None:
+        spec.worldbody.add_body(name=WALLS_BODY)
+    reference = mujoco.MjSpec()  # holds the truth sensors to compare against
+    for name in (POS, ZAXIS, WALL_CONTACT):
+        sensor = spec.sensor(name)
+        if sensor is None:
+            _add_sensor(spec, name, car_body)
+        elif not _same_sensor(sensor, _add_sensor(reference, name, car_body)):
+            raise ValueError(f"the spec has a sensor {name} that is not a truth sensor")
+
+
+def find_sensors(spec: mujoco.MjSpec) -> TruthSensors:
+    """Find the sensors that add_sensors added to spec."""
+    pos, zaxis, wall_contact = (spec.sensor(n) for n in (POS, ZAXIS, WALL_CONTACT))
+    if pos is None or zaxis is None or wall_contact is None:
+        raise ValueError("the spec has no truth sensors: call truth.add_sensors")
+    return TruthSensors(pos=pos, zaxis=zaxis, wall_contact=wall_contact)
 
 
 def _add_sensor(spec: mujoco.MjSpec, name: Name, car_body: str) -> mujoco.MjsSensor:
@@ -101,34 +124,10 @@ _SETTINGS = (
 )
 
 
-def _setting(sensor: mujoco.MjsSensor, field: str) -> np.ndarray:
-    value = getattr(sensor, field)
-    return np.asarray(list(value) if field == "userdata" else value)
-
-
 def _same_sensor(a: mujoco.MjsSensor, b: mujoco.MjsSensor) -> bool:
     return all(np.array_equal(_setting(a, f), _setting(b, f)) for f in _SETTINGS)
 
 
-def add_sensors(spec: mujoco.MjSpec, car_body: str) -> None:
-    """Add the truth sensors of the body named car_body to spec, and an empty
-    walls body if spec has none. A truth sensor that spec already has stays,
-    so the spec of a Scene can be compiled again. Raise ValueError if spec
-    has a sensor with the name of a truth sensor but other settings."""
-    if spec.body(WALLS_BODY) is None:
-        spec.worldbody.add_body(name=WALLS_BODY)
-    reference = mujoco.MjSpec()  # holds the truth sensors to compare against
-    for name in (POS, ZAXIS, WALL_CONTACT):
-        sensor = spec.sensor(name)
-        if sensor is None:
-            _add_sensor(spec, name, car_body)
-        elif not _same_sensor(sensor, _add_sensor(reference, name, car_body)):
-            raise ValueError(f"the spec has a sensor {name} that is not a truth sensor")
-
-
-def find_sensors(spec: mujoco.MjSpec) -> TruthSensors:
-    """Find the sensors that add_sensors added to spec."""
-    pos, zaxis, wall_contact = (spec.sensor(n) for n in (POS, ZAXIS, WALL_CONTACT))
-    if pos is None or zaxis is None or wall_contact is None:
-        raise ValueError("the spec has no truth sensors: call truth.add_sensors")
-    return TruthSensors(pos=pos, zaxis=zaxis, wall_contact=wall_contact)
+def _setting(sensor: mujoco.MjsSensor, field: str) -> np.ndarray:
+    value = getattr(sensor, field)
+    return np.asarray(list(value) if field == "userdata" else value)

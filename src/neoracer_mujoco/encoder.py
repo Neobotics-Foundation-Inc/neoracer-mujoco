@@ -24,10 +24,6 @@ from neoracer_spec.derive import EncoderParams
 
 from .sensors import WHEEL_RADIUS
 
-# A window closes when less than this is left of it (s), so that a step that
-# lands on a tick, up to rounding, closes the window.
-_EPS = 1e-9
-
 
 @dataclass(frozen=True)
 class EncoderState:
@@ -42,6 +38,11 @@ class EncoderState:
 def start(params: EncoderParams, angle: float) -> EncoderState:
     """The encoder of a car at rest, its drivetrain at angle (rad)."""
     return EncoderState(angle=angle, span=0.0, due=params.window, speed=0.0)
+
+
+# A window closes when less than this is left of it (s), so that a step that
+# lands on a tick, up to rounding, closes the window.
+_EPS = 1e-9
 
 
 def step(

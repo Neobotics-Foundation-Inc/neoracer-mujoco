@@ -40,6 +40,49 @@ class WallParams:
     boxes_per_wall: int | None = None
 
 
+def to_spec(track: Track, walls: WallParams = WallParams()) -> mujoco.MjSpec:
+    """The scenery of to_mjcf as an MjSpec, for assets.compose."""
+    return mujoco.MjSpec.from_string(to_mjcf(track, walls))
+
+
+def to_mjcf(track: Track, walls: WallParams = WallParams()) -> str:
+    """MJCF text for `track` as scenery: two walls of boxes and a floor, no car.
+
+    Walls come straight off left_edge(track) / right_edge(track), which already
+    carry the loop's varying half-width, moved by the start transform so the
+    car spawns at sample 0 facing +X.
+    """
+    left = to_start_frame(track, left_edge(track))
+    right = to_start_frame(track, right_edge(track))
+
+    geoms = _wall_boxes(left, "track_wall_left", walls)
+    geoms += _wall_boxes(right, "track_wall_right", walls)
+
+    corners = np.vstack([left, right])
+    low = corners.min(axis=0) - walls.floor_margin
+    high = corners.max(axis=0) + walls.floor_margin
+    floor_size = 0.5 * (high - low)
+    floor_pos = 0.5 * (high + low)
+
+    # substitute() rather than safe_substitute(): a typo'd placeholder should
+    # fail loudly here, not silently emit a "$name" into the MJCF.
+    template = string.Template(
+        resources.files("neoracer_mujoco.track_generation")
+        .joinpath("scene_template.xml")
+        .read_text()
+    )
+    return template.substitute(
+        seed=track.seed,
+        total_length=f"{track.total_length:.2f}",
+        wall_count=len(geoms),
+        floor_size_x=f"{floor_size[0]:.5f}",
+        floor_size_y=f"{floor_size[1]:.5f}",
+        floor_pos_x=f"{floor_pos[0]:.5f}",
+        floor_pos_y=f"{floor_pos[1]:.5f}",
+        walls="\n".join(geoms),
+    )
+
+
 def to_start_frame(track: Track, points: Points) -> Points:
     """points moved by the rigid transform that puts sample 0 at the origin
     facing +X.
@@ -56,21 +99,34 @@ def to_start_frame(track: Track, points: Points) -> Points:
     return (points - origin) @ rotation.T
 
 
-def _max_deviation(points: Points, start: int, end: int) -> float:
-    """Farthest any point strictly between `start` and `end` sits from the
-    straight chord joining them. `end` may be len(points), meaning the wrap
-    back to index 0."""
-    first = points[start]
-    last = points[end % len(points)]
-    chord = last - first
-    length = float(np.linalg.norm(chord))
-    interior = points[start + 1 : end]
-    if length < 1e-12 or len(interior) == 0:
-        return 0.0
-    offsets = interior - first
-    # 2D cross product / |chord| is the perpendicular distance to the chord.
-    across = chord[0] * offsets[:, 1] - chord[1] * offsets[:, 0]
-    return float(np.abs(across).max() / length)
+def _wall_boxes(edge: Points, name_prefix: str, walls: WallParams) -> list[str]:
+    """MJCF <geom> lines for one wall: one box per decimated segment, centred on
+    its midpoint and yawed to lie along it.
+
+    Each box is over-long by `thickness` at both ends so consecutive boxes
+    overlap at their corners instead of leaving a notch for a wheel to catch in.
+    """
+    kept = decimate_closed(edge, walls.segment_length, walls.max_deviation)
+    if walls.boxes_per_wall is not None:
+        kept = split_to(edge, kept, walls.boxes_per_wall, walls.max_deviation)
+    thickness, height = walls.thickness, walls.height
+    lines = []
+    for n, (i, j) in enumerate(itertools.pairwise(kept)):
+        first, last = edge[i], edge[j % len(edge)]
+        span = last - first
+        length = float(np.linalg.norm(span))
+        if length < 1e-9:
+            continue
+        middle = 0.5 * (first + last)
+        yaw = float(np.arctan2(span[1], span[0]))
+        lines.append(
+            f'            <geom class="track_wall" name="{name_prefix}_{n:04d}"'
+            f' pos="{middle[0]:.5f} {middle[1]:.5f} {height / 2:.5f}"'
+            f' euler="0 0 {yaw:.5f}"'
+            f' size="{length / 2 + thickness:.5f} {thickness / 2:.5f}'
+            f' {height / 2:.5f}"/>'
+        )
+    return lines
 
 
 def decimate_closed(
@@ -143,72 +199,21 @@ def split_to(
     return kept
 
 
-def _wall_boxes(edge: Points, name_prefix: str, walls: WallParams) -> list[str]:
-    """MJCF <geom> lines for one wall: one box per decimated segment, centred on
-    its midpoint and yawed to lie along it.
-
-    Each box is over-long by `thickness` at both ends so consecutive boxes
-    overlap at their corners instead of leaving a notch for a wheel to catch in.
-    """
-    kept = decimate_closed(edge, walls.segment_length, walls.max_deviation)
-    if walls.boxes_per_wall is not None:
-        kept = split_to(edge, kept, walls.boxes_per_wall, walls.max_deviation)
-    thickness, height = walls.thickness, walls.height
-    lines = []
-    for n, (i, j) in enumerate(itertools.pairwise(kept)):
-        first, last = edge[i], edge[j % len(edge)]
-        span = last - first
-        length = float(np.linalg.norm(span))
-        if length < 1e-9:
-            continue
-        middle = 0.5 * (first + last)
-        yaw = float(np.arctan2(span[1], span[0]))
-        lines.append(
-            f'            <geom class="track_wall" name="{name_prefix}_{n:04d}"'
-            f' pos="{middle[0]:.5f} {middle[1]:.5f} {height / 2:.5f}"'
-            f' euler="0 0 {yaw:.5f}"'
-            f' size="{length / 2 + thickness:.5f} {thickness / 2:.5f}'
-            f' {height / 2:.5f}"/>'
-        )
-    return lines
-
-
-def to_mjcf(track: Track, walls: WallParams = WallParams()) -> str:
-    """MJCF text for `track` as scenery: two walls of boxes and a floor, no car.
-
-    Walls come straight off left_edge(track) / right_edge(track), which already
-    carry the loop's varying half-width, moved by the start transform so the
-    car spawns at sample 0 facing +X.
-    """
-    left = to_start_frame(track, left_edge(track))
-    right = to_start_frame(track, right_edge(track))
-
-    geoms = _wall_boxes(left, "track_wall_left", walls)
-    geoms += _wall_boxes(right, "track_wall_right", walls)
-
-    corners = np.vstack([left, right])
-    low = corners.min(axis=0) - walls.floor_margin
-    high = corners.max(axis=0) + walls.floor_margin
-    floor_size = 0.5 * (high - low)
-    floor_pos = 0.5 * (high + low)
-
-    # substitute() rather than safe_substitute(): a typo'd placeholder should
-    # fail loudly here, not silently emit a "$name" into the MJCF.
-    template = string.Template(
-        resources.files("neoracer_mujoco.track_generation")
-        .joinpath("scene_template.xml")
-        .read_text()
-    )
-    return template.substitute(
-        seed=track.seed,
-        total_length=f"{track.total_length:.2f}",
-        wall_count=len(geoms),
-        floor_size_x=f"{floor_size[0]:.5f}",
-        floor_size_y=f"{floor_size[1]:.5f}",
-        floor_pos_x=f"{floor_pos[0]:.5f}",
-        floor_pos_y=f"{floor_pos[1]:.5f}",
-        walls="\n".join(geoms),
-    )
+def _max_deviation(points: Points, start: int, end: int) -> float:
+    """Farthest any point strictly between `start` and `end` sits from the
+    straight chord joining them. `end` may be len(points), meaning the wrap
+    back to index 0."""
+    first = points[start]
+    last = points[end % len(points)]
+    chord = last - first
+    length = float(np.linalg.norm(chord))
+    interior = points[start + 1 : end]
+    if length < 1e-12 or len(interior) == 0:
+        return 0.0
+    offsets = interior - first
+    # 2D cross product / |chord| is the perpendicular distance to the chord.
+    across = chord[0] * offsets[:, 1] - chord[1] * offsets[:, 0]
+    return float(np.abs(across).max() / length)
 
 
 def lap_distance(track: Track, xy: npt.ArrayLike) -> npt.NDArray[np.float64]:
@@ -223,8 +228,3 @@ def lap_distance(track: Track, xy: npt.ArrayLike) -> npt.NDArray[np.float64]:
     gaps = points[..., None, :] - center  # (..., N, 2)
     nearest = np.argmin(np.einsum("...ij,...ij->...i", gaps, gaps), axis=-1)
     return track.distance_along[nearest]
-
-
-def to_spec(track: Track, walls: WallParams = WallParams()) -> mujoco.MjSpec:
-    """The scenery of to_mjcf as an MjSpec, for assets.compose."""
-    return mujoco.MjSpec.from_string(to_mjcf(track, walls))
