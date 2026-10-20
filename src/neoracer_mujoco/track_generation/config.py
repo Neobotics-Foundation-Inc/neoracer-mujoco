@@ -3,7 +3,9 @@
 Numbers used by exactly one stage live in that stage's module, not here.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 from typing import Literal
 
 # 0 is gentle and wide, 3 is tight and narrow.
@@ -89,16 +91,16 @@ class TrackSettings:
 
 # Easy tracks are gentle and wide, hard tracks are tight and narrow. Only these
 # three knobs change with difficulty. All other knobs stay the same.
-_MAX_CURVATURE: frozendict[Difficulty, float] = frozendict(
+_MAX_CURVATURE: Mapping[Difficulty, float] = MappingProxyType(
     {0: 0.4, 1: 0.6, 2: 0.8, 3: 1.0}
 )  # 1/m
-_MIN_HALF_WIDTH: frozendict[Difficulty, float] = frozendict(
+_MIN_HALF_WIDTH: Mapping[Difficulty, float] = MappingProxyType(
     {0: 0.60, 1: 0.50, 2: 0.40, 3: 0.35}
 )  # m
 # rad. The curvature limit of difficulty 0 rejects most walks drawn with the
 # default 0.9: over seeds 0-199, 41 gave no track. With 0.6, every seed
 # gives one, with as many bends to the right.
-_TURN_JITTER: frozendict[Difficulty, float] = frozendict(
+_TURN_JITTER: Mapping[Difficulty, float] = MappingProxyType(
     {0: 0.6, 1: 0.9, 2: 0.9, 3: 0.9}
 )
 

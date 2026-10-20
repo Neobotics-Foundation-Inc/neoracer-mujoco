@@ -23,7 +23,9 @@ Actuators (see neoracer_mujoco.contract):
 import argparse
 import math
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Literal
 
 import mujoco
@@ -60,7 +62,7 @@ class DriveParams:
             )
 
 
-MODES: frozendict[Mode, DriveParams] = frozendict(
+MODES: Mapping[Mode, DriveParams] = MappingProxyType(
     {
         "safe": DriveParams(),
         "full": DriveParams(

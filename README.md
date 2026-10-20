@@ -16,17 +16,17 @@ The package is not on PyPI. Each [GitHub Release](https://github.com/Neobotics-F
 pip install https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.11.2/neoracer_mujoco-0.11.2-py3-none-any.whl
 ```
 
-To work on the package, clone it with [Git LFS](https://git-lfs.com) installed (the meshes in `assets/meshes/` are LFS objects) and install it editable on Python 3.15:
+To work on the package, clone it with [Git LFS](https://git-lfs.com) installed (the meshes in `assets/meshes/` are LFS objects) and install it editable on Python 3.14:
 
 ```sh
-uv venv --python 3.15 && source .venv/bin/activate
+uv venv --python 3.14 && source .venv/bin/activate
 uv pip install -e ".[dev]"
 python -m pytest validation/
 ```
 
 `environment.yml` makes the same environment with conda; then run `pip install -e ".[dev]"` in it.
 
-With [Nix](https://nixos.org), `nix develop` gives you Python 3.15 with the package and its `dev`, `demo` and `jax` extras, built from `uv.lock`, and Node for `js/`; there is no `.venv`. The package is installed editable: edit a file and run it, for example `python examples/run_racecar_core.py my_controller.py`, or any command under [Examples](#examples). After changing the dependencies in `pyproject.toml`, run `uv lock`, and the next `nix develop` installs them.
+With [Nix](https://nixos.org), `nix develop` gives you Python 3.14 with the package's dependencies and its `dev`, `demo` and `jax` extras, all from nixpkgs' binary cache, and Node for `js/`; there is no `.venv`. The package runs from `src/`: edit a file and run it, for example `python examples/run_racecar_core.py my_controller.py`, or any command under [Examples](#examples). The flake takes the dependencies from `pyproject.toml` and stops if a nixpkgs version breaks a pin.
 
 ## Quick start
 

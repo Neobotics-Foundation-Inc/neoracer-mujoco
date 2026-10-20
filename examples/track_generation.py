@@ -18,6 +18,8 @@ Frame: +X forward, +Y left, +Z up.
 
 import argparse
 import time
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import assert_never
 
 import mujoco
@@ -37,7 +39,9 @@ from neoracer_mujoco.track_generation import (
     to_spec,
 )
 
-DIFFICULTIES: frozendict[str, Difficulty] = frozendict({"0": 0, "1": 1, "2": 2, "3": 3})
+DIFFICULTIES: Mapping[str, Difficulty] = MappingProxyType(
+    {"0": 0, "1": 1, "2": 2, "3": 3}
+)
 
 # Follow the right-hand wall at roughly a quarter of the corridor width, so the
 # car has room on both sides even on the narrowest stretches (half_width_min is
