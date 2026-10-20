@@ -143,8 +143,6 @@ def test_the_v2_spec_lists_its_questions_for_racecarsim():
         "shape.payload_drop",
         "shape.payload_bottom",
         "lidar.position",
-        "lidar.samples",
-        "lidar.scan_rate",
         "imu.position",
         "camera.bottom",
     ]

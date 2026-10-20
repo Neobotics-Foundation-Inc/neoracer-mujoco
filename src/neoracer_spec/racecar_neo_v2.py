@@ -441,8 +441,9 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         diameter=measured(
             0.072,
             C_L,
-            note="the speed reads 0.904 of the true speed, as from a 65.1 mm"
-            " wheel; likely the firmware's encoder constants, not the wheel",
+            note="the firmware reads the speed about 10% high"
+            " (Odometry.speed_scale), as if the wheels rolled 65.1 mm across: it"
+            " depends on the tyres' diameter and wear",
             conflicts=(Alternative(0.071, M_Z),),
         ),
         width=measured(0.029, C_L, conflicts=(Alternative(0.030, M_Z),)),
@@ -635,8 +636,18 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             conflicts=(Alternative(179.16, WORKSHEET_RUNS),),
         ),
         tilt_degrees=measured((0.0, 0.0), C_L),
-        samples=measured(1080, C_L, conflicts=(Alternative(720, MODEL),)),
-        scan_rate=measured(7.4, C_L, conflicts=(Alternative(6.0, MODEL),)),
+        samples=measured(
+            1080,
+            C_L,
+            note="as RacecarSim's LiDAR has it; the worksheet's model column, from"
+            " an earlier RacecarSim, has 720",
+        ),
+        scan_rate=measured(
+            7.4,
+            C_L,
+            note="as RacecarSim's LiDAR has it; the worksheet's model column, from"
+            " an earlier RacecarSim, has 6",
+        ),
         min_range=measured(0.05, C_L),
         max_range=measured(12.0, C_L),
     ),
