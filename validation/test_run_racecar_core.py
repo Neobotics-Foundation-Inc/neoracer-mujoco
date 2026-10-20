@@ -52,6 +52,17 @@ def test_run_controller_runs_the_wall_follower_and_cleans_up(capsys, monkeypatch
     assert str(_CANONICAL_DIR) not in sys.path
 
 
+def test_run_controller_runs_the_wall_follower_on_the_v2(monkeypatch):
+    """With car="racecar_neo_v2", the wall follower drives the RACECAR Neo V2
+    forward, on its own LiDAR and encoder."""
+    monkeypatch.delitem(sys.modules, "racecar_core", raising=False)
+    monkeypatch.delitem(sys.modules, "control", raising=False)
+    dx = run_racecar_core.run_controller(
+        str(_CANONICAL_DIR / "wall_follower.py"), steps=300, car="racecar_neo_v2"
+    )
+    assert dx > 0.1, f"expected forward progress, got dx={dx:.3f} m"
+
+
 def test_run_controller_rejects_a_missing_path_and_a_non_python_file():
     with pytest.raises(FileNotFoundError):
         run_racecar_core.run_controller(str(_EXAMPLES_DIR / "does_not_exist.py"))

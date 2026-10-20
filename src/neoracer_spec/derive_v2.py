@@ -30,7 +30,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
-from .derive import EncoderParams, G, LidarParams, Polynomial, precise
+from .derive import G, LidarParams, Polynomial, precise
 from .racecar_neo_v2 import RacecarNeoV2
 from .spec import Vec3
 
@@ -44,9 +44,12 @@ class DerivedParams:
 
     model: ModelParams
     lidar: LidarParams
-    encoder: EncoderParams
+    encoder: HallEncoderParams
     wheel_radius: float  # m, that the encoder's speed is measured at
     steer_lock: float  # rad of steering input at a command of 1
+    start_max_speed: (
+        float  # the share of full throttle that racecar_core's speed 1 sends
+    )
 
 
 def derive(spec: RacecarNeoV2) -> DerivedParams:
@@ -57,6 +60,7 @@ def derive(spec: RacecarNeoV2) -> DerivedParams:
         encoder=encoder_params(spec),
         wheel_radius=m.wheel_radius,
         steer_lock=m.steering.lock,
+        start_max_speed=spec.drive.start_max_speed.value,
     )
 
 
@@ -72,10 +76,28 @@ def lidar_params(spec: RacecarNeoV2) -> LidarParams:
     )
 
 
-def encoder_params(spec: RacecarNeoV2) -> EncoderParams:
-    """A speed every telemetry frame, unfiltered: nobody has measured the
-    firmware's filter."""
-    return EncoderParams(window=1 / spec.odometry.telemetry_rate.value, alpha=1.0)
+@dataclass(frozen=True)
+class HallEncoderParams:
+    """How the drive board measures the speed: from the time between the
+    edges of the motor's hall sensors."""
+
+    edge_angle: float  # rad of the drivetrain from one edge to the next
+    radius: float  # m, the tyre's, that it measures the speed at
+    alpha: float  # the weight of each new edge's speed in its filter
+    stop_timeout: float  # s without an edge, after which it reads 0
+
+
+def encoder_params(spec: RacecarNeoV2) -> HallEncoderParams:
+    """The drive board's encoder: an edge every 1/edges of a turn of the
+    motor, which turns the drivetrain through its gears."""
+    o = spec.odometry
+    edges = o.edges_per_motor_turn.value * o.motor_turns_per_wheel_turn.value
+    return HallEncoderParams(
+        edge_angle=2 * math.pi / edges,
+        radius=wheel_radius(spec),
+        alpha=o.filter_alpha.value,
+        stop_timeout=o.stop_timeout.value,
+    )
 
 
 # --- the model ----------------------------------------------------------------

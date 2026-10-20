@@ -62,7 +62,7 @@ sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.0))  # 0
 scan = lidar.start(params.lidar, scene.model, data, scene.car).scan
 ```
 
-The `racecar_core` adapter still has the NeoRacer's LiDAR and encoder.
+A `racecar_core` program runs on the V2 with its own LiDAR and encoder: `python examples/run_racecar_core.py my_controller.py --car racecar_neo_v2`. Its drive board reports the speed from the time between its motor's hall sensor edges (`hall_encoder.py`), and, as in RacecarSim, its `racecar_core` starts with a max speed of 0.25, so speed 1 sends a command of 0.25.
 
 ## A scene
 

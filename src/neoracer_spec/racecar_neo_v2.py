@@ -196,6 +196,9 @@ class Drive:
     # At any other command it pushes the car with gain * (set speed - speed).
     gain: Sourced[float]  # N per m/s
     latency: Sourced[float]  # s, from a command to the speed controller
+    # The share of a full command that a racecar_core program's speed 1
+    # sends until it calls rc.drive.set_max_speed.
+    start_max_speed: Sourced[float]
 
 
 @dataclass(frozen=True)
@@ -208,6 +211,11 @@ class Odometry:
     # How much more than the true speed the encoder reads at full lock.
     turn_overread: Sourced[Sides[float]]
     telemetry_rate: Sourced[float]  # Hz
+    # The drive board times the edges of the motor's hall sensors.
+    edges_per_motor_turn: Sourced[int]
+    motor_turns_per_wheel_turn: Sourced[float]
+    filter_alpha: Sourced[float]  # the weight of each new edge's speed
+    stop_timeout: Sourced[float]  # s without an edge, after which it reads 0
 
 
 @dataclass(frozen=True)
@@ -321,6 +329,12 @@ RACECARSIM_MODEL = Source(
     "RacecarSim model",
     "RacecarSim's model of the RACECAR Neo V2, Assets/Models/RacecarNeoV2/"
     "RacecarNeoV2.fbx, 2026-10",
+)
+RACECARSIM_DRIVE = Source(
+    "RacecarSim drive",
+    "RacecarSim's model of the V2's drive and its firmware, as its code"
+    " describes the physical car: Assets/Scripts/Racecar/Drive.cs and"
+    " Assets/Scripts/NonMonoBehavior/HallEncoder.cs, 2026-10",
 )
 FIT = Source(
     "model fit",
@@ -594,6 +608,12 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             "the straight runs' speed after a command",
             note="a fit to the stops alone gives 0.05 s, to the starts alone 0.095",
         ),
+        start_max_speed=assumed(
+            0.25,
+            RACECARSIM_DRIVE,
+            "RacecarSim's Drive.DefaultMaxSpeed, the max speed a program starts"
+            " with there; not checked against the car's racecar_core",
+        ),
     ),
     odometry=Odometry(
         min_speed=measured(0.07, WORKSHEET_RUNS),
@@ -615,6 +635,23 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         ),
         telemetry_rate=measured(
             170.0, WORKSHEET_RUNS, note="about 1 frame in 5 arrives late, after 10.7 ms"
+        ),
+        edges_per_motor_turn=documented(
+            12,
+            RACECARSIM_DRIVE,
+            note="6 hall states a turn of its field, on a motor of 2 pole pairs",
+        ),
+        motor_turns_per_wheel_turn=documented(
+            (61 / 18) * (37 / 15),
+            RACECARSIM_DRIVE,
+            note="gears of 18/61 and 15/37, so an edge every 2.25 mm of travel",
+        ),
+        filter_alpha=documented(0.8, RACECARSIM_DRIVE),
+        stop_timeout=documented(
+            0.030,
+            RACECARSIM_DRIVE,
+            note="so the speed reads 0 below 75 mm/s, an edge every 30 ms; min_speed"
+            " measures 70",
         ),
     ),
     lidar=Lidar(

@@ -75,6 +75,20 @@ def test_drive_writes_clipped_and_scaled_commands(scene):
 # --- LiDAR: order, units and no return ----------------------------------------
 
 
+def test_set_max_speed_without_an_argument_restores_the_start(scene):
+    """set_max_speed() without an argument goes back to the max speed the
+    drive started with, as racecar_core's default does: 1.0 on the NeoRacer,
+    0.25 on the V2. Speed 1 then drives that share of full throttle."""
+    a, b, c = contract.throttle_map(scene.model, scene.car.drive)
+    data = mujoco.MjData(scene.model)
+    for start in (1.0, 0.25):
+        drive = MujocoDrive(scene, data, start)
+        drive.set_max_speed(0.5)
+        drive.set_max_speed()
+        drive.set_speed_angle(1.0, 0.0)
+        assert _drive_ctrl(scene, data) == pytest.approx(a * start + b + c)
+
+
 def test_a_scan_is_clockwise_from_the_front_in_cm(corridor):
     """Index i of a scan points i * 360 / len(scan) degrees clockwise from the
     front: it reads, in cm, what the rangefinder at that bearing reads in m.
