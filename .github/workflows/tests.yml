@@ -9,11 +9,61 @@ permissions:
   contents: read
 
 jobs:
-  pytest:
+  # Every check runs in nix develop, the shell contributors use. Its packages
+  # come from the binary cache at cache.nixos.org, so the job builds nothing.
+  nix:
     runs-on: ubuntu-latest
     steps:
       # The meshes in assets/meshes/ are Git LFS objects. Without them,
       # MuJoCo cannot compile the car model.
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          lfs: true
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
+
+      - name: Fetch the shell
+        run: nix develop --command true
+
+      - name: Ruff (lint)
+        run: nix develop --command ruff check --output-format=github .
+
+      - name: Ruff (format)
+        run: nix develop --command ruff format --check .
+
+      # mujoco ships no type stubs. Generate them from the installed version.
+      # --exit-code fails the step on a stub error. The ignore patterns are
+      # the known errors: C++ types that mujoco's bindings do not expose.
+      - name: Generate mujoco stubs
+        run: >-
+          nix develop --command
+          pybind11-stubgen mujoco mujoco.viewer mujoco.rollout -o typings --exit-code
+          --ignore-invalid-expressions '^(mujoco::python::.*|std::byte)$'
+          --ignore-unresolved-names '^(ArrayLike|NoneType|_abc\._abc_data|mjs[A-Za-z]+_)$'
+
+      - name: ty
+        run: nix develop --command ty check --output-format github
+
+      - name: Run the validation suite
+        run: nix develop --command python -m pytest -q validation
+
+      # The JS package (js/) against this package: js/test/fixtures.py runs a
+      # set of cases in Python, and npm test runs the same cases in MuJoCo's
+      # WebAssembly build.
+      - name: Run the JS tests against the Python package
+        run: |
+          nix develop --command npm ci --prefix js --no-audit --no-fund
+          nix develop --command python js/test/fixtures.py js/test/fixtures.json
+          nix develop --command npm test --prefix js
+
+  # What pip users get: the wheel, with its dependencies from PyPI, installed
+  # in a fresh environment, loading the car and every track from outside the
+  # checkout.
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -25,18 +75,6 @@ jobs:
           python-version: "3.14"
           cache: pip
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install -e .
-
-      - name: Run the validation suite
-        run: python -m pytest -q validation
-
-      # The suite above uses the editable install, which reads assets/ from the
-      # checkout. This step tests what pip users get: it builds the wheel,
-      # installs it in a fresh environment and loads the car and every track
-      # from outside the checkout.
       - name: Load the car and the tracks from the installed wheel
         run: |
           pip install build
@@ -57,30 +95,3 @@ jobs:
               assets.compose(mujoco.MjSpec.from_file(track))
           print(len(tracks), 'tracks loaded from', assets.ASSET_DIR)
           "
-
-  # The JS package (js/) against this package: js/test/fixtures.py runs a
-  # set of cases in Python, and npm test runs the same cases in MuJoCo's
-  # WebAssembly build. It runs beside pytest. The scenes leave out the meshes
-  # that only show the car, so the checkout needs no Git LFS objects, and the
-  # runner's own Node runs the tests.
-  js:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Setup Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.14"
-          cache: pip
-
-      - name: Install the package and the JS dependencies
-        run: |
-          pip install -e .
-          npm ci --prefix js --no-audit --no-fund
-
-      - name: Run the JS tests against the Python package
-        run: |
-          python js/test/fixtures.py js/test/fixtures.json
-          npm test --prefix js
