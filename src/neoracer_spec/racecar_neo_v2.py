@@ -1,16 +1,21 @@
 """
-The RACECAR Neo V2, part by part, from its measurement worksheet.
+The RACECAR Neo V2, part by part, from its measurement worksheet and its
+calibration reference.
 
-There is no CAD model of this car yet. Every value comes from the RACECAR
-Neo V2 Model Measurement Worksheet: two measurements of the car (its C.L
-and M.Z columns), the values of a model of the car that it checks, and runs
-calibrated against the car's LiDAR (2026-10-05). The value is the C.L
-measurement; where the M.Z measurement or the model disagree, they are its
-conflicts. The worksheet also lists values it computes from these, such as
-the wheel angles at full lock from the turning radius, which are left out
-here.
+There is no CAD model of this car yet. The values come from two sources:
+- the RACECAR Neo V2 Model Measurement Worksheet: two measurements of the
+  car (its C.L and M.Z columns), and the values of a model of the car that
+  it checks;
+- calibration_reference_car_2026-10: the calibration tools' runs on one
+  reference car (2026-10-04 and 05), and the parameter files they wrote.
 
-The worksheet measures what the car does, not its motor's and servo's
+The value is the calibration reference's where it has one, and otherwise
+the C.L measurement. Where the M.Z measurement, the model or an earlier
+calibration disagree, they are its conflicts. The worksheet also lists
+values it computes from these, such as the wheel angles at full lock from
+the turning radius, which are left out here.
+
+These sources measure what the car does, not its motor's and servo's
 ratings, and the car's firmware holds a speed rather than a voltage. So its
 parts are its own types, not those of spec.py, and there is no model of it
 yet.
@@ -28,6 +33,7 @@ from .provenance import (
     Source,
     Sourced,
     assumed,
+    calibrated,
     documented,
     estimated,
     measured,
@@ -39,12 +45,31 @@ M_Z = Source("M.Z", "RACECAR Neo V2 Model Measurement Worksheet, the M.Z column"
 MODEL = Source(
     "model", "RACECAR Neo V2 Model Measurement Worksheet, the Model Value column"
 )
-CALIBRATION = Source(
-    "calibration",
+WORKSHEET_RUNS = Source(
+    "worksheet runs",
     "RACECAR Neo V2 Model Measurement Worksheet, the lidar-referenced"
     " calibration runs of 2026-10-05",
 )
 FRAMES = Source("frames.yaml", "the car's frames.yaml, as the worksheet quotes it")
+
+
+def _reference(name: str, tool: str) -> Source:
+    """A file of calibration_reference_car_2026-10."""
+    return Source(name, f"calibration_reference_car_2026-10/{name}, from {tool}")
+
+
+REFERENCE_CAR = _reference("README.md", "the reference car's table")
+ODOM = _reference("parameters/odom.local.yaml", "calibrate_odom.py, 2026-10-05")
+DYNAMICS = _reference(
+    "parameters/dynamics.local.yaml", "calibrate_dynamics.py, 2026-10-05"
+)
+STEERING = _reference(
+    "parameters/throttle.local.md", "calibrate_steering.py, 2026-10-05"
+)
+LIDAR_YAW = _reference("parameters/frames.local.yaml", "calibrate_lidar.py, 2026-10-05")
+IMU_CAL = _reference(
+    "parameters/lsm9ds1_cal.local.yaml", "calibrate_imu.py, 2026-10-04"
+)
 
 
 @dataclass(frozen=True)
@@ -56,8 +81,17 @@ class Sides[T]:
 
 
 @dataclass(frozen=True)
+class Span:
+    """The range of a value over repeated runs."""
+
+    low: float
+    high: float
+
+
+@dataclass(frozen=True)
 class AtCommand[T]:
-    """A value measured with the car held at a command, in [0, 1] of full."""
+    """A value measured with the car held at a command: a share of full, in
+    [-1, 1], + forward or left."""
 
     command: float
     value: T
@@ -103,22 +137,23 @@ class Steering:
     # From the centre to full lock, timed from the yaw rate: an upper bound,
     # since it includes the tyres' lag in following the wheels.
     center_to_lock_time: Sourced[Sides[float]]  # s
-    degrees_per_us: Sourced[float]  # of wheel angle per us of servo pulse, near centre
-    us_per_command: Sourced[float]  # us of servo pulse per unit of command
-    # The bicycle-model steering angle that a steering command gives.
-    response_degrees: Sourced[tuple[AtCommand[Sides[float]], ...]]
+    # The curvature of the path that a steering command gives, 1/m, + left.
+    response: Sourced[tuple[AtCommand[Span], ...]]
+    trim: Sourced[float]  # of command, that the firmware adds to every command
     deadband: Sourced[float]  # of command: smaller changes do nothing
-    straight_drift_degrees_per_m: Sourced[float]  # heading change at command 0, + left
+    straight_drift_degrees_per_m: Sourced[Span]  # heading change at command 0, + left
 
 
 @dataclass(frozen=True)
 class Drive:
     """The firmware holds a speed: a drive command is a share of max_speed."""
 
-    max_speed: Sourced[float]  # m/s, the firmware's rc.drive.set_max_speed
+    max_speed: Sourced[float]  # m/s, the firmware's ceiling, rc.drive.set_max_speed
+    speed_floor: Sourced[float]  # m/s, the least speed the firmware sets
     steady_speed: Sourced[tuple[AtCommand[float], ...]]  # m/s, true
     rise_time: Sourced[tuple[AtCommand[float], ...]]  # s, from rest to 90% of it
     stop_distance: Sourced[tuple[AtCommand[float], ...]]  # m, after command 0
+    stop_time: Sourced[tuple[AtCommand[float], ...]]  # s, after command 0
     reverse: Sourced[Literal["immediate", "delayed", "double command"]]
 
 
@@ -126,10 +161,11 @@ class Drive:
 class Odometry:
     """The speed and the yaw rate that the firmware reports."""
 
-    distance_per_transition: Sourced[float]  # m of travel per encoder transition
     min_speed: Sourced[float]  # m/s; below it the reported speed is 0
     speed_scale: Sourced[float]  # true speed / reported speed
     yaw_rate_scale: Sourced[float]  # true yaw rate / reported yaw rate
+    # How much more than the true speed the encoder reads at full lock.
+    turn_overread: Sourced[Sides[float]]
     telemetry_rate: Sourced[float]  # Hz
 
 
@@ -146,8 +182,14 @@ class Lidar:
 
 @dataclass(frozen=True)
 class Imu:
+    """The LSM9DS1 on the drive-controller board. The firmware reports
+    (raw - bias) * scale."""
+
     position: Sourced[Vec3]  # m, the breakout's centre
     rotation_degrees: Sourced[Vec3]  # roll, pitch, yaw of the chip's axes
+    accel_bias: Sourced[Vec3]  # m/s²
+    accel_scale: Sourced[Vec3]
+    gyro_bias: Sourced[Vec3]  # rad/s
     rest_accel: Sourced[Vec3]  # m/s², calibrated, at rest
     rest_gyro: Sourced[Vec3]  # rad/s, calibrated, at rest
     gyro_noise: Sourced[float]  # rad/s, 1 sigma a sample, at rest
@@ -222,77 +264,112 @@ RACECAR_NEO_V2 = RacecarNeoV2(
     ),
     steering=Steering(
         min_turn_radius=measured(
-            Sides(left=0.419, right=0.465),
-            CALIBRATION,
-            note="from the LiDAR; the wheels' angles are 34.8 / 24.3 degrees"
-            " (inner / outer) to the left and 31.4 / 22.5 to the right. The"
-            " difference is a 1.2 degree offset to the left: a simulator should"
-            " use the mean, about 33 / 23, until the steering is calibrated."
-            " The model has 22.4 / 18.0",
+            Sides(left=0.420, right=0.466),
+            DYNAMICS,
+            note="the full-lock circles, from the LiDAR. Left lock turns about 10%"
+            " tighter: servo travel or linkage geometry, which no trim corrects."
+            " The wheels' angles are 34.8 / 24.3 degrees (inner / outer) to the"
+            " left and 31.4 / 22.5 to the right; the model has 22.4 / 18.0",
+            conflicts=(Alternative(Sides(left=0.419, right=0.465), WORKSHEET_RUNS),),
         ),
         center_to_lock_time=measured(
-            Sides(left=0.20, right=0.22),
-            C_L,
-            note="about 0.07 s of it is the tyres' lag. The model swings lock to"
-            " lock in 0.067 s",
+            Sides(left=0.203, right=0.216),
+            DYNAMICS,
+            note="the model swings lock to lock in 0.067 s",
         ),
-        degrees_per_us=measured(0.104, CALIBRATION),
-        us_per_command=measured(475.0, CALIBRATION),
-        response_degrees=measured(
+        response=measured(
             (
-                AtCommand(0.25, Sides(left=11.5, right=13.1)),
-                AtCommand(0.5, Sides(left=22.9, right=25.3)),
-                AtCommand(1.0, Sides(left=28.6, right=26.3)),
+                AtCommand(-1.0, Span(-2.140, -2.135)),
+                AtCommand(-0.5, Span(-2.098, -2.042)),
+                AtCommand(-0.25, Span(-1.043, -1.006)),
+                AtCommand(0.0, Span(-0.047, 0.007)),
+                AtCommand(0.25, Span(0.884, 0.919)),
+                AtCommand(0.5, Span(1.844, 1.858)),
+                AtCommand(1.0, Span(2.366, 2.401)),
             ),
-            CALIBRATION,
-            note="it flattens past 0.5",
+            STEERING,
+            note="arcs at speed 0.25 with trim 0, from the LiDAR, 3 to 8 runs a"
+            " command. It flattens past 0.5 and differs by side: use the table,"
+            " not a linear model",
+        ),
+        trim=calibrated(
+            0.0,
+            STEERING,
+            "the LiDAR: the drift at command 0 over the curvature near the centre",
+            note="a first fit of +0.0188 read the difference between the sides as"
+            " a centre offset; it moved the drift by under 0.1 degree/m",
         ),
         deadband=measured(
             0.02,
-            CALIBRATION,
+            WORKSHEET_RUNS,
             note="0.01 to 0.02: a trim of +0.019 (9 us) had no measurable effect",
         ),
         straight_drift_degrees_per_m=measured(
-            -1.7,
-            CALIBRATION,
-            note="-0.8 to -2.6: hardware variation, below the trim's resolution",
+            Span(-2.70, 0.42),
+            STEERING,
+            note="8 runs at trim 0: servo and linkage play, inside the deadband."
+            " The worksheet gives -1.7 (-0.8 to -2.6)",
         ),
     ),
     drive=Drive(
-        max_speed=measured(
+        max_speed=documented(
             1.0,
-            C_L,
-            note="the setting of every drive run; at it the car reaches 1.07 m/s",
+            REFERENCE_CAR,
+            note="the setting of every run; the car reaches 1.07 m/s",
         ),
+        speed_floor=documented(0.5, REFERENCE_CAR),
         steady_speed=measured(
-            (AtCommand(0.25, 0.72), AtCommand(0.5, 0.83), AtCommand(1.0, 1.07)),
-            CALIBRATION,
-            note="the firmware holds about 0.175 m/s above each set speed, in its"
+            (AtCommand(0.25, 0.721), AtCommand(0.5, 0.833), AtCommand(1.0, 1.07)),
+            DYNAMICS,
+            note="from the odometry, with its lidar-calibrated scale. The worksheet:"
+            " the firmware holds about 0.175 m/s above each set speed, in its"
             " own encoder units",
         ),
         rise_time=measured(
-            (AtCommand(0.5, 0.33), AtCommand(1.0, 0.36)),
-            C_L,
+            (AtCommand(0.25, 0.33), AtCommand(0.5, 0.33), AtCommand(1.0, 0.36)),
+            DYNAMICS,
             note="the model takes 1.3 s",
         ),
         stop_distance=measured(
-            (AtCommand(0.25, 0.184), AtCommand(0.5, 0.246), AtCommand(1.0, 0.370)),
-            C_L,
-            note="from 0.5 it stops in 0.59 s: 1.3 to 1.5 m/s² of braking",
+            (AtCommand(0.25, 0.184), AtCommand(0.5, 0.246), AtCommand(1.0, 0.372)),
+            DYNAMICS,
+            conflicts=(
+                Alternative(
+                    (
+                        AtCommand(0.25, 0.184),
+                        AtCommand(0.5, 0.246),
+                        AtCommand(1.0, 0.370),
+                    ),
+                    C_L,
+                ),
+            ),
+        ),
+        stop_time=measured(
+            (AtCommand(0.25, 0.56), AtCommand(0.5, 0.59), AtCommand(1.0, 0.72)),
+            DYNAMICS,
         ),
         reverse=measured("immediate", C_L),
     ),
     odometry=Odometry(
-        distance_per_transition=measured(
-            0.00203,
-            CALIBRATION,
-            note="the firmware's nominal 2.25 mm times the speed scale",
+        min_speed=measured(0.07, WORKSHEET_RUNS),
+        speed_scale=calibrated(
+            0.90406,
+            ODOM,
+            "the LiDAR, driving straight at a wall",
+            note="it depends on the tyres' diameter and wear. Earlier runs against"
+            " a tape gave 0.903 and 0.865",
         ),
-        min_speed=measured(0.07, CALIBRATION),
-        speed_scale=measured(0.90406, CALIBRATION),
-        yaw_rate_scale=measured(1.00188, CALIBRATION),
+        yaw_rate_scale=calibrated(
+            1.00188, ODOM, "the LiDAR, over three full-lock circles"
+        ),
+        turn_overread=measured(
+            Sides(left=0.0415, right=0.0245),
+            DYNAMICS,
+            note="the centre shaft is locked, so the encoder reads a speed between"
+            " the rear and the front axles'",
+        ),
         telemetry_rate=measured(
-            170.0, CALIBRATION, note="about 1 frame in 5 arrives late, after 10.7 ms"
+            170.0, WORKSHEET_RUNS, note="about 1 frame in 5 arrives late, after 10.7 ms"
         ),
     ),
     lidar=Lidar(
@@ -305,11 +382,13 @@ RACECAR_NEO_V2 = RacecarNeoV2(
                 Alternative((0.2383, 0.0, 0.2016), MODEL),
             ),
         ),
-        yaw_degrees=measured(
-            179.16,
-            CALIBRATION,
-            note="its motor faces the rear; the mount error is 0 to 0.8 degrees."
-            " One car's value",
+        yaw_degrees=calibrated(
+            179.619,
+            LIDAR_YAW,
+            "the odometry's direction of travel, by scan matching",
+            note="its motor faces the rear: nominally 180. The mean of six"
+            " placements, standard error 0.059 degrees",
+            conflicts=(Alternative(179.16, WORKSHEET_RUNS),),
         ),
         tilt_degrees=measured((0.0, 0.0), C_L),
         samples=measured(1080, C_L, conflicts=(Alternative(720, MODEL),)),
@@ -329,9 +408,21 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         rotation_degrees=documented(
             (-90.0, 0.0, -90.0), FRAMES, note="the chip is mounted face down"
         ),
-        rest_accel=measured((-0.15, -0.01, 9.82), C_L, note="the LSM9DS1's"),
-        rest_gyro=measured((0.0012, -0.0005, 0.0009), C_L, note="the LSM9DS1's"),
-        gyro_noise=measured(0.039, CALIBRATION),
+        accel_bias=calibrated(
+            (-0.2646, -0.0453, 0.0734),
+            IMU_CAL,
+            "gravity, with each axis up and down",
+            note="one board's",
+        ),
+        accel_scale=calibrated(
+            (1.00451, 1.01032, 1.00362), IMU_CAL, "gravity, with each axis up and down"
+        ),
+        gyro_bias=calibrated(
+            (0.02844, 0.00084, -0.06329), IMU_CAL, "the car at rest", note="one board's"
+        ),
+        rest_accel=measured((-0.15, -0.01, 9.82), C_L),
+        rest_gyro=measured((0.0012, -0.0005, 0.0009), C_L),
+        gyro_noise=measured(0.039, WORKSHEET_RUNS),
     ),
     camera=Camera(
         front=measured(0.2779, C_L, conflicts=(Alternative(0.275, M_Z),)),

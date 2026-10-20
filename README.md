@@ -8,7 +8,7 @@ The Gymnasium environment and the reinforcement learning are in [neoracer-rl](ht
 
 ## The spec
 
-`NEORACER`, in `src/neoracer_spec/neoracer.py`, describes the car part by part: the chassis, the wheels, the motor, the servo, the firmware's speed loop and each sensor. Every number in it is a `Sourced[T]`. That holds the value, how we know it (`Measured`, `Documented`, `Assumed`, `Estimated` or `Chosen`), and what other sources say when they disagree:
+`NEORACER`, in `src/neoracer_spec/neoracer.py`, describes the car part by part: the chassis, the wheels, the motor, the servo, the firmware's speed loop and each sensor. Every number in it is a `Sourced[T]`. That holds the value, how we know it (`Measured`, `Calibrated`, `Documented`, `Assumed`, `Estimated` or `Chosen`), and what other sources say when they disagree:
 
 ```python
 from neoracer_spec.neoracer import NEORACER
@@ -41,7 +41,7 @@ python -m neoracer_mujoco.write_car assets          # the numbers in assets/neor
 python -m neoracer_spec.typescript js/src/spec.ts   # the spec as TypeScript, for js/
 ```
 
-A second car, the RACECAR Neo V2, has a spec in `src/neoracer_spec/racecar_neo_v2.py`, taken from its measurement worksheet. That worksheet measures what the car does, such as its turning radius and its speed at each command, rather than its motor's and servo's ratings. So the V2's parts have their own types, and the car has no model yet.
+A second car, the RACECAR Neo V2, has a spec in `src/neoracer_spec/racecar_neo_v2.py`. Its values come from its measurement worksheet and from the calibration runs of a reference car. Those sources measure what the car does, such as its turning radius and its speed at each command, rather than its motor's and servo's ratings. Values that a calibration fitted against a reference, such as the LiDAR's mounting angle, are `Calibrated`. So the V2's parts have their own types, and the car has no model yet.
 
 ## A scene
 
