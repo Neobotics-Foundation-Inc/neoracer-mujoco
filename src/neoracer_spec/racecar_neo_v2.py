@@ -54,89 +54,22 @@ from .provenance import (
 )
 from .spec import Vec3
 
-C_L = Source("C.L", "RACECAR Neo V2 Model Measurement Worksheet, the C.L column")
-M_Z = Source("M.Z", "RACECAR Neo V2 Model Measurement Worksheet, the M.Z column")
-MODEL = Source(
-    "model", "RACECAR Neo V2 Model Measurement Worksheet, the Model Value column"
-)
-WORKSHEET_RUNS = Source(
-    "worksheet runs",
-    "RACECAR Neo V2 Model Measurement Worksheet, the lidar-referenced"
-    " calibration runs of 2026-10-05",
-)
-FRAMES = Source("frames.yaml", "the car's frames.yaml, as the worksheet quotes it")
-
-
-def _reference(name: str, tool: str) -> Source:
-    """A file of calibration_reference_car_2026-10."""
-    return Source(name, f"calibration_reference_car_2026-10/{name}, from {tool}")
-
-
-REFERENCE_CAR = _reference("README.md", "the reference car's table")
-ODOM = _reference("parameters/odom.local.yaml", "calibrate_odom.py, 2026-10-05")
-DYNAMICS = _reference(
-    "parameters/dynamics.local.yaml", "calibrate_dynamics.py, 2026-10-05"
-)
-STEERING = _reference(
-    "parameters/throttle.local.md", "calibrate_steering.py, 2026-10-05"
-)
-LIDAR_YAW = _reference("parameters/frames.local.yaml", "calibrate_lidar.py, 2026-10-05")
-IMU_CAL = _reference(
-    "parameters/lsm9ds1_cal.local.yaml", "calibrate_imu.py, 2026-10-04"
-)
-DYNAMICS_RUNS = _reference(
-    "bags/dynamics", "the ten straight runs' /drive and /odom/integrated"
-)
-SCANS = _reference("bags", "the /scan of every recording")
-RACECARSIM = Source(
-    "RacecarSim",
-    "the RACECAR Neo V2 car of RacecarSim, the RACECAR Neo simulator in Unity:"
-    " Assets/Scripts/Editor/RacecarPrefabSetup.cs, 2026-10",
-)
-RACECARSIM_MODEL = Source(
-    "RacecarSim model",
-    "RacecarSim's model of the RACECAR Neo V2, Assets/Models/RacecarNeoV2/"
-    "RacecarNeoV2.fbx, 2026-10",
-)
-FIT = Source(
-    "model fit",
-    "fitted in the MuJoCo model, assets/racecar_neo_v2.xml, to the reference"
-    " car's runs, 2026-10-20; validation/test_racecar_neo_v2.py holds the model"
-    " to the runs",
-)
-
 
 @dataclass(frozen=True)
-class Sides[T]:
-    """A value that differs between the car's left and right."""
+class RacecarNeoV2:
+    """The car, part by part. RACECAR_NEO_V2, below, holds its values."""
 
-    left: T
-    right: T
-
-
-@dataclass(frozen=True)
-class Span:
-    """The range of a value over repeated runs."""
-
-    low: float
-    high: float
-
-
-@dataclass(frozen=True)
-class Axles[T]:
-    """A value that differs between the car's front and rear."""
-
-    front: T
-    rear: T
-
-
-@dataclass(frozen=True)
-class AtCommand[T]:
-    """A value measured with the car held at a command: a share of full, in
-    [-1, 1], + forward or left."""
-
-    command: float
-    value: T
+    chassis: Chassis
+    footprint: Footprint
+    shape: Shape
+    wheel: Wheel
+    suspension: Suspension
+    steering: Steering
+    drive: Drive
+    odometry: Odometry
+    lidar: Lidar
+    imu: Imu
+    camera: Camera
 
 
 @dataclass(frozen=True)
@@ -167,13 +100,6 @@ class Footprint:
 
 
 @dataclass(frozen=True)
-class NamedBox:
-    name: str
-    center: Vec3  # m
-    half_size: Vec3  # m
-
-
-@dataclass(frozen=True)
 class Shape:
     """What the car's body collides with, and what the LiDAR sees of it.
 
@@ -194,6 +120,13 @@ class Shape:
 
 
 @dataclass(frozen=True)
+class NamedBox:
+    name: str
+    center: Vec3  # m
+    half_size: Vec3  # m
+
+
+@dataclass(frozen=True)
 class Wheel:
     diameter: Sourced[float]  # m, the tyre's
     width: Sourced[float]  # m, the tyre's
@@ -208,18 +141,6 @@ class Suspension:
     stiffness: Sourced[Axles[float]]  # N/m, at each wheel
     damping: Sourced[Axles[float]]  # N·s/m, at each wheel
     travel: Sourced[float]  # m, from full droop to full jounce; it rests midway
-
-
-@dataclass(frozen=True)
-class Linkage:
-    """How a steering command turns the front wheels, as the model has it.
-    The command turns a virtual wheel at the middle of the front axle in
-    proportion, with a slope of its own each side, until the linkage reaches
-    its stop on that side. Ackermann geometry turns the front wheels from
-    the virtual one."""
-
-    slope: Sides[float]  # rad per unit of command
-    stop: Sides[float]  # rad, the virtual wheel's angle at each stop, > 0
 
 
 @dataclass(frozen=True)
@@ -243,6 +164,18 @@ class Steering:
     servo_kd: Sourced[float]  # V·s/rad
     servo_supply: Sourced[float]  # V
     latency: Sourced[float]  # s, from a command to the servo
+
+
+@dataclass(frozen=True)
+class Linkage:
+    """How a steering command turns the front wheels, as the model has it.
+    The command turns a virtual wheel at the middle of the front axle in
+    proportion, with a slope of its own each side, until the linkage reaches
+    its stop on that side. Ackermann geometry turns the front wheels from
+    the virtual one."""
+
+    slope: Sides[float]  # rad per unit of command
+    stop: Sides[float]  # rad, the virtual wheel's angle at each stop, > 0
 
 
 @dataclass(frozen=True)
@@ -312,18 +245,89 @@ class Camera:
 
 
 @dataclass(frozen=True)
-class RacecarNeoV2:
-    chassis: Chassis
-    footprint: Footprint
-    shape: Shape
-    wheel: Wheel
-    suspension: Suspension
-    steering: Steering
-    drive: Drive
-    odometry: Odometry
-    lidar: Lidar
-    imu: Imu
-    camera: Camera
+class Sides[T]:
+    """A value that differs between the car's left and right."""
+
+    left: T
+    right: T
+
+
+@dataclass(frozen=True)
+class Span:
+    """The range of a value over repeated runs."""
+
+    low: float
+    high: float
+
+
+@dataclass(frozen=True)
+class Axles[T]:
+    """A value that differs between the car's front and rear."""
+
+    front: T
+    rear: T
+
+
+@dataclass(frozen=True)
+class AtCommand[T]:
+    """A value measured with the car held at a command: a share of full, in
+    [-1, 1], + forward or left."""
+
+    command: float
+    value: T
+
+
+# The sources of RACECAR_NEO_V2's values.
+C_L = Source("C.L", "RACECAR Neo V2 Model Measurement Worksheet, the C.L column")
+M_Z = Source("M.Z", "RACECAR Neo V2 Model Measurement Worksheet, the M.Z column")
+MODEL = Source(
+    "model", "RACECAR Neo V2 Model Measurement Worksheet, the Model Value column"
+)
+WORKSHEET_RUNS = Source(
+    "worksheet runs",
+    "RACECAR Neo V2 Model Measurement Worksheet, the lidar-referenced"
+    " calibration runs of 2026-10-05",
+)
+FRAMES = Source("frames.yaml", "the car's frames.yaml, as the worksheet quotes it")
+
+
+def _reference(name: str, tool: str) -> Source:
+    """A file of calibration_reference_car_2026-10."""
+    return Source(name, f"calibration_reference_car_2026-10/{name}, from {tool}")
+
+
+REFERENCE_CAR = _reference("README.md", "the reference car's table")
+ODOM = _reference("parameters/odom.local.yaml", "calibrate_odom.py, 2026-10-05")
+DYNAMICS = _reference(
+    "parameters/dynamics.local.yaml", "calibrate_dynamics.py, 2026-10-05"
+)
+STEERING = _reference(
+    "parameters/throttle.local.md", "calibrate_steering.py, 2026-10-05"
+)
+LIDAR_YAW = _reference("parameters/frames.local.yaml", "calibrate_lidar.py, 2026-10-05")
+IMU_CAL = _reference(
+    "parameters/lsm9ds1_cal.local.yaml", "calibrate_imu.py, 2026-10-04"
+)
+DYNAMICS_RUNS = _reference(
+    "bags/dynamics", "the ten straight runs' /drive and /odom/integrated"
+)
+SCANS = _reference("bags", "the /scan of every recording")
+RACECARSIM = Source(
+    "RacecarSim",
+    "the RACECAR Neo V2 car of RacecarSim, the RACECAR Neo simulator in Unity:"
+    " Assets/Scripts/Editor/RacecarPrefabSetup.cs, 2026-10",
+)
+RACECARSIM_MODEL = Source(
+    "RacecarSim model",
+    "RacecarSim's model of the RACECAR Neo V2, Assets/Models/RacecarNeoV2/"
+    "RacecarNeoV2.fbx, 2026-10",
+)
+FIT = Source(
+    "model fit",
+    "fitted in the MuJoCo model, assets/racecar_neo_v2.xml, to the reference"
+    " car's runs, 2026-10-20; validation/test_racecar_neo_v2.py holds the model"
+    " to the runs",
+)
 
 
 RACECAR_NEO_V2 = RacecarNeoV2(
