@@ -21,43 +21,25 @@ def _wall_names(spec: mujoco.MjSpec) -> set[str]:
     return {geom.name for geom in walls.geoms}
 
 
-# --- the walls body ----------------------------------------------------------
-
-
-def test_corridor_walls_are_in_the_walls_body():
+def test_the_walls_body_holds_exactly_the_walls_of_each_track():
+    """The ramp of ramp_course.xml is drivable, so it is not a wall; every
+    panel and post of f1_track.xml is a wall, and the floor is not. The bare
+    car of neoracer.xml has no walls, and its scene gets an empty walls body,
+    so it has the same truth sensors as a track."""
     assert _wall_names(corridor_scene().spec) == {
         "corridor_wall_left",
         "corridor_wall_right",
     }
-
-
-def test_ramp_and_floor_are_not_walls():
-    """The ramp in ramp_course.xml is drivable, so it is not in the walls
-    body."""
     ramp_course = os.path.join(assets.TRACK_DIR, "ramp_course.xml")
     assert _wall_names(mujoco.MjSpec.from_file(ramp_course)) == {"turn1", "turn2"}
-
-
-def test_every_f1_geom_but_the_floor_is_a_wall():
-    """Every panel and post of f1_track.xml is a wall; the floor is not."""
-    spec = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "f1_track.xml"))
-    names = _wall_names(spec)
-    assert len(names) == spec.compile().ngeom - 1
+    f1 = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "f1_track.xml"))
+    names = _wall_names(f1)
+    assert len(names) == f1.compile().ngeom - 1
     assert "floor" not in names
-
-
-def test_the_bare_car_gets_an_empty_walls_body():
-    """neoracer.xml has no walls. Its scene gets an empty walls body, so it
-    has the same truth sensors as a track."""
     assert _wall_names(assets.load().spec) == set()
 
 
 # --- car_touches_wall / reset_car --------------------------------------------
-
-
-def test_no_contact_at_rest_in_corridor_center():
-    scene = corridor_scene()
-    assert not car_touches_wall(sim.settle(scene.model), scene.car)
 
 
 def test_reset_after_wall_penetration_restores_the_spawn_state():
@@ -91,9 +73,3 @@ def test_no_contact_when_driving_down_the_center():
     for _ in range(round(1.0 / model.opt.timestep)):  # 1 s
         mujoco.mj_step(model, data)
         assert not car_touches_wall(data, scene.car)
-
-
-def test_bare_car_never_touches_a_wall():
-    """The bare car model has no walls, so no contact is a wall contact."""
-    scene = assets.load()
-    assert not car_touches_wall(sim.settle(scene.model), scene.car)

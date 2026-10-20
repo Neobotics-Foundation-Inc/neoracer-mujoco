@@ -7,7 +7,6 @@ update() is pure, so these tests call it directly, without a window or the simul
 import itertools
 
 import numpy as np
-import pytest
 
 from examples.manual_drive import ManualDriveParams, Pedal, SteerKey, update
 from neoracer_mujoco.control.steering import ControlCommand
@@ -57,20 +56,23 @@ def test_released_steer_returns_to_exactly_center():
     assert min(steers) == 0.0
 
 
-@pytest.mark.parametrize("seed", range(5))
-def test_mirrored_keys_give_a_mirrored_command(seed):
-    """Reverse and right on a mirrored command give the mirror of forward and left."""
-    rng = np.random.default_rng(seed)
-    command = ControlCommand(
-        throttle=float(rng.uniform(-PARAMS.throttle.max, PARAMS.throttle.max)),
-        steer=float(rng.uniform(-PARAMS.steering.max, PARAMS.steering.max)),
-    )
+def test_mirrored_keys_give_a_mirrored_command():
+    """Reverse and right on a mirrored command give the mirror of forward and
+    left, from any command."""
+    rng = np.random.default_rng(0)
     pairs: list[tuple[Pedal, SteerKey, Pedal, SteerKey]] = [
         ("forward", "left", "reverse", "right"),
         ("coast", "center", "coast", "center"),
         ("reverse", "center", "forward", "center"),
     ]
-    for pedal, steer_key, mirror_pedal, mirror_steer_key in pairs:
-        direct = update(PARAMS, command, DT, pedal, steer_key)
-        mirrored = update(PARAMS, _mirror(command), DT, mirror_pedal, mirror_steer_key)
-        assert mirrored == _mirror(direct)
+    for _ in range(5):
+        command = ControlCommand(
+            throttle=float(rng.uniform(-PARAMS.throttle.max, PARAMS.throttle.max)),
+            steer=float(rng.uniform(-PARAMS.steering.max, PARAMS.steering.max)),
+        )
+        for pedal, steer_key, mirror_pedal, mirror_steer_key in pairs:
+            direct = update(PARAMS, command, DT, pedal, steer_key)
+            mirrored = update(
+                PARAMS, _mirror(command), DT, mirror_pedal, mirror_steer_key
+            )
+            assert mirrored == _mirror(direct), (command, pedal, steer_key)

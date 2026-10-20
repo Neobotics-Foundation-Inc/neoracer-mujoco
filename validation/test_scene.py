@@ -15,33 +15,31 @@ from neoracer_mujoco import Scene, assets, contract, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
 
 
-def test_reversed_car_has_another_layout():
-    """The reordered car really moves the actuators and the sensors in the
-    compiled arrays, so the laws below compare two different layouts."""
-
-    def layout(scene: Scene) -> tuple[list[int], int]:
-        model, car = scene.model, scene.car
-        ctrl = [model.bind_scalar(a).id for a in (car.drive, car.steer)]
-        return ctrl, int(model.bind_scalar(car.sensors.imu_accel).adr[0])
-
-    assert layout(assets.load()) != layout(reversed_car())
+def _layout(scene: Scene) -> tuple[list[int], int]:
+    """Where the actuators sit in ctrl and where one sensor sits in
+    sensordata."""
+    model, car = scene.model, scene.car
+    ctrl = [model.bind_scalar(a).id for a in (car.drive, car.steer)]
+    return ctrl, int(model.bind_scalar(car.sensors.imu_accel).adr[0])
 
 
-@pytest.mark.parametrize(("throttle", "steer"), [(0.7, -0.3), (-1.0, 0.4)])
-def test_apply_command_writes_each_named_actuator(throttle, steer):
+def test_apply_command_writes_each_named_actuator():
     """apply_command writes the throttle, as that fraction of the motor's
     voltage limit, to the drive motor and the steer to the steering servo,
     whatever their order in the XML."""
-    for scene in (assets.load(), reversed_car()):
-        data = mujoco.MjData(scene.model)
-        sim.apply_command(
-            scene.car, data, ControlCommand(throttle=throttle, steer=steer)
-        )
-        motor = scene.spec.actuator(contract.DRIVE_ACTUATOR)
-        voltage = contract.actuator_limits(scene.model, scene.car).voltage
-        assert data.bind_scalar(motor).ctrl[0] == throttle * voltage
-        steer_servo = scene.spec.actuator(contract.STEER_ACTUATOR)
-        assert data.bind_scalar(steer_servo).ctrl[0] == steer
+    cars = (assets.load(), reversed_car())
+    assert _layout(cars[0]) != _layout(cars[1])  # two different layouts
+    for throttle, steer in [(0.7, -0.3), (-1.0, 0.4)]:
+        for scene in cars:
+            data = mujoco.MjData(scene.model)
+            sim.apply_command(
+                scene.car, data, ControlCommand(throttle=throttle, steer=steer)
+            )
+            motor = scene.spec.actuator(contract.DRIVE_ACTUATOR)
+            voltage = contract.actuator_limits(scene.model, scene.car).voltage
+            assert data.bind_scalar(motor).ctrl[0] == throttle * voltage
+            steer_servo = scene.spec.actuator(contract.STEER_ACTUATOR)
+            assert data.bind_scalar(steer_servo).ctrl[0] == steer
 
 
 def test_read_does_not_depend_on_the_sensor_order():
@@ -52,7 +50,9 @@ def test_read_does_not_depend_on_the_sensor_order():
         data = sim.settle(scene.model)
         return sensors.read(scene.car.sensors, data)
 
-    a, b = settled_readings(assets.load()), settled_readings(reversed_car())
+    car, reversed_ = assets.load(), reversed_car()
+    assert _layout(car) != _layout(reversed_)  # two different layouts
+    a, b = settled_readings(car), settled_readings(reversed_)
     for f in fields(sensors.SensorReadings):
         np.testing.assert_allclose(
             getattr(a, f.name), getattr(b, f.name), atol=1e-9, err_msg=f.name

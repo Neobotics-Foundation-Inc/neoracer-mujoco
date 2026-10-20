@@ -80,28 +80,24 @@ def test_a_scene_spec_compiles_again():
     assert again.model.nsensor == scene.model.nsensor
 
 
-@pytest.mark.parametrize(
-    "other",
-    [
+def test_a_sensor_with_a_truth_name_but_another_definition_is_rejected():
+    """A car XML that already has a sensor named truth_zaxis, but on another
+    object, in another frame, with a cutoff or with noise, does not compile:
+    car_upright_cos would read the wrong value."""
+    for other in [
         {"objtype": mujoco.mjtObj.mjOBJ_SITE, "objname": "imu"},
         {"reftype": mujoco.mjtObj.mjOBJ_SITE, "refname": "imu"},
         {"cutoff": 0.5},
         {"noise": 0.01},
-    ],
-    ids=["another object", "another frame", "a cutoff", "noise"],
-)
-def test_a_sensor_with_a_truth_name_but_another_definition_is_rejected(other):
-    """A car XML that already has a sensor named truth_zaxis, but with other
-    settings, does not compile: car_upright_cos would read the wrong value."""
-    spec = mujoco.MjSpec.from_file(assets.DEFAULT_CAR)
-    spec.add_sensor(
-        **{
-            "name": truth.ZAXIS,
-            "type": mujoco.mjtSensor.mjSENS_FRAMEZAXIS,
-            "objtype": mujoco.mjtObj.mjOBJ_XBODY,
-            "objname": "car",
-        }
-        | other
-    )
-    with pytest.raises(ValueError, match=truth.ZAXIS):
-        compile_scene(spec)
+    ]:
+        spec = mujoco.MjSpec.from_file(assets.DEFAULT_CAR)
+        sensor = spec.add_sensor(
+            name=truth.ZAXIS,
+            type=mujoco.mjtSensor.mjSENS_FRAMEZAXIS,
+            objtype=mujoco.mjtObj.mjOBJ_XBODY,
+            objname="car",
+        )
+        for field, setting in other.items():
+            setattr(sensor, field, setting)
+        with pytest.raises(ValueError, match=truth.ZAXIS):
+            compile_scene(spec)

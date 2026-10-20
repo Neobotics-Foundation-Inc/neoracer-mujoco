@@ -5,13 +5,14 @@ import pytest
 from examples.track_centering_demo import DemoParams, run
 
 
-@pytest.mark.parametrize(
-    "bad",
-    [{"steps": 3}, {"print_every_steps": 0}, {"viewer_duration_s": 0.0}],
-)
-def test_demo_params_reject_values_that_give_no_report(bad):
-    with pytest.raises(ValueError):
-        DemoParams(**bad)
+def test_demo_params_reject_values_that_give_no_report():
+    for make in [
+        lambda: DemoParams(steps=3),
+        lambda: DemoParams(print_every_steps=0),
+        lambda: DemoParams(viewer_duration_s=0.0),
+    ]:
+        with pytest.raises(ValueError):
+            make()
 
 
 def test_headless_run_centers_the_car():

@@ -9,8 +9,6 @@ the same release.
 import dataclasses
 import importlib
 
-import pytest
-
 from neoracer_mujoco.contract import ActuatorLimits
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.scene import Car, Scene
@@ -37,10 +35,12 @@ USED_BY_NEORACER_RL = (
 )
 
 
-@pytest.mark.parametrize("name", USED_BY_NEORACER_RL)
-def test_name_used_by_neoracer_rl_exists(name):
-    module, attr = name.split(".")
-    assert hasattr(importlib.import_module(f"neoracer_mujoco.{module}"), attr)
+def test_the_names_used_by_neoracer_rl_exist():
+    def exists(name):
+        module, attr = name.split(".")
+        return hasattr(importlib.import_module(f"neoracer_mujoco.{module}"), attr)
+
+    assert [name for name in USED_BY_NEORACER_RL if not exists(name)] == []
 
 
 def test_records_used_by_neoracer_rl_keep_their_fields():

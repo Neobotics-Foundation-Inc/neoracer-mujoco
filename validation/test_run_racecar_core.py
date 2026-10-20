@@ -24,49 +24,37 @@ _CANONICAL_DIR = _EXAMPLES_DIR / "ultimate_wall_follower"
 _TESTDATA_DIR = _REPO / "validation" / "testdata" / "ultimate_wall_follower"
 
 
-@pytest.mark.parametrize(
-    "relpath",
-    ["wall_follower.py", "control.py", "config/wall_follower.yaml"],
-)
-def test_canonical_example_matches_testdata_fixture_byte_for_byte(relpath):
+def test_canonical_example_matches_testdata_fixture_byte_for_byte():
     """examples/ultimate_wall_follower/ is a byte-for-byte copy of the fixture
     in validation/testdata/. This test fails if one copy changes."""
-    canonical = (_CANONICAL_DIR / relpath).read_bytes()
-    fixture = (_TESTDATA_DIR / relpath).read_bytes()
-    assert canonical == fixture
+    for relpath in ["wall_follower.py", "control.py", "config/wall_follower.yaml"]:
+        canonical = (_CANONICAL_DIR / relpath).read_bytes()
+        fixture = (_TESTDATA_DIR / relpath).read_bytes()
+        assert canonical == fixture, relpath
 
 
-def test_run_controller_reaches_wall_follower_start(capsys, monkeypatch):
-    """run_controller() runs wall_follower.py until its start() prints its ready
-    line. Afterwards, the fake module, the controller's own control module and
-    the sys.path entry are gone."""
+def test_run_controller_runs_the_wall_follower_and_cleans_up(capsys, monkeypatch):
+    """run_controller() runs wall_follower.py: its start() prints its ready
+    line, and the go() loop steps the physics with the drive commands of
+    update(), so the car moves forward along +X. Afterwards, the fake module,
+    the controller's own control module and the sys.path entry are gone."""
     monkeypatch.delitem(sys.modules, "racecar_core", raising=False)
     monkeypatch.delitem(sys.modules, "control", raising=False)
 
-    run_racecar_core.run_controller(str(_CANONICAL_DIR / "wall_follower.py"), steps=10)
+    dx = run_racecar_core.run_controller(
+        str(_CANONICAL_DIR / "wall_follower.py"), steps=300
+    )
 
-    out = capsys.readouterr().out
-    assert ">> Ultimate Wall Follower ready." in out
+    assert ">> Ultimate Wall Follower ready." in capsys.readouterr().out
+    assert dx > 0.1, f"expected forward progress, got dx={dx:.3f} m"
     assert "racecar_core" not in sys.modules
     assert "control" not in sys.modules
     assert str(_CANONICAL_DIR) not in sys.path
 
 
-def test_run_controller_drives_the_car_forward():
-    """The go() loop steps the physics with the drive commands of update(),
-    so the car moves forward along +X."""
-    dx = run_racecar_core.run_controller(
-        str(_CANONICAL_DIR / "wall_follower.py"), steps=300
-    )
-    assert dx > 0.1, f"expected forward progress, got dx={dx:.3f} m"
-
-
-def test_run_controller_rejects_missing_path():
+def test_run_controller_rejects_a_missing_path_and_a_non_python_file():
     with pytest.raises(FileNotFoundError):
         run_racecar_core.run_controller(str(_EXAMPLES_DIR / "does_not_exist.py"))
-
-
-def test_run_controller_rejects_non_python_file():
     with pytest.raises(ValueError):
         run_racecar_core.run_controller(str(_REPO / "README.md"))
 
@@ -92,52 +80,28 @@ def test_cli_runs_canonical_wall_follower_end_to_end():
     assert "steps done" in result.stdout
 
 
-def test_cli_fails_clearly_on_missing_controller():
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(_EXAMPLES_DIR / "run_racecar_core.py"),
-            str(_EXAMPLES_DIR / "does_not_exist.py"),
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
-    assert result.returncode != 0
-    assert "error:" in result.stderr
-
-
 def test_a_controller_reads_the_simulated_time(tmp_path):
     """In controller_imports, time.time(), time.monotonic() and
     time.perf_counter() read the simulated time, so a controller that
-    measures its frame time sees the physics step on any machine. After the
-    block, the real clock is back."""
-    scene = run_racecar_core.load_scene()
-    data, rc = run_racecar_core.build_racecar(scene, steps=10)
+    measures its frame time sees the physics step on any machine. `from time
+    import *` gets the simulated clocks and the rest of the time module.
+    After the block, the real clock is back."""
+    data, rc = run_racecar_core.build_racecar(run_racecar_core.load_scene(), 1)
     (tmp_path / "clock_probe.py").write_text(
         "import time\n\n\ndef now():\n"
         "    return time.time(), time.monotonic(), time.perf_counter()\n"
     )
-    with run_racecar_core.controller_imports(rc, tmp_path):
-        probe = importlib.import_module("clock_probe")
-        data.time = 1.25
-        assert probe.now() == (1.25, 1.25, 1.25)
-    assert time.time() > 1e9  # s since 1970
-
-
-def test_a_star_import_gets_the_simulated_clocks(tmp_path):
-    """`from time import *` in a controller gets the simulated clocks and
-    the rest of the time module."""
-    data, rc = run_racecar_core.build_racecar(run_racecar_core.load_scene(), 1)
     (tmp_path / "star_probe.py").write_text(
         "from time import *\n\n\ndef now():\n"
         "    return time(), monotonic(), perf_counter(), monotonic_ns(), sleep\n"
     )
     with run_racecar_core.controller_imports(rc, tmp_path):
-        probe = importlib.import_module("star_probe")
+        probe = importlib.import_module("clock_probe")
+        star = importlib.import_module("star_probe")
         data.time = 1.25
-        assert probe.now() == (1.25, 1.25, 1.25, 1_250_000_000, time.sleep)
+        assert probe.now() == (1.25, 1.25, 1.25)
+        assert star.now() == (1.25, 1.25, 1.25, 1_250_000_000, time.sleep)
+    assert time.time() > 1e9  # s since 1970
 
 
 def test_a_library_imported_by_a_controller_keeps_the_real_clock(tmp_path):

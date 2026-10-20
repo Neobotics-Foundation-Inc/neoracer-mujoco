@@ -8,8 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 _GITHUB = Path(__file__).parents[1] / ".github"
 sys.path.insert(0, str(_GITHUB))  # citation.py imports ai_credit.py next to it
 _SPEC = importlib.util.spec_from_file_location("citation", _GITHUB / "citation.py")
@@ -31,32 +29,26 @@ NOT_PEOPLE = (
 )
 
 
-@pytest.mark.parametrize("identity", PEOPLE)
-def test_a_person_is_an_author(identity):
-    assert citation.is_person(identity)
-
-
-@pytest.mark.parametrize("identity", NOT_PEOPLE)
-def test_an_ai_tool_or_a_bot_is_not_an_author(identity):
-    assert not citation.is_person(identity)
+def test_a_person_is_an_author_and_an_ai_tool_or_a_bot_is_not():
+    assert [i for i in PEOPLE if not citation.is_person(i)] == []
+    assert [i for i in NOT_PEOPLE if citation.is_person(i)] == []
 
 
 def test_authors_are_ranked_by_credited_commits_then_by_first_credit():
+    """Each commit counts once for each person it credits, however often it
+    names them, and only people count."""
     a, b, c = (f"{n} <{n.lower()}@example.com>" for n in ("Ann Lee", "Bo Kim", "Cy Wu"))
     commits = [[c], [a, *NOT_PEOPLE], [b], [a, NOT_PEOPLE[0]], [b], [c]]
     assert citation.ranked_people(commits) == [c, a, b]
+    # Ann is the author and a co-author of one commit; Bo authored two.
+    assert citation.ranked_people([[a, a], [b], [b]]) == [b, a]
 
 
-def test_a_person_counts_once_per_commit():
-    """Ann is the author and a co-author of one commit; Bo authored two."""
-    ann, bo = "Ann Lee <ann@example.com>", "Bo Kim <bo@example.com>"
-    assert citation.ranked_people([[ann, ann], [bo], [bo]]) == [bo, ann]
-
-
-def test_two_people_with_one_name_are_two_authors():
+def test_names_that_give_one_entry_get_the_email():
     """.mailmap keeps two Alex Smiths apart, so the citation does too: each
     gets an entry with the email, as CFF requires different entries. A name
-    that nobody else has gets no email."""
+    that nobody else has gets no email. cff_person splits a name at any run
+    of spaces, so names that differ only in spaces also need the email."""
     alex1, alex2 = "Alex Smith <a@one.org>", "Alex Smith <a@two.org>"
     sam = "Sam Roe <sam@example.com>"
     people = citation.ranked_people([[alex1], [alex2], [sam], [sam], [sam]])
@@ -67,13 +59,7 @@ def test_two_people_with_one_name_are_two_authors():
         'given-names: "Alex"\n    family-names: "Smith"\n    email: "a@one.org"\n',
         'given-names: "Alex"\n    family-names: "Smith"\n    email: "a@two.org"\n',
     ]
-
-
-def test_names_that_differ_only_in_spaces_get_the_email():
-    """cff_person splits a name at any run of spaces, so these two names give
-    the same entry and need the email to differ."""
-    people = ["Alex Smith <a@one.org>", "Alex  Smith <a@two.org>"]
-    text = citation.citation(people)
+    text = citation.citation(["Alex Smith <a@one.org>", "Alex  Smith <a@two.org>"])
     assert 'email: "a@one.org"' in text and 'email: "a@two.org"' in text
 
 
@@ -91,9 +77,8 @@ def test_a_credit_without_an_email_is_left_out(tmp_path, monkeypatch):
     ]
 
 
-@pytest.mark.parametrize(
-    ("name", "entry"),
-    [
+def test_the_family_name_keeps_its_particles():
+    for name, entry in [
         ("anshm", '  - alias: "anshm"\n'),
         ("Bassel Mabsout", '  - given-names: "Bassel"\n    family-names: "Mabsout"\n'),
         (
@@ -104,21 +89,16 @@ def test_a_credit_without_an_email_is_left_out(tmp_path, monkeypatch):
             "Mary Ann van der Berg",
             '  - given-names: "Mary Ann"\n    family-names: "van der Berg"\n',
         ),
-    ],
-)
-def test_the_family_name_keeps_its_particles(name, entry):
-    assert citation.cff_person(name) == entry
+    ]:
+        assert citation.cff_person(name) == entry, name
 
 
-def test_the_file_lists_the_top_five_authors():
+def test_the_file_lists_the_top_five_authors_once_each():
     """people come most commits first, so the authors are the first five."""
     people = [f"Person {c} <{c}@example.com>" for c in "ABCDEFG"]
     text = citation.citation(people)
     assert text.count("given-names") == 5
     assert 'family-names: "E"' in text and 'family-names: "F"' not in text
-
-
-def test_the_file_lists_each_author_once():
     text = citation.citation(
         ["Bassel Mabsout <b@example.com>", "anshm <a@example.com>"]
     )

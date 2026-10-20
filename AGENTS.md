@@ -250,6 +250,9 @@ class Stamped[T]:
   Examples of laws: a mirrored scene gives a mirrored command; a parse then a print gives the input; a second reset changes nothing.
 - Test pure functions directly, without the simulator.
   Use the simulator for the physics conformance tests.
+- Write one test for each law, and loop over its cases inside it, not with `parametrize`.
+  Name the case in the assert message, or wrap the loop body in `with case(name):` (validation/cases.py).
+- Do not test what another test or the type checker already proves.
 
 ## 13. Names and comments
 

@@ -2,8 +2,9 @@
 Laws for neoracer_mujoco.control.wall_following.
 
 The pure-logic tests call step() and compute_signals() with fake
-SensorReadings and do not use the simulator. The last test runs the
-controller on the car in straight_corridor.xml.
+SensorReadings and do not use the simulator; test_steering.py has the laws
+of the steer and throttle shaping. The last test runs the controller on the
+car in straight_corridor.xml.
 
 Steer sign: + = left (contract.py). With follow_side="right", a steer toward
 the wall is negative.
@@ -16,7 +17,7 @@ from fake_sensors import beams, mirror, random_beams
 from scenes import corridor_scene
 
 from neoracer_mujoco import sensors, sim
-from neoracer_mujoco.control import PDState, ShapingConfig
+from neoracer_mujoco.control import PDState, steering
 from neoracer_mujoco.control.wall_following import (
     WallFollowingConfig,
     compute_signals,
@@ -73,11 +74,6 @@ def test_steer_decreases_as_the_wall_distance_increases():
     assert np.all(steers[distances < RIGHT.target_distance - 1e-6] > 0.0)
 
 
-def test_at_target_distance_and_parallel_is_neutral():
-    readings = beams(lidar_270=0.3, lidar_315=0.3, lidar_225=0.3)
-    assert _command(RIGHT, readings).steer == pytest.approx(0.0, abs=1e-9)
-
-
 def test_nose_angled_toward_wall_corrects_away():
     """At the target distance, the front-right beam is shorter than the
     rear-right beam, so the nose points at the wall. The car steers away
@@ -89,31 +85,13 @@ def test_nose_angled_toward_wall_corrects_away():
     assert _command(RIGHT, readings).steer > 0.0
 
 
-def test_throttle_decreases_for_close_forward_obstacle():
-    clear = _command(RIGHT, beams(lidar_270=0.3, lidar_000=RIGHT.max_beam_range))
-    blocked = _command(RIGHT, beams(lidar_270=0.3, lidar_000=0.1))
-    assert blocked.throttle < clear.throttle
-    assert blocked.throttle == pytest.approx(0.0, abs=1e-9)
-
-
-def test_throttle_decreases_for_sharp_steering_correction():
-    straight = _command(RIGHT, beams(lidar_270=0.3))
-    state = PDState()
-    readings = beams(lidar_270=1.0)  # far from the wall: a large correction
-    for _ in range(200):  # 4 s
-        state, sharp = step(RIGHT, state, readings, DT)
-    assert sharp.throttle < straight.throttle
-
-
-def test_invalid_readings_trigger_safe_fallback():
+def test_too_many_corrupt_beams_give_the_fallback():
     nan = float("nan")
     readings = beams(lidar_270=nan, lidar_315=nan, lidar_225=nan, lidar_000=1.0)
-    control = _command(RIGHT, readings)
-    assert control.throttle == pytest.approx(
-        RIGHT.shaping.target_throttle * RIGHT.shaping.safe_fallback_throttle_fraction
-    )
-    assert abs(control.steer) < 0.05, (
-        "fallback must not issue an extreme steering command"
+    assert compute_signals(readings, RIGHT).n_corrupt > RIGHT.max_corrupt_beams
+    state = PDState(prev_error=0.4, prev_steer=0.2)
+    assert step(RIGHT, state, readings, DT) == steering.fallback(
+        RIGHT.shaping, state, DT
     )
 
 
@@ -122,46 +100,6 @@ def test_no_hit_reading_is_not_treated_as_corrupt():
     as corrupt."""
     readings = beams(lidar_270=-1.0, lidar_315=-1.0, lidar_225=-1.0)
     assert compute_signals(readings, RIGHT).n_corrupt == 0
-
-
-def test_steer_never_exceeds_the_steer_limit():
-    rng = np.random.default_rng(1)
-    for _ in range(500):
-        _, control = step(RIGHT, _random_state(rng), random_beams(rng), DT)
-        assert abs(control.steer) <= RIGHT.shaping.steer_limit
-
-
-def test_steer_saturates_at_the_steer_limit():
-    readings = beams(lidar_270=RIGHT.max_beam_range)  # far from the wall
-    state = PDState()
-    for _ in range(200):  # 4 s: the steer rate limit lets the steer reach its limit
-        state, control = step(RIGHT, state, readings, DT)
-    assert control.steer == pytest.approx(-RIGHT.shaping.steer_limit, abs=1e-6)
-
-
-def test_steer_slew_rate_limits_first_step():
-    cfg = WallFollowingConfig(
-        follow_side="right",
-        target_distance=0.3,
-        shaping=ShapingConfig(steer_slew_limit=1.0),
-    )
-    # Without the rate limit, this reading gives the full steer limit at once.
-    control = _command(cfg, beams(lidar_270=cfg.max_beam_range))
-    max_first_step_delta = cfg.shaping.steer_slew_limit * DT  # rad
-    assert abs(control.steer) <= max_first_step_delta + 1e-9
-    assert abs(control.steer) < cfg.shaping.steer_limit, (
-        "slew must prevent an instant jump to the limit"
-    )
-
-
-def test_step_is_a_pure_function():
-    """step() keeps no hidden state: the same (state, readings) gives the
-    same result, also after calls with other inputs."""
-    rng = np.random.default_rng(2)
-    cases = [(_random_state(rng), random_beams(rng)) for _ in range(200)]
-    first = [step(RIGHT, state, readings, DT) for state, readings in cases]
-    again = [step(RIGHT, state, readings, DT) for state, readings in reversed(cases)]
-    assert first == again[::-1]
 
 
 # --- physics integration: the compiled car in the corridor --------------------
