@@ -1,8 +1,10 @@
 # NeoRacer MuJoCo Simulator
 
-The NeoRacer is a 1/12-scale RC car that students program in Python through the `racecar_core` API. Each simulator of the car used to keep its own copy of the car's numbers, and the copies drifted apart. The Playground's car reached 6 m/s, while the real car tops out near 3.5 m/s. Nobody could say which wheelbase was right, because the CAD model, the docs and the ROS driver give three different values. Code that finds the car's parts by index in the compiled model breaks whenever the XML changes.
+The NeoRacer is a 1/12-scale RC car that students program in Python through the `racecar_core` API. Each simulator of the car used to keep its own copy of the car's numbers, and the copies drifted apart. The Playground's car reached 6 m/s, while the motor speed and gearing in the docs allow about 3.5 m/s. Nobody could say which wheelbase was right, because the CAD model, the docs and the ROS driver give three different values. Code that finds the car's parts by index in the compiled model breaks whenever the XML changes.
 
 This package keeps one description of the car, with the source of every number. The MuJoCo model, the sensor settings and the JavaScript package's numbers are all computed from it. Code reaches the car's parts through the elements of the model it was compiled from, so the same code drives the car alone, on any track, or in a batch of hundreds.
+
+The sections below follow the order in which the pieces build on one another: the spec, a scene compiled from it, the car on a track, what the car and the track give together, a variant of the car, and batches of cars. After them come the layout of the repository, installation, and how close the model is to the real car.
 
 The Gymnasium environment and the reinforcement learning live in [neoracer-rl](https://github.com/Neobotics-Foundation-Inc/neoracer-rl).
 
@@ -28,7 +30,7 @@ from neoracer_spec.provenance import Estimated, walk
 # ['chassis.com_height', 'chassis.inertia', 'wheel.mass', 'wheel.friction', ...]
 ```
 
-Simulators do not read the spec. `derive(spec)` turns a `Spec` into `DerivedParams`, the numbers a simulator needs:
+The simulators never read the spec itself. `derive(spec)` turns a `Spec` into `DerivedParams`, the numbers a simulator needs:
 - the model's masses, inertias, springs and motor (`ModelParams`);
 - the LiDAR's scan rate and resolution;
 - the encoder's filter;
@@ -45,7 +47,7 @@ Run both after you edit the spec. A test fails while either file is out of step 
 
 ## A scene
 
-MuJoCo compiles an `MjSpec`, the editable form of a model, into an `MjModel`, the arrays it simulates. A `Scene` keeps the two together:
+MuJoCo compiles an `MjSpec`, the editable form of a model, into an `MjModel`, the arrays it simulates. A `Scene` keeps the two together; `scene.py` defines it as:
 
 ```python
 @dataclass(frozen=True)
@@ -55,11 +57,17 @@ class Scene:
     car: Car               # the car's parts, as elements of spec
 ```
 
-`Car` holds the car's body, free joint, two actuators, wheel geoms, LiDAR site and sensors. Each one is an element of `spec`. Code binds an element to the model or to the data where it uses it, and never computes an index:
+`Car` holds the car's body, free joint, two actuators, wheel geoms, LiDAR site and sensors. Each one is an element of `spec`. Code binds an element to the model or to the data where it uses it, and never computes an index. With `data` an `MjData` of the scene's model:
 
 ```python
 data.bind_scalar(scene.car.steer).ctrl = 0.2  # rad, + = left
 ```
+
+The two actuators are MuJoCo `dcmotor`s:
+- **The drive motor** takes the voltage at its terminals. Its torque falls as the car speeds up, and 0 V brakes.
+- **The steering servo** runs its own position loop, so it turns the wheels no faster than a real servo.
+
+Two equality constraints split the steering angle into the front wheels' Ackermann angles.
 
 `load()` compiles the car alone, on a floor. This drives it for a second and reads its sensors:
 
@@ -74,7 +82,7 @@ data = sim.settle(scene.model)  # the car at rest on the floor
 sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.2))
 for _ in range(360):  # 1 s at 360 Hz
     mujoco.mj_step(scene.model, data)
-read(scene.car.sensors, data)  # IMU, steering angles, wheel speeds, ...
+read(scene.car.sensors, data)  # IMU, steering angles, wheel speeds, suspension, rangefinders
 ```
 
 The throttle is a share of the battery's 11.1 V, from -1 to 1. The steer is the steering angle in radians, + to the left, up to full lock at 0.4405.
@@ -92,9 +100,9 @@ track = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xm
 scene = assets.compose(track)
 ```
 
-`apply_command` and `read` take `scene.car`, not the scene, so the loop above drives the car on the track unchanged. Code that works on the car keeps working wherever the car is.
+`apply_command` takes `scene.car` and `read` takes `scene.car.sensors`, not the whole scene, so the loop above drives the car on the track unchanged. Code that works on the car keeps working wherever the car is.
 
-`assets/tracks/` holds four tracks, and `track_generation` makes new ones. `generate_track` is geometry only: it takes a seed and settings, and returns either a `Track` or `NoValidTrack`. A `Track` is the sampled centerline of a closed corridor, with its width at each sample. `NoValidTrack` means no candidate passed the checks for tight corners, self-crossing and length. `to_spec` turns a `Track` into a track `MjSpec`:
+`assets/tracks/` holds four tracks, and `track_generation` makes new ones. `generate_track` is geometry only: it takes a seed and settings, and returns either a `Track` or `NoValidTrack`. A `Track` is the sampled centerline of a closed corridor, with its width at each sample. A closed random walk draws the control points, so tracks have S-bends and hairpins as well as ovals. A candidate that has a corner too tight for the car, touches itself or has the wrong length is repaired where it fails or drawn again, and `NoValidTrack` means none passed. The same seed always gives the same track. Difficulty runs from 0, gentle and wide, to 3, tight and narrow. `to_spec` turns a `Track` into a track `MjSpec`:
 
 ```python
 from neoracer_mujoco.track_generation import (
@@ -178,7 +186,7 @@ import numpy as np
 from neoracer_mujoco import batch
 from neoracer_mujoco.physics import Physics
 
-scene = assets.compose(to_spec(track), visuals=False)  # without the meshes that only show the car
+scene = assets.compose(to_spec(track), visuals=False)
 cpu = batch.CpuBatch(scene, nbatch=64, nthread=4)
 state = cpu.initial([sim.settle(scene.model)] * 64, [scene] * 64, [Physics()] * 64)
 ctrl = batch.command(scene.model, scene.car, np.full(64, 0.5), np.zeros(64))
@@ -191,7 +199,9 @@ A spec variant and `Physics` both change the car, in different ways:
 - **A spec variant is a different car.** Its model is compiled from its own numbers.
 - **`Physics` scales a compiled car's numbers without recompiling.** It holds factors on the wheel friction, the chassis mass, the motor torque and the steering stiffness. `physics.sample` draws one from `PhysicsRanges`, so each row of a batch can train on a slightly different car.
 
-A row of a `CpuBatch` steps the same, bit for bit, as one `MjData` stepped the same way. `batch.py` explains why, and how rows can each have their own track.
+A row of a `CpuBatch` steps the same, bit for bit, as one `MjData` stepped the same way. A `WarpBatch` row is close but not equal: after ten steps from rest, the cars are within 1 mm. On 4 cores, 64 rows run 7,000 to 8,000 env steps a second.
+
+`visuals=False` matters for speed: without the meshes that only show the car, the model shrinks from 35 MB to 1.6 MB, with the same physics. A `CpuBatch` can also step each row on its own track, if every track compiles to a model of the same size: generate them with `WallParams(boxes_per_wall=192)`. `batch.py` has the details.
 
 ## Where the code lives
 
