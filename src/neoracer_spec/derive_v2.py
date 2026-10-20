@@ -34,12 +34,140 @@ from .derive import EncoderParams, G, LidarParams, Polynomial, precise
 from .racecar_neo_v2 import RacecarNeoV2
 from .spec import Vec3
 
-TIMESTEP = 1 / 360  # s, the model's step, as every track's
-WHEEL_STEER_MARGIN = 0.015  # rad, so the wheels' steer joint limits never bind
-INPUT_BODY_MASS = 0.01  # kg, the steering input's light virtual body
-
 type Sides = tuple[float, float]  # left, right
 type Axles = tuple[float, float]  # front, rear
+
+
+@dataclass(frozen=True)
+class DerivedParams:
+    """Everything the simulators need, derived from a RacecarNeoV2."""
+
+    model: ModelParams
+    lidar: LidarParams
+    encoder: EncoderParams
+    wheel_radius: float  # m, that the encoder's speed is measured at
+    steer_lock: float  # rad of steering input at a command of 1
+
+
+def derive(spec: RacecarNeoV2) -> DerivedParams:
+    m = model(spec)
+    return DerivedParams(
+        model=m,
+        lidar=lidar_params(spec),
+        encoder=encoder_params(spec),
+        wheel_radius=m.wheel_radius,
+        steer_lock=m.steering.lock,
+    )
+
+
+def lidar_params(spec: RacecarNeoV2) -> LidarParams:
+    """A slot every sample of a turn, out to its range; it sees all around:
+    the car blocks none of its turn, but its antennas are in it."""
+    lidar = spec.lidar
+    return LidarParams(
+        slots=lidar.samples.value,
+        scan_rate=lidar.scan_rate.value,
+        max_range=lidar.max_range.value,
+        field=2 * math.pi,
+    )
+
+
+def encoder_params(spec: RacecarNeoV2) -> EncoderParams:
+    """A speed every telemetry frame, unfiltered: nobody has measured the
+    firmware's filter."""
+    return EncoderParams(window=1 / spec.odometry.telemetry_rate.value, alpha=1.0)
+
+
+# --- the model ----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ModelParams:
+    """The car model's numbers. Positions are in the car's body frame."""
+
+    spawn_height: float  # m, of the body frame above the floor
+    chassis_mass: float  # kg
+    chassis_com: Vec3  # m
+    chassis_inertia: Vec3  # kg·m²
+    boxes: tuple[Box, ...]
+    antenna_center: Vec3  # m, the left antenna's; the right one is its mirror
+    antenna_radius: float  # m
+    antenna_half_length: float  # m
+    imu_position: Vec3  # m
+    lidar_position: Vec3  # m
+    lidar_yaw: float  # rad, of the scan's bearing 0 from +X
+    half_wheelbase: float  # m
+    half_track: float  # m
+    wheel_radius: float  # m
+    tyre_half_width: float  # m
+    wheel_mass: float  # kg
+    grip: Axles
+    input_body_mass: float  # kg
+    spring_stiffness: Axles  # N/m
+    spring_damping: Axles  # N·s/m
+    spring_ref: Axles  # m
+    half_travel: float  # m
+    drive: DriveParams
+    servo: ServoParams
+    steering: SteeringParams
+
+
+@dataclass(frozen=True)
+class Box:
+    name: str
+    center: Vec3  # m
+    half_size: Vec3  # m
+
+
+INPUT_BODY_MASS = 0.01  # kg, the steering input's light virtual body
+
+
+def model(spec: RacecarNeoV2) -> ModelParams:
+    c, sh, w, s = spec.chassis, spec.shape, spec.wheel, spec.suspension
+    drop = sh.payload_drop.value
+    top = spec.footprint.antenna_top.value
+    bottom = sh.antenna_bottom.value - drop
+    payload = tuple(
+        replace(b, center=(b.center[0], b.center[1], b.center[2] - drop))
+        for b in sh.payload_boxes.value
+    )
+    refs = spring_refs(spec)
+    return ModelParams(
+        # 1 mm above its resting height, the axles at the tyre radius
+        spawn_height=precise(wheel_radius(spec) + 0.001),
+        chassis_mass=precise(chassis_mass(spec)),
+        chassis_com=_precise3(chassis_com(spec)),
+        chassis_inertia=_precise3(chassis_inertia(spec)),
+        boxes=tuple(
+            Box(b.name, _precise3(body(spec, b.center)), _precise3(b.half_size))
+            for b in sh.chassis_boxes.value + payload
+        ),
+        antenna_center=_precise3(
+            body(spec, (sh.antenna_x.value, sh.antenna_y.value, (top + bottom) / 2))
+        ),
+        antenna_radius=precise(sh.antenna_diameter.value / 2),
+        antenna_half_length=precise((top - bottom) / 2),
+        imu_position=_precise3(body(spec, spec.imu.position.value)),
+        lidar_position=_precise3(body(spec, spec.lidar.position.value)),
+        lidar_yaw=precise(math.radians(spec.lidar.yaw_degrees.value - 180)),
+        half_wheelbase=precise(c.wheelbase.value / 2),
+        half_track=precise(c.track.value / 2),
+        wheel_radius=precise(wheel_radius(spec)),
+        tyre_half_width=precise(w.width.value / 2),
+        wheel_mass=precise(w.mass.value),
+        grip=(precise(w.grip.value.front), precise(w.grip.value.rear)),
+        input_body_mass=precise(INPUT_BODY_MASS),
+        spring_stiffness=(
+            precise(s.stiffness.value.front),
+            precise(s.stiffness.value.rear),
+        ),
+        spring_damping=(precise(s.damping.value.front), precise(s.damping.value.rear)),
+        spring_ref=(precise(refs[0]), precise(refs[1])),
+        half_travel=precise(s.travel.value / 2),
+        drive=drive(spec),
+        servo=servo(spec),
+        steering=steering(spec),
+    )
 
 
 def body(spec: RacecarNeoV2, p: Vec3) -> Vec3:
@@ -59,29 +187,24 @@ def _precise3(v: Vec3) -> Vec3:
 # --- mass ---------------------------------------------------------------------
 
 
-def wheel_radius(spec: RacecarNeoV2) -> float:
-    return spec.wheel.diameter.value / 2
+def chassis_mass(spec: RacecarNeoV2) -> float:
+    """The chassis body's mass (kg): the car's less its wheels and the
+    steering input's body."""
+    return spec.chassis.mass.value - 4 * spec.wheel.mass.value - INPUT_BODY_MASS
 
 
-def wheel_inertia(spec: RacecarNeoV2) -> Vec3:
-    """A wheel's principal inertia (kg·m²) about its centre, as a solid
-    cylinder: about X, its spin axis Y, and Z."""
-    m, r, w = spec.wheel.mass.value, wheel_radius(spec), spec.wheel.width.value
-    across = m * (3 * r**2 + w**2) / 12
-    return (across, m * r**2 / 2, across)
+def chassis_com(spec: RacecarNeoV2) -> Vec3:
+    """The chassis body's centre of mass: the car's, less the wheels and the
+    steering input's body, which sit on the axle line."""
+    x, y, z = (float(v) for v in _chassis_com(spec))
+    return (x, y, z)
 
 
-def effective_mass(spec: RacecarNeoV2) -> float:
-    """The mass that a force at the tyres accelerates (kg): the car's and
-    its wheels' spin. A solid wheel adds half its mass for each of four."""
-    return (
-        spec.chassis.mass.value + 4 * wheel_inertia(spec)[1] / wheel_radius(spec) ** 2
-    )
-
-
-def _wheel_centres(spec: RacecarNeoV2) -> list[np.ndarray]:
-    x, y = spec.chassis.wheelbase.value / 2, spec.chassis.track.value / 2
-    return [np.array([sx * x, sy * y, 0.0]) for sx in (1, -1) for sy in (1, -1)]
+def _chassis_com(spec: RacecarNeoV2) -> np.ndarray:
+    m, mw = spec.chassis.mass.value, spec.wheel.mass.value
+    moment = m * car_com(spec) - mw * sum(_wheel_centres(spec))
+    moment -= INPUT_BODY_MASS * _input_centre(spec)
+    return moment / chassis_mass(spec)
 
 
 def car_com(spec: RacecarNeoV2) -> np.ndarray:
@@ -92,33 +215,13 @@ def car_com(spec: RacecarNeoV2) -> np.ndarray:
     return np.array(body(spec, (x, 0.0, c.com_height.value)))
 
 
-def chassis_mass(spec: RacecarNeoV2) -> float:
-    """The chassis body's mass (kg): the car's less its wheels and the
-    steering input's body."""
-    return spec.chassis.mass.value - 4 * spec.wheel.mass.value - INPUT_BODY_MASS
+def _wheel_centres(spec: RacecarNeoV2) -> list[np.ndarray]:
+    x, y = spec.chassis.wheelbase.value / 2, spec.chassis.track.value / 2
+    return [np.array([sx * x, sy * y, 0.0]) for sx in (1, -1) for sy in (1, -1)]
 
 
 def _input_centre(spec: RacecarNeoV2) -> np.ndarray:
     return np.array([spec.chassis.wheelbase.value / 2, 0.0, 0.0])
-
-
-def _chassis_com(spec: RacecarNeoV2) -> np.ndarray:
-    m, mw = spec.chassis.mass.value, spec.wheel.mass.value
-    moment = m * car_com(spec) - mw * sum(_wheel_centres(spec))
-    moment -= INPUT_BODY_MASS * _input_centre(spec)
-    return moment / chassis_mass(spec)
-
-
-def chassis_com(spec: RacecarNeoV2) -> Vec3:
-    """The chassis body's centre of mass: the car's, less the wheels and the
-    steering input's body, which sit on the axle line."""
-    x, y, z = (float(v) for v in _chassis_com(spec))
-    return (x, y, z)
-
-
-def _shift(mass: float, d: np.ndarray) -> np.ndarray:
-    """A point mass's inertia (kg·m²) about a point d from it."""
-    return mass * (float(d @ d) * np.eye(3) - np.outer(d, d))
 
 
 def chassis_inertia(spec: RacecarNeoV2) -> Vec3:
@@ -134,6 +237,31 @@ def chassis_inertia(spec: RacecarNeoV2) -> Vec3:
     return (float(inertia[0, 0]), float(inertia[1, 1]), float(inertia[2, 2]))
 
 
+def _shift(mass: float, d: np.ndarray) -> np.ndarray:
+    """A point mass's inertia (kg·m²) about a point d from it."""
+    return mass * (float(d @ d) * np.eye(3) - np.outer(d, d))
+
+
+def wheel_inertia(spec: RacecarNeoV2) -> Vec3:
+    """A wheel's principal inertia (kg·m²) about its centre, as a solid
+    cylinder: about X, its spin axis Y, and Z."""
+    m, r, w = spec.wheel.mass.value, wheel_radius(spec), spec.wheel.width.value
+    across = m * (3 * r**2 + w**2) / 12
+    return (across, m * r**2 / 2, across)
+
+
+def wheel_radius(spec: RacecarNeoV2) -> float:
+    return spec.wheel.diameter.value / 2
+
+
+def effective_mass(spec: RacecarNeoV2) -> float:
+    """The mass that a force at the tyres accelerates (kg): the car's and
+    its wheels' spin. A solid wheel adds half its mass for each of four."""
+    return (
+        spec.chassis.mass.value + 4 * wheel_inertia(spec)[1] / wheel_radius(spec) ** 2
+    )
+
+
 def spring_refs(spec: RacecarNeoV2) -> Axles:
     """Each axle's springs' rest position (m): each spring holds its share of
     the weight on its axle, less the wheels, with its joint at 0."""
@@ -145,38 +273,6 @@ def spring_refs(spec: RacecarNeoV2) -> Axles:
 
 
 # --- drive --------------------------------------------------------------------
-
-
-def steady_speed_line(spec: RacecarNeoV2) -> tuple[float, float]:
-    """The steady speed (m/s) at a throttle t > 0 as floor + slope * t: a
-    least-squares line through the measured steady speeds."""
-    table = spec.drive.steady_speed.value
-    slope, floor = np.polyfit([a.command for a in table], [a.value for a in table], 1)
-    return float(floor), float(slope)
-
-
-def coast_drag(spec: RacecarNeoV2) -> tuple[float, float]:
-    """The forces at the tyres that slow the coasting car: its drag brake
-    (N) and its drag per speed (N per m/s)."""
-    a0, a1 = spec.drive.coast.value
-    m = effective_mass(spec)
-    return (m * a0, m * a1)
-
-
-def throttle_map(spec: RacecarNeoV2) -> tuple[float, float]:
-    """The motor's ctrl at a throttle t != 0, sign(t) * (step + slope * |t|),
-    as (slope, step): the speed it holds is ctrl less the drags over the
-    gain, so ctrl is set above the steady speed by that much."""
-    floor, slope = steady_speed_line(spec)
-    brake, drag = coast_drag(spec)
-    gain = spec.drive.gain.value
-    return (slope * (1 + drag / gain), floor * (1 + drag / gain) + brake / gain)
-
-
-def _nsample(latency: float) -> int:
-    """The history a delay of latency (s) needs: a sample a step, and two
-    to spare."""
-    return math.ceil(latency / TIMESTEP) + 2
 
 
 @dataclass(frozen=True)
@@ -212,6 +308,41 @@ def drive(spec: RacecarNeoV2) -> DriveParams:
     )
 
 
+def throttle_map(spec: RacecarNeoV2) -> tuple[float, float]:
+    """The motor's ctrl at a throttle t != 0, sign(t) * (step + slope * |t|),
+    as (slope, step): the speed it holds is ctrl less the drags over the
+    gain, so ctrl is set above the steady speed by that much."""
+    floor, slope = steady_speed_line(spec)
+    brake, drag = coast_drag(spec)
+    gain = spec.drive.gain.value
+    return (slope * (1 + drag / gain), floor * (1 + drag / gain) + brake / gain)
+
+
+def steady_speed_line(spec: RacecarNeoV2) -> tuple[float, float]:
+    """The steady speed (m/s) at a throttle t > 0 as floor + slope * t: a
+    least-squares line through the measured steady speeds."""
+    table = spec.drive.steady_speed.value
+    slope, floor = np.polyfit([a.command for a in table], [a.value for a in table], 1)
+    return float(floor), float(slope)
+
+
+def coast_drag(spec: RacecarNeoV2) -> tuple[float, float]:
+    """The forces at the tyres that slow the coasting car: its drag brake
+    (N) and its drag per speed (N per m/s)."""
+    a0, a1 = spec.drive.coast.value
+    m = effective_mass(spec)
+    return (m * a0, m * a1)
+
+
+TIMESTEP = 1 / 360  # s, the model's step, as every track's
+
+
+def _nsample(latency: float) -> int:
+    """The history a delay of latency (s) needs: a sample a step, and two
+    to spare."""
+    return math.ceil(latency / TIMESTEP) + 2
+
+
 # --- steering -----------------------------------------------------------------
 
 
@@ -222,6 +353,9 @@ class SteeringParams:
     wheel_steer_range: float  # rad, of each front wheel's steer joint
     ackermann_left: Polynomial  # the left wheel's angle from the steering input
     ackermann_right: Polynomial
+
+
+WHEEL_STEER_MARGIN = 0.015  # rad, so the wheels' steer joint limits never bind
 
 
 def steering(spec: RacecarNeoV2) -> SteeringParams:
@@ -279,133 +413,4 @@ def servo(spec: RacecarNeoV2) -> ServoParams:
         voltage_limit=precise(s.servo_supply.value),
         latency=precise(latency),
         nsample=_nsample(latency),
-    )
-
-
-# --- the model ----------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Box:
-    name: str
-    center: Vec3  # m
-    half_size: Vec3  # m
-
-
-@dataclass(frozen=True)
-class ModelParams:
-    """The car model's numbers. Positions are in the car's body frame."""
-
-    spawn_height: float  # m, of the body frame above the floor
-    chassis_mass: float  # kg
-    chassis_com: Vec3  # m
-    chassis_inertia: Vec3  # kg·m²
-    boxes: tuple[Box, ...]
-    antenna_center: Vec3  # m, the left antenna's; the right one is its mirror
-    antenna_radius: float  # m
-    antenna_half_length: float  # m
-    imu_position: Vec3  # m
-    lidar_position: Vec3  # m
-    lidar_yaw: float  # rad, of the scan's bearing 0 from +X
-    half_wheelbase: float  # m
-    half_track: float  # m
-    wheel_radius: float  # m
-    tyre_half_width: float  # m
-    wheel_mass: float  # kg
-    grip: Axles
-    input_body_mass: float  # kg
-    spring_stiffness: Axles  # N/m
-    spring_damping: Axles  # N·s/m
-    spring_ref: Axles  # m
-    half_travel: float  # m
-    drive: DriveParams
-    servo: ServoParams
-    steering: SteeringParams
-
-
-def model(spec: RacecarNeoV2) -> ModelParams:
-    c, sh, w, s = spec.chassis, spec.shape, spec.wheel, spec.suspension
-    drop = sh.payload_drop.value
-    top = spec.footprint.antenna_top.value
-    bottom = sh.antenna_bottom.value - drop
-    payload = tuple(
-        replace(b, center=(b.center[0], b.center[1], b.center[2] - drop))
-        for b in sh.payload_boxes.value
-    )
-    refs = spring_refs(spec)
-    return ModelParams(
-        # 1 mm above its resting height, the axles at the tyre radius
-        spawn_height=precise(wheel_radius(spec) + 0.001),
-        chassis_mass=precise(chassis_mass(spec)),
-        chassis_com=_precise3(chassis_com(spec)),
-        chassis_inertia=_precise3(chassis_inertia(spec)),
-        boxes=tuple(
-            Box(b.name, _precise3(body(spec, b.center)), _precise3(b.half_size))
-            for b in sh.chassis_boxes.value + payload
-        ),
-        antenna_center=_precise3(
-            body(spec, (sh.antenna_x.value, sh.antenna_y.value, (top + bottom) / 2))
-        ),
-        antenna_radius=precise(sh.antenna_diameter.value / 2),
-        antenna_half_length=precise((top - bottom) / 2),
-        imu_position=_precise3(body(spec, spec.imu.position.value)),
-        lidar_position=_precise3(body(spec, spec.lidar.position.value)),
-        lidar_yaw=precise(math.radians(spec.lidar.yaw_degrees.value - 180)),
-        half_wheelbase=precise(c.wheelbase.value / 2),
-        half_track=precise(c.track.value / 2),
-        wheel_radius=precise(wheel_radius(spec)),
-        tyre_half_width=precise(w.width.value / 2),
-        wheel_mass=precise(w.mass.value),
-        grip=(precise(w.grip.value.front), precise(w.grip.value.rear)),
-        input_body_mass=precise(INPUT_BODY_MASS),
-        spring_stiffness=(
-            precise(s.stiffness.value.front),
-            precise(s.stiffness.value.rear),
-        ),
-        spring_damping=(precise(s.damping.value.front), precise(s.damping.value.rear)),
-        spring_ref=(precise(refs[0]), precise(refs[1])),
-        half_travel=precise(s.travel.value / 2),
-        drive=drive(spec),
-        servo=servo(spec),
-        steering=steering(spec),
-    )
-
-
-@dataclass(frozen=True)
-class DerivedParams:
-    """Everything the simulators need, derived from a RacecarNeoV2."""
-
-    model: ModelParams
-    lidar: LidarParams
-    encoder: EncoderParams
-    wheel_radius: float  # m, that the encoder's speed is measured at
-    steer_lock: float  # rad of steering input at a command of 1
-
-
-def lidar_params(spec: RacecarNeoV2) -> LidarParams:
-    """A slot every sample of a turn, out to its range; it sees all around:
-    the car blocks none of its turn, but its antennas are in it."""
-    lidar = spec.lidar
-    return LidarParams(
-        slots=lidar.samples.value,
-        scan_rate=lidar.scan_rate.value,
-        max_range=lidar.max_range.value,
-        field=2 * math.pi,
-    )
-
-
-def encoder_params(spec: RacecarNeoV2) -> EncoderParams:
-    """A speed every telemetry frame, unfiltered: nobody has measured the
-    firmware's filter."""
-    return EncoderParams(window=1 / spec.odometry.telemetry_rate.value, alpha=1.0)
-
-
-def derive(spec: RacecarNeoV2) -> DerivedParams:
-    m = model(spec)
-    return DerivedParams(
-        model=m,
-        lidar=lidar_params(spec),
-        encoder=encoder_params(spec),
-        wheel_radius=m.wheel_radius,
-        steer_lock=m.steering.lock,
     )
