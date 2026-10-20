@@ -1,2 +1,3 @@
 assets/meshes/*.STL filter=lfs diff=lfs merge=lfs -text
+assets/meshes/racecar_neo_v2/*.STL filter=lfs diff=lfs merge=lfs -text
 cad/**/*.blend filter=lfs diff=lfs merge=lfs -text

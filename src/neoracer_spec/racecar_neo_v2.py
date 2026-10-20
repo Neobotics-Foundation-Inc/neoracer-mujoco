@@ -2,12 +2,17 @@
 The RACECAR Neo V2, part by part, from its measurement worksheet and its
 calibration reference.
 
-There is no CAD model of this car yet. The values come from two sources:
+There is no CAD model of this car yet. The values come from these sources:
 - the RACECAR Neo V2 Model Measurement Worksheet: two measurements of the
   car (its C.L and M.Z columns), and the values of a model of the car that
   it checks;
 - calibration_reference_car_2026-10: the calibration tools' runs on one
-  reference car (2026-10-04 and 05), and the parameter files they wrote.
+  reference car (2026-10-04 and 05), the parameter files they wrote, and
+  the recordings of the runs;
+- RacecarSim, the RACECAR Neo simulator in Unity: its model of the car's
+  shape, and its estimates of the car's inertia, springs and tyres;
+- the MuJoCo model of the car, assets/racecar_neo_v2.xml: what it needs to
+  drive as the reference car drove (FIT).
 
 The value is the calibration reference's where it has one, and otherwise
 the C.L measurement. Where the M.Z measurement, the model or an earlier
@@ -17,8 +22,8 @@ the turning radius, which are left out here.
 
 These sources measure what the car does, not its motor's and servo's
 ratings, and the car's firmware holds a speed rather than a voltage. So its
-parts are its own types, not those of spec.py, and there is no model of it
-yet.
+parts are its own types, not those of spec.py, and derive_v2.py turns them
+into its MuJoCo model.
 
 Frame: the car's base_link, on the floor below the middle of the rear axle
 (REP-103): +X forward, +Y left, +Z up. Values are in SI units unless a
@@ -34,6 +39,7 @@ from .provenance import (
     Sourced,
     assumed,
     calibrated,
+    chosen,
     documented,
     estimated,
     measured,
@@ -70,6 +76,26 @@ LIDAR_YAW = _reference("parameters/frames.local.yaml", "calibrate_lidar.py, 2026
 IMU_CAL = _reference(
     "parameters/lsm9ds1_cal.local.yaml", "calibrate_imu.py, 2026-10-04"
 )
+DYNAMICS_RUNS = _reference(
+    "bags/dynamics", "the ten straight runs' /drive and /odom/integrated"
+)
+SCANS = _reference("bags", "the /scan of every recording")
+RACECARSIM = Source(
+    "RacecarSim",
+    "the RACECAR Neo V2 car of RacecarSim, the RACECAR Neo simulator in Unity:"
+    " Assets/Scripts/Editor/RacecarPrefabSetup.cs, 2026-10",
+)
+RACECARSIM_MODEL = Source(
+    "RacecarSim model",
+    "RacecarSim's model of the RACECAR Neo V2, Assets/Models/RacecarNeoV2/"
+    "RacecarNeoV2.fbx, 2026-10",
+)
+FIT = Source(
+    "model fit",
+    "fitted in the MuJoCo model, assets/racecar_neo_v2.xml, to the reference"
+    " car's runs, 2026-10-20; validation/test_racecar_neo_v2.py holds the model"
+    " to the runs",
+)
 
 
 @dataclass(frozen=True)
@@ -86,6 +112,14 @@ class Span:
 
     low: float
     high: float
+
+
+@dataclass(frozen=True)
+class Axles[T]:
+    """A value that differs between the car's front and rear."""
+
+    front: T
+    rear: T
 
 
 @dataclass(frozen=True)
@@ -106,7 +140,9 @@ class Chassis:
     # this share of the wheelbase ahead of the rear axle, and laterally centred.
     front_weight_share: Sourced[float]
     com_height: Sourced[float]  # m, of the centre of mass above the floor
-    yaw_inertia: Sourced[float]  # kg·m², about the centre of mass
+    # kg·m², the whole car's principal moments about its centre of mass:
+    # roll (about X), pitch (Y), yaw (Z)
+    inertia: Sourced[Vec3]
     ride_height: Sourced[float]  # m, of the chassis above the floor, moving
 
 
@@ -123,10 +159,52 @@ class Footprint:
 
 
 @dataclass(frozen=True)
+class NamedBox:
+    name: str
+    center: Vec3  # m
+    half_size: Vec3  # m
+
+
+@dataclass(frozen=True)
+class Shape:
+    """What the car's body collides with, and what the LiDAR sees of it."""
+
+    # The body less the wheels and the antennas, as boxes.
+    boxes: Sourced[tuple[NamedBox, ...]]
+    # Two upright whips at the rear, one each side, within the LiDAR's sweep.
+    antenna_x: Sourced[float]  # m, of their axes
+    antenna_y: Sourced[float]  # m, of the left one's axis; the right one's is -y
+    antenna_bottom: Sourced[float]  # m, z; Footprint.antenna_top is their top
+    antenna_diameter: Sourced[float]  # m, at the LiDAR's height
+
+
+@dataclass(frozen=True)
 class Wheel:
     diameter: Sourced[float]  # m, the tyre's
     width: Sourced[float]  # m, the tyre's
     axle_height: Sourced[float]  # m, of the rear axle above the floor
+    mass: Sourced[float]  # kg, each, with its tyre
+    # The model's sliding friction of each axle's tyres on the floor.
+    grip: Sourced[Axles[float]]
+
+
+@dataclass(frozen=True)
+class Suspension:
+    stiffness: Sourced[Axles[float]]  # N/m, at each wheel
+    damping: Sourced[Axles[float]]  # N·s/m, at each wheel
+    travel: Sourced[float]  # m, from full droop to full jounce; it rests midway
+
+
+@dataclass(frozen=True)
+class Linkage:
+    """How a steering command turns the front wheels, as the model has it.
+    The command turns a virtual wheel at the middle of the front axle in
+    proportion, with a slope of its own each side, until the linkage reaches
+    its stop on that side. Ackermann geometry turns the front wheels from
+    the virtual one."""
+
+    slope: Sides[float]  # rad per unit of command
+    stop: Sides[float]  # rad, the virtual wheel's angle at each stop, > 0
 
 
 @dataclass(frozen=True)
@@ -142,6 +220,14 @@ class Steering:
     trim: Sourced[float]  # of command, that the firmware adds to every command
     deadband: Sourced[float]  # of command: smaller changes do nothing
     straight_drift_degrees_per_m: Sourced[Span]  # heading change at command 0, + left
+    linkage: Sourced[Linkage]
+    # The servo, as a DC motor at the steering input with a position loop.
+    servo_stall_torque: Sourced[float]  # N·m
+    servo_free_speed: Sourced[float]  # rad/s
+    servo_kp: Sourced[float]  # V/rad of the loop, at a supply of servo_supply
+    servo_kd: Sourced[float]  # V·s/rad
+    servo_supply: Sourced[float]  # V
+    latency: Sourced[float]  # s, from a command to the servo
 
 
 @dataclass(frozen=True)
@@ -155,6 +241,13 @@ class Drive:
     stop_distance: Sourced[tuple[AtCommand[float], ...]]  # m, after command 0
     stop_time: Sourced[tuple[AtCommand[float], ...]]  # s, after command 0
     reverse: Sourced[Literal["immediate", "delayed", "double command"]]
+    # At command 0 the speed controller lets go and the car slows at
+    # coast[0] + coast[1] * speed: its drag brake, and drag that grows with
+    # the speed.
+    coast: Sourced[tuple[float, float]]  # m/s², 1/s
+    # At any other command it pushes the car with gain * (set speed - speed).
+    gain: Sourced[float]  # N per m/s
+    latency: Sourced[float]  # s, from a command to the speed controller
 
 
 @dataclass(frozen=True)
@@ -207,7 +300,9 @@ class Camera:
 class RacecarNeoV2:
     chassis: Chassis
     footprint: Footprint
+    shape: Shape
     wheel: Wheel
+    suspension: Suspension
     steering: Steering
     drive: Drive
     odometry: Odometry
@@ -232,7 +327,12 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             " they sum to 140 g short of the total",
         ),
         com_height=measured(0.095, C_L, note="a sideways tip test: 47 degrees a side"),
-        yaw_inertia=estimated(0.032, "a uniform box of 2.36 kg, 347 x 209 mm"),
+        inertia=estimated(
+            (0.0098, 0.0216, 0.0200),
+            "RacecarSim's, which does not say how it was found. The worksheet"
+            " estimates the yaw as 0.032, a uniform box of 2.36 kg, 347 x 209 mm:"
+            " too much for a car whose battery and motor sit near its middle",
+        ),
         ride_height=assumed(0.0205, MODEL, "the model's; not yet measured"),
     ),
     footprint=Footprint(
@@ -251,6 +351,41 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         ),
         antenna_top=measured(0.275, C_L, conflicts=(Alternative(0.267, MODEL),)),
     ),
+    shape=Shape(
+        boxes=measured(
+            (
+                NamedBox("chassis", (0.1286, 0.0, 0.06125), (0.1646, 0.1045, 0.04075)),
+                NamedBox(
+                    "rear_bumper", (-0.0339, 0.0, 0.0438), (0.0274, 0.0925, 0.0272)
+                ),
+                NamedBox("shell_rear", (0.08125, 0.0, 0.1445), (0.10125, 0.1, 0.0425)),
+                NamedBox(
+                    "shell_front", (0.23125, 0.0, 0.1295), (0.04875, 0.0525, 0.0275)
+                ),
+                NamedBox("lidar_stack", (0.2385, 0.0, 0.174), (0.035, 0.035, 0.017)),
+                NamedBox(
+                    "lidar_head", (0.23825, 0.0, 0.20075), (0.035, 0.035, 0.00975)
+                ),
+            ),
+            RACECARSIM,
+            note="its boxes, fitted to its model. Its model's front is 293 mm"
+            " ahead of the rear axle and its LiDAR 210.5 mm tall, where the car's"
+            " are 287.5 and 205 mm (Footprint)",
+        ),
+        antenna_x=measured(-0.030, RACECARSIM_MODEL),
+        antenna_y=measured(
+            0.0449,
+            RACECARSIM_MODEL,
+            note="the reference car's scans see them 0.27 m behind the LiDAR,"
+            " 8.5 degrees to its left and 11 to its right",
+        ),
+        antenna_bottom=measured(0.130, RACECARSIM_MODEL),
+        antenna_diameter=measured(
+            0.009,
+            RACECARSIM_MODEL,
+            note="they taper from 12.7 mm at the bottom to 5 mm at the top",
+        ),
+    ),
     wheel=Wheel(
         diameter=measured(
             0.072,
@@ -261,6 +396,28 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         ),
         width=measured(0.029, C_L, conflicts=(Alternative(0.030, M_Z),)),
         axle_height=measured(0.036, C_L),
+        mass=estimated(0.04, "RacecarSim's"),
+        grip=calibrated(
+            Axles(front=0.987, rear=1.204),
+            FIT,
+            "the full-lock circles: their radii and the encoder's over-read",
+            note="MuJoCo's contacts are not a model of a tyre. The front tyres'"
+            " lower grip stands for the slip of tyres steered 25 to 35 degrees,"
+            " which the locked centre shaft drags; with the same grip front and"
+            " rear the model's encoder over-reads 6 to 10%. RacecarSim estimates"
+            " 0.8 for a smooth floor",
+        ),
+    ),
+    suspension=Suspension(
+        stiffness=estimated(
+            Axles(front=770.0, rear=400.0),
+            "RacecarSim's: coilover springs of 1.3 and 1.1 mm wire at an assumed"
+            " 0.6 motion ratio",
+        ),
+        damping=estimated(
+            Axles(front=26.0, rear=18.0), "RacecarSim's: 0.6 of critical"
+        ),
+        travel=estimated(0.020, "RacecarSim's"),
     ),
     steering=Steering(
         min_turn_radius=measured(
@@ -310,6 +467,27 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             note="8 runs at trim 0: servo and linkage play, inside the deadband."
             " The worksheet gives -1.7 (-0.8 to -2.6)",
         ),
+        linkage=calibrated(
+            Linkage(
+                slope=Sides(left=0.8678, right=0.9829),
+                stop=Sides(left=0.5603, right=0.4890),
+            ),
+            FIT,
+            "the curvature table (response) and the full-lock circles",
+            note="the model's tyres slip more than the car's: Ackermann geometry"
+            " turns its virtual wheel 0.501 rad left and 0.457 right at the"
+            " measured full-lock radii",
+        ),
+        servo_stall_torque=chosen(3.0, "strong enough that the tyres do not move it"),
+        servo_free_speed=calibrated(
+            7.92, FIT, "the full-lock circles' yaw rate after the steering command"
+        ),
+        servo_kp=chosen(50.0, "the NeoRacer's: it settles without chatter"),
+        servo_kd=chosen(1.0, "the NeoRacer's: it settles without chatter"),
+        servo_supply=chosen(5.0, "the loop's voltage clamp; kp is per this supply"),
+        latency=calibrated(
+            0.086, FIT, "the full-lock circles' yaw rate after the steering command"
+        ),
     ),
     drive=Drive(
         max_speed=documented(
@@ -349,6 +527,21 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             DYNAMICS,
         ),
         reverse=measured("immediate", C_L),
+        coast=measured(
+            (0.81, 1.25),
+            DYNAMICS_RUNS,
+            note="fitted to the speed from the 0 command to rest, with a latency"
+            " of 0.05 s. The drag brake alone, 1.52 m/s², fits about as well",
+        ),
+        gain=calibrated(
+            18.0, FIT, "the straight runs: the rise to 90% of the steady speed"
+        ),
+        latency=calibrated(
+            0.06,
+            FIT,
+            "the straight runs' speed after a command",
+            note="a fit to the stops alone gives 0.05 s, to the starts alone 0.095",
+        ),
     ),
     odometry=Odometry(
         min_speed=measured(0.07, WORKSHEET_RUNS),

@@ -1,6 +1,6 @@
 """
 Laws for neoracer_spec: every value of a car's specification has a source,
-the NeoRacer's XML holds the numbers derived from its spec, each derivation
+each car's XML holds the numbers derived from its spec, each derivation
 keeps what it derives from, the settings beside the model are the sensor
 modules' defaults, and the package runs without MuJoCo in the Python of the
 browser's Pyodide.
@@ -9,22 +9,25 @@ browser's Pyodide.
 import ast
 import dataclasses
 import math
+import os
 import pathlib
 import subprocess
 import sys
 
+import mujoco
 import numpy as np
 import pytest
 
 import neoracer_spec
-from neoracer_mujoco import assets, encoder, lidar
-from neoracer_spec import ackermann, derive, mjcf, provenance, spec
+from neoracer_mujoco import assets, encoder, lidar, sim
+from neoracer_spec import ackermann, derive, derive_v2, mjcf, provenance, spec
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.provenance import Sourced
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
 
 CAR = NEORACER
 MODEL = derive.model(CAR)
+V2_XML = os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml")
 
 
 def value[T](s: Sourced[T], v: T) -> Sourced[T]:
@@ -64,6 +67,56 @@ def test_the_xml_holds_the_numbers_derived_from_the_spec():
 
 
 BOX = CAR.chassis.collision_box.value
+
+
+def test_the_v2_xml_holds_the_numbers_derived_from_its_spec():
+    """The checked-in RACECAR Neo V2 XML is what racecar_neo_v2_xml writes:
+    after a change to the car, run python -m neoracer_mujoco.write_car
+    assets."""
+    with open(V2_XML) as f:
+        xml = f.read()
+    assert mjcf.racecar_neo_v2_xml(derive_v2.model(RACECAR_NEO_V2), xml) == xml
+
+
+def test_the_v2_model_has_the_cars_mass_centre_of_mass_and_inertia():
+    """The chassis, the wheels and the steering input's body together weigh
+    the car's mass, with its centre of mass and its principal moments of
+    inertia, as MuJoCo computes them from the bodies. The derivation counts
+    the steering input's body as a point; its own inertia is 1e-6 kg·m². The
+    chassis' principal axes are the car's, so the wheels, below the centre
+    of mass and not midway along the car, leave products of inertia of
+    under 0.2% of the moments."""
+    model = assets.load(V2_XML).model
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)  # at qpos0: the springs neither up nor down
+    car = model.body("car").id
+    bodies = [b for b in range(model.nbody) if b == car or model.body_rootid[b] == car]
+    mass = sum(model.body_mass[b] for b in bodies)
+    com = sum(model.body_mass[b] * data.xipos[b] for b in bodies) / mass
+    inertia = np.zeros((3, 3))
+    for b in bodies:
+        rot = data.ximat[b].reshape(3, 3)
+        d = data.xipos[b] - com
+        inertia += rot @ np.diag(model.body_inertia[b]) @ rot.T
+        inertia += model.body_mass[b] * (d @ d * np.eye(3) - np.outer(d, d))
+    c = RACECAR_NEO_V2.chassis
+    spawn = data.xpos[car]
+    assert mass == pytest.approx(c.mass.value)
+    np.testing.assert_allclose(
+        com - spawn, derive_v2.car_com(RACECAR_NEO_V2), atol=1e-6
+    )
+    np.testing.assert_allclose(np.diag(inertia), c.inertia.value, rtol=1e-3)
+    np.testing.assert_allclose(inertia - np.diag(np.diag(inertia)), 0, atol=3e-5)
+
+
+def test_the_v2_rests_in_the_middle_of_its_travel():
+    """Each axle's springs hold their share of the weight with their joints
+    at 0, the middle of their travel: the settled car's suspension is
+    within 1 mm of it."""
+    scene = assets.load(V2_XML)
+    data = sim.settle(scene.model)
+    for name in ("fl_susp", "fr_susp", "rl_susp", "rr_susp"):
+        assert abs(data.joint(name).qpos[0]) < 0.001, name
 
 
 def test_a_change_to_the_chassis_changes_the_xml():

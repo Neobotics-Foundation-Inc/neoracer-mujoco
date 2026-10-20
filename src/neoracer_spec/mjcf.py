@@ -1,16 +1,20 @@
 """
-The car model's numbers (derive.ModelParams) written into the car's XML.
+The car models' numbers (derive.ModelParams, derive_v2.ModelParams)
+written into the cars' XML.
 
-car_xml sets each number in the start tag that holds it and leaves the rest
-of the XML, its structure and its comments, as it is. The checked-in
-assets/neoracer.xml is what car_xml writes for neoracer.NEORACER; a test
-holds it there. After a change to the car, run
+car_xml and racecar_neo_v2_xml set each number in the start tag that holds
+it and leave the rest of the XML, its structure and its comments, as it is.
+The checked-in assets/neoracer.xml and assets/racecar_neo_v2.xml are what
+they write for neoracer.NEORACER and racecar_neo_v2.RACECAR_NEO_V2; a test
+holds them there. After a change to a car, run
 
     python -m neoracer_mujoco.write_car assets
 """
 
+import math
 import re
 
+from . import derive_v2
 from .derive import ModelParams, precise
 
 
@@ -114,6 +118,117 @@ def car_xml(p: ModelParams, xml: str) -> str:
             (rf'<body name="{corner}_wheel_body"', "pos", numbers(cx, cy, 0)),
             (rf'<geom name="{corner}_wheel"', "mass", number(p.wheel_mass)),
             (rf'<mesh name="vis_{corner}_wheel"', "scale", scale),
+        ]
+    for element, attribute, value in edits:
+        xml = _set(xml, element, attribute, value)
+    return xml
+
+
+def racecar_neo_v2_xml(p: derive_v2.ModelParams, xml: str) -> str:
+    """The RACECAR Neo V2's XML, xml, with the numbers of p."""
+    x, y = p.half_wheelbase, p.half_track
+    d, s, st = p.drive, p.servo, p.steering
+    ax, ay, az = p.antenna_center
+    edits = [
+        (r'<body name="car"', "pos", numbers(0, 0, p.spawn_height)),
+        (r"<inertial\s", "pos", numbers(*p.chassis_com)),
+        (r"<inertial\s", "mass", number(p.chassis_mass)),
+        (r"<inertial\s", "diaginertia", numbers(*p.chassis_inertia)),
+        (r'<site name="imu"', "pos", numbers(*p.imu_position)),
+        (r'<site name="lidar_mount"', "pos", numbers(*p.lidar_position)),
+        (r'<site name="lidar_mount"', "euler", numbers(0, 0, p.lidar_yaw)),
+        (r'<geom name="antenna_left"', "pos", numbers(ax, ay, az)),
+        (r'<geom name="antenna_right"', "pos", numbers(ax, -ay, az)),
+        (r'<body name="steer_input_body"', "pos", numbers(x, 0, 0)),
+        (r'<joint name="steer_input"', "range", numbers(st.stops[1], st.stops[0])),
+        (
+            r'<geom type="cylinder" size="[^"]*" contype',
+            "mass",
+            number(p.input_body_mass),
+        ),
+        (r'<default class="wheel">\s*<joint', "damping", number(d.wheel_damping)),
+        (
+            r'<default class="wheel">\s*<joint[^>]*>\s*<geom',
+            "size",
+            numbers(p.wheel_radius, p.tyre_half_width),
+        ),
+        (
+            r'<default class="steer">\s*<joint',
+            "range",
+            numbers(-st.wheel_steer_range, st.wheel_steer_range),
+        ),
+        (
+            r'<default class="susp">\s*<joint',
+            "range",
+            numbers(-p.half_travel, p.half_travel),
+        ),
+        (r'<fixed name="drivetrain"', "frictionloss", number(d.brake)),
+        (r'<general name="motor"', "gear", number(d.gear)),
+        (r'<general name="motor"', "gainprm", number(d.gain)),
+        (r'<general name="motor"', "ctrlrange", numbers(-d.ctrl_limit, d.ctrl_limit)),
+        (r'<general name="motor"', "user", numbers(d.slope, d.step, 0)),
+        (r'<general name="motor"', "delay", number(d.latency)),
+        (r'<general name="motor"', "nsample", str(d.nsample)),
+        (r'<general name="motor_engage"', "gear", number(d.gear)),
+        (r'<general name="motor_engage"', "gainprm", numbers(0, 0, -d.gain)),
+        (r'<general name="motor_engage"', "delay", number(d.latency)),
+        (r'<general name="motor_engage"', "nsample", str(d.nsample)),
+        (r'<dcmotor name="steer_servo"', "nominal", numbers(*s.nominal)),
+        (
+            r'<dcmotor name="steer_servo"',
+            "controller",
+            numbers(s.kp, 0, s.kd, 0, 0, s.voltage_limit),
+        ),
+        (r'<dcmotor name="steer_servo"', "ctrlrange", numbers(-st.lock, st.lock)),
+        (r'<dcmotor name="steer_servo"', "delay", number(s.latency)),
+        (r'<dcmotor name="steer_servo"', "nsample", str(s.nsample)),
+        (r'<joint name="ackermann_left"', "polycoef", numbers(*st.ackermann_left)),
+        (r'<joint name="ackermann_right"', "polycoef", numbers(*st.ackermann_right)),
+    ]
+    for box in p.boxes:
+        edits += [
+            (rf'<geom name="{box.name}"', "pos", numbers(*box.center)),
+            (rf'<geom name="{box.name}"', "size", numbers(*box.half_size)),
+        ]
+    for name in ("antenna_left", "antenna_right"):
+        edits.append(
+            (
+                rf'<geom name="{name}"',
+                "size",
+                numbers(p.antenna_radius, p.antenna_half_length),
+            )
+        )
+    for bearing in range(0, 360, 45):
+        a = math.radians(bearing) + p.lidar_yaw
+        site = rf'<site name="lidar_{bearing:03d}"'
+        edits += [
+            (site, "pos", numbers(*p.lidar_position)),
+            (site, "zaxis", numbers(math.cos(a), math.sin(a), 0)),
+        ]
+    stiffness, damping, ref, grip = (
+        p.spring_stiffness,
+        p.spring_damping,
+        p.spring_ref,
+        p.grip,
+    )
+    for corner, (cx, cy, axle) in {
+        "fl": (x, y, 0),
+        "fr": (x, -y, 0),
+        "rl": (-x, y, 1),
+        "rr": (-x, -y, 1),
+    }.items():
+        susp = rf'<joint name="{corner}_susp"'
+        edits += [
+            (rf'<body name="{corner}_wheel_body"', "pos", numbers(cx, cy, 0)),
+            (susp, "stiffness", number(stiffness[axle])),
+            (susp, "damping", number(damping[axle])),
+            (susp, "springref", number(ref[axle])),
+            (rf'<geom name="{corner}_wheel"', "mass", number(p.wheel_mass)),
+            (
+                rf'<geom name="{corner}_wheel"',
+                "friction",
+                numbers(grip[axle], 0.1, 0.1),
+            ),
         ]
     for element, attribute, value in edits:
         xml = _set(xml, element, attribute, value)
