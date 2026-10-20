@@ -46,8 +46,22 @@ jobs:
       - name: ty
         run: nix develop --command ty check --output-format github
 
+      # The Warp batch tests compile Warp kernels and JAX programs, which
+      # takes most of the suite's time when cold. Both caches depend only on
+      # the package versions, which flake.lock fixes.
+      - name: Restore the Warp and JAX compilation caches
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/warp
+            ~/.cache/jax
+          key: compiled-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+
       - name: Run the validation suite
-        run: nix develop --command python -m pytest -q validation
+        run: >-
+          JAX_COMPILATION_CACHE_DIR=$HOME/.cache/jax
+          JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0
+          nix develop --command python -m pytest -q validation
 
       # The JS package (js/) against this package: js/test/fixtures.py runs a
       # set of cases in Python, and npm test runs the same cases in MuJoCo's
