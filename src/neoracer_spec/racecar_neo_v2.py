@@ -331,6 +331,9 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         wheelbase=measured(
             0.230,
             C_L,
+            note="the model's 225 mm is the wheelbase that retailers list for the"
+            " 1/14-scale LC Racing EMB-SC (one lists 227 mm for its kit, the"
+            " EMB-SCH); the car measures 4 to 5 mm longer",
             conflicts=(Alternative(0.229, M_Z), Alternative(0.225, MODEL)),
         ),
         track=measured(0.178, C_L, conflicts=(Alternative(0.174, M_Z),)),
