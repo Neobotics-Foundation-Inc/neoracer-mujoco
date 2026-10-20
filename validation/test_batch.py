@@ -82,35 +82,38 @@ def _tracks(seeds: Sequence[int]) -> list[Scene]:
 def test_a_row_is_one_data_stepped_on_its_scene_with_its_physics():
     """Row i of a CpuBatch equals, bit for bit, one MjData that starts from
     datas[i], starts the solver cold at each call, and steps on scenes[i]
-    with physics[i]. Rows 0 and 1 differ only in the track, rows 0 and 2
-    only in the physics, and both differences show. Seeds 9 and 10 give
-    model names of different lengths, which do not matter. initial rejects
-    a list that is not one MjData per row."""
+    with physics[i] and its own commands. Rows 0 to 2 get the same commands:
+    rows 0 and 1 differ only in the track, rows 0 and 2 only in the physics,
+    and both differences show. Row 3 is row 0 with its own start and its own
+    commands, so a batch that gave every row row 0's data or commands fails.
+    Seeds 9 and 10 give model names of different lengths, which do not
+    matter. initial rejects a list that is not one MjData per row."""
     nine, ten = _tracks((9, 10))
-    scenes = [nine, ten, nine]
+    scenes = [nine, ten, nine, nine]
     p, q = _random_physics(2, seed=0)
-    params = [p, p, q]
+    params = [p, p, q, p]
     datas = [sim.settle(s.model) for s in scenes]
-    commands = _commands(0, nbatch=1)[:, 0]  # the same for every row
-    sim_batch = batch.CpuBatch(nine, 3, nthread=2)
+    datas[3].bind_scalar(nine.car.joint).qpos[0] += 0.05  # m along x
+    assert not np.array_equal(datas[3].qpos, datas[0].qpos)
+    shared = _commands(0, nbatch=1)
+    commands = np.concatenate([shared, shared, shared, _commands(1, nbatch=1)], axis=1)
+    sim_batch = batch.CpuBatch(nine, 4, nthread=2)
     state = sim_batch.initial(datas, scenes, params)
     with pytest.raises(ValueError, match="one MjData per row"):
         sim_batch.initial(datas[:2], scenes[:2], params[:2])
     got = []
-    for throttle, steer in commands:
-        ctrl = batch.command(
-            nine.model, nine.car, np.full(3, throttle), np.full(3, steer)
-        )
+    for c in commands:
+        ctrl = batch.command(nine.model, nine.car, c[:, 0], c[:, 1])
         state, sensordata = sim_batch.step(state, ctrl, NSTEP)
         got.append(sensordata)
     sim_batch.close()
-    got = np.array(got)  # (CALLS, 3, NSTEP, n)
+    got = np.array(got)  # (CALLS, 4, NSTEP, n)
     for i, (scene, row_physics) in enumerate(zip(scenes, params, strict=True)):
         model = copy.deepcopy(scene.model)
         physics.apply_physics(model, scene, row_physics)
-        data = sim.settle(scene.model)
+        data = copy.deepcopy(datas[i])
         expected = []
-        for throttle, steer in commands:
+        for throttle, steer in commands[:, i]:
             data.qacc_warmstart[:] = 0
             command = ControlCommand(throttle=throttle, steer=steer)
             sim.apply_command(scene.car, data, command)

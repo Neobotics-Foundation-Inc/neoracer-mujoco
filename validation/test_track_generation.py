@@ -27,7 +27,6 @@ from neoracer_mujoco.track_generation import (
     WallParams,
     generate_track,
     left_edge,
-    mjcf,
     right_edge,
     settings_for_difficulty,
     to_mjcf,
@@ -106,6 +105,20 @@ def _check_track(track: Track, settings: TrackSettings) -> None:
         np.sum(track.tangent * track.left_normal, axis=1), 0.0, atol=1e-9
     )
     assert left_edge(track).shape == track.center.shape
+
+
+def _farthest_from_wall(points: np.ndarray, i: int, j: int) -> float:
+    """The farthest any point strictly between i and j sits from the wall
+    segment that joins them (m); j == len(points) is the wrap to point 0.
+    Measured to the segment, not the line through it, so a wall that stops
+    short of the edge counts too."""
+    a, b = points[i], points[j % len(points)]
+    interior = points[i + 1 : j]
+    if len(interior) == 0:
+        return 0.0
+    ab = b - a
+    t = np.clip((interior - a) @ ab / (ab @ ab), 0.0, 1.0)
+    return float(np.linalg.norm(interior - (a + t[:, None] * ab), axis=1).max())
 
 
 def _right_bends(track: Track) -> list[float]:
@@ -240,7 +253,7 @@ def test_walls_track_the_generated_edges_closely():
             edge = to_start_frame(track, edge)
             kept = decimate_closed(edge, walls.segment_length, walls.max_deviation)
             for i, j in itertools.pairwise(kept):
-                deviation = mjcf._max_deviation(edge, i, j)
+                deviation = _farthest_from_wall(edge, i, j)
                 assert deviation <= walls.max_deviation + 1e-9, difficulty
 
 
@@ -278,7 +291,7 @@ def test_split_walls_still_track_the_edges():
             kept = split_to(edge, kept, 192, walls.max_deviation)
             assert len(kept) - 1 == 192 and kept[0] == 0 and kept[-1] == len(edge)
             for i, j in itertools.pairwise(kept):
-                deviation = mjcf._max_deviation(edge, i, j)
+                deviation = _farthest_from_wall(edge, i, j)
                 assert deviation <= walls.max_deviation + 1e-9, difficulty
 
 
@@ -297,7 +310,7 @@ def test_a_split_where_the_edge_bends_stays_within_max_deviation():
     kept = split_to(points, [0, 4, 5], 3, max_deviation=0.01)
     assert len(kept) == 4
     for i, j in itertools.pairwise(kept):
-        assert mjcf._max_deviation(points, i, j) <= 0.01
+        assert _farthest_from_wall(points, i, j) <= 0.01
 
 
 def test_repeated_splits_stay_within_max_deviation():
@@ -311,7 +324,7 @@ def test_repeated_splits_stay_within_max_deviation():
     kept = split_to(points, kept, 5, max_deviation=0.01)
     assert len(kept) == 6
     for i, j in itertools.pairwise(kept):
-        assert mjcf._max_deviation(points, i, j) <= 0.01
+        assert _farthest_from_wall(points, i, j) <= 0.01
 
 
 def test_lap_distance_finds_the_sample_across_the_corridor():
