@@ -1,8 +1,8 @@
 # NeoRacer MuJoCo Simulator
 
-The NeoRacer is a 1/12-scale RC car that students program in Python through the `racecar_core` API. Each simulator of the car used to keep its own copy of the car's numbers, and the copies drifted apart. The Playground's car reached 6 m/s, while the motor speed and gearing in the docs allow about 3.5 m/s. Nobody could say which wheelbase was right, because the CAD model, the docs and the ROS driver give three different values. Code that finds the car's parts by index in the compiled model breaks whenever the XML changes.
+The NeoRacer is a 1/12-scale RC car that students program in Python through the `racecar_core` API. This package simulates it in MuJoCo. The same car runs in three places: one car that you step yourself, batches of hundreds for training, and the browser, through the JavaScript package in `js/`.
 
-This package keeps one description of the car, with the source of every number. The MuJoCo model, the sensor settings and the JavaScript package's numbers are all computed from it. Code reaches the car's parts through the elements of the model it was compiled from, so the same code drives the car alone, on any track, or in a batch of hundreds.
+All three take the car from one description, `NEORACER`, where every number carries its source. The sources do not always agree. The CAD model, the docs and the ROS driver give three different wheelbases, and nobody has weighed the car. So each number also keeps the values that disagree with it. Every number a simulator uses is computed from the description, not copied. Code reaches the car's parts through the elements of the model it was compiled from, so the same code drives the car alone, on any track, or in a batch.
 
 The sections below follow the order in which the pieces build on one another: the spec, a scene compiled from it, the car on a track, what the car and the track give together, a variant of the car, and batches of cars. After them come the layout of the repository, installation, and how close the model is to the real car.
 
