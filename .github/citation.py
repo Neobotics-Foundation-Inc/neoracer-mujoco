@@ -22,7 +22,7 @@ import ai_credit
 
 TITLE = "NeoRacer MuJoCo"
 ABSTRACT = (
-    "A MuJoCo simulation of the NeoRacer, a 1/12-scale RC car, with its sensors, "
+    "A MuJoCo simulation of the NeoRacer, a 1/12-scale autonomous racing car, with its sensors, "
     "tracks, a procedural track generator and batched stepping on CPU or GPU."
 )
 REPOSITORY = "https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco"

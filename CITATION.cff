@@ -4,7 +4,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "NeoRacer MuJoCo"
-abstract: "A MuJoCo simulation of the NeoRacer, a 1/12-scale RC car, with its sensors, tracks, a procedural track generator and batched stepping on CPU or GPU."
+abstract: "A MuJoCo simulation of the NeoRacer, a 1/12-scale autonomous racing car, with its sensors, tracks, a procedural track generator and batched stepping on CPU or GPU."
 type: software
 repository-code: "https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco"
 license: GPL-3.0-only

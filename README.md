@@ -1,6 +1,6 @@
 # NeoRacer MuJoCo Simulator
 
-The NeoRacer is a 1/12-scale RC car that students program in Python through the `racecar_core` API. This package simulates it in MuJoCo. The same car runs in three places: one car that you step yourself, batches of hundreds for training, and the browser, through the JavaScript package in `js/`.
+The NeoRacer is a 1/12-scale autonomous racing car that students program in Python through the `racecar_core` API. This package simulates it in MuJoCo. The same car runs in three places: one car that you step yourself, batches of hundreds for training, and the browser, through the JavaScript package in `js/`.
 
 All three take the car from one description, `NEORACER`, where every number carries its source. The sources do not always agree. The CAD model, the docs and the ROS driver give three different wheelbases, and nobody has weighed the car. So each number also keeps the values that disagree with it. Every number a simulator uses is computed from the description, not copied. Code reaches the car's parts through the elements of the model it was compiled from, so the same code drives the car alone, on any track, or in a batch.
 

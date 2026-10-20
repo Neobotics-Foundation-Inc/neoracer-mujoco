@@ -1,6 +1,8 @@
 <mujoco model="neoracer">
     <!--
-    NeoRacer 1/8-scale RC car. Single source of truth for the model.
+    The NeoRacer, a 1/12-scale autonomous racing car. Its structure is written
+    here by hand; python -m neoracer_mujoco.write_car writes its numbers from
+    the spec, src/neoracer_spec/neoracer.py.
 
     Coordinate frame: +X = forward, +Y = left, +Z = up. Lengths in meters,
     angles in radians, masses in kg.
