@@ -4,6 +4,6 @@ scipy>=1.13
 # The demo extra (examples/pygame_drive/). ty and the demo tests need it.
 pygame-ce>=2.5.8
 pytest>=7.4
-ruff==0.17.0
+ruff==0.17.1
 pybind11-stubgen==3.0.0
-ty==0.0.86
+ty==0.0.87

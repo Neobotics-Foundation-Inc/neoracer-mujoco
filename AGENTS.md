@@ -19,7 +19,7 @@ Follow every rule here. If a task conflicts with a rule, say so in the pull requ
   To make experiment code part of the project, copy it to `src/` or `examples/` in its own pull request, and make it follow these rules there.
 - Keep one change in one pull request.
 
-The code requires Python 3.15. Use a feature from Python 3.13 to 3.15 where it removes a check,
+The code requires Python 3.14. Use a feature from Python 3.13 or 3.14 where it removes a check,
 a class of bugs or a copy of code (rule 9), not only because it is new.
 
 The rules below come from typed functional programming.
@@ -34,9 +34,9 @@ Then no code has to check for an invalid state, because it cannot exist.
 - Put parameters in a frozen dataclass with defaults: `params = WallFollowingParams()`.
   Do not use module constants or loose arguments for them.
 - Use a frozen dataclass for a record, not a `dict` or a tuple of unnamed fields.
-  If an outside API requires a dict with fixed keys (gymnasium's `info`), use a closed `TypedDict`:
-  `class EnvInfo(TypedDict, closed=True)`. The type checker then checks each key and value.
-- A constant mapping is a `frozendict`, not a `dict`.
+  If an outside API requires a dict with fixed keys (gymnasium's `info`), use a `TypedDict`:
+  `class EnvInfo(TypedDict)`. The type checker then checks each key and value.
+- A constant mapping is a `MappingProxyType` typed `Mapping`, not a `dict`: `MappingProxyType({"easy": 1, "hard": 3})`.
 - A fixed set of names is a `Literal`:
 
   ```python

@@ -22,7 +22,9 @@ Needs pygame-ce: pip install -e ".[demo]".
 import argparse
 import math
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Literal, assert_never
 
 import mujoco
@@ -88,7 +90,7 @@ class Inputs:
 
 type Action = Literal["quit", "reset_car", "toggle_timer", "reset_timer", "none"]
 
-_KEY_ACTIONS: frozendict[int, Action] = frozendict(
+_KEY_ACTIONS: Mapping[int, Action] = MappingProxyType(
     {
         pygame.K_ESCAPE: "quit",
         pygame.K_BACKSPACE: "reset_car",

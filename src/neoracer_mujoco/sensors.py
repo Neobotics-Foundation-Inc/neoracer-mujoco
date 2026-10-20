@@ -19,7 +19,9 @@ Sensor map (matches neoracer.xml):
   lidar_000..315 — rangefinder distances (m; -1 = no hit)
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, fields
+from types import MappingProxyType
 from typing import assert_never
 
 import mujoco
@@ -77,8 +79,8 @@ class SensorReadings:
 
 # The number of values of each sensor with more than one value. Every other
 # SensorReadings field has one value.
-VECTOR_SIZE: frozendict[str, int] = frozendict(
-    imu_accel=3, imu_gyro=3, imu_quat=4, imu_linvel=3
+VECTOR_SIZE: Mapping[str, int] = MappingProxyType(
+    {"imu_accel": 3, "imu_gyro": 3, "imu_quat": 4, "imu_linvel": 3}
 )
 
 
