@@ -57,10 +57,12 @@ def test_each_dataclass_is_an_interface_with_its_fields():
 
 def test_the_statuses_carry_their_kind():
     interfaces = _interfaces()
-    for status in typing.get_args(provenance.Status.__value__):
+    statuses = typing.get_args(provenance.Status.__value__)
+    for status in statuses:
         assert interfaces[status.__name__][0] == "kind"
     assert "kind" not in interfaces["Sourced"]
-    assert "export type Status = Measured | Documented | Assumed" in TEXT
+    names = " | ".join(status.__name__ for status in statuses)
+    assert f"export type Status = {names};" in TEXT
 
 
 def test_the_values_are_checked_against_their_types():

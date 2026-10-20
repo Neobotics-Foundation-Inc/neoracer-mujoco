@@ -11,6 +11,13 @@ export interface Measured {
   readonly source: Source;
 }
 
+/** Fitted so that the car's own readings or commands agree with a reference: a scale factor of its odometry, the mounting angle of a sensor, the angle a steering command gives. */
+export interface Calibrated {
+  readonly kind: "Calibrated";
+  readonly source: Source;
+  readonly reference: string; // what it was fitted against: "the LiDAR", "a tape"
+}
+
 /** Read from a datasheet, the docs, the firmware or a config file. */
 export interface Documented {
   readonly kind: "Documented";
@@ -36,7 +43,7 @@ export interface Chosen {
   readonly why: string;
 }
 
-export type Status = Measured | Documented | Assumed | Estimated | Chosen;
+export type Status = Measured | Calibrated | Documented | Assumed | Estimated | Chosen;
 
 /** A value that another source gives. */
 export interface Alternative<T> {

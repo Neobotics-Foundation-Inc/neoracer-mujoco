@@ -30,6 +30,16 @@ class Measured:
 
 
 @dataclass(frozen=True)
+class Calibrated:
+    """Fitted so that the car's own readings or commands agree with a
+    reference: a scale factor of its odometry, the mounting angle of a
+    sensor, the angle a steering command gives."""
+
+    source: Source
+    reference: str  # what it was fitted against: "the LiDAR", "a tape"
+
+
+@dataclass(frozen=True)
 class Documented:
     """Read from a datasheet, the docs, the firmware or a config file."""
 
@@ -58,7 +68,7 @@ class Chosen:
     why: str
 
 
-type Status = Measured | Documented | Assumed | Estimated | Chosen
+type Status = Measured | Calibrated | Documented | Assumed | Estimated | Chosen
 
 
 @dataclass(frozen=True)
@@ -83,6 +93,16 @@ def measured[T](
     value: T, source: Source, note: str = "", conflicts: tuple[Alternative[T], ...] = ()
 ) -> Sourced[T]:
     return Sourced(value, Measured(source), note, conflicts)
+
+
+def calibrated[T](
+    value: T,
+    source: Source,
+    reference: str,
+    note: str = "",
+    conflicts: tuple[Alternative[T], ...] = (),
+) -> Sourced[T]:
+    return Sourced(value, Calibrated(source, reference), note, conflicts)
 
 
 def documented[T](
