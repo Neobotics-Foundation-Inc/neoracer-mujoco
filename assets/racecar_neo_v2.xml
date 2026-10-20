@@ -1,6 +1,6 @@
 <mujoco model="racecar_neo_v2">
     <!--
-    The RACECAR Neo V2, a 1/12-scale autonomous racing car on the LC Racing
+    The RACECAR Neo V2, a 1/14-scale autonomous racing car on the LC Racing
     EMB-SC chassis. Its structure is written here by hand; python -m
     neoracer_mujoco.write_car writes its numbers from the spec,
     src/neoracer_spec/racecar_neo_v2.py, through neoracer_spec.derive_v2.
