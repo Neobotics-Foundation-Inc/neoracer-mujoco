@@ -94,6 +94,26 @@ def test_a_car_that_starts_again_reads_until_a_timeout_after_its_edge():
     assert state.speed == 0.0
 
 
+@pytest.mark.parametrize("way", (1.0, -1.0), ids=("forward", "backward"))
+def test_an_edge_after_a_timeout_starts_the_filter_over(way):
+    """An edge crossed, ten steps at rest, and the next edge half a step into
+    the step after: the wait, 30.1 ms, passes stop_timeout within that step,
+    so the board read 0 before the edge, and it reads alpha of the edge's
+    speed, an edge over the wait, either way."""
+    e = PARAMS.edge_angle
+    state = hall_encoder.start(PARAMS, 0.0)
+    state = hall_encoder.step(PARAMS, state, way * 1.5 * e, DT)
+    for _ in range(10):
+        state = hall_encoder.step(PARAMS, state, way * 1.5 * e, DT)
+    assert state.since < PARAMS.stop_timeout
+    assert state.speed != 0.0
+    wait = state.since + DT / 2
+    assert wait > PARAMS.stop_timeout
+    state = hall_encoder.step(PARAMS, state, way * 2.5 * e, DT)
+    expected = way * PARAMS.alpha * e * PARAMS.radius / wait
+    assert state.speed == pytest.approx(expected)
+
+
 def test_a_step_longer_than_the_timeout_reads_0_after_an_old_edge():
     """A step of 0.1 s from rest that turns 1.5 edges crosses one a third of
     the step, 33 ms, before its end: more than stop_timeout, so it reads 0."""
