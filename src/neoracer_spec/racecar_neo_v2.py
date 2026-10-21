@@ -2,7 +2,7 @@
 The RACECAR Neo V2, part by part, from its measurement worksheet and its
 calibration reference.
 
-There is no CAD model of this car yet. The values come from these sources:
+The values come from these sources:
 - the RACECAR Neo V2 Model Measurement Worksheet: two measurements of the
   car (its C.L and M.Z columns), and the values of a model of the car that
   it checks;
@@ -11,6 +11,9 @@ There is no CAD model of this car yet. The values come from these sources:
   the recordings of the runs;
 - RacecarSim, the RACECAR Neo simulator in Unity: its model of the car's
   shape, and its estimates of the car's inertia, springs and tyres;
+- the payload's CAD model: the shape and the layout of everything on the
+  chassis' body posts, which the measured heights of the LiDAR and the
+  camera place on the car. The chassis has no CAD model;
 - the MuJoCo model of the car, assets/racecar_neo_v2.xml: what it needs to
   drive as the reference car drove (FIT).
 
@@ -99,6 +102,7 @@ class Footprint:
     right: Sourced[float]  # m, y of the right-most point
     lidar_top: Sourced[float]  # m, z of the top of the LiDAR
     antenna_top: Sourced[float]  # m, z of the antenna tips, the tallest point
+    payload_bottom: Sourced[float]  # m, z of the payload's underside, its floor
 
 
 @dataclass(frozen=True)
@@ -112,7 +116,6 @@ class Shape:
     chassis_boxes: Sourced[tuple[NamedBox, ...]]
     payload_boxes: Sourced[tuple[NamedBox, ...]]
     payload_drop: Sourced[float]  # m
-    payload_bottom: Sourced[float]  # m, z of its underside
     # Two upright whips at the payload's rear, one each side, within the
     # LiDAR's sweep.
     antenna_x: Sourced[float]  # m, of their axes
@@ -344,6 +347,12 @@ FIT = Source(
     " car's runs, 2026-10-20; validation/test_racecar_neo_v2.py holds the model"
     " to the runs",
 )
+PAYLOAD_CAD = Source(
+    "payload CAD",
+    "the payload's CAD model, racecar-neo-v2-body.step, exported from Autodesk"
+    " software on 2026-10-21: its y is the car's x less 130 mm, and its floor's"
+    " underside is at its z 0",
+)
 
 
 RACECAR_NEO_V2 = RacecarNeoV2(
@@ -398,7 +407,22 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         lidar_top=measured(
             0.205, C_L, conflicts=(Alternative(0.204, M_Z), Alternative(0.2105, MODEL))
         ),
-        antenna_top=measured(0.275, C_L, conflicts=(Alternative(0.267, MODEL),)),
+        antenna_top=measured(
+            0.275,
+            C_L,
+            note="the payload's CAD has a partial model of the antennas",
+            conflicts=(Alternative(0.267, MODEL), Alternative(0.260, PAYLOAD_CAD)),
+        ),
+        payload_bottom=calibrated(
+            0.096,
+            PAYLOAD_CAD,
+            "the LiDAR's scan plane and top and the camera's underside, measured at"
+            " 195, 205 and 100 mm, which put the CAD's floor 95.9, 96.5 and 95.0 mm"
+            " up",
+            note="the battery chamber hangs 26.5 mm below it, to 69.5 mm;"
+            " RacecarSim's block under the payload reaches 72",
+            conflicts=(Alternative(0.100, RACECARSIM_MODEL),),
+        ),
     ),
     shape=Shape(
         chassis_boxes=measured(
@@ -430,14 +454,10 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             RACECARSIM_MODEL,
             "the car's LiDAR, 195 mm high, which RacecarSim's model has at 201.6",
             note="its model has the camera 7 mm and the IMU 8.5 mm higher than they"
-            " are measured, too. The MuJoCo model's meshes are lowered by it",
-        ),
-        payload_bottom=assumed(
-            0.100,
-            RACECARSIM_MODEL,
-            "not yet measured. In RacecarSim's model it is about 30 mm above the"
-            " chassis' parts below it, so that the payload looks to float over"
-            " them; in photos of the car the payload looks to reach lower",
+            " are measured, too. Its floor is 4 mm higher than the payload's CAD"
+            " puts it (Footprint.payload_bottom), and its LiDAR, camera and IMU 2 to"
+            " 2.5 mm higher above that floor. The MuJoCo model's meshes are lowered"
+            " by it",
         ),
         antenna_x=measured(-0.030, RACECARSIM_MODEL),
         antenna_y=measured(
@@ -697,6 +717,7 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             conflicts=(
                 Alternative((0.192, 0.0, 0.105), M_Z),
                 Alternative((0.190, 0.0, 0.1135), MODEL),
+                Alternative((0.190, 0.0, 0.107), PAYLOAD_CAD),
             ),
         ),
         rotation_degrees=documented(
