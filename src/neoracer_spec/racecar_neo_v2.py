@@ -350,9 +350,9 @@ FIT = Source(
 )
 PAYLOAD_CAD = Source(
     "payload CAD",
-    "the payload's CAD model, racecar-neo-v2-body.step, exported from Autodesk"
-    " software on 2026-10-21: its y is the car's x less 130 mm, and its floor's"
-    " underside is at its z 0",
+    "the payload's CAD model, cad/racecar_neo_v2/racecar-neo-v2-body.step,"
+    " exported from Autodesk software on 2026-10-21: its y is the car's x less"
+    " 130 mm, and its floor's underside is at its z 0",
 )
 
 
