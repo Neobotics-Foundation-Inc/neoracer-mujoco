@@ -62,6 +62,12 @@ class CarParams:
     encoder: EncoderParams | HallEncoderParams = EncoderParams()
     start_max_speed: float = 1.0
 
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.start_max_speed <= 1.0:
+            raise ValueError(
+                f"start_max_speed must be in [0, 1], not {self.start_max_speed}"
+            )
+
 
 def racecar_neo_v2_params() -> CarParams:
     """The RACECAR Neo V2's LiDAR, its drive board's encoder and its
@@ -91,8 +97,8 @@ class MujocoDrive:
     def __init__(self, scene: Scene, data: mujoco.MjData, start_max_speed: float = 1.0):
         self._car = scene.car
         self._data = data
-        self._start_max_speed = start_max_speed
-        self._max_speed = start_max_speed  # fraction of the full throttle, 0..1
+        self._start_max_speed = _clamp(start_max_speed, 0.0, 1.0)
+        self._max_speed = self._start_max_speed  # fraction of the full throttle
         self._limits = contract.actuator_limits(scene.model, scene.car)
 
     def set_speed_angle(self, speed: float, angle: float) -> None:

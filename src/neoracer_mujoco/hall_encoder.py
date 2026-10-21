@@ -63,4 +63,6 @@ def step(
     measured = edges * params.edge_angle * params.radius / (since - after)  # m/s
     speed = params.alpha * math.copysign(measured, angle - state.angle)
     speed += (1.0 - params.alpha) * state.speed
+    if after > params.stop_timeout:  # in a step longer than the timeout
+        speed = 0.0
     return HallEncoderState(state.origin, angle, after, speed)

@@ -17,7 +17,12 @@ import numpy as np
 import pytest
 
 from neoracer_mujoco import Scene, assets, contract, lidar, sim
-from neoracer_mujoco.racecar_core_adapter import MujocoDrive, MujocoLidar, MujocoRacecar
+from neoracer_mujoco.racecar_core_adapter import (
+    CarParams,
+    MujocoDrive,
+    MujocoLidar,
+    MujocoRacecar,
+)
 
 LIDAR = lidar.LidarParams()
 
@@ -78,15 +83,23 @@ def test_drive_writes_clipped_and_scaled_commands(scene):
 def test_set_max_speed_without_an_argument_restores_the_start(scene):
     """set_max_speed() without an argument goes back to the max speed the
     drive started with, as racecar_core's default does: 1.0 on the NeoRacer,
-    0.25 on the V2. Speed 1 then drives that share of full throttle."""
+    0.25 on the V2. Speed 1 drives that share of full throttle at the start
+    and after. A drive clamps its start into [0, 1], as set_max_speed clamps
+    its argument, and CarParams refuses a start outside it."""
     a, b, c = contract.throttle_map(scene.model, scene.car.drive)
     data = mujoco.MjData(scene.model)
-    for start in (1.0, 0.25):
+    for start, share in ((1.0, 1.0), (0.25, 0.25), (2.0, 1.0), (-0.25, 0.0)):
+        expected = a * share + (b + c if share > 0 else 0.0)
         drive = MujocoDrive(scene, data, start)
+        drive.set_speed_angle(1.0, 0.0)
+        assert _drive_ctrl(scene, data) == pytest.approx(expected), start
         drive.set_max_speed(0.5)
         drive.set_max_speed()
         drive.set_speed_angle(1.0, 0.0)
-        assert _drive_ctrl(scene, data) == pytest.approx(a * start + b + c)
+        assert _drive_ctrl(scene, data) == pytest.approx(expected), start
+    for start in (2.0, -0.25):
+        with pytest.raises(ValueError, match="start_max_speed"):
+            CarParams(start_max_speed=start)
 
 
 def test_a_scan_is_clockwise_from_the_front_in_cm(corridor):

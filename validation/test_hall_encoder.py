@@ -94,6 +94,16 @@ def test_a_car_that_starts_again_reads_until_a_timeout_after_its_edge():
     assert state.speed == 0.0
 
 
+def test_a_step_longer_than_the_timeout_reads_0_after_an_old_edge():
+    """A step of 0.1 s from rest that turns 1.5 edges crosses one a third of
+    the step, 33 ms, before its end: more than stop_timeout, so it reads 0."""
+    state = hall_encoder.start(PARAMS, 0.0)
+    state = hall_encoder.step(PARAMS, state, 1.5 * PARAMS.edge_angle, 0.1)
+    assert state.since == pytest.approx(0.1 / 3)
+    assert state.since > PARAMS.stop_timeout
+    assert state.speed == 0.0
+
+
 @pytest.mark.parametrize(
     "field, value",
     [
