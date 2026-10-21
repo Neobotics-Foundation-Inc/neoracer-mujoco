@@ -15,11 +15,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # The meshes in assets/meshes/ are Git LFS objects. Without them,
-      # MuJoCo cannot compile the car model.
+      # MuJoCo cannot compile the car model. The payload's CAD model, which
+      # nothing here reads, is left out, as .lfsconfig leaves it out of clones:
+      # checkout fetches the LFS objects before .lfsconfig is checked out.
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           lfs: true
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: lfs.fetchexclude
+          GIT_CONFIG_VALUE_0: cad/**/*.step
 
       - name: Install Nix
         uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
@@ -81,10 +87,15 @@ jobs:
   wheel:
     runs-on: ubuntu-latest
     steps:
+      # The LFS objects but the payload's CAD model, as in the nix job.
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           lfs: true
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: lfs.fetchexclude
+          GIT_CONFIG_VALUE_0: cad/**/*.step
 
       - name: Setup Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
