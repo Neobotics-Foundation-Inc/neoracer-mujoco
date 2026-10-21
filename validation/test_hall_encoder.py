@@ -6,6 +6,7 @@ rc.physics.get_encoder_speed() on the V2.
 
 import math
 import os
+from dataclasses import replace
 
 import pytest
 
@@ -62,6 +63,50 @@ def test_a_creeping_car_reads_zero():
             assert state.speed == 0.0
         else:
             assert state.speed >= 0.0
+
+
+def test_a_drivetrain_that_turns_back_before_the_next_edge_passes_none():
+    """The edges are fixed angles: a drivetrain that rocks between 0.8 and 0.4
+    of the way to the next edge, as a car at rest may, crosses none, so for a
+    second it reads 0 and its last edge ages."""
+    state = hall_encoder.start(PARAMS, 0.0)
+    for i in range(360):
+        angle = (0.8 if i % 2 == 0 else 0.4) * PARAMS.edge_angle
+        state = hall_encoder.step(PARAMS, state, angle, DT)
+        assert state.speed == 0.0
+    assert state.since == pytest.approx(1.0)
+
+
+def test_a_car_that_starts_again_reads_until_a_timeout_after_its_edge():
+    """After a second at rest, a step that turns 1.5 edges crosses one: its
+    last edge is the third of the step old, not a share of the second. The
+    reading then holds until stop_timeout after that edge, and is 0 after."""
+    state = hall_encoder.start(PARAMS, 0.0)
+    for _ in range(360):
+        state = hall_encoder.step(PARAMS, state, 0.0, DT)
+    state = hall_encoder.step(PARAMS, state, 1.5 * PARAMS.edge_angle, DT)
+    assert state.since == pytest.approx(DT / 3)
+    assert state.speed > 0.0
+    while state.since + DT <= PARAMS.stop_timeout:
+        state = hall_encoder.step(PARAMS, state, 1.5 * PARAMS.edge_angle, DT)
+        assert state.speed > 0.0
+    state = hall_encoder.step(PARAMS, state, 1.5 * PARAMS.edge_angle, DT)
+    assert state.speed == 0.0
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("edge_angle", 0.0),
+        ("radius", -0.036),
+        ("alpha", 0.0),
+        ("alpha", 1.5),
+        ("stop_timeout", 0.0),
+    ],
+)
+def test_the_params_refuse_settings_it_cannot_step_with(field, value):
+    with pytest.raises(ValueError, match=field):
+        replace(PARAMS, **{field: value})
 
 
 def test_the_adapter_reads_the_v2s_encoder_and_lidar():

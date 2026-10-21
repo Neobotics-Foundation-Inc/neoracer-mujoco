@@ -88,6 +88,16 @@ class HallEncoderParams:
     alpha: float  # the weight of each new edge's speed in its filter
     stop_timeout: float  # s without an edge, after which it reads 0
 
+    def __post_init__(self) -> None:
+        if not self.edge_angle > 0.0:
+            raise ValueError(f"edge_angle must be > 0 rad, not {self.edge_angle}")
+        if not self.radius > 0.0:
+            raise ValueError(f"radius must be > 0 m, not {self.radius}")
+        if not 0.0 < self.alpha <= 1.0:
+            raise ValueError(f"alpha must be in (0, 1], not {self.alpha}")
+        if not self.stop_timeout > 0.0:
+            raise ValueError(f"stop_timeout must be > 0 s, not {self.stop_timeout}")
+
 
 def encoder_params(spec: RacecarNeoV2) -> HallEncoderParams:
     """The drive board's encoder: an edge every 1/edges of a turn of the
