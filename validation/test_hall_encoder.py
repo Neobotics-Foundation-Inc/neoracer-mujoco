@@ -94,24 +94,24 @@ def test_a_car_that_starts_again_reads_until_a_timeout_after_its_edge():
     assert state.speed == 0.0
 
 
-@pytest.mark.parametrize("way", (1.0, -1.0), ids=("forward", "backward"))
-def test_an_edge_after_a_timeout_starts_the_filter_over(way):
+def test_an_edge_after_a_timeout_starts_the_filter_over():
     """An edge crossed, ten steps at rest, and the next edge half a step into
     the step after: the wait, 30.1 ms, passes stop_timeout within that step,
     so the board read 0 before the edge, and it reads alpha of the edge's
     speed, an edge over the wait, either way."""
     e = PARAMS.edge_angle
-    state = hall_encoder.start(PARAMS, 0.0)
-    state = hall_encoder.step(PARAMS, state, way * 1.5 * e, DT)
-    for _ in range(10):
+    for way, name in ((1.0, "forward"), (-1.0, "backward")):
+        state = hall_encoder.start(PARAMS, 0.0)
         state = hall_encoder.step(PARAMS, state, way * 1.5 * e, DT)
-    assert state.since < PARAMS.stop_timeout
-    assert state.speed != 0.0
-    wait = state.since + DT / 2
-    assert wait > PARAMS.stop_timeout
-    state = hall_encoder.step(PARAMS, state, way * 2.5 * e, DT)
-    expected = way * PARAMS.alpha * e * PARAMS.radius / wait
-    assert state.speed == pytest.approx(expected)
+        for _ in range(10):
+            state = hall_encoder.step(PARAMS, state, way * 1.5 * e, DT)
+        assert state.since < PARAMS.stop_timeout, name
+        assert state.speed != 0.0, name
+        wait = state.since + DT / 2
+        assert wait > PARAMS.stop_timeout, name
+        state = hall_encoder.step(PARAMS, state, way * 2.5 * e, DT)
+        expected = way * PARAMS.alpha * e * PARAMS.radius / wait
+        assert state.speed == pytest.approx(expected), name
 
 
 def test_a_step_longer_than_the_timeout_reads_0_after_an_old_edge():
@@ -124,19 +124,17 @@ def test_a_step_longer_than_the_timeout_reads_0_after_an_old_edge():
     assert state.speed == 0.0
 
 
-@pytest.mark.parametrize(
-    "field, value",
-    [
+def test_the_params_refuse_settings_it_cannot_step_with():
+    bad = [
         ("edge_angle", 0.0),
         ("radius", -0.036),
         ("alpha", 0.0),
         ("alpha", 1.5),
         ("stop_timeout", 0.0),
-    ],
-)
-def test_the_params_refuse_settings_it_cannot_step_with(field, value):
-    with pytest.raises(ValueError, match=field):
-        replace(PARAMS, **{field: value})
+    ]
+    for field, value in bad:
+        with pytest.raises(ValueError, match=field):
+            replace(PARAMS, **{field: value})
 
 
 def test_the_adapter_reads_the_v2s_encoder_and_lidar():

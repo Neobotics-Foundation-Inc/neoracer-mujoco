@@ -37,6 +37,7 @@ speed.
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import IntEnum
+from typing import assert_never
 
 import mujoco
 import numpy as np
@@ -206,6 +207,8 @@ class MujocoPhysics:
                 self._encoder = _Windowed(params, encoder.start(params, angle))
             case HallEncoderParams():
                 self._encoder = _Hall(params, hall_encoder.start(params, angle))
+            case _:
+                assert_never(params)
 
     def _angle(self) -> float:
         return float(self._data.bind_scalar(self._drive_pos).data[0])  # rad
@@ -220,6 +223,8 @@ class MujocoPhysics:
             case _Hall(params, state):
                 state = hall_encoder.step(params, state, angle, self._dt)
                 self._encoder = _Hall(params, state)
+            case _:
+                assert_never(self._encoder)
 
     def get_encoder_speed(self) -> float:
         """The car's speed (m/s) from its motor encoder, + = forward."""

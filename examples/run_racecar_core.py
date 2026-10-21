@@ -39,7 +39,7 @@ import types
 import unittest.mock
 from collections.abc import Generator, Mapping, Sequence
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Literal, assert_never, get_args
 
 import mujoco
 
@@ -78,6 +78,8 @@ def _car_xml(car: CarName) -> str:
             return assets.DEFAULT_CAR
         case "racecar_neo_v2":
             return os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml")
+        case _:
+            assert_never(car)
 
 
 def build_racecar(
@@ -98,6 +100,8 @@ def _car_params(car: CarName) -> CarParams:
             return CarParams()
         case "racecar_neo_v2":
             return racecar_neo_v2_params()
+        case _:
+            assert_never(car)
 
 
 def _sim_time(rc: MujocoRacecar) -> types.ModuleType:
