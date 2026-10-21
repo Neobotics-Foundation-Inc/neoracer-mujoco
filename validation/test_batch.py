@@ -1,7 +1,9 @@
 """
 Laws for batch.py: a batch row is one environment stepped on its own, and
 command and read address the batch arrays by spec element, whatever the
-order of the actuators and the sensors in the car XML.
+order of the actuators and the sensors in the car XML. The RACECAR Neo V2's
+actuators act on a command 0.06 s late, longer than a call of NSTEP steps,
+so its rows carry their command history from call to call.
 """
 
 import copy
@@ -28,11 +30,12 @@ from neoracer_mujoco.track_generation import (
 
 NBATCH, NSTEP, CALLS = 6, 17, 8
 NOMINAL = [Physics()]  # times nbatch: the car of the XML in every row
+V2 = os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml")
 
 
-def _loop_scene() -> Scene:
+def _loop_scene(car: str = assets.DEFAULT_CAR) -> Scene:
     track = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
-    return assets.compose(mujoco.MjSpec.from_file(track), pos=(0, -2.5, 0))
+    return assets.compose(mujoco.MjSpec.from_file(track), car, pos=(0, -2.5, 0))
 
 
 def _commands(seed: int, nbatch: int = NBATCH) -> np.ndarray:
@@ -53,6 +56,29 @@ def _batch_run(scene: Scene, nthread: int) -> np.ndarray:
         state, sensordata = sim_batch.step(state, ctrl, NSTEP)
         out.append(sensordata)
     sim_batch.close()
+    return np.array(out)
+
+
+def _stepped(
+    scene: Scene, row_physics: Physics, start: mujoco.MjData, commands: np.ndarray
+) -> np.ndarray:
+    """The sensordata of one MjData that starts from start and steps on scene
+    with row_physics, NSTEP steps for each (throttle, steer) of commands,
+    starting the solver cold at each: (len(commands), NSTEP, nsensordata)."""
+    model = copy.deepcopy(scene.model)
+    physics.apply_physics(model, scene, row_physics)
+    data = copy.deepcopy(start)
+    out = []
+    for throttle, steer in commands:
+        data.qacc_warmstart[:] = 0
+        sim.apply_command(
+            scene.car, data, ControlCommand(throttle=throttle, steer=steer)
+        )
+        steps = []
+        for _ in range(NSTEP):
+            mujoco.mj_step(model, data)
+            steps.append(data.sensordata.copy())
+        out.append(steps)
     return np.array(out)
 
 
@@ -109,22 +135,42 @@ def test_a_row_is_one_data_stepped_on_its_scene_with_its_physics():
     sim_batch.close()
     got = np.array(got)  # (CALLS, 4, NSTEP, n)
     for i, (scene, row_physics) in enumerate(zip(scenes, params, strict=True)):
-        model = copy.deepcopy(scene.model)
-        physics.apply_physics(model, scene, row_physics)
-        data = copy.deepcopy(datas[i])
-        expected = []
-        for throttle, steer in commands[:, i]:
-            data.qacc_warmstart[:] = 0
-            command = ControlCommand(throttle=throttle, steer=steer)
-            sim.apply_command(scene.car, data, command)
-            steps = []
-            for _ in range(NSTEP):
-                mujoco.mj_step(model, data)
-                steps.append(data.sensordata.copy())
-            expected.append(steps)
+        expected = _stepped(scene, row_physics, datas[i], commands[:, i])
         np.testing.assert_array_equal(got[:, i], expected, err_msg=f"row {i}")
     assert not np.array_equal(got[-1, 0], got[-1, 1])
     assert not np.array_equal(got[-1, 0], got[-1, 2])
+
+
+def test_a_v2_row_keeps_its_command_history_across_calls_and_resets():
+    """On the V2 a row equals, bit for bit, one MjData stepped with its
+    physics and its commands, which change at every call and take every
+    sign, so a batch that lost the command history between calls fails. A
+    row reset halfway starts over, history and all, as a fresh MjData does."""
+    scene = _loop_scene(V2)
+    params = _random_physics(2, seed=4)
+    datas = [sim.settle(scene.model)] * 2
+    commands = _commands(2, nbatch=2)
+    commands[2, :, 0] = 0.0  # a coast
+    half = CALLS // 2
+    sim_batch = batch.CpuBatch(scene, 2, nthread=0)
+    initial = sim_batch.initial(datas, [scene] * 2, params)
+    state, got = initial, []
+    for k, c in enumerate(commands):
+        if k == half:
+            state = sim_batch.reset(state, np.array([True, False]), initial)
+        ctrl = batch.command(scene.model, scene.car, c[:, 0], c[:, 1])
+        state, sensordata = sim_batch.step(state, ctrl, NSTEP)
+        got.append(sensordata)
+    sim_batch.close()
+    got = np.array(got)  # (CALLS, 2, NSTEP, n)
+    p, q = params
+    np.testing.assert_array_equal(
+        got[:, 1], _stepped(scene, q, datas[1], commands[:, 1])
+    )
+    before = _stepped(scene, p, datas[0], commands[:half, 0])
+    after = _stepped(scene, p, datas[0], commands[half:, 0])
+    np.testing.assert_array_equal(got[:half, 0], before)
+    np.testing.assert_array_equal(got[half:, 0], after)
 
 
 def test_the_thread_count_does_not_change_the_result():
@@ -137,8 +183,15 @@ def test_command_and_read_address_the_arrays_by_spec_element():
     row of command is the ctrl that apply_command writes, and read on
     sensordata gives what binding the sensor to the data gives, for every
     sensor of the car and every truth sensor."""
-    throttle, steer = np.array([0.1, -0.2, 0.3]), np.array([0.4, 0.0, -0.1])
-    for name, scene in [("car", assets.load()), ("reversed", reversed_car())]:
+    throttle = np.array([0.1, -0.2, 0.0, 0.3])
+    steer = np.array([0.4, 0.0, 0.2, -0.1])
+    cases = [
+        ("car", assets.load()),
+        ("reversed", reversed_car()),
+        ("v2", assets.load(V2)),
+        ("reversed v2", reversed_car(V2)),
+    ]
+    for name, scene in cases:
         rows = batch.command(scene.model, scene.car, throttle, steer)
         for row, t, s in zip(rows, throttle, steer, strict=True):
             data = mujoco.MjData(scene.model)
@@ -255,6 +308,45 @@ def test_the_warp_batch_follows_the_cpu_batch(warp):
     cpu_ctrl = batch.command(scene.model, scene.car, throttle, steer)
     warp_ctrl = jnp.asarray(cpu_ctrl)
     for _ in range(10):
+        cpu_state, cpu_data = cpu.step(cpu_state, cpu_ctrl, NSTEP)
+        warp_state, warp_data = warp_batch.step(warp_state, warp_ctrl, NSTEP)
+    cpu.close()
+    pos = scene.car.truth.pos
+    cpu_pos = batch.read(scene.model, cpu_data[:, -1], pos)
+    warp_pos = np.asarray(batch.read(scene.model, warp_data[:, -1], pos))
+    np.testing.assert_allclose(warp_pos, cpu_pos, atol=1e-3)
+
+
+@pytest.fixture(scope="module")
+def warp_v2():
+    """jax.numpy, the V2 on the loop scene and a WarpBatch of 2 rows on it."""
+    jnp, batch_warp = _warp_modules()
+    scene = _loop_scene(V2)
+    return jnp, scene, batch_warp.WarpBatch(scene, 2)
+
+
+def test_the_warp_batch_follows_the_cpu_batch_on_the_v2(warp_v2):
+    """On the V2, with commands that change at every call, a different
+    physics in each row and a row reset halfway, the Warp batch carries the
+    command history as the CPU batch does: its rows end within 1 mm of the
+    CPU batch's. command gives JAX arrays the ctrl it gives NumPy ones."""
+    jnp, scene, warp_batch = warp_v2
+    params = _random_physics(2, seed=5)
+    datas = [sim.settle(scene.model)] * 2
+    cpu = batch.CpuBatch(scene, 2, nthread=0)
+    cpu_initial = cpu.initial(datas, [scene] * 2, params)
+    warp_initial = warp_batch.initial(datas, [scene] * 2, params)
+    cpu_state, warp_state = cpu_initial, warp_initial
+    done = np.array([True, False])
+    for k, c in enumerate(_commands(3, nbatch=2)):
+        if k == CALLS // 2:
+            cpu_state = cpu.reset(cpu_state, done, cpu_initial)
+            warp_state = warp_batch.reset(warp_state, jnp.asarray(done), warp_initial)
+        cpu_ctrl = batch.command(scene.model, scene.car, c[:, 0], c[:, 1])
+        warp_ctrl = batch.command(
+            scene.model, scene.car, jnp.asarray(c[:, 0]), jnp.asarray(c[:, 1])
+        )
+        np.testing.assert_allclose(np.asarray(warp_ctrl), cpu_ctrl, rtol=1e-6)
         cpu_state, cpu_data = cpu.step(cpu_state, cpu_ctrl, NSTEP)
         warp_state, warp_data = warp_batch.step(warp_state, warp_ctrl, NSTEP)
     cpu.close()
