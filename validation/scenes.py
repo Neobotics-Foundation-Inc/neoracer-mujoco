@@ -19,9 +19,10 @@ def corridor_scene() -> Scene:
     )
 
 
-def reversed_car() -> Scene:
-    """The default car with its actuators and its sensors in reverse order."""
-    root = ET.parse(assets.DEFAULT_CAR).getroot()
+def reversed_car(path: str = assets.DEFAULT_CAR) -> Scene:
+    """The car of the XML at path, the default car's by default, with its
+    actuators and its sensors in reverse order."""
+    root = ET.parse(path).getroot()
     for tag in ("actuator", "sensor"):
         section = root.find(tag)
         assert section is not None, tag
@@ -31,8 +32,8 @@ def reversed_car() -> Scene:
         section.extend(reversed(children))
     spec = mujoco.MjSpec.from_string(ET.tostring(root, encoding="unicode"))
     # A spec made from a string has no file directory, so give it the one of
-    # the car XML. Mesh paths in neoracer.xml are relative to it.
-    spec.meshdir = assets.ASSET_DIR
+    # the car XML. Its mesh paths are relative to it.
+    spec.meshdir = os.path.dirname(path)
     return compile_scene(spec)
 
 
