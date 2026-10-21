@@ -10,7 +10,7 @@ import mujoco
 import numpy as np
 import pytest
 
-from neoracer_mujoco import Scene, encoder, sim
+from neoracer_mujoco import Scene, encoder, load, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
 from neoracer_mujoco.sensors import WHEEL_RADIUS
@@ -55,9 +55,11 @@ def test_the_filter_converges_to_the_tyres_surface_speed():
         assert speed == pytest.approx(expected), f"window {k}"
 
 
-def test_the_adapter_reads_the_car_speed(scene):
+def test_the_adapter_reads_the_car_speed():
     """rc.physics.get_encoder_speed() of a car that drives straight reads its
-    wheels' surface speed, and so about its speed over the ground."""
+    wheels' surface speed, and so about its speed over the ground. The
+    adapter's encoder is the NeoRacer's, so these tests drive the NeoRacer."""
+    scene = load()
     model, car = scene.model, scene.car
     data = sim.settle(model)
     rc = MujocoRacecar(scene, data, max_steps=round(1.5 / model.opt.timestep))
@@ -81,12 +83,13 @@ def _wheel_angle(scene: Scene, data: mujoco.MjData) -> float:
     return float(np.mean([data.bind_scalar(j).qpos[0] for j in spins]))
 
 
-def test_the_first_window_measures_the_turn_of_the_wheels_in_it(scene):
+def test_the_first_window_measures_the_turn_of_the_wheels_in_it():
     """The car speeds up from rest, on data that mj_forward last updated.
     The first speed the encoder reports is alpha times the wheels' turn
     between the first update() and the update() that closes the window,
     over that time: the encoder reads the angle the car has at each
     update(), not the one of a step before."""
+    scene = load()
     model, car = scene.model, scene.car
     data = sim.settle(model)
     mujoco.mj_forward(model, data)
@@ -106,10 +109,11 @@ def test_the_first_window_measures_the_turn_of_the_wheels_in_it(scene):
     assert first == pytest.approx(alpha * (a1 - a0) * WHEEL_RADIUS / (t1 - t0))
 
 
-def test_a_bounded_run_counts_its_last_step(scene):
+def test_a_bounded_run_counts_its_last_step():
     """go() with max_steps returns with every step counted: from rest at
     full throttle, 8 steps at 360 Hz (22 ms) pass the first 20 ms tick, so
     the encoder reports a speed."""
+    scene = load()
     model, car = scene.model, scene.car
     data = sim.settle(model)
     rc = MujocoRacecar(scene, data, max_steps=8)

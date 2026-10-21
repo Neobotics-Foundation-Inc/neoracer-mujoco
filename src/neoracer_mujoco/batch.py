@@ -48,6 +48,7 @@ import numpy as np
 import numpy.typing as npt
 from mujoco import rollout
 
+from . import contract
 from .physics import Physics, apply_physics
 from .scene import Car, Scene
 
@@ -187,21 +188,27 @@ def check_one_per_row(items: Sequence[object], nbatch: int, what: str) -> None:
 
 
 def command[A: Array](model: mujoco.MjModel, car: Car, throttle: A, steer: A) -> A:
-    """The ctrl rows (nbatch, nu) that give the drive motor throttle, in
-    [-1, 1], as that fraction of its voltage limit (the battery), and the
-    steer servo steer (rad, + = left). throttle and steer have shape
-    (nbatch,). Raise ValueError if model has actuators that are not the car's."""
-    elements = (car.drive, car.steer)
+    """The ctrl rows (nbatch, nu) that give the actuators that the throttle
+    drives throttle, in [-1, 1], through their throttle maps
+    (contract.throttle_map: on the NeoRacer, that fraction of the motor's
+    voltage limit, the battery), and the steer servo steer (rad, + = left).
+    throttle and steer have shape (nbatch,). Raise ValueError if model has
+    actuators that are not the car's."""
+    elements = (*car.throttled, car.steer)
     if model.nu != len(elements):
         raise ValueError(
             f"the model has {model.nu} actuators, the car has {len(elements)}"
         )
-    voltage = float(model.bind_scalar(car.drive).ctrlrange[1])  # V
-    values = (throttle * voltage, steer)
+    xp = throttle.__array_namespace__()  # numpy or jax.numpy
+    sign = xp.sign(throttle)
+    values = []
+    for actuator in car.throttled:
+        a, b, c = contract.throttle_map(model, actuator)
+        values.append(throttle * a + sign * b + xp.abs(sign) * c)
+    values.append(steer)
     column = {
         int(model.bind_scalar(a).id): v for a, v in zip(elements, values, strict=True)
     }
-    xp = throttle.__array_namespace__()  # numpy or jax.numpy
     return xp.stack([column[i] for i in range(model.nu)], axis=-1)
 
 

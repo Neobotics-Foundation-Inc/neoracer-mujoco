@@ -1,0 +1,5 @@
+# The payload's CAD model, 77 MB, which nothing in the repo reads, is left out
+# of clones. Fetch it with:
+#   git -c lfs.fetchexclude= lfs pull --include="cad/**/*.step"
+[lfs]
+	fetchexclude = cad/**/*.step

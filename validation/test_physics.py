@@ -1,7 +1,8 @@
 """
-Laws for physics.py: apply_physics gives the model that compiling the
-changed car would give, Physics() changes nothing, FIELDS lists everything it
-changes, and the wheel friction factor changes how much the wheels slip.
+Laws for physics.py: on the NeoRacer and on the RACECAR Neo V2, apply_physics
+gives the model that compiling the changed car would give, whatever the model
+held before, Physics() changes nothing, and FIELDS lists everything it
+changes; and the wheel friction factor changes how much the wheels slip.
 """
 
 import copy
@@ -18,13 +19,14 @@ from neoracer_mujoco.physics import Physics, PhysicsRanges, Range
 from neoracer_mujoco.scene import find_car
 
 TRACK = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
+CARS = (assets.DEFAULT_CAR, os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml"))
 CHANGED = Physics(
     wheel_friction=0.4, chassis_mass=1.3, motor_torque=0.7, steer_stiffness=1.6
 )
 
 
-def _scene() -> Scene:
-    return assets.compose(mujoco.MjSpec.from_file(TRACK), pos=(0, -2.5, 0))
+def _scene(car: str = assets.DEFAULT_CAR) -> Scene:
+    return assets.compose(mujoco.MjSpec.from_file(TRACK), car, pos=(0, -2.5, 0))
 
 
 def _applied(scene: Scene, p: Physics) -> mujoco.MjModel:
@@ -45,18 +47,27 @@ def _drive(model: mujoco.MjModel, scene: Scene) -> np.ndarray:
     return np.array(out)
 
 
-def test_apply_physics_equals_compiling_the_changed_car():
+@pytest.mark.parametrize("car_path", CARS, ids=("neoracer", "racecar_neo_v2"))
+def test_apply_physics_equals_compiling_the_changed_car(car_path):
     """The same factors written into the MjSpec and compiled give the same
-    drive, bit for bit."""
-    scene = _scene()
+    drive, bit for bit. motor_torque divides the NeoRacer's DC motor's
+    resistance, and multiplies both gains of the V2's speed controller: a
+    factor on one of them alone would change the speed it holds."""
+    scene = _scene(car_path)
     edited, car = scene.spec.copy(), scene.car  # car names the elements
     for wheel in car.wheels:
         edited.geom(wheel.name).friction[0] *= CHANGED.wheel_friction
     body = edited.body(car.body.name)
     body.mass *= CHANGED.chassis_mass
     body.inertia = np.asarray(body.inertia) * CHANGED.chassis_mass
-    motor = edited.actuator(car.drive.name)
-    motor.gainprm[0] /= CHANGED.motor_torque  # the DC motor's resistance
+    for actuator in car.throttled:
+        a = edited.actuator(actuator.name)
+        if a.gaintype == mujoco.mjtGain.mjGAIN_DCMOTOR:
+            a.gainprm[0] /= CHANGED.motor_torque  # the resistance
+        elif a.gaintype == mujoco.mjtGain.mjGAIN_FIXED:
+            a.gainprm[0] *= CHANGED.motor_torque  # motor's gain on ctrl
+        else:
+            a.gainprm[2] *= CHANGED.motor_torque  # motor_engage's on the speed
     servo = edited.actuator(car.steer.name)
     servo.gainprm[4] *= CHANGED.steer_stiffness  # the position loop's kp
     model = edited.compile()  # edited has the truth sensors already
@@ -66,8 +77,23 @@ def test_apply_physics_equals_compiling_the_changed_car():
     )
 
 
-def test_the_nominal_physics_changes_no_field():
-    scene = _scene()
+@pytest.mark.parametrize("car_path", CARS, ids=("neoracer", "racecar_neo_v2"))
+def test_applying_physics_again_does_not_compound(car_path):
+    """apply_physics scales the nominal model, not the one it writes into:
+    applying the same physics twice gives every field that applying it once
+    gives."""
+    scene = _scene(car_path)
+    once, twice = _applied(scene, CHANGED), _applied(scene, CHANGED)
+    physics.apply_physics(twice, scene, CHANGED)
+    for name in physics.FIELDS:
+        np.testing.assert_array_equal(
+            physics.field(twice, name), physics.field(once, name), err_msg=name
+        )
+
+
+@pytest.mark.parametrize("car_path", CARS, ids=("neoracer", "racecar_neo_v2"))
+def test_the_nominal_physics_changes_no_field(car_path):
+    scene = _scene(car_path)
     model = _applied(scene, Physics())
     for name in physics.FIELDS:
         np.testing.assert_array_equal(
@@ -75,10 +101,11 @@ def test_the_nominal_physics_changes_no_field():
         )
 
 
-def test_fields_lists_every_field_that_apply_physics_changes():
+@pytest.mark.parametrize("car_path", CARS, ids=("neoracer", "racecar_neo_v2"))
+def test_fields_lists_every_field_that_apply_physics_changes(car_path):
     """The Warp batch gives each environment its own copy of FIELDS only, so
     a field that apply_physics changes and FIELDS misses would be lost."""
-    scene = _scene()
+    scene = _scene(car_path)
     model = _applied(scene, CHANGED)
     changed = {
         name

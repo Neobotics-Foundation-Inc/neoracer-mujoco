@@ -10,8 +10,11 @@ tests all read it.
 
 Frame: +X forward, +Y left, +Z up.
 Actuators:
-  motor       = voltage at the one drive motor (V), + = forward
+  motor       = the drive, + = forward: the voltage at the NeoRacer's motor
+                (V); the speed that the RACECAR Neo V2's firmware holds (m/s)
   steer_servo = steering target angle (rad), + = left
+A car may have more actuators, which the throttle drives with the motor, as
+motor_engage on the RACECAR Neo V2. throttle_map gives each one's ctrl.
 Wheels:
   fl/fr/rl/rr_wheel = the geom of each wheel that touches the ground
 Their order in the XML is not part of the contract: code binds each one by
@@ -29,7 +32,11 @@ if TYPE_CHECKING:  # scene.py imports this module
 # --- actuators ---------------------------------------------------------------
 DRIVE_ACTUATOR = "motor"
 STEER_ACTUATOR = "steer_servo"
-EXPECTED_ACTUATORS = (DRIVE_ACTUATOR, STEER_ACTUATOR)
+REQUIRED_ACTUATORS = (DRIVE_ACTUATOR, STEER_ACTUATOR)
+# An actuator's user numbers (a, b, c), if it has any, give its ctrl for a
+# throttle t in [-1, 1]: a t + b sign(t) + c |sign(t)|. Every actuator but
+# the steer servo has them, except a motor that takes a share of its limit.
+THROTTLE_MAP_SIZE = 3
 
 # --- wheels -----------------------------------------------------------------
 # The geoms that touch the ground, in the order fl, fr, rl, rr.
@@ -68,12 +75,30 @@ REQUIRED_SENSORS = (
 MASS_MIN, MASS_MAX = 1.0, 8.0  # kg
 
 
+type ThrottleMap = tuple[float, float, float]
+
+
+def throttle_map(model: mujoco.MjModel, actuator: mujoco.MjsActuator) -> ThrottleMap:
+    """(a, b, c): a throttle t in [-1, 1] sets actuator's ctrl to
+    a t + b sign(t) + c |sign(t)|. They are its user numbers: the RACECAR Neo
+    V2's motor holds a speed of at least b while the throttle is not 0, and
+    its motor_engage is 1. A motor without them is (its ctrlrange limit, 0,
+    0): the NeoRacer's takes the throttle's share of the battery's voltage."""
+    user = actuator.userdata
+    if len(user) == 0:
+        return (float(model.bind_scalar(actuator).ctrlrange[1]), 0.0, 0.0)
+    a, b, c = (float(u) for u in user)
+    return (a, b, c)
+
+
 @dataclass(frozen=True)
 class ActuatorLimits:
     """The ctrlrange limits of the drive and steer actuators. Each range is
     symmetric, so a command in [-1, 1] scales by one limit."""
 
-    voltage: float  # V, the battery; the motor's ctrlrange is [-voltage, voltage]
+    # The motor's ctrlrange is [-voltage, voltage]: V, the NeoRacer's battery;
+    # m/s for the RACECAR Neo V2, the speed it holds at full throttle.
+    voltage: float
     steer_rad: float  # rad; ctrlrange is [-steer_rad, steer_rad]
 
 

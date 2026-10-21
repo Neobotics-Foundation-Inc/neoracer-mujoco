@@ -31,7 +31,7 @@ def corridor() -> Scene:
 
 
 def _drive_ctrl(scene: Scene, data: mujoco.MjData) -> float:
-    """The ctrl of the drive motor: its voltage (V)."""
+    """The ctrl of the drive motor: its voltage (V) on the NeoRacer."""
     return float(data.bind_scalar(scene.car.drive).ctrl[0])
 
 
@@ -43,16 +43,18 @@ def _steer_ctrl(scene: Scene, data: mujoco.MjData) -> float:
 
 
 def test_drive_writes_clipped_and_scaled_commands(scene):
-    """For each speed, angle and max_speed, set_speed_angle writes
-    clip(speed, -1, 1) * clip(max_speed, 0, 1) * voltage to the drive
-    motor, and -clip(angle, -1, 1) * steer_rad to the steer servo. The
-    minus sign changes the racecar_core steer sign to the contract.py sign.
-    A new drive has max_speed 1, and stop() writes 0 to both."""
+    """For each speed, angle and max_speed, set_speed_angle drives the
+    motor with the throttle clip(speed, -1, 1) * clip(max_speed, 0, 1),
+    through its throttle map (on the NeoRacer, that share of the battery's
+    voltage), and writes -clip(angle, -1, 1) * steer_rad to the steer servo.
+    The minus sign changes the racecar_core steer sign to the contract.py
+    sign. A new drive has max_speed 1, and stop() writes 0 to both."""
     limits = contract.actuator_limits(scene.model, scene.car)
+    a, b, c = contract.throttle_map(scene.model, scene.car.drive)
     data = mujoco.MjData(scene.model)
     drive = MujocoDrive(scene, data)
     drive.set_speed_angle(1.0, 0.0)  # a new drive has max_speed 1
-    assert _drive_ctrl(scene, data) == limits.voltage
+    assert _drive_ctrl(scene, data) == pytest.approx(limits.voltage)
     grid = np.linspace(-2.0, 2.0, 17)  # values inside and outside [-1, 1]
     for max_speed in grid:
         drive.set_max_speed(max_speed)
@@ -60,7 +62,8 @@ def test_drive_writes_clipped_and_scaled_commands(scene):
         for speed in grid:
             for angle in grid:
                 drive.set_speed_angle(speed, angle)
-                volts = np.clip(speed, -1.0, 1.0) * scale * limits.voltage
+                t = np.clip(speed, -1.0, 1.0) * scale
+                volts = a * t + b * np.sign(t) + c * abs(np.sign(t))
                 steer = -np.clip(angle, -1.0, 1.0) * limits.steer_rad
                 assert _drive_ctrl(scene, data) == pytest.approx(volts, abs=1e-12)
                 assert _steer_ctrl(scene, data) == pytest.approx(steer, abs=1e-12)
