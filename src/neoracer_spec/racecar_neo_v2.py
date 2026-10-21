@@ -13,7 +13,8 @@ The values come from these sources:
   shape, and its estimates of the car's inertia, springs and tyres;
 - the payload's CAD model: the shape and the layout of everything on the
   chassis' body posts, which the measured heights of the LiDAR and the
-  camera place on the car. The chassis has no CAD model;
+  camera place on the car. RacecarSim's model of the payload is this one,
+  6 mm higher. The chassis has no CAD model;
 - the MuJoCo model of the car, assets/racecar_neo_v2.xml: what it needs to
   drive as the reference car drove (FIT).
 
@@ -419,9 +420,8 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             "the LiDAR's scan plane and top and the camera's underside, measured at"
             " 195, 205 and 100 mm, which put the CAD's floor 95.9, 96.5 and 95.0 mm"
             " up",
-            note="the battery chamber hangs 26.5 mm below it, to 69.5 mm;"
-            " RacecarSim's block under the payload reaches 72",
-            conflicts=(Alternative(0.100, RACECARSIM_MODEL),),
+            note="the battery chamber hangs 26.5 mm below it, to 69.5 mm",
+            conflicts=(Alternative(0.102, RACECARSIM_MODEL),),
         ),
     ),
     shape=Shape(
@@ -453,10 +453,12 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             0.0066,
             RACECARSIM_MODEL,
             "the car's LiDAR, 195 mm high, which RacecarSim's model has at 201.6",
-            note="its model has the camera 7 mm and the IMU 8.5 mm higher than they"
-            " are measured, too. Its floor is 4 mm higher than the payload's CAD"
-            " puts it (Footprint.payload_bottom), and its LiDAR, camera and IMU 2 to"
-            " 2.5 mm higher above that floor. The MuJoCo model's meshes are lowered"
+            note="its model also has the camera 7 mm and the IMU 8.5 mm higher than"
+            " they are measured. Its payload is the payload's CAD, 6 mm higher: 107"
+            " of its parts match the CAD's across to 1.5 mm, and 96 of them sit 5.7"
+            " to 6.3 mm higher, the WiFi adapter and its antennas 7. Lowered by the"
+            " drop, its floor is 0.6 mm below where the measured heights put the"
+            " CAD's (Footprint.payload_bottom). The MuJoCo model's meshes are lowered"
             " by it",
         ),
         antenna_x=measured(-0.030, RACECARSIM_MODEL),
