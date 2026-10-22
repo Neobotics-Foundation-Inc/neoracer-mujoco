@@ -13,15 +13,22 @@ import mujoco
 import numpy as np
 import pytest
 
-from neoracer_mujoco import Scene, assets, physics, sensors, sim
+from neoracer_mujoco import Scene, assets, batch, physics, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import Physics, PhysicsRanges, Range
 from neoracer_mujoco.scene import find_car
+from neoracer_spec import derive, derive_v2
+from neoracer_spec.neoracer import NEORACER
+from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
 
 TRACK = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
 CARS = (assets.DEFAULT_CAR, os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml"))
 CHANGED = Physics(
-    wheel_friction=0.4, chassis_mass=1.3, motor_torque=0.7, steer_stiffness=1.6
+    wheel_friction=0.4,
+    chassis_mass=1.3,
+    motor_torque=0.7,
+    steer_stiffness=1.6,
+    lidar_rate=1.25,
 )
 
 
@@ -70,6 +77,10 @@ def test_apply_physics_equals_compiling_the_changed_car():
                 a.gainprm[2] *= CHANGED.motor_torque  # motor_engage's on the speed
         servo = edited.actuator(car.steer.name)
         servo.gainprm[4] *= CHANGED.steer_stiffness  # the position loop's kp
+        for name in sensors.LIDAR_BEAM_ORDER:
+            beam = edited.sensor(name)
+            beam.interval = np.asarray(beam.interval) / CHANGED.lidar_rate
+            beam.delay /= CHANGED.lidar_rate
         model = edited.compile()  # edited has the truth sensors already
         compiled = Scene(edited, model, find_car(edited, model))
         np.testing.assert_array_equal(
@@ -124,6 +135,27 @@ def test_fields_lists_every_field_that_apply_physics_changes():
         if model.stat.meaninertia != scene.model.stat.meaninertia:
             changed.add("stat.meaninertia")
         assert changed - {"light_poscom0"} == set(physics.FIELDS), car_path
+
+
+def test_a_faster_lidar_shows_its_scans_sooner():
+    """With lidar_rate f, a driving car's front beam shows a new scan every
+    turn of the head, 1 / (scan rate x f), to a physics step."""
+    scan_rates = (
+        derive.model(NEORACER).lidar_scan_rate,
+        derive_v2.model(RACECAR_NEO_V2).lidar_scan_rate,
+    )
+    for car_path, scan_rate in zip(CARS, scan_rates, strict=True):
+        scene = _scene(car_path)
+        dt = scene.model.opt.timestep
+        for rate in (0.8, 1.25):
+            model = _applied(scene, Physics(lidar_rate=rate))
+            front = batch.read(model, _drive(model, scene), scene.car.sensors.lidar_000)
+            shown = np.flatnonzero(np.diff(front[:, 0]) != 0.0)
+            gaps = np.diff(shown) * dt  # s
+            assert len(gaps) >= 5, (car_path, rate)
+            np.testing.assert_allclose(
+                gaps, 1.0 / (scan_rate * rate), atol=dt * 1.01, err_msg=car_path
+            )
 
 
 def test_less_wheel_friction_means_more_slip():

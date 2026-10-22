@@ -13,8 +13,9 @@ small amount, and the difference grows after a crash, as two CPU runs with
 slightly different states do.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 
 import jax
 import jax.numpy as jnp
@@ -26,6 +27,16 @@ from . import batch
 from . import physics as physics_module
 from .physics import Physics
 from .scene import Scene
+
+# Where MJX's model for MuJoCo Warp holds each field of physics.FIELDS that
+# its Model does not: MuJoCo Warp's own model, _impl, holds the sensors'
+# timing.
+WARP_PATHS: Mapping[str, str] = MappingProxyType(
+    {
+        "sensor_interval": "_impl.sensor_interval",
+        "sensor_delay": "_impl.sensor_delay",
+    }
+)
 
 # The most contacts and constraints that one environment holds at once. The
 # car on a track has about 10 contacts and 40 constraints.
@@ -102,7 +113,9 @@ class WarpBatch:
         def one_env(
             fields: dict[str, jax.Array], d: mjx.Data, c: jax.Array
         ) -> tuple[mjx.Data, jax.Array]:
-            model = self._mx.tree_replace(fields)
+            model = self._mx.tree_replace(
+                {WARP_PATHS.get(f, f): v for f, v in fields.items()}
+            )
 
             def substep(d: mjx.Data, _: None) -> tuple[mjx.Data, jax.Array]:
                 d = mjx.step(model, d)
