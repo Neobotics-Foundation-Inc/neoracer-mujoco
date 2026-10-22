@@ -20,6 +20,7 @@ from neoracer_mujoco import Scene, assets, batch, physics, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import Physics
 from neoracer_mujoco.scene import compile_scene
+from neoracer_mujoco.sensors import SensorReadings
 from neoracer_mujoco.track_generation import (
     Track,
     WallParams,
@@ -199,7 +200,8 @@ def test_command_and_read_address_the_arrays_by_spec_element():
             assert np.array_equal(row, data.ctrl), name
         data = sim.settle(scene.model)
         car = scene.car
-        sensors = [getattr(car.sensors, f.name) for f in fields(car.sensors)]
+        # The car's sensors are those of the SensorReadings fields.
+        sensors = [getattr(car.sensors, f.name) for f in fields(SensorReadings)]
         sensors += [getattr(car.truth, f.name) for f in fields(car.truth)]
         for sensor in sensors:
             value = batch.read(scene.model, data.sensordata, sensor)

@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 import neoracer_spec
-from neoracer_mujoco import assets, encoder, lidar, sim
+from neoracer_mujoco import assets, contract, encoder, lidar, sensors, sim
 from neoracer_mujoco.control import ControlCommand
 from neoracer_spec import (
     ackermann,
@@ -141,6 +141,32 @@ def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
                     continue  # the head passed the beam before the record
                 seen = {truth[s + o, j] for s in steps for o in (-1, 0, 1)}
                 assert readings[k][j] in seen, (path, now, bearing)
+
+
+def test_a_beam_that_the_car_blocks_reads_no_return():
+    """The model holds the field that its spec's LiDAR sees. In
+    loop_corridor, with a wall in every direction, each beam in that field
+    reads the wall, and each beam outside it reads no return: the NeoRacer's
+    LiDAR, which sees 270 degrees, does not see straight back."""
+    loop = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
+    cars = (
+        (assets.DEFAULT_CAR, derive.derive(CAR).lidar.field, {"lidar_180"}),
+        (V2_XML, derive_v2.derive(RACECAR_NEO_V2).lidar.field, set()),
+    )
+    for path, field, blocked in cars:
+        scene = assets.compose(
+            mujoco.MjSpec.from_file(loop), path, pos=(0.0, -2.5, 0.0), visuals=False
+        )
+        model_field = contract.lidar_field(scene.model, scene.car.lidar)
+        assert model_field == pytest.approx(field, rel=1e-5), path
+        assert scene.car.sensors.blocked == blocked, path
+        data = sim.settle(scene.model)
+        ranges = sensors.lidar_ranges(sensors.read(scene.car.sensors, data))
+        for name, distance in zip(sensors.LIDAR_BEAM_ORDER, ranges, strict=True):
+            if name in blocked:
+                assert distance == sensors.NO_RETURN, (path, name)
+            else:
+                assert distance > 0.0, (path, name)
 
 
 def test_the_v2_model_has_the_cars_mass_centre_of_mass_and_inertia():

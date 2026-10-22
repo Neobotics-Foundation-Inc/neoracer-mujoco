@@ -134,6 +134,7 @@ class ModelParams:
     imu_position: Vec3  # m
     lidar_position: Vec3  # m
     lidar_scan_rate: float  # Hz, turns of its head a second
+    lidar_field: float  # rad of bearings it sees, centred on the front
     half_wheelbase: float  # m
     half_track: float  # m
     wheel_radius: float  # m
@@ -189,6 +190,7 @@ def model(spec: Spec) -> ModelParams:
         imu_position=_precise3(spec.imu.position.value),
         lidar_position=_precise3(spec.lidar.position.value),
         lidar_scan_rate=precise(spec.lidar.scan_rate.value),
+        lidar_field=precise(lidar_params(spec.lidar).field),
         half_wheelbase=precise(c.wheelbase.value / 2),
         half_track=precise(c.track.value / 2),
         wheel_radius=precise(w.radius.value),

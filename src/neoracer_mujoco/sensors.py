@@ -16,10 +16,12 @@ Sensor map (matches neoracer.xml):
   fl/fr/rl/rr_wheel_vel — wheel angular velocities (rad/s)
   drive_pos     — the drivetrain's angle: the mean wheel angle (rad)
   fl/fr/rl/rr_susp_pos  — suspension travel (m; positive = compressed)
-  lidar_000..315 — rangefinder distances (m; -1 = no hit), as the LiDAR's
-                   last complete turn reports them (mjcf.beam_timing)
+  lidar_000..315 — rangefinder distances (m; -1 = no hit, or a bearing that
+                   the car blocks), as the LiDAR's last complete turn reports
+                   them (mjcf.beam_timing)
 """
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from types import MappingProxyType
@@ -30,6 +32,10 @@ import numpy as np
 import numpy.typing as npt
 
 from neoracer_spec.neoracer import NEORACER
+
+from . import contract
+
+NO_RETURN = -1.0  # m, what a rangefinder reads with nothing in range
 
 # The tyre's radius, which the car model's wheel geoms also have.
 WHEEL_RADIUS = NEORACER.wheel.radius.value  # m
@@ -67,7 +73,7 @@ class SensorReadings:
     fr_susp_pos: float
     rl_susp_pos: float
     rr_susp_pos: float
-    # 8-beam lidar ring (m; -1 = no hit)
+    # 8-beam lidar ring (m; -1 = no hit, or a bearing the car blocks)
     lidar_000: float
     lidar_045: float
     lidar_090: float
@@ -114,14 +120,21 @@ class CarSensors:
     lidar_225: mujoco.MjsSensor
     lidar_270: mujoco.MjsSensor
     lidar_315: mujoco.MjsSensor
+    # The beams of LIDAR_BEAM_ORDER outside the field that the LiDAR sees
+    # (contract.lidar_field). The car blocks them, so they read NO_RETURN.
+    blocked: frozenset[str]
 
 
 def find_sensors(spec: mujoco.MjSpec, model: mujoco.MjModel) -> CarSensors:
     """Find the sensor of each SensorReadings field in spec, which model was
-    compiled from. Raise ValueError if a field has no sensor of that name and
-    size."""
+    compiled from, and the LiDAR beams that the car blocks. Raise ValueError
+    if a field has no sensor of that name and size, or the LiDAR site is
+    missing."""
     found: dict[str, mujoco.MjsSensor] = {}
     problems: list[str] = []
+    lidar = spec.site(contract.LIDAR_SITE)
+    if lidar is None:
+        problems.append(f"the {contract.LIDAR_SITE} site is missing")
     for f in fields(SensorReadings):
         sensor = spec.sensor(f.name)
         size = VECTOR_SIZE.get(f.name, 1)
@@ -133,16 +146,33 @@ def find_sensors(spec: mujoco.MjSpec, model: mujoco.MjModel) -> CarSensors:
             problems.append(f"{f.name} has {dim} values, not {size}")
         else:
             found[f.name] = sensor
-    if problems:
+    if problems or lidar is None:
         raise ValueError(
             f"the model does not have the NeoRacer sensors: {'; '.join(problems)}"
         )
-    return CarSensors(**found)
+    field = contract.lidar_field(model, lidar)
+    blocked = frozenset(
+        name for name in LIDAR_BEAM_ORDER if not beam_in_field(name, field)
+    )
+    return CarSensors(**found, blocked=blocked)
+
+
+def beam_in_field(name: str, field: float) -> bool:
+    """Whether a LiDAR that sees field (rad), centred on its front, sees the
+    beam of LIDAR_BEAM_ORDER called name. A beam on the field's edge is in."""
+    degrees = int(name.removeprefix("lidar_"))
+    off_front = math.radians(min(degrees, 360 - degrees))
+    return off_front <= field / 2 + 1e-6
 
 
 def read(sensors: CarSensors, data: mujoco.MjData) -> SensorReadings:
-    """Read every named sensor of data."""
+    """Read every named sensor of data. A LiDAR beam that the car blocks
+    reads NO_RETURN."""
     d, s = data.bind_scalar, sensors
+
+    def beam(sensor: mujoco.MjsSensor) -> float:
+        return NO_RETURN if sensor.name in s.blocked else float(d(sensor).data[0])
+
     return SensorReadings(
         imu_accel=d(s.imu_accel).data.copy(),
         imu_gyro=d(s.imu_gyro).data.copy(),
@@ -160,14 +190,14 @@ def read(sensors: CarSensors, data: mujoco.MjData) -> SensorReadings:
         fr_susp_pos=float(d(s.fr_susp_pos).data[0]),
         rl_susp_pos=float(d(s.rl_susp_pos).data[0]),
         rr_susp_pos=float(d(s.rr_susp_pos).data[0]),
-        lidar_000=float(d(s.lidar_000).data[0]),
-        lidar_045=float(d(s.lidar_045).data[0]),
-        lidar_090=float(d(s.lidar_090).data[0]),
-        lidar_135=float(d(s.lidar_135).data[0]),
-        lidar_180=float(d(s.lidar_180).data[0]),
-        lidar_225=float(d(s.lidar_225).data[0]),
-        lidar_270=float(d(s.lidar_270).data[0]),
-        lidar_315=float(d(s.lidar_315).data[0]),
+        lidar_000=beam(s.lidar_000),
+        lidar_045=beam(s.lidar_045),
+        lidar_090=beam(s.lidar_090),
+        lidar_135=beam(s.lidar_135),
+        lidar_180=beam(s.lidar_180),
+        lidar_225=beam(s.lidar_225),
+        lidar_270=beam(s.lidar_270),
+        lidar_315=beam(s.lidar_315),
     )
 
 
