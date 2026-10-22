@@ -143,6 +143,18 @@ def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
                 assert readings[k][j] in seen, (path, now, bearing)
 
 
+def test_a_beam_on_the_edge_of_the_lidars_field_is_in_it():
+    """At the model's precision, the beams that lie on the edges of a field
+    of 90, 180, 270 or 360 degrees are in it, and the beams beyond are not."""
+    for degrees in (90, 180, 270, 360):
+        field = derive.precise(math.radians(degrees))
+        for name in sensors.LIDAR_BEAM_ORDER:
+            bearing = int(name.removeprefix("lidar_"))
+            off_front = min(bearing, 360 - bearing)  # degrees
+            expected = off_front <= degrees / 2
+            assert sensors.beam_in_field(name, field) == expected, (degrees, name)
+
+
 def test_a_beam_that_the_car_blocks_reads_no_return():
     """The model holds the field that its spec's LiDAR sees. In
     loop_corridor, with a wall in every direction, each beam in that field
