@@ -179,6 +179,26 @@ def test_the_car_rests_without_input(scene):
 # --- the car responds to control with the contract.py signs -------------------
 
 
+def test_the_wheel_radius_turns_the_wheel_speed_into_the_car_speed(scene):
+    """Every wheel geom is a cylinder of contract.wheel_radius, and rolling
+    straight at a steady speed, the mean wheel speed (rad/s) times it is the
+    car's speed (m/s), to 3%."""
+    model, car = scene.model, scene.car
+    radius = contract.wheel_radius(model, car)
+    for wheel in car.wheels:
+        geom = model.bind_scalar(wheel)
+        assert geom.type == mujoco.mjtGeom.mjGEOM_CYLINDER
+        assert geom.size[0] == radius
+    d = _drive(scene, throttle=0.4, steer=0.0, seconds=2.0)
+    s = _read(scene, d)
+    forward = d.bind_scalar(car.body).xmat.reshape(3, 3)[:, 0]
+    speed = float(forward @ s.imu_linvel)  # m/s
+    assert speed > 0.3
+    np.testing.assert_allclose(
+        sensors.motor_encoder_rad_s(s) * radius, speed, rtol=0.03
+    )
+
+
 def test_throttle_drives_forward(scene):
     """Full forward throttle moves the car along +X and spins the motor
     forward (+ angular velocity)."""

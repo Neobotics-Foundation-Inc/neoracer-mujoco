@@ -21,6 +21,7 @@ USED_BY_NEORACER_RL = (
     "assets.compose",
     "collision.car_touches_wall",
     "contract.actuator_limits",
+    "contract.wheel_radius",
     "scene.Car",
     "scene.Scene",
     "sensors.SensorReadings",
