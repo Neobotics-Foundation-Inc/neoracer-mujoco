@@ -47,6 +47,9 @@ class Physics:
     # x the motor's torque, at every speed; x the gain of a speed controller
     motor_torque: float = 1.0
     steer_stiffness: float = 1.0  # x the gain kp of the steering servo's loop
+    # x the LiDAR's scan rate: each beam samples its range, and shows the
+    # sample, in 1 / lidar_rate times the time (mjcf.beam_timing)
+    lidar_rate: float = 1.0
 
     def __post_init__(self) -> None:
         for f in fields(self):
@@ -75,6 +78,7 @@ class PhysicsRanges:
     chassis_mass: Range = Range()
     motor_torque: Range = Range()
     steer_stiffness: Range = Range()
+    lidar_rate: Range = Range()
 
 
 def sample(ranges: PhysicsRanges, rng: np.random.Generator) -> Physics:
@@ -90,6 +94,7 @@ def sample(ranges: PhysicsRanges, rng: np.random.Generator) -> Physics:
         chassis_mass=draw(ranges.chassis_mass),
         motor_torque=draw(ranges.motor_torque),
         steer_stiffness=draw(ranges.steer_stiffness),
+        lidar_rate=draw(ranges.lidar_rate),
     )
 
 
@@ -117,6 +122,22 @@ def apply_physics(model: mujoco.MjModel, scene: Scene, physics: Physics) -> None
     # gainprm[4] = kp, so near its target its stiffness is proportional to kp.
     servo, servo0 = model.bind_scalar(car.steer), nominal.bind_scalar(car.steer)
     servo.gainprm[4] = servo0.gainprm[4] * physics.steer_stiffness
+    # A beam's interval is its period and phase. MjModel's sensor views have
+    # no interval or delay, so these two go by the sensor's id.
+    s = car.sensors
+    for beam in (
+        s.lidar_000,
+        s.lidar_045,
+        s.lidar_090,
+        s.lidar_135,
+        s.lidar_180,
+        s.lidar_225,
+        s.lidar_270,
+        s.lidar_315,
+    ):
+        i = nominal.bind_scalar(beam).id
+        model.sensor_interval[i] = nominal.sensor_interval[i] / physics.lidar_rate
+        model.sensor_delay[i] = nominal.sensor_delay[i] / physics.lidar_rate
     mujoco.mj_setConst(model, mujoco.MjData(model))
 
 
@@ -127,6 +148,8 @@ FIELDS = (
     "body_mass",
     "body_inertia",
     "actuator_gainprm",
+    "sensor_interval",
+    "sensor_delay",
     "body_subtreemass",
     "body_invweight0",
     "dof_invweight0",
