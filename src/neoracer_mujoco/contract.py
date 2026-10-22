@@ -16,7 +16,8 @@ Actuators:
 A car may have more actuators, which the throttle drives with the motor, as
 motor_engage on the RACECAR Neo V2. throttle_map gives each one's ctrl.
 Wheels:
-  fl/fr/rl/rr_wheel = the geom of each wheel that touches the ground
+  fl/fr/rl/rr_wheel = the geom of each wheel that touches the ground, a
+                      cylinder of the car's wheel radius (wheel_radius)
 Their order in the XML is not part of the contract: code binds each one by
 its element in the scene's MjSpec (scene.Car).
 """
@@ -44,7 +45,8 @@ WHEEL_GEOMS = ("fl_wheel", "fr_wheel", "rl_wheel", "rr_wheel")
 
 # --- sensors ----------------------------------------------------------------
 # The site at the centre of the spinning LiDAR (lidar.py). Its +X axis is the
-# scan's bearing 0, and its XY plane is the plane the scan sweeps.
+# scan's bearing 0, and its XY plane is the plane the scan sweeps. Its user
+# number is the field that the LiDAR sees (lidar_field).
 LIDAR_SITE = "lidar_mount"
 REQUIRED_SENSORS = (
     "imu_accel",
@@ -100,6 +102,19 @@ class ActuatorLimits:
     # m/s for the RACECAR Neo V2, the speed it holds at full throttle.
     voltage: float
     steer_rad: float  # rad; ctrlrange is [-steer_rad, steer_rad]
+
+
+def wheel_radius(model: mujoco.MjModel, car: Car) -> float:
+    """The radius (m) of the car's wheels, the size of its wheel geoms. The
+    wheels' turn rate (rad/s) times it is the car's speed (m/s) while they
+    do not slip."""
+    return float(model.bind_scalar(car.wheels[0]).size[0])
+
+
+def lidar_field(model: mujoco.MjModel, lidar: mujoco.MjsSite) -> float:
+    """The bearings (rad) that the LiDAR at the site lidar sees, centred on
+    its front: the car blocks the rest. 2 pi if it sees all around."""
+    return float(model.bind_scalar(lidar).user[0])
 
 
 def actuator_limits(model: mujoco.MjModel, car: Car) -> ActuatorLimits:

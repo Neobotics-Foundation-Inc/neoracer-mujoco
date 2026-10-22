@@ -20,6 +20,7 @@ from neoracer_mujoco import Scene, assets, batch, physics, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import Physics
 from neoracer_mujoco.scene import compile_scene
+from neoracer_mujoco.sensors import SensorReadings
 from neoracer_mujoco.track_generation import (
     Track,
     WallParams,
@@ -89,6 +90,7 @@ def _random_physics(nbatch: int, seed: int) -> list[Physics]:
         chassis_mass=physics.Range(0.7, 1.5),
         motor_torque=physics.Range(0.5, 1.5),
         steer_stiffness=physics.Range(0.5, 2.0),
+        lidar_rate=physics.Range(0.8, 1.25),
     )
     rng = np.random.default_rng(seed)
     return [physics.sample(ranges, rng) for _ in range(nbatch)]
@@ -199,7 +201,8 @@ def test_command_and_read_address_the_arrays_by_spec_element():
             assert np.array_equal(row, data.ctrl), name
         data = sim.settle(scene.model)
         car = scene.car
-        sensors = [getattr(car.sensors, f.name) for f in fields(car.sensors)]
+        # The car's sensors are those of the SensorReadings fields.
+        sensors = [getattr(car.sensors, f.name) for f in fields(SensorReadings)]
         sensors += [getattr(car.truth, f.name) for f in fields(car.truth)]
         for sensor in sensors:
             value = batch.read(scene.model, data.sensordata, sensor)
@@ -329,7 +332,9 @@ def test_the_warp_batch_follows_the_cpu_batch_on_the_v2(warp_v2):
     """On the V2, with commands that change at every call, a different
     physics in each row and a row reset halfway, the Warp batch carries the
     command history as the CPU batch does: its rows end within 1 mm of the
-    CPU batch's. command gives JAX arrays the ctrl it gives NumPy ones."""
+    CPU batch's. Its LiDAR beams keep their history too: at every step, over
+    the three turns of the head that the calls span, they read the CPU
+    batch's ranges. command gives JAX arrays the ctrl it gives NumPy ones."""
     jnp, scene, warp_batch = warp_v2
     params = _random_physics(2, seed=5)
     datas = [sim.settle(scene.model)] * 2
@@ -337,6 +342,7 @@ def test_the_warp_batch_follows_the_cpu_batch_on_the_v2(warp_v2):
     cpu_initial = cpu.initial(datas, [scene] * 2, params)
     warp_initial = warp_batch.initial(datas, [scene] * 2, params)
     cpu_state, warp_state = cpu_initial, warp_initial
+    beams = [scene.spec.sensor(f"lidar_{b:03d}") for b in range(0, 360, 45)]
     done = np.array([True, False])
     for k, c in enumerate(_commands(3, nbatch=2)):
         if k == CALLS // 2:
@@ -349,6 +355,10 @@ def test_the_warp_batch_follows_the_cpu_batch_on_the_v2(warp_v2):
         np.testing.assert_allclose(np.asarray(warp_ctrl), cpu_ctrl, rtol=1e-6)
         cpu_state, cpu_data = cpu.step(cpu_state, cpu_ctrl, NSTEP)
         warp_state, warp_data = warp_batch.step(warp_state, warp_ctrl, NSTEP)
+        for beam in beams:
+            cpu_range = batch.read(scene.model, cpu_data, beam)
+            warp_range = np.asarray(batch.read(scene.model, warp_data, beam))
+            np.testing.assert_allclose(warp_range, cpu_range, atol=1e-3)
     cpu.close()
     pos = scene.car.truth.pos
     cpu_pos = batch.read(scene.model, cpu_data[:, -1], pos)

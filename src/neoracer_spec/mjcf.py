@@ -42,6 +42,35 @@ def _set(xml: str, element: str, attribute: str, value: str) -> str:
     return xml[: tag.start()] + new + xml[tag.end() :]
 
 
+def beam_timing(scan_rate: float, bearing: int) -> tuple[float, float, float]:
+    """When the rangefinder of the LiDAR beam at bearing (degrees,
+    counterclockwise from the scan's 0) reads, as the period and the phase of
+    its interval and its delay, all in s.
+
+    The LiDAR's head turns clockwise from bearing 0 scan_rate times a second
+    (Hz), and its driver reports a whole turn when the turn ends, as
+    racecar_core's get_samples() does. So the beam samples the range once a
+    turn, when the head passes it, and shows the sample when that turn ends.
+    The first turn begins at time 0. MuJoCo reads a phase of 0 as the whole
+    period, a sample at time 0."""
+    period = 1.0 / scan_rate
+    passes = (-bearing) % 360 / 360  # when in a turn the head passes the beam
+    phase = (passes - 1.0) * period if passes > 0.0 else 0.0
+    return period, phase, (1.0 - passes) * period
+
+
+def _beam_edits(scan_rate: float, bearing: int) -> list[tuple[str, str, str]]:
+    """The attributes of the beam's rangefinder that time its readings."""
+    period, phase, delay = beam_timing(scan_rate, bearing)
+    rangefinder = rf'<rangefinder name="lidar_{bearing:03d}"'
+    return [
+        # Two samples: the one the beam shows, and the next until it shows.
+        (rangefinder, "nsample", "2"),
+        (rangefinder, "interval", numbers(period, phase)),
+        (rangefinder, "delay", number(delay)),
+    ]
+
+
 def car_xml(p: ModelParams, xml: str) -> str:
     """The car's XML, xml, with the numbers of p."""
     x, y = p.half_wheelbase, p.half_track
@@ -61,6 +90,7 @@ def car_xml(p: ModelParams, xml: str) -> str:
         (r'<geom name="chassis"', "size", numbers(*p.box_half_size)),
         (r'<site name="imu"', "pos", numbers(*p.imu_position)),
         (r'<site name="lidar_mount"', "pos", numbers(*p.lidar_position)),
+        (r'<site name="lidar_mount"', "user", number(p.lidar_field)),
         (r'<geom name="vis_lidar"', "pos", numbers(*p.lidar_position)),
         (r'<body name="steer_input_body"', "pos", numbers(x, 0, 0)),
         (
@@ -109,6 +139,7 @@ def car_xml(p: ModelParams, xml: str) -> str:
         edits.append(
             (rf'<site name="lidar_{bearing:03d}"', "pos", numbers(*p.lidar_position))
         )
+        edits += _beam_edits(p.lidar_scan_rate, bearing)
     scale = numbers(*[p.wheel_mesh_scale] * 3)
     for corner, (cx, cy) in {
         "fl": (x, y),
@@ -139,6 +170,7 @@ def racecar_neo_v2_xml(p: derive_v2.ModelParams, xml: str) -> str:
         (r'<site name="imu"', "pos", numbers(*p.imu_position)),
         (r'<site name="lidar_mount"', "pos", numbers(*p.lidar_position)),
         (r'<site name="lidar_mount"', "euler", numbers(0, 0, p.lidar_yaw)),
+        (r'<site name="lidar_mount"', "user", number(p.lidar_field)),
         (r'<geom name="antenna_left"', "pos", numbers(ax, ay, az)),
         (r'<geom name="antenna_right"', "pos", numbers(ax, -ay, az)),
         (r'<body name="steer_input_body"', "pos", numbers(x, 0, 0)),
@@ -206,6 +238,7 @@ def racecar_neo_v2_xml(p: derive_v2.ModelParams, xml: str) -> str:
         edits += [
             (site, "pos", numbers(*p.lidar_position)),
             (site, "zaxis", numbers(math.cos(a), math.sin(a), 0)),
+            *_beam_edits(p.lidar_scan_rate, bearing),
         ]
     stiffness, damping, ref, grip = (
         p.spring_stiffness,

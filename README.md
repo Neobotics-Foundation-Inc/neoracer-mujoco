@@ -167,6 +167,8 @@ for _ in range(360):
 state.scan  # the last full turn: 1440 distances (m), clockwise from the front
 ```
 
+The model's eight rangefinders, `lidar_000` to `lidar_315`, have the same timing in MuJoCo's own sensors, so `mj_step`, `mujoco.rollout` and the Warp batch see it with no loop of their own. Each beam samples the range once a turn, when the head passes it (its `interval`), and shows the sample when the turn ends (its `delay`), as the scan of the last complete turn does. So a beam reads a range up to two turns old: 67 ms on the NeoRacer, 270 ms on the V2. `mjcf.beam_timing` derives both settings from the spec's scan rate. A beam that the car blocks reads -1, no return, as the real scan does: the NeoRacer's LiDAR sees 270 degrees, so its beam straight back never returns. The LiDAR site's user number holds the field, and `contract.lidar_field` reads it. `sensors.read` gives the blocked beams -1, but the rangefinders themselves still measure, so code that reads `sensordata` arrays, as a batch does, sets the beams in `scene.car.sensors.blocked` to -1 itself.
+
 `encoder.py` models the speed that the firmware reports from the motor encoder in the same way. `racecar_core_adapter.py` puts the actuators, the LiDAR and the encoder behind the `racecar_core` API that programs for the real car use. Those programs run in the simulator unchanged:
 
 ```sh
@@ -217,7 +219,7 @@ cpu.close()
 
 - **`visuals=False`** drops the meshes that only make the car look right. The physics stays the same, and the model shrinks from 35 MB to 1.6 MB.
 - **Bit-for-bit rows.** A CPU row matches a single `MjData` stepped the same way, bit for bit. A Warp row stays within 1 mm of it after ten steps.
-- **`Physics`** is the other way to change the car. It scales a compiled car's wheel friction, chassis mass, motor torque and steering stiffness without recompiling, so each row can drive a slightly different car. `physics.sample` draws one from `PhysicsRanges`.
+- **`Physics`** is the other way to change the car. It scales a compiled car's wheel friction, chassis mass, motor torque, steering stiffness and LiDAR scan rate without recompiling, so each row can drive a slightly different car. `physics.sample` draws one from `PhysicsRanges`.
 - **A track per row.** On the CPU, rows can also run on different tracks, if the tracks compile to the same size: generate them with `WallParams(boxes_per_wall=192)`. A `WarpBatch` steps every row on the one scene it was made with.
 
 ## Where the code lives
@@ -243,7 +245,7 @@ The package is not on PyPI. Each [GitHub Release](https://github.com/Neobotics-F
 - the JS package.
 
 ```sh
-pip install https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.13.0/neoracer_mujoco-0.13.0-py3-none-any.whl
+pip install https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.14.0/neoracer_mujoco-0.14.0-py3-none-any.whl
 ```
 
 To work on the package, clone it with [Git LFS](https://git-lfs.com) installed, since the meshes are LFS objects.

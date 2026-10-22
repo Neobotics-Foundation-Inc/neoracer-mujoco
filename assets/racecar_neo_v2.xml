@@ -170,7 +170,7 @@
                  mounting error: the LiDAR faces the rear, at 179.619 degrees,
                  and racecar_core turns its scan around. -->
             <site name="lidar_mount" pos=".1233 0 .159" euler="0 0 -.0066497" size=".02"
-                  rgba="1 0 0 .5"/>
+                  rgba="1 0 0 .5" user="6.28319"/>
 
             <!-- LiDAR ray sites: 8 beams at 45° intervals from the scan's bearing
                  0, toward +Y. zaxis points the rangefinder's beam, as on the
@@ -372,15 +372,21 @@
         <jointpos name="rl_susp_pos" joint="rl_susp"/>
         <jointpos name="rr_susp_pos" joint="rr_susp"/>
 
-        <!-- LiDAR: 8 rangefinder beams, one per ray site above. -->
-        <rangefinder name="lidar_000" site="lidar_000"/>
-        <rangefinder name="lidar_045" site="lidar_045"/>
-        <rangefinder name="lidar_090" site="lidar_090"/>
-        <rangefinder name="lidar_135" site="lidar_135"/>
-        <rangefinder name="lidar_180" site="lidar_180"/>
-        <rangefinder name="lidar_225" site="lidar_225"/>
-        <rangefinder name="lidar_270" site="lidar_270"/>
-        <rangefinder name="lidar_315" site="lidar_315"/>
+        <!--
+        LiDAR: 8 rangefinder beams, one per ray site above. A beam reads as
+        racecar_core's get_samples() reports it: the range when the head,
+        turning clockwise from the front, passed it in the last complete turn.
+        interval samples the range once a turn, as the head passes the beam,
+        and delay holds the sample until the turn ends (mjcf.beam_timing).
+        -->
+        <rangefinder name="lidar_000" site="lidar_000" nsample="2" interval=".135135 0" delay=".135135"/>
+        <rangefinder name="lidar_045" site="lidar_045" nsample="2" interval=".135135 -.0168919" delay=".0168919"/>
+        <rangefinder name="lidar_090" site="lidar_090" nsample="2" interval=".135135 -.0337838" delay=".0337838"/>
+        <rangefinder name="lidar_135" site="lidar_135" nsample="2" interval=".135135 -.0506757" delay=".0506757"/>
+        <rangefinder name="lidar_180" site="lidar_180" nsample="2" interval=".135135 -.0675676" delay=".0675676"/>
+        <rangefinder name="lidar_225" site="lidar_225" nsample="2" interval=".135135 -.0844595" delay=".0844595"/>
+        <rangefinder name="lidar_270" site="lidar_270" nsample="2" interval=".135135 -.101351" delay=".101351"/>
+        <rangefinder name="lidar_315" site="lidar_315" nsample="2" interval=".135135 -.118243" delay=".118243"/>
     </sensor>
 
 </mujoco>

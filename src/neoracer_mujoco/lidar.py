@@ -31,8 +31,8 @@ import numpy.typing as npt
 from neoracer_spec.derive import LidarParams
 
 from .scene import Car
+from .sensors import NO_RETURN
 
-NO_RETURN = -1.0  # what a slot reads with nothing in range, as a rangefinder
 type Scan = npt.NDArray[np.float64]  # shape (slots,), m
 type Slots = npt.NDArray[np.intp]  # slot indices
 
