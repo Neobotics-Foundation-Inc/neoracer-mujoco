@@ -273,18 +273,21 @@
         the target angle of steer_input (rad), + = left, and the Ackermann
         constraints below turn the two front wheels from it. The loop's
         voltage is kp (target - angle) - kd x speed, clamped to the servo's
-        5 V supply. The motor's torque falls as it speeds up, so it turns the
+        6 V supply. The motor's torque falls as it speeds up, so it turns the
         wheels at most at its free speed, as a real servo does.
 
-        The servo is the car's SPT5435LV-180W. nominal is its supply, stall
-        torque and free speed at steer_input, through the linkage from its
-        horn, controller its loop's kp, ki, kd and voltage clamp, and
+        The servo is the car's 20 kg digital servo. nominal is its supply,
+        stall torque and free speed at steer_input, through the linkage from
+        its horn, controller its loop's kp, ki, kd and voltage clamp, and
         ctrlrange full lock, where the inner front wheel reaches the angle
-        measured on the car: all from neoracer_spec.neoracer (servo, steering).
+        measured on the car. delay holds each command back as long as the
+        car's board and servo take to act on it, and nsample keeps the
+        history that needs, a sample a step. All from neoracer_spec.neoracer
+        (servo, steering).
         -->
         <dcmotor name="steer_servo" joint="steer_input" input="pos"
-                 nominal="5 3.2785 5.99818" controller="50 0 1 0 0 5"
-                 ctrlrange="-.440491 .440491"/>
+                 nominal="6 1.99442 7.99757" controller="50 0 1 0 0 6"
+                 ctrlrange="-.440491 .440491" delay=".045" nsample="19"/>
     </actuator>
 
     <!--

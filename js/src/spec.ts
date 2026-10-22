@@ -127,6 +127,14 @@ export interface ServoRating {
   readonly seconds_per_60_degrees: number; // s, with no load
 }
 
+/** Steps between the centre and the driver's full lock, the car at rest on the floor, each timed from the command written to the car's board: when the chassis first moves, and when each swing ends. */
+export interface ServoSteps {
+  readonly first_motion: number; // s
+  readonly centre_to_lock: number; // s
+  readonly lock_to_lock: number; // s
+  readonly lock_to_centre: number; // s
+}
+
 export interface SteeringServo {
   // Two datasheet lines; the rating at supply is interpolated between them.
   readonly low: Sourced<ServoRating>;
@@ -137,6 +145,11 @@ export interface SteeringServo {
   // The servo's own position loop, the model's.
   readonly kp: Sourced<number>; // V/rad
   readonly kd: Sourced<number>; // V·s/rad
+  // How long a command takes from the car's board to the servo's loop: the
+  // firmware's control loop and pulse, and the servo's own dead time.
+  readonly latency: Sourced<number>; // s
+  // The car's steering steps at rest, which latency is fitted to.
+  readonly steps_at_rest: Sourced<ServoSteps>;
 }
 
 export interface Steering {
@@ -253,6 +266,8 @@ export interface ServoParams {
   readonly kd: number; // V·s/rad
   readonly voltage_limit: number; // V, the loop's clamp
   readonly lock: number; // rad of steering input, |ctrl| at most
+  readonly latency: number; // s
+  readonly nsample: number;
 }
 
 export type Polynomial = readonly [number, number, number, number, number];
@@ -588,48 +603,54 @@ export const NEORACER = {
   servo: {
     low: {
       value: {
-        voltage: 4.8,
-        stall_torque_kgf_cm: 29.0,
-        seconds_per_60_degrees: 0.16,
+        voltage: 5.0,
+        stall_torque_kgf_cm: 17.0,
+        seconds_per_60_degrees: 0.13,
       },
       status: {
         kind: "Documented",
         source: {
           name: "datasheet",
-          where: "the SPT5435LV-180W's datasheet, spt-servo.com",
+          where: "the car's servo's datasheet, a 20 kg waterproof high-torque digital servo (the team, 2026-10-22)",
         },
       },
-      note: "the car's servo (the team, 2026-10-16)",
+      note: "the car's servo (the team, 2026-10-22). Until then the model took the SPT5435LV-180W (the team, 2026-10-16), 29 kgf·cm and 0.16 s at 4.8 V",
       conflicts: [],
     },
     high: {
       value: {
-        voltage: 6.0,
-        stall_torque_kgf_cm: 35.0,
-        seconds_per_60_degrees: 0.14,
+        voltage: 7.4,
+        stall_torque_kgf_cm: 20.0,
+        seconds_per_60_degrees: 0.1,
       },
       status: {
         kind: "Documented",
         source: {
           name: "datasheet",
-          where: "the SPT5435LV-180W's datasheet, spt-servo.com",
+          where: "the car's servo's datasheet, a 20 kg waterproof high-torque digital servo (the team, 2026-10-22)",
         },
       },
-      note: "the docs (hardware/drivetrain) give a 20 kg·cm stall torque, at no stated voltage or speed, which fits no line of this datasheet",
+      note: "the docs' 20 kg·cm (hardware/drivetrain) is this line",
       conflicts: [],
     },
     supply: {
-      value: 5.0,
+      value: 6.0,
       status: {
-        kind: "Assumed",
+        kind: "Documented",
         source: {
-          name: "schematic",
-          where: "OSCORE schematic, pin header block: the servo's power pin is VCC_ESC, which only the ESC's red wire (its BEC) feeds",
+          name: "team",
+          where: "stated by the team, 2026-10-22",
         },
-        why: "the ESC's BEC powers the servo, and nobody has measured its voltage; 5 V is the docs' value (oscore-board), which puts the header on VCC_5V_IO",
       },
-      note: "",
+      note: "the ESC's BEC: on the OSCORE schematic its red wire alone feeds VCC_ESC, the servo's power pin",
       conflicts: [
+        {
+          value: 5.0,
+          source: {
+            name: "docs",
+            where: "neoracer-docs, hardware/oscore-board",
+          },
+        },
         {
           value: 11.1,
           source: {
@@ -642,14 +663,13 @@ export const NEORACER = {
     horn_half_range_degrees: {
       value: 45.0,
       status: {
-        kind: "Assumed",
+        kind: "Documented",
         source: {
-          name: "datasheet",
-          where: "the SPT5435LV-180W's datasheet, spt-servo.com",
+          name: "team",
+          where: "the team's specification for a replacement servo, 2026-10-22: 500 to 2500 us for 180 degrees of travel, 1500 us neutral, 50 Hz",
         },
-        why: "a 180-degree servo over 500 to 2500 us, so 90 degrees over the firmware's 1000 to 2000 us",
       },
-      note: "",
+      note: "180 degrees over 500 to 2500 us, so 90 degrees over the firmware's 1000 to 2000 us",
       conflicts: [],
     },
     kp: {
@@ -668,6 +688,36 @@ export const NEORACER = {
         why: "so the servo settles without chatter at the 1/360 s step",
       },
       note: "",
+      conflicts: [],
+    },
+    latency: {
+      value: 0.045,
+      status: {
+        kind: "Calibrated",
+        source: {
+          name: "model fit",
+          where: "fitted in the MuJoCo model, assets/neoracer.xml, to the steps at rest; validation/test_spec.py holds the model to them",
+        },
+        reference: "the steps at rest: their first motion and the end of each swing, with the servo at its datasheet rating at 6 V",
+      },
+      note: "from the command written to the board. A racecar_core program's command also waits for the driver's mux, which resends it every 0.02 s (mux.yaml), 0.01 s on average, which this leaves out",
+      conflicts: [],
+    },
+    steps_at_rest: {
+      value: {
+        first_motion: 0.059,
+        centre_to_lock: 0.175,
+        lock_to_lock: 0.229,
+        lock_to_centre: 0.157,
+      },
+      status: {
+        kind: "Measured",
+        source: {
+          name: "steps at rest",
+          where: "the team's steering steps on a NeoRacer at rest on the floor, 2026-10-22: the driver's full lock written to the OSCORE board at speed 0, three cycles of centre, left, right, centre, timed from each command by the IMU at 200 Hz",
+        },
+      },
+      note: "first motion: the IMU's yaw rate or sideways acceleration leaves four times its noise; a swing ends where the yaw rate the scrubbing tyres give the chassis falls under a quarter of its peak. With the front lifted off the floor the first motion is the same, so the delay is not the tyres'",
       conflicts: [],
     },
   },
@@ -1174,11 +1224,13 @@ export const NEORACER_PARAMS = {
       ctrl_limit: 11.1,
     },
     servo: {
-      nominal: [5.0, 3.2785, 5.99818],
+      nominal: [6.0, 1.99442, 7.99757],
       kp: 50.0,
       kd: 1.0,
-      voltage_limit: 5.0,
+      voltage_limit: 6.0,
       lock: 0.440491,
+      latency: 0.045,
+      nsample: 19,
     },
     ackermann_left: [-1.36675e-05, 1.00127, 0.390823, 0.12243, -0.0931586],
   },

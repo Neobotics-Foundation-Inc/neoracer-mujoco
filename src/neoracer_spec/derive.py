@@ -169,6 +169,8 @@ class ServoParams:
     kd: float  # V·s/rad
     voltage_limit: float  # V, the loop's clamp
     lock: float  # rad of steering input, |ctrl| at most
+    latency: float  # s
+    nsample: int
 
 
 def model(spec: Spec) -> ModelParams:
@@ -215,6 +217,8 @@ def model(spec: Spec) -> ModelParams:
             kd=precise(servo.kd.value),
             voltage_limit=precise(servo.supply.value),
             lock=steer_lock(spec),
+            latency=precise(servo.latency.value),
+            nsample=nsample(servo.latency.value),
         ),
         ackermann_left=(
             precise(poly[0]),
@@ -320,6 +324,15 @@ def wheel_steer_range(spec: Spec) -> float:
     l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
     s = spec.steering
     return ackermann.left_wheel(l, w, s.fit_range.value) + s.wheel_range_margin.value
+
+
+TIMESTEP = 1 / 360  # s, the model's step, as every track's
+
+
+def nsample(latency: float) -> int:
+    """The history a delay of latency (s) needs: a sample a step, and two
+    to spare."""
+    return math.ceil(latency / TIMESTEP) + 2
 
 
 def precise(x: float) -> float:

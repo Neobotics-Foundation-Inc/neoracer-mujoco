@@ -95,6 +95,8 @@ def car_xml(p: ModelParams, xml: str) -> str:
             numbers(s.kp, 0, s.kd, 0, 0, s.voltage_limit),
         ),
         (r'<dcmotor name="steer_servo"', "ctrlrange", numbers(-s.lock, s.lock)),
+        (r'<dcmotor name="steer_servo"', "delay", number(s.latency)),
+        (r'<dcmotor name="steer_servo"', "nsample", str(s.nsample)),
         (
             r'<joint name="steer_input"',
             "range",

@@ -32,7 +32,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
-from .derive import G, LidarParams, Polynomial, precise
+from .derive import G, LidarParams, Polynomial, nsample, precise
 from .racecar_neo_v2 import RacecarNeoV2
 from .spec import Vec3
 
@@ -338,7 +338,7 @@ def drive(spec: RacecarNeoV2) -> DriveParams:
         brake=precise(brake * r),
         wheel_damping=precise(drag * r**2 / 4),
         latency=precise(latency),
-        nsample=_nsample(latency),
+        nsample=nsample(latency),
     )
 
 
@@ -366,15 +366,6 @@ def coast_drag(spec: RacecarNeoV2) -> tuple[float, float]:
     a0, a1 = spec.drive.coast.value
     m = effective_mass(spec)
     return (m * a0, m * a1)
-
-
-TIMESTEP = 1 / 360  # s, the model's step, as every track's
-
-
-def _nsample(latency: float) -> int:
-    """The history a delay of latency (s) needs: a sample a step, and two
-    to spare."""
-    return math.ceil(latency / TIMESTEP) + 2
 
 
 # --- steering -----------------------------------------------------------------
@@ -446,5 +437,5 @@ def servo(spec: RacecarNeoV2) -> ServoParams:
         kd=precise(s.servo_kd.value),
         voltage_limit=precise(s.servo_supply.value),
         latency=precise(latency),
-        nsample=_nsample(latency),
+        nsample=nsample(latency),
     )
