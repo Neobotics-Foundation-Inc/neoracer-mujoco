@@ -167,6 +167,8 @@ for _ in range(360):
 state.scan  # the last full turn: 1440 distances (m), clockwise from the front
 ```
 
+The model's eight rangefinders, `lidar_000` to `lidar_315`, have the same timing in MuJoCo's own sensors, so `mj_step`, `mujoco.rollout` and the Warp batch see it with no loop of their own. Each beam samples the range once a turn, when the head passes it (its `interval`), and shows the sample when the turn ends (its `delay`), as the scan of the last complete turn does. So a beam reads a range up to two turns old: 67 ms on the NeoRacer, 270 ms on the V2. `mjcf.beam_timing` derives both settings from the spec's scan rate.
+
 `encoder.py` models the speed that the firmware reports from the motor encoder in the same way. `racecar_core_adapter.py` puts the actuators, the LiDAR and the encoder behind the `racecar_core` API that programs for the real car use. Those programs run in the simulator unchanged:
 
 ```sh
