@@ -219,7 +219,7 @@ cpu.close()
 
 - **`visuals=False`** drops the meshes that only make the car look right. The physics stays the same, and the model shrinks from 35 MB to 1.6 MB.
 - **Bit-for-bit rows.** A CPU row matches a single `MjData` stepped the same way, bit for bit. A Warp row stays within 1 mm of it after ten steps.
-- **`Physics`** is the other way to change the car. It scales a compiled car's wheel friction, chassis mass, motor torque and steering stiffness without recompiling, so each row can drive a slightly different car. `physics.sample` draws one from `PhysicsRanges`.
+- **`Physics`** is the other way to change the car. It scales a compiled car's wheel friction, chassis mass, motor torque, steering stiffness and LiDAR scan rate without recompiling, so each row can drive a slightly different car. `physics.sample` draws one from `PhysicsRanges`.
 - **A track per row.** On the CPU, rows can also run on different tracks, if the tracks compile to the same size: generate them with `WallParams(boxes_per_wall=192)`. A `WarpBatch` steps every row on the one scene it was made with.
 
 ## Where the code lives

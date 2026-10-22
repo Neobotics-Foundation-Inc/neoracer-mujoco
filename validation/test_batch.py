@@ -90,6 +90,7 @@ def _random_physics(nbatch: int, seed: int) -> list[Physics]:
         chassis_mass=physics.Range(0.7, 1.5),
         motor_torque=physics.Range(0.5, 1.5),
         steer_stiffness=physics.Range(0.5, 2.0),
+        lidar_rate=physics.Range(0.8, 1.25),
     )
     rng = np.random.default_rng(seed)
     return [physics.sample(ranges, rng) for _ in range(nbatch)]
