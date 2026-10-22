@@ -90,6 +90,7 @@ def car_xml(p: ModelParams, xml: str) -> str:
         (r'<geom name="chassis"', "size", numbers(*p.box_half_size)),
         (r'<site name="imu"', "pos", numbers(*p.imu_position)),
         (r'<site name="lidar_mount"', "pos", numbers(*p.lidar_position)),
+        (r'<site name="lidar_mount"', "user", number(p.lidar_field)),
         (r'<geom name="vis_lidar"', "pos", numbers(*p.lidar_position)),
         (r'<body name="steer_input_body"', "pos", numbers(x, 0, 0)),
         (
@@ -167,6 +168,7 @@ def racecar_neo_v2_xml(p: derive_v2.ModelParams, xml: str) -> str:
         (r'<site name="imu"', "pos", numbers(*p.imu_position)),
         (r'<site name="lidar_mount"', "pos", numbers(*p.lidar_position)),
         (r'<site name="lidar_mount"', "euler", numbers(0, 0, p.lidar_yaw)),
+        (r'<site name="lidar_mount"', "user", number(p.lidar_field)),
         (r'<geom name="antenna_left"', "pos", numbers(ax, ay, az)),
         (r'<geom name="antenna_right"', "pos", numbers(ax, -ay, az)),
         (r'<body name="steer_input_body"', "pos", numbers(x, 0, 0)),

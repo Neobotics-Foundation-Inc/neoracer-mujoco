@@ -45,7 +45,8 @@ WHEEL_GEOMS = ("fl_wheel", "fr_wheel", "rl_wheel", "rr_wheel")
 
 # --- sensors ----------------------------------------------------------------
 # The site at the centre of the spinning LiDAR (lidar.py). Its +X axis is the
-# scan's bearing 0, and its XY plane is the plane the scan sweeps.
+# scan's bearing 0, and its XY plane is the plane the scan sweeps. Its user
+# number is the field that the LiDAR sees (lidar_field).
 LIDAR_SITE = "lidar_mount"
 REQUIRED_SENSORS = (
     "imu_accel",
@@ -108,6 +109,12 @@ def wheel_radius(model: mujoco.MjModel, car: Car) -> float:
     wheels' turn rate (rad/s) times it is the car's speed (m/s) while they
     do not slip."""
     return float(model.bind_scalar(car.wheels[0]).size[0])
+
+
+def lidar_field(model: mujoco.MjModel, lidar: mujoco.MjsSite) -> float:
+    """The bearings (rad) that the LiDAR at the site lidar sees, centred on
+    its front: the car blocks the rest. 2 pi if it sees all around."""
+    return float(model.bind_scalar(lidar).user[0])
 
 
 def actuator_limits(model: mujoco.MjModel, car: Car) -> ActuatorLimits:

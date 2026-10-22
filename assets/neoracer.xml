@@ -140,8 +140,11 @@
             <!-- IMU site at the centre of mass; sensors below reference it. -->
             <site name="imu" pos="0 0 .0189" size=".01" rgba="1 1 0 1"/>
 
-            <!-- LiDAR mount site: the centre of the LiDAR, as measured. -->
-            <site name="lidar_mount" pos="-.0442 0 .11995" size=".02" rgba="1 0 0 .5"/>
+            <!-- LiDAR mount site: the centre of the LiDAR, as measured. Its user
+                 number is the field the LiDAR sees (rad), centred on the front:
+                 the car blocks the rest (contract.lidar_field). -->
+            <site name="lidar_mount" pos="-.0442 0 .11995" size=".02" rgba="1 0 0 .5"
+                  user="4.71239"/>
 
             <!--
             LiDAR ray sites: 8 beams at 45° intervals in the horizontal plane.

@@ -170,7 +170,7 @@
                  mounting error: the LiDAR faces the rear, at 179.619 degrees,
                  and racecar_core turns its scan around. -->
             <site name="lidar_mount" pos=".1233 0 .159" euler="0 0 -.0066497" size=".02"
-                  rgba="1 0 0 .5"/>
+                  rgba="1 0 0 .5" user="6.28319"/>
 
             <!-- LiDAR ray sites: 8 beams at 45° intervals from the scan's bearing
                  0, toward +Y. zaxis points the rangefinder's beam, as on the
