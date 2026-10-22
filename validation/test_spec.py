@@ -21,6 +21,7 @@ import pytest
 
 import neoracer_spec
 from neoracer_mujoco import assets, encoder, lidar, sim
+from neoracer_mujoco.control import ControlCommand
 from neoracer_spec import (
     ackermann,
     derive,
@@ -85,6 +86,61 @@ def test_the_v2_xml_holds_the_numbers_derived_from_its_spec():
     with open(V2_XML) as f:
         xml = f.read()
     assert mjcf.racecar_neo_v2_xml(derive_v2.model(RACECAR_NEO_V2), xml) == xml
+
+
+def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
+    """Each LiDAR rangefinder reads what an instant rangefinder at its site
+    read when the head passed the beam in the last complete turn, as the
+    driver's scan reports it. MuJoCo times a sample to the physics step, so
+    a new turn can show a step early or late."""
+    bearings = range(0, 360, 45)
+    cars = (
+        (assets.DEFAULT_CAR, MODEL.lidar_scan_rate),
+        (V2_XML, derive_v2.model(RACECAR_NEO_V2).lidar_scan_rate),
+    )
+    for path, scan_rate in cars:
+        car = mujoco.MjSpec.from_file(path)
+        for bearing in bearings:
+            beam = car.sensor(f"lidar_{bearing:03d}")
+            car.add_sensor(
+                name=f"instant_{bearing:03d}",
+                type=mujoco.mjtSensor.mjSENS_RANGEFINDER,
+                objtype=mujoco.mjtObj.mjOBJ_SITE,
+                objname=beam.objname,
+                intprm=beam.intprm.tolist(),
+            )
+        loop = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
+        scene = assets.compose(
+            mujoco.MjSpec.from_file(loop), car, pos=(0.0, -2.5, 0.0), visuals=False
+        )
+        model = scene.model
+        dt = model.opt.timestep
+        timed = [scene.spec.sensor(f"lidar_{b:03d}") for b in bearings]
+        instant = [scene.spec.sensor(f"instant_{b:03d}") for b in bearings]
+        data = sim.settle(model)
+        times, readings, truths = [], [], []
+        for _ in range(540):
+            sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.2))
+            mujoco.mj_step(model, data)
+            times.append(data.time - dt)  # the state that the sensors read
+            readings.append([data.bind_scalar(s).data[0] for s in timed])
+            truths.append([data.bind_scalar(s).data[0] for s in instant])
+        truth = np.array(truths)
+        period = 1.0 / scan_rate
+        # The ranges change as the car drives, so the law is not trivial.
+        assert np.mean(np.array(readings) != truth) > 0.8, path
+        for k, now in enumerate(times):
+            for j, bearing in enumerate(bearings):
+                passes = (-bearing) % 360 / 360  # when in a turn
+                steps = []
+                for t in (now - dt, now, now + dt):
+                    end = math.floor(t / period + 1e-9) * period
+                    passed = end - (1.0 - passes) * period
+                    steps.append(round((passed - times[0]) / dt))
+                if min(steps) < 1 or max(steps) + 1 >= len(times):
+                    continue  # the head passed the beam before the record
+                seen = {truth[s + o, j] for s in steps for o in (-1, 0, 1)}
+                assert readings[k][j] in seen, (path, now, bearing)
 
 
 def test_the_v2_model_has_the_cars_mass_centre_of_mass_and_inertia():

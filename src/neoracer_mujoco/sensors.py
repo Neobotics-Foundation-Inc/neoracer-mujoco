@@ -16,7 +16,8 @@ Sensor map (matches neoracer.xml):
   fl/fr/rl/rr_wheel_vel — wheel angular velocities (rad/s)
   drive_pos     — the drivetrain's angle: the mean wheel angle (rad)
   fl/fr/rl/rr_susp_pos  — suspension travel (m; positive = compressed)
-  lidar_000..315 — rangefinder distances (m; -1 = no hit)
+  lidar_000..315 — rangefinder distances (m; -1 = no hit), as the LiDAR's
+                   last complete turn reports them (mjcf.beam_timing)
 """
 
 from collections.abc import Mapping

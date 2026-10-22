@@ -267,6 +267,7 @@ export interface ModelParams {
   readonly box_half_size: Vec3; // m
   readonly imu_position: Vec3; // m
   readonly lidar_position: Vec3; // m
+  readonly lidar_scan_rate: number; // Hz, turns of its head a second
   readonly half_wheelbase: number; // m
   readonly half_track: number; // m
   readonly wheel_radius: number; // m
@@ -1151,6 +1152,7 @@ export const NEORACER_PARAMS = {
     box_half_size: [0.240635, 0.12042, 0.09198],
     imu_position: [0.0, 0.0, 0.0189],
     lidar_position: [-0.0442, 0.0, 0.11995],
+    lidar_scan_rate: 30.0,
     half_wheelbase: 0.14382,
     half_track: 0.112,
     wheel_radius: 0.0425,
