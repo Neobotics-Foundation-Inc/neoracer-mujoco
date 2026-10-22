@@ -37,7 +37,8 @@ from . import contract
 
 NO_RETURN = -1.0  # m, what a rangefinder reads with nothing in range
 
-# The tyre's radius, which the car model's wheel geoms also have.
+# The NeoRacer's tyre radius, which its wheel geoms also have.
+# contract.wheel_radius reads any car's from its model.
 WHEEL_RADIUS = NEORACER.wheel.radius.value  # m
 
 type Vec3 = npt.NDArray[np.float64]  # shape (3,)
@@ -214,8 +215,9 @@ def motor_encoder_rad_s(sensors: SensorReadings) -> float:
 
 
 def estimated_linear_speed_ms(motor_rad_s: float) -> float:
-    """Estimate the car speed (m/s) from the motor speed (rad/s), as
-    motor_rad_s * WHEEL_RADIUS. This estimate assumes that the wheels do not
+    """Estimate the NeoRacer's speed (m/s) from the motor speed (rad/s), as
+    motor_rad_s * WHEEL_RADIUS. For another car, multiply by its
+    contract.wheel_radius instead. This estimate assumes that the wheels do not
     slip. If a wheel slips or locks, the estimate differs from the true speed
     (SensorReadings.imu_linvel). A real speedometer that measures wheel speed
     has the same error."""
