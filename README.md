@@ -245,7 +245,7 @@ The package is not on PyPI. Each [GitHub Release](https://github.com/Neobotics-F
 - the JS package.
 
 ```sh
-pip install https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.13.0/neoracer_mujoco-0.13.0-py3-none-any.whl
+pip install https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.14.0/neoracer_mujoco-0.14.0-py3-none-any.whl
 ```
 
 To work on the package, clone it with [Git LFS](https://git-lfs.com) installed, since the meshes are LFS objects.
