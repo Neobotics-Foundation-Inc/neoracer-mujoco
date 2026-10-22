@@ -47,77 +47,83 @@ def _drive(model: mujoco.MjModel, scene: Scene) -> np.ndarray:
     return np.array(out)
 
 
-@pytest.mark.parametrize("car_path", CARS, ids=("neoracer", "racecar_neo_v2"))
-def test_apply_physics_equals_compiling_the_changed_car(car_path):
+def test_apply_physics_equals_compiling_the_changed_car():
     """The same factors written into the MjSpec and compiled give the same
     drive, bit for bit. motor_torque divides the NeoRacer's DC motor's
     resistance, and multiplies both gains of the V2's speed controller: a
     factor on one of them alone would change the speed it holds."""
-    scene = _scene(car_path)
-    edited, car = scene.spec.copy(), scene.car  # car names the elements
-    for wheel in car.wheels:
-        edited.geom(wheel.name).friction[0] *= CHANGED.wheel_friction
-    body = edited.body(car.body.name)
-    body.mass *= CHANGED.chassis_mass
-    body.inertia = np.asarray(body.inertia) * CHANGED.chassis_mass
-    for actuator in car.throttled:
-        a = edited.actuator(actuator.name)
-        if a.gaintype == mujoco.mjtGain.mjGAIN_DCMOTOR:
-            a.gainprm[0] /= CHANGED.motor_torque  # the resistance
-        elif a.gaintype == mujoco.mjtGain.mjGAIN_FIXED:
-            a.gainprm[0] *= CHANGED.motor_torque  # motor's gain on ctrl
-        else:
-            a.gainprm[2] *= CHANGED.motor_torque  # motor_engage's on the speed
-    servo = edited.actuator(car.steer.name)
-    servo.gainprm[4] *= CHANGED.steer_stiffness  # the position loop's kp
-    model = edited.compile()  # edited has the truth sensors already
-    compiled = Scene(edited, model, find_car(edited, model))
-    np.testing.assert_array_equal(
-        _drive(_applied(scene, CHANGED), scene), _drive(compiled.model, compiled)
-    )
+    for car_path in CARS:
+        scene = _scene(car_path)
+        edited, car = scene.spec.copy(), scene.car  # car names the elements
+        for wheel in car.wheels:
+            edited.geom(wheel.name).friction[0] *= CHANGED.wheel_friction
+        body = edited.body(car.body.name)
+        body.mass *= CHANGED.chassis_mass
+        body.inertia = np.asarray(body.inertia) * CHANGED.chassis_mass
+        for actuator in car.throttled:
+            a = edited.actuator(actuator.name)
+            if a.gaintype == mujoco.mjtGain.mjGAIN_DCMOTOR:
+                a.gainprm[0] /= CHANGED.motor_torque  # the resistance
+            elif a.gaintype == mujoco.mjtGain.mjGAIN_FIXED:
+                a.gainprm[0] *= CHANGED.motor_torque  # motor's gain on ctrl
+            else:
+                a.gainprm[2] *= CHANGED.motor_torque  # motor_engage's on the speed
+        servo = edited.actuator(car.steer.name)
+        servo.gainprm[4] *= CHANGED.steer_stiffness  # the position loop's kp
+        model = edited.compile()  # edited has the truth sensors already
+        compiled = Scene(edited, model, find_car(edited, model))
+        np.testing.assert_array_equal(
+            _drive(_applied(scene, CHANGED), scene),
+            _drive(compiled.model, compiled),
+            err_msg=car_path,
+        )
 
 
-@pytest.mark.parametrize("car_path", CARS, ids=("neoracer", "racecar_neo_v2"))
-def test_applying_physics_again_does_not_compound(car_path):
+def test_applying_physics_again_does_not_compound():
     """apply_physics scales the nominal model, not the one it writes into:
     applying the same physics twice gives every field that applying it once
     gives."""
-    scene = _scene(car_path)
-    once, twice = _applied(scene, CHANGED), _applied(scene, CHANGED)
-    physics.apply_physics(twice, scene, CHANGED)
-    for name in physics.FIELDS:
-        np.testing.assert_array_equal(
-            physics.field(twice, name), physics.field(once, name), err_msg=name
-        )
+    for car_path in CARS:
+        scene = _scene(car_path)
+        once, twice = _applied(scene, CHANGED), _applied(scene, CHANGED)
+        physics.apply_physics(twice, scene, CHANGED)
+        for name in physics.FIELDS:
+            np.testing.assert_array_equal(
+                physics.field(twice, name),
+                physics.field(once, name),
+                err_msg=f"{car_path}: {name}",
+            )
 
 
-@pytest.mark.parametrize("car_path", CARS, ids=("neoracer", "racecar_neo_v2"))
-def test_the_nominal_physics_changes_no_field(car_path):
-    scene = _scene(car_path)
-    model = _applied(scene, Physics())
-    for name in physics.FIELDS:
-        np.testing.assert_array_equal(
-            physics.field(model, name), physics.field(scene.model, name), err_msg=name
-        )
+def test_the_nominal_physics_changes_no_field():
+    for car_path in CARS:
+        scene = _scene(car_path)
+        model = _applied(scene, Physics())
+        for name in physics.FIELDS:
+            np.testing.assert_array_equal(
+                physics.field(model, name),
+                physics.field(scene.model, name),
+                err_msg=f"{car_path}: {name}",
+            )
 
 
-@pytest.mark.parametrize("car_path", CARS, ids=("neoracer", "racecar_neo_v2"))
-def test_fields_lists_every_field_that_apply_physics_changes(car_path):
+def test_fields_lists_every_field_that_apply_physics_changes():
     """The Warp batch gives each environment its own copy of FIELDS only, so
     a field that apply_physics changes and FIELDS misses would be lost."""
-    scene = _scene(car_path)
-    model = _applied(scene, CHANGED)
-    changed = {
-        name
-        for name in dir(model)
-        if isinstance(getattr(model, name), np.ndarray)
-        and not np.array_equal(getattr(model, name), getattr(scene.model, name))
-    }
-    # light_poscom0 is where a light that tracks the center of mass starts; it
-    # moves no body.
-    if model.stat.meaninertia != scene.model.stat.meaninertia:
-        changed.add("stat.meaninertia")
-    assert changed - {"light_poscom0"} == set(physics.FIELDS)
+    for car_path in CARS:
+        scene = _scene(car_path)
+        model = _applied(scene, CHANGED)
+        changed = {
+            name
+            for name in dir(model)
+            if isinstance(getattr(model, name), np.ndarray)
+            and not np.array_equal(getattr(model, name), getattr(scene.model, name))
+        }
+        # light_poscom0 is where a light that tracks the center of mass
+        # starts; it moves no body.
+        if model.stat.meaninertia != scene.model.stat.meaninertia:
+            changed.add("stat.meaninertia")
+        assert changed - {"light_poscom0"} == set(physics.FIELDS), car_path
 
 
 def test_less_wheel_friction_means_more_slip():
