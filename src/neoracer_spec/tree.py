@@ -33,7 +33,7 @@ def at[T, V](tree: T, where: Callable[[T], V]) -> Focus[T, V]:
     if not isinstance(found, _Recorder):
         raise TypeError(_ONLY_READ)
     # The recorder cannot see an identity test (is), which no object can
-    # intercept, nor an item that is a new value, such as a slice. Either
+    # intercept, nor an attribute that computes, such as a property. Either
     # makes where return other than the recorded path's node.
     if where(tree) is not _node(tree, found._tree_steps):
         raise TypeError(_ONLY_READ)
@@ -83,6 +83,10 @@ class _Recorder:
         return _Recorder((*self._tree_steps, Attr(name)))
 
     def __getitem__(self, key: object) -> _Recorder:
+        # A slice is not a node of the tree, though it can be the same object
+        # as one, as t[:] is t for a tuple t.
+        if isinstance(key, slice):
+            raise TypeError(_ONLY_READ)
         return _Recorder((*self._tree_steps, Item(key)))
 
     # A where that compares, tests or loops over the tree computes; it does

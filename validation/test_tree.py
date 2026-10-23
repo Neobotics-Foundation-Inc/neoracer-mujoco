@@ -78,6 +78,8 @@ def test_a_where_that_computes_is_refused():
         lambda c: c.chassis.track if c.chassis.mass.value != 0 else c.chassis.mass,
         lambda c: c.chassis.track if c.chassis is c.chassis else c.chassis.wheelbase,
         lambda c: c.lidar.position.value[:2],
+        lambda c: c.lidar.position.value[:2][0],
+        lambda c: c.lidar.position.value[:],
         lambda c: list(c.lidar.position.value),
     ):
         with pytest.raises(TypeError):
