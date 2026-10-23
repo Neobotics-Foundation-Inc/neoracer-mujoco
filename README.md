@@ -59,7 +59,8 @@ from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
 scene = assets.load(os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml"))
 params = derive_v2.derive(RACECAR_NEO_V2)  # its LiDAR's slots are its samples a turn
 data = sim.settle(scene.model)
-sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.0))  # half speed
+# It holds the steady speed that the spec measured at throttle 0.5.
+sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.0))
 scan = lidar.start(params.lidar, scene.model, data, scene.car).scan
 ```
 
