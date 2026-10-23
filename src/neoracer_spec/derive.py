@@ -134,6 +134,7 @@ class ModelParams:
     springs: parts.Springs
     steering: parts.SteeringInput
     servo: parts.Servo
+    servo_delay: parts.Delay  # the car's board and servo acting on a command
     motor: DcMotorParams
     wheel_mesh_scale: float  # of the cosmetic wheel meshes, to the tyre
     steer_armature: float  # kg·m², at the steering input and steer joints
@@ -202,6 +203,7 @@ def model(spec: Spec) -> ModelParams:
             voltage_limit=precise(spec.servo.supply.value),
             lock=steer_lock(spec),
         ),
+        servo_delay=parts.delay(spec.servo.latency.value),
         motor=DcMotorParams(
             nominal=precise3(nominal(spec.motor.rating.value)),
             gear=precise(spec.motor.gear_ratio.value),

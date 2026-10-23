@@ -249,6 +249,7 @@ def car_edits(p: ModelParams) -> list[Edit]:
         *springs(p.springs),
         *steering_input(p.steering, p.wheels),
         *servo(p.servo),
+        *delay(named("dcmotor", "steer_servo"), p.servo_delay),
         # The NeoRacer's own: its floor, the meshes of its LiDAR and wheels,
         # its steering's armature and its DC drive motor.
         *put(

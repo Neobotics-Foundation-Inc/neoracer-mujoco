@@ -261,9 +261,11 @@
 
         nominal is the servo's supply, stall torque and free speed at
         steer_input, through the linkage from its horn, controller its loop's
-        kp, ki, kd and voltage clamp, and
-        ctrlrange full lock, where the inner front wheel reaches the angle
-        measured on the car: all from neoracer_spec.neoracer (servo, steering).
+        kp, ki, kd and voltage clamp, and ctrlrange full lock, where the inner
+        front wheel reaches the angle measured on the car. delay holds each
+        command back as long as the car's board and servo take to act on it,
+        and nsample keeps the history that needs, a sample a step. All from
+        neoracer_spec.neoracer (servo, steering).
         -->
         <dcmotor name="steer_servo" joint="steer_input" input="pos"/>
     </actuator>
