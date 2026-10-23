@@ -35,10 +35,11 @@ class Solver:
     impratio: float  # of the frictional to the normal contact's impedance
 
 
-# Both cars' options. The step is 1/360 s: 12 steps to a 30 Hz LiDAR scan
-# and 6 to a 60 Hz frame. implicitfast integrates the actuators' speed
-# damping (the motors' back-EMF and the servo's kd), which explicit Euler
-# cannot hold steady at this step: the servo then chatters. The elliptic
+# Both cars' options. The step is 1/360 s, so that a turn of the NeoRacer's
+# LiDAR and a frame of its camera each take a whole number of steps.
+# implicitfast integrates the actuators' speed damping (the motors' back-EMF
+# and the servo's kd), which explicit Euler cannot hold steady at this step:
+# the servo then chatters. The elliptic
 # friction cone with a high impratio is MuJoCo's setting for wheeled
 # vehicles: it stiffens the tyres' sideways contact, so they creep less (on
 # the NeoRacer at 0.4 rad of steering, a full-lock radius of 0.74 m against

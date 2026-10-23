@@ -1,21 +1,22 @@
 """
 The speed that the car's firmware reports from its motor encoder.
 
-Every 20 ms, the car's ESP32 (its firmware's task_control) reads the motor
-encoder's count over the window and turns it into the tyre's surface speed.
-It then low-pass filters it: 0.95 of the new window's speed plus 0.05 of the
-last value. It reports the result as /encoder/speed, which a program reads
-as rc.physics.get_encoder_speed().
+Every window (EncoderParams.window, the spec's MotorEncoder.report_period),
+the car's ESP32 (its firmware's task_control) reads the motor encoder's
+count over the window and turns it into the tyre's surface speed. It then
+low-pass filters it, with the weight EncoderParams.alpha on the new
+window's speed. It reports the result as /encoder/speed, which a program
+reads as rc.physics.get_encoder_speed().
 
 This module computes the same speed from the drivetrain's angle, the
-drive_pos sensor. The physics step does not divide 20 ms. So a window closes
-at the first step on or after each 20 ms tick, and its speed is the angle
-it covered over its own length. At 360 Hz, windows run seven or eight steps
-and average 50 a second, as on the car.
+drive_pos sensor. The physics step does not divide the window. So a window
+closes at the first step on or after each tick, and its speed is the angle
+it covered over its own length. Windows then run a whole number of steps or
+one more, and close as often as on the car.
 
-Limit: the speed is not quantized. One count of the encoder (1024 pulses a
-motor turn, through the 10.55 reduction) is 1.2 mm/s over a window, small
-beside any speed a program acts on.
+Limit: the speed is not quantized. One count of the encoder, a pulse
+through the drivetrain's reduction, is about a millimetre a second over a
+window, small beside any speed a program acts on.
 """
 
 from dataclasses import dataclass
