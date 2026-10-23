@@ -5,7 +5,7 @@ beside the model, the LiDAR's scan and the encoder's filter. Pure functions
 of the values, without their provenance; no MuJoCo.
 
 Numbers that the model holds are kept to its precision, 6 significant
-digits (precise), so the code and the XML hold the same floats.
+digits (parts.precise), so the code and the XML hold the same floats.
 
 Frame: +X forward, +Y left, +Z up; angles in rad.
 """
@@ -17,8 +17,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import ackermann
+from . import ackermann, parts
 from .neoracer import NEORACER
+from .parts import Nominal, Polynomial, precise, precise3
 from .spec import (
     DcMotorRating,
     Lidar,
@@ -30,8 +31,6 @@ from .spec import (
 )
 
 G = 9.81  # m/s^2, MuJoCo's gravity
-type Nominal = tuple[float, float, float]  # V, N·m, rad/s: a dcmotor's nominal
-type Polynomial = tuple[float, float, float, float, float]  # a0..a4
 
 
 @dataclass(frozen=True)
@@ -123,38 +122,21 @@ def encoder_params(encoder: MotorEncoder) -> EncoderParams:
 
 @dataclass(frozen=True)
 class ModelParams:
-    """The car model's numbers. Positions are in the car's body frame."""
+    """The car model's numbers: the parts that both cars' models have
+    (parts), and the NeoRacer's own. Positions are in the car's body frame."""
 
     spawn_height: float  # m, of the body frame above the floor
-    chassis_mass: float  # kg
-    chassis_inertia: Vec3  # kg·m^2
-    com_height: float  # m
-    box_center: Vec3  # m, the chassis' collision box
-    box_half_size: Vec3  # m
+    inertial: parts.Inertial
+    boxes: tuple[parts.CollisionBox, ...]
     imu_position: Vec3  # m
-    lidar_position: Vec3  # m
-    lidar_scan_rate: float  # Hz, turns of its head a second
-    lidar_field: float  # rad of bearings it sees, centred on the front
-    half_wheelbase: float  # m
-    half_track: float  # m
-    wheel_radius: float  # m
-    tyre_half_width: float  # m
-    wheel_mass: float  # kg
-    wheel_friction: float
-    wheel_damping: float  # N·m·s/rad
-    wheel_mesh_scale: float
-    input_body_mass: float  # kg
-    spring_stiffness: float  # N/m
-    spring_damping: float  # N·s/m
-    spring_ref: float  # m, the spring's rest position
-    droop: float  # m
-    jounce: float  # m
-    steer_input_range: float  # rad
-    wheel_steer_range: float  # rad
-    steer_armature: float  # kg·m²
+    lidar: parts.LidarBeams
+    wheels: parts.Wheels
+    springs: parts.Springs
+    steering: parts.SteeringInput
+    servo: parts.Servo
     motor: DcMotorParams
-    servo: ServoParams
-    ackermann_left: Polynomial  # the left wheel's angle from the steering input
+    wheel_mesh_scale: float  # of the cosmetic wheel meshes, to the tyre
+    steer_armature: float  # kg·m², at the steering input and steer joints
 
 
 @dataclass(frozen=True)
@@ -164,82 +146,85 @@ class DcMotorParams:
     ctrl_limit: float  # V, |ctrl| at most
 
 
-@dataclass(frozen=True)
-class ServoParams:
-    nominal: Nominal  # at the steering input, through the linkage
-    kp: float  # V/rad
-    kd: float  # V·s/rad
-    voltage_limit: float  # V, the loop's clamp
-    lock: float  # rad of steering input, |ctrl| at most
-
-
 def model(spec: Spec) -> ModelParams:
     c, w, s = spec.chassis, spec.wheel, spec.suspension
-    motor, servo = spec.motor, spec.servo
     box = c.collision_box.value
     poly = ackermann_left(spec)
-    m_nominal, s_nominal = nominal(motor.rating.value), servo_nominal(spec)
+    fit = precise(spec.steering.fit_range.value)
+    friction = precise(w.friction.value)
+    k, d, ref = precise(s.stiffness.value), precise(s.damping.value), spring_ref(spec)
     return ModelParams(
-        # 1 mm above its resting height, the axles at the tyre radius
-        spawn_height=precise(w.radius.value + 0.001),
-        chassis_mass=precise(chassis_mass(spec)),
-        chassis_inertia=_precise3(chassis_inertia(spec)),
-        com_height=precise(c.com_height.value),
-        box_center=_precise3(box.center),
-        box_half_size=_precise3(box.half_size),
-        imu_position=_precise3(spec.imu.position.value),
-        lidar_position=_precise3(spec.lidar.position.value),
-        lidar_scan_rate=precise(spec.lidar.scan_rate.value),
-        lidar_field=precise(lidar_params(spec.lidar).field),
-        half_wheelbase=precise(c.wheelbase.value / 2),
-        half_track=precise(c.track.value / 2),
-        wheel_radius=precise(w.radius.value),
-        tyre_half_width=precise(w.width.value / 2),
-        wheel_mass=precise(w.mass.value),
-        wheel_friction=precise(w.friction.value),
-        wheel_damping=precise(w.drive_damping.value),
-        wheel_mesh_scale=precise(w.radius.value / spec.visuals.mesh_wheel_radius.value),
-        input_body_mass=precise(spec.steering.input_body_mass.value),
-        spring_stiffness=precise(s.stiffness.value),
-        spring_damping=precise(s.damping.value),
-        spring_ref=precise(spring_ref(spec)),
-        droop=precise(s.droop.value),
-        jounce=precise(s.jounce.value),
-        steer_input_range=precise(spec.steering.fit_range.value),
-        wheel_steer_range=precise(wheel_steer_range(spec)),
-        steer_armature=precise(spec.steering.armature.value),
-        motor=DcMotorParams(
-            nominal=_precise3(m_nominal),
-            gear=precise(motor.gear_ratio.value),
-            ctrl_limit=precise(spec.battery.voltage.value),
+        spawn_height=parts.spawn_height(w.radius.value),
+        inertial=parts.Inertial(
+            mass=precise(chassis_mass(spec)),
+            pos=(0.0, 0.0, precise(c.com_height.value)),
+            diaginertia=precise3(chassis_inertia(spec)),
         ),
-        servo=ServoParams(
-            nominal=_precise3(s_nominal),
-            kp=precise(servo.kp.value),
-            kd=precise(servo.kd.value),
-            voltage_limit=precise(servo.supply.value),
+        boxes=(
+            parts.CollisionBox(
+                "chassis", precise3(box.center), precise3(box.half_size)
+            ),
+        ),
+        imu_position=precise3(spec.imu.position.value),
+        lidar=parts.LidarBeams(
+            position=precise3(spec.lidar.position.value),
+            yaw=0.0,
+            scan_rate=precise(spec.lidar.scan_rate.value),
+            field=precise(lidar_params(spec.lidar).field),
+        ),
+        wheels=parts.Wheels(
+            half_wheelbase=precise(c.wheelbase.value / 2),
+            half_track=precise(c.track.value / 2),
+            radius=precise(w.radius.value),
+            half_width=precise(w.width.value / 2),
+            mass=precise(w.mass.value),
+            damping=precise(w.drive_damping.value),
+            friction=(friction, friction),
+        ),
+        springs=parts.Springs(
+            range=(-precise(s.droop.value), precise(s.jounce.value)),
+            stiffness=(k, k),
+            damping=(d, d),
+            springref=(precise(ref), precise(ref)),
+        ),
+        steering=parts.SteeringInput(
+            stops=(-fit, fit),
+            wheel_range=precise(wheel_steer_range(spec)),
+            ackermann_left=poly,
+            # The right wheel's is the left's mirror image.
+            ackermann_right=(-poly[0], poly[1], -poly[2], poly[3], -poly[4]),
+            input_body_mass=precise(spec.steering.input_body_mass.value),
+        ),
+        servo=parts.Servo(
+            nominal=precise3(servo_nominal(spec)),
+            kp=precise(spec.servo.kp.value),
+            kd=precise(spec.servo.kd.value),
+            voltage_limit=precise(spec.servo.supply.value),
             lock=steer_lock(spec),
         ),
-        ackermann_left=(
-            precise(poly[0]),
-            precise(poly[1]),
-            precise(poly[2]),
-            precise(poly[3]),
-            precise(poly[4]),
+        motor=DcMotorParams(
+            nominal=precise3(nominal(spec.motor.rating.value)),
+            gear=precise(spec.motor.gear_ratio.value),
+            ctrl_limit=precise(spec.battery.voltage.value),
         ),
+        wheel_mesh_scale=precise(w.radius.value / spec.visuals.mesh_wheel_radius.value),
+        steer_armature=precise(spec.steering.armature.value),
     )
 
 
 def ackermann_left(spec: Spec) -> Polynomial:
     """The left wheel's angle as a 4th-order polynomial of the steering input,
-    a least-squares fit to ideal Ackermann steering over its range. The right
-    wheel's is its mirror image, (-a0, a1, -a2, a3, -a4)."""
+    a least-squares fit to ideal Ackermann steering over its range, to the
+    model's precision. The right wheel's is its mirror image,
+    (-a0, a1, -a2, a3, -a4)."""
     l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
     r = spec.steering.fit_range.value
     # An even count of points leaves out 0, where left_wheel divides by 0.
     x = np.linspace(-r, r, 400)
     y = [ackermann.left_wheel(l, w, s) for s in x]
-    a0, a1, a2, a3, a4 = (float(a) for a in np.polynomial.polynomial.polyfit(x, y, 4))
+    a0, a1, a2, a3, a4 = (
+        precise(float(a)) for a in np.polynomial.polynomial.polyfit(x, y, 4)
+    )
     return (a0, a1, a2, a3, a4)
 
 
@@ -324,12 +309,3 @@ def wheel_steer_range(spec: Spec) -> float:
     l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
     s = spec.steering
     return ackermann.left_wheel(l, w, s.fit_range.value) + s.wheel_range_margin.value
-
-
-def precise(x: float) -> float:
-    """x to the model's precision, 6 significant digits."""
-    return float(f"{x:.6g}")
-
-
-def _precise3(v: Vec3) -> Vec3:
-    return (precise(v[0]), precise(v[1]), precise(v[2]))
