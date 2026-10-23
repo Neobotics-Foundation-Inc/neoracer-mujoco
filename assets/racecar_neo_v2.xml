@@ -1,9 +1,11 @@
 <mujoco model="racecar_neo_v2">
     <!--
     The RACECAR Neo V2, a 1/14-scale autonomous racing car on the LC Racing
-    EMB-SC chassis. Its structure is written here by hand; python -m
-    neoracer_mujoco.write_car writes its numbers from the spec,
-    src/neoracer_spec/racecar_neo_v2.py, through neoracer_spec.derive_v2.
+    EMB-SC chassis. Its structure, and the numbers that its spec does not
+    give, are written by hand in the template assets/racecar_neo_v2.xml.
+    neoracer_spec.mjcf.racecar_neo_v2_xml adds the numbers of the spec,
+    src/neoracer_spec/racecar_neo_v2.py, when neoracer_mujoco.assets loads
+    it, and python -m neoracer_mujoco.write_car writes the complete car.
 
     Coordinate frame: +X = forward, +Y = left, +Z = up. Lengths in meters,
     angles in radians, masses in kg. The car body's frame is at the middle
@@ -28,9 +30,9 @@
 
         <!-- Cosmetic meshes (meters, in the car body's frame), one per part and
              color: RacecarSim's model of the car, RacecarNeoV2.fbx.
-             Its wheelbase is 225 mm, so it is placed by its rear axle, and its
-             front wheels are 5 mm behind the model's. Its payload, everything
-             on the chassis' body posts, is lowered 6.6 mm, the spec's
+             Its wheelbase is shorter than the car's, so it is placed by its
+             rear axle, and its front wheels are behind the car's. Its payload,
+             everything on the chassis' body posts, is lowered by the spec's
              Shape.payload_drop, so that its LiDAR is at the measured height.
              Each wheel's meshes are centred on the wheel. None of these affect
              physics. -->
@@ -81,8 +83,8 @@
         softness alone count. The friction is set per axle.
         -->
         <default class="wheel">
-            <joint type="hinge" axis="0 1 0" damping=".0009882"/>
-            <geom type="cylinder" size=".036 .0145" zaxis="0 1 0" condim="3" priority="1"
+            <joint type="hinge" axis="0 1 0"/>
+            <geom type="cylinder" zaxis="0 1 0" condim="3" priority="1"
                   rgba=".2 .4 1 0.1"/>
         </default>
 
@@ -90,7 +92,7 @@
              wheel's angle at either stop of the steering input. Its armature,
              friction and damping are the NeoRacer's. -->
         <default class="steer">
-            <joint type="hinge" axis="0 0 1" limited="true" range="-.706877 .706877"
+            <joint type="hinge" axis="0 0 1" limited="true"
                    damping=".001" armature=".002" frictionloss=".01"
                    actuatorfrcrange="-100 100"/>
         </default>
@@ -100,40 +102,38 @@
              preloads each spring with its share of its axle's weight. The
              stiffness, damping and springref are set per axle. -->
         <default class="susp">
-            <joint type="slide" axis="0 0 1" range="-.01 .01"/>
+            <joint type="slide" axis="0 0 1"/>
         </default>
     </default>
 
     <worldbody>
         <geom type="plane" size="5 5 .01" material="grid" friction="1 .1 .1"/>
 
-        <!-- Car body. It spawns 1 mm above its resting height, the axles at the
-             tyre radius. -->
-        <body name="car" pos="0 0 .037">
+        <!-- Car body. It spawns just above its resting height, the axles at
+             the tyre radius (neoracer_spec.derive_v2.ModelParams). -->
+        <body name="car">
             <freejoint/>
             <light name="top_light" pos="0 0 2" mode="trackcom" diffuse=".4 .4 .4"/>
 
             <!-- The chassis' mass is the car's less its wheels and the steering
                  input's body; its centre of mass and inertia are the car's less
                  theirs (neoracer_spec.derive_v2). -->
-            <inertial pos=".00492767 0 .0635799" mass="2.19"
-                      diaginertia=".00783188 .0186176 .0164286"/>
+            <inertial/>
 
             <!-- Collision boxes: RacecarSim's, fitted to its model, with the
                  payload's lowered as its meshes are. Collision only; the mass
-                 is in <inertial>. "chassis" is the tub, from 20.5 mm above the
-                 floor. -->
-            <geom name="chassis" type="box" pos=".0136 0 .02525" size=".1646 .1045 .04075"
+                 is in <inertial>. "chassis" is the tub. -->
+            <geom name="chassis" type="box"
                   rgba=".3 .6 .3 .1" mass="0"/>
-            <geom name="rear_bumper" type="box" pos="-.1489 0 .0078" size=".0274 .0925 .0272"
+            <geom name="rear_bumper" type="box"
                   rgba=".3 .6 .3 .1" mass="0"/>
-            <geom name="shell_rear" type="box" pos="-.03375 0 .1019" size=".10125 .1 .0425"
+            <geom name="shell_rear" type="box"
                   rgba=".3 .6 .3 .1" mass="0"/>
-            <geom name="shell_front" type="box" pos=".11625 0 .0869" size=".04875 .0525 .0275"
+            <geom name="shell_front" type="box"
                   rgba=".3 .6 .3 .1" mass="0"/>
-            <geom name="lidar_stack" type="box" pos=".1235 0 .1314" size=".035 .035 .017"
+            <geom name="lidar_stack" type="box"
                   rgba=".3 .6 .3 .1" mass="0"/>
-            <geom name="lidar_head" type="box" pos=".12325 0 .15815" size=".035 .035 .00975"
+            <geom name="lidar_head" type="box"
                   rgba=".3 .6 .3 .1" mass="0"/>
 
             <geom class="visual" mesh="vis_body_1f1f1f" rgba=".098 .098 .098 1"/>
@@ -163,26 +163,26 @@
 
             <!-- IMU site: the LSM9DS1, as measured; its axes are the car's, as
                  the firmware reports them. -->
-            <site name="imu" pos=".075 0 .069" size=".01" rgba="1 1 0 1"/>
+            <site name="imu" size=".01" rgba="1 1 0 1"/>
 
             <!-- LiDAR mount site: the centre of the scan, as measured. Its +X is
                  the scan's bearing 0, the car's front less the calibrated
-                 mounting error: the LiDAR faces the rear, at 179.619 degrees,
-                 and racecar_core turns its scan around. -->
-            <site name="lidar_mount" pos=".1233 0 .159" euler="0 0 -.0066497" size=".02"
-                  rgba="1 0 0 .5" user="6.28319"/>
+                 mounting error: the LiDAR faces the rear (the spec's
+                 Lidar.yaw_degrees), and racecar_core turns its scan around. -->
+            <site name="lidar_mount" size=".02"
+                  rgba="1 0 0 .5"/>
 
             <!-- LiDAR ray sites: 8 beams at 45° intervals from the scan's bearing
                  0, toward +Y. zaxis points the rangefinder's beam, as on the
                  NeoRacer. -->
-            <site name="lidar_000" pos=".1233 0 .159" zaxis=".999978 -.00664965 0" size=".005"/>
-            <site name="lidar_045" pos=".1233 0 .159" zaxis=".711793 .702389 0" size=".005"/>
-            <site name="lidar_090" pos=".1233 0 .159" zaxis=".00664965 .999978 0" size=".005"/>
-            <site name="lidar_135" pos=".1233 0 .159" zaxis="-.702389 .711793 0" size=".005"/>
-            <site name="lidar_180" pos=".1233 0 .159" zaxis="-.999978 .00664965 0" size=".005"/>
-            <site name="lidar_225" pos=".1233 0 .159" zaxis="-.711793 -.702389 0" size=".005"/>
-            <site name="lidar_270" pos=".1233 0 .159" zaxis="-.00664965 -.999978 0" size=".005"/>
-            <site name="lidar_315" pos=".1233 0 .159" zaxis=".702389 -.711793 0" size=".005"/>
+            <site name="lidar_000" size=".005"/>
+            <site name="lidar_045" size=".005"/>
+            <site name="lidar_090" size=".005"/>
+            <site name="lidar_135" size=".005"/>
+            <site name="lidar_180" size=".005"/>
+            <site name="lidar_225" size=".005"/>
+            <site name="lidar_270" size=".005"/>
+            <site name="lidar_315" size=".005"/>
 
             <!--
             The antennas: two whips at the rear that the LiDAR's sweep crosses,
@@ -192,11 +192,9 @@
             past them. Their meshes are in the body's.
             -->
             <body name="antennas">
-                <geom name="antenna_left" type="cylinder" pos="-.145 .0449 .1632"
-                      size=".0045 .0758" contype="0" conaffinity="0" mass="0"
+                <geom name="antenna_left" type="cylinder" contype="0" conaffinity="0" mass="0"
                       rgba=".1 .1 .1 .3"/>
-                <geom name="antenna_right" type="cylinder" pos="-.145 -.0449 .1632"
-                      size=".0045 .0758" contype="0" conaffinity="0" mass="0"
+                <geom name="antenna_right" type="cylinder" contype="0" conaffinity="0" mass="0"
                       rgba=".1 .1 .1 .3"/>
             </body>
 
@@ -208,10 +206,9 @@
             to the left, and to the right the stop is reached at about half
             the command.
             -->
-            <body name="steer_input_body" pos=".115 0 0">
-                <joint name="steer_input" class="steer" range="-.460368 .597457"/>
-                <geom type="cylinder" size=".02 .005" contype="0" conaffinity="0"
-                      mass=".01" rgba="1 0 0 .3"/>
+            <body name="steer_input_body">
+                <joint name="steer_input" class="steer"/>
+                <geom type="cylinder" size=".02 .005" contype="0" conaffinity="0" rgba="1 0 0 .3"/>
             </body>
 
             <!--
@@ -220,43 +217,39 @@
             declared innermost to outermost, all on the same body, as on the
             NeoRacer.
             -->
-            <body name="fl_wheel_body" pos=".115 .089 0">
-                <joint name="fl_susp" class="susp" stiffness="770" damping="26"
-                       springref="-.00733788"/>
+            <body name="fl_wheel_body">
+                <joint name="fl_susp" class="susp"/>
                 <joint name="fl_steer" class="steer"/>
                 <joint name="fl_drive" class="wheel"/>
-                <geom name="fl_wheel" class="wheel" mass=".04" friction=".987 .1 .1"/>
+                <geom name="fl_wheel" class="wheel"/>
                 <geom class="visual" mesh="vis_wheel_left_rubber" rgba=".147 .16 .176 1"/>
                 <geom class="visual" mesh="vis_wheel_left_1f1f1f" rgba=".098 .098 .098 1"/>
                 <geom class="visual" mesh="vis_wheel_left_bac4cc" rgba=".735 .774 .804 1"/>
             </body>
 
-            <body name="fr_wheel_body" pos=".115 -.089 0">
-                <joint name="fr_susp" class="susp" stiffness="770" damping="26"
-                       springref="-.00733788"/>
+            <body name="fr_wheel_body">
+                <joint name="fr_susp" class="susp"/>
                 <joint name="fr_steer" class="steer"/>
                 <joint name="fr_drive" class="wheel"/>
-                <geom name="fr_wheel" class="wheel" mass=".04" friction=".987 .1 .1"/>
+                <geom name="fr_wheel" class="wheel"/>
                 <geom class="visual" mesh="vis_wheel_right_rubber" rgba=".147 .16 .176 1"/>
                 <geom class="visual" mesh="vis_wheel_right_1f1f1f" rgba=".098 .098 .098 1"/>
                 <geom class="visual" mesh="vis_wheel_right_bac4cc" rgba=".735 .774 .804 1"/>
             </body>
 
-            <body name="rl_wheel_body" pos="-.115 .089 0">
-                <joint name="rl_susp" class="susp" stiffness="400" damping="18"
-                       springref="-.0128521"/>
+            <body name="rl_wheel_body">
+                <joint name="rl_susp" class="susp"/>
                 <joint name="rl_drive" class="wheel"/>
-                <geom name="rl_wheel" class="wheel" mass=".04" friction="1.204 .1 .1"/>
+                <geom name="rl_wheel" class="wheel"/>
                 <geom class="visual" mesh="vis_wheel_left_rubber" rgba=".147 .16 .176 1"/>
                 <geom class="visual" mesh="vis_wheel_left_1f1f1f" rgba=".098 .098 .098 1"/>
                 <geom class="visual" mesh="vis_wheel_left_bac4cc" rgba=".735 .774 .804 1"/>
             </body>
 
-            <body name="rr_wheel_body" pos="-.115 -.089 0">
-                <joint name="rr_susp" class="susp" stiffness="400" damping="18"
-                       springref="-.0128521"/>
+            <body name="rr_wheel_body">
+                <joint name="rr_susp" class="susp"/>
                 <joint name="rr_drive" class="wheel"/>
-                <geom name="rr_wheel" class="wheel" mass=".04" friction="1.204 .1 .1"/>
+                <geom name="rr_wheel" class="wheel"/>
                 <geom class="visual" mesh="vis_wheel_right_rubber" rgba=".147 .16 .176 1"/>
                 <geom class="visual" mesh="vis_wheel_right_1f1f1f" rgba=".098 .098 .098 1"/>
                 <geom class="visual" mesh="vis_wheel_right_bac4cc" rgba=".735 .774 .804 1"/>
@@ -275,7 +268,7 @@
     angle less the rear's, which the equality below holds at 0.
     -->
     <tendon>
-        <fixed name="drivetrain" frictionloss=".0711504">
+        <fixed name="drivetrain">
             <joint joint="fl_drive" coef=".25"/>
             <joint joint="fr_drive" coef=".25"/>
             <joint joint="rl_drive" coef=".25"/>
@@ -301,15 +294,12 @@
         car coasts. The user numbers (a, b, c) give each one's ctrl for t:
         a t + b sign(t) + c |sign(t)| (neoracer_mujoco.contract). The motor's
         are the car's steady speeds as a line in |t|, raised to hold them
-        against the drag: the car is never slower than about 0.6 m/s while
-        it drives. Both start a command 0.06 s late, as the car does.
+        against the drag, so the car is never slower than the line's floor
+        while it drives (neoracer_spec.derive_v2.steady_speed_line). Both start
+        a command the spec's Drive.latency late, as the car does.
         -->
-        <general name="motor" tendon="drivetrain" gear=".036" gainprm="18"
-                 ctrlrange="-1.36002 1.36002" user=".545629 .81439 0"
-                 delay=".06" nsample="24"/>
-        <general name="motor_engage" tendon="drivetrain" gear=".036" gaintype="affine"
-                 gainprm="0 0 -18" ctrlrange="0 1" user="0 0 1"
-                 delay=".06" nsample="24"/>
+        <general name="motor" tendon="drivetrain"/>
+        <general name="motor_engage" tendon="drivetrain" gaintype="affine" ctrlrange="0 1" user="0 0 1"/>
 
         <!--
         The steering servo, as a DC motor with its own position loop, as on the
@@ -317,9 +307,7 @@
         Its free speed and its latency are fitted to the car's yaw rate after
         a full-lock command.
         -->
-        <dcmotor name="steer_servo" joint="steer_input" input="pos"
-                 nominal="5 3 7.92" controller="50 0 1 0 0 5"
-                 ctrlrange="-.92535 .92535" delay=".086" nsample="33"/>
+        <dcmotor name="steer_servo" joint="steer_input" input="pos"/>
     </actuator>
 
     <!--
@@ -335,11 +323,9 @@
     -->
     <equality>
         <joint name="ackermann_left" solref=".006 1"
-               joint1="fl_steer" joint2="steer_input"
-               polycoef="-.00411486 .996451 .202206 .0376817 .185184"/>
+               joint1="fl_steer" joint2="steer_input"/>
         <joint name="ackermann_right" solref=".006 1"
-               joint1="fr_steer" joint2="steer_input"
-               polycoef="-.00431569 1.01214 -.565486 .157688 .305832"/>
+               joint1="fr_steer" joint2="steer_input"/>
         <tendon name="center_lock" tendon1="center_shaft"/>
     </equality>
 
@@ -356,8 +342,8 @@
         <jointpos name="fl_steer_pos"  joint="fl_steer"/>
         <jointpos name="fr_steer_pos"  joint="fr_steer"/>
 
-        <!-- Wheel angular velocity (rad/s); times the tyre radius, 0.036 m, the
-             surface speed. -->
+        <!-- Wheel angular velocity (rad/s); times the tyre radius, the surface
+             speed. -->
         <jointvel name="fl_wheel_vel" joint="fl_drive"/>
         <jointvel name="fr_wheel_vel" joint="fr_drive"/>
         <jointvel name="rl_wheel_vel" joint="rl_drive"/>
@@ -379,14 +365,14 @@
         interval samples the range once a turn, as the head passes the beam,
         and delay holds the sample until the turn ends (mjcf.beam_timing).
         -->
-        <rangefinder name="lidar_000" site="lidar_000" nsample="2" interval=".135135 0" delay=".135135"/>
-        <rangefinder name="lidar_045" site="lidar_045" nsample="2" interval=".135135 -.0168919" delay=".0168919"/>
-        <rangefinder name="lidar_090" site="lidar_090" nsample="2" interval=".135135 -.0337838" delay=".0337838"/>
-        <rangefinder name="lidar_135" site="lidar_135" nsample="2" interval=".135135 -.0506757" delay=".0506757"/>
-        <rangefinder name="lidar_180" site="lidar_180" nsample="2" interval=".135135 -.0675676" delay=".0675676"/>
-        <rangefinder name="lidar_225" site="lidar_225" nsample="2" interval=".135135 -.0844595" delay=".0844595"/>
-        <rangefinder name="lidar_270" site="lidar_270" nsample="2" interval=".135135 -.101351" delay=".101351"/>
-        <rangefinder name="lidar_315" site="lidar_315" nsample="2" interval=".135135 -.118243" delay=".118243"/>
+        <rangefinder name="lidar_000" site="lidar_000"/>
+        <rangefinder name="lidar_045" site="lidar_045"/>
+        <rangefinder name="lidar_090" site="lidar_090"/>
+        <rangefinder name="lidar_135" site="lidar_135"/>
+        <rangefinder name="lidar_180" site="lidar_180"/>
+        <rangefinder name="lidar_225" site="lidar_225"/>
+        <rangefinder name="lidar_270" site="lidar_270"/>
+        <rangefinder name="lidar_315" site="lidar_315"/>
     </sensor>
 
 </mujoco>

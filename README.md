@@ -34,10 +34,10 @@ The simulators don't read the spec directly. `derive(spec)` computes what they n
 - the encoder's filter;
 - full lock.
 
-After you edit the spec, regenerate the numbers in the cars' XML in `assets/`. A test fails if they are stale.
+The cars' XML files in `assets/` are templates. They hold each car's structure and the numbers that its spec does not give, and `assets` adds the spec's numbers when it loads the car, so an edit to the spec reaches the model with no other step. Load a car with `assets.load`, `assets.compose` or `assets.from_file`: a template alone does not compile. To open the cars in another MuJoCo tool, write them complete into a folder:
 
 ```sh
-python -m neoracer_mujoco.write_car assets
+python -m neoracer_mujoco.write_car cars
 ```
 
 The JS package's TypeScript is written from the spec when the package is built (`js/README.md`).
@@ -234,7 +234,7 @@ cpu.close()
   - controllers, in `control/`;
   - the `racecar_core` adapter.
 - Code that two modules share goes in a module both of them import. For example, the steering limits and throttle shaping that both controllers use are in `control/steering.py`.
-- `assets/` holds `neoracer.xml` and `racecar_neo_v2.xml` (their structure is written by hand and their numbers by `write_car`), the meshes (Git LFS objects) and the tracks.
+- `assets/` holds `neoracer.xml` and `racecar_neo_v2.xml` (templates, to which `assets.read_xml` adds the numbers of each car's spec), the meshes (Git LFS objects) and the tracks.
 - `js/` is the same car in MuJoCo's WebAssembly build. See [js/README.md](js/README.md).
 - `examples/` holds runnable programs, `validation/` the tests, and `users/<github-name>/` personal experiments.
 

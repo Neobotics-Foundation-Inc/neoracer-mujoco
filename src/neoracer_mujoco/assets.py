@@ -1,11 +1,16 @@
 """
 Locating and loading the car and track XMLs, and putting the car on a track.
 
-The XMLs and meshes live in assets/ at the repo root, so that users can open
-them in other MuJoCo tools. A wheel copies assets/ into the package as
-neoracer_mujoco/data (see pyproject.toml). In a source checkout or an
-editable install, the package has no data/ folder, and this module uses the
-repo's assets/ instead.
+The XMLs and meshes live in assets/ at the repo root. A wheel copies assets/
+into the package as neoracer_mujoco/data (see pyproject.toml). In a source
+checkout or an editable install, the package has no data/ folder, and this
+module uses the repo's assets/ instead.
+
+The NeoRacer's and the RACECAR Neo V2's XMLs in assets/ are templates: they
+hold none of the numbers that the cars' specs give (neoracer_spec), and
+compile only after read_xml adds them. Load a car with load, compose or
+from_file, not with mujoco.MjSpec.from_file. python -m
+neoracer_mujoco.write_car writes the complete XMLs, for other MuJoCo tools.
 """
 
 import glob
@@ -16,6 +21,11 @@ from importlib import resources
 
 import mujoco
 import numpy as np
+
+from neoracer_spec import derive_v2, mjcf
+from neoracer_spec.derive import derive
+from neoracer_spec.neoracer import NEORACER
+from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
 
 from .scene import Scene, compile_scene
 
@@ -46,9 +56,34 @@ def tracks() -> list[str]:
     return sorted(glob.glob(os.path.join(TRACK_DIR, "*.xml")))
 
 
+def read_xml(path: str | os.PathLike[str]) -> str:
+    """The MJCF of the XML at path: the file's text, with the numbers of the
+    car's spec added if it is the NeoRacer's or the RACECAR Neo V2's
+    template in assets/."""
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    if os.path.realpath(os.path.dirname(path)) != os.path.realpath(ASSET_DIR):
+        return text
+    match os.path.basename(path):
+        case "neoracer.xml":
+            return mjcf.car_xml(derive(NEORACER).model, text)
+        case "racecar_neo_v2.xml":
+            return mjcf.racecar_neo_v2_xml(derive_v2.model(RACECAR_NEO_V2), text)
+        case _:
+            return text
+
+
+def from_file(path: str | os.PathLike[str] = DEFAULT_CAR) -> mujoco.MjSpec:
+    """The MjSpec of read_xml(path), whose files are read from path's
+    folder. The XML must not include another XML."""
+    spec = mujoco.MjSpec.from_string(read_xml(path))
+    spec.modelfiledir = os.path.dirname(os.path.abspath(path))
+    return spec
+
+
 def load(path: str | os.PathLike[str] = DEFAULT_CAR) -> Scene:
     """Compile a car XML into a Scene. Defaults to assets/neoracer.xml."""
-    return compile_scene(mujoco.MjSpec.from_file(str(path)))
+    return compile_scene(from_file(path))
 
 
 def compose(
@@ -73,11 +108,7 @@ def compose(
         compose(mujoco.MjSpec.from_file(os.path.join(TRACK_DIR, "f1_track.xml")))
     """
     scene = track.copy()
-    car = (
-        car.copy()
-        if isinstance(car, mujoco.MjSpec)
-        else mujoco.MjSpec.from_file(str(car))
-    )
+    car = car.copy() if isinstance(car, mujoco.MjSpec) else from_file(car)
     frame = scene.worldbody.add_frame()
     frame.pos = np.array(pos)
     if not visuals:
@@ -110,26 +141,19 @@ def delete_visuals(spec: mujoco.MjSpec) -> None:
             spec.delete(mesh)
 
 
-def write_mjz(xml_path: str | os.PathLike[str], out: str | os.PathLike[str]) -> None:
-    """Write to out an .mjz archive of the MJCF file at xml_path: the file as
-    written, as model.xml, and every mesh and texture file that it names, at
-    the path that it names them by. It is the XML as written, not
-    MjSpec.to_xml(), which keeps six significant digits, so the archive
-    compiles to the same model, bit for bit.
-
-    MuJoCo reads the archive with MjSpec.from_zip(out) in Python, and as
-    "out/model.xml" in its WebAssembly build. The same files always give the
-    same bytes. Raise ValueError for an XML that includes another XML, or
-    names a height field or skin file, or a file outside its folder: none of
-    ours does, and the archive would miss them."""
-    # MjSpec.from_file reads an <include>d file into the spec, so only the
-    # XML itself shows one, and the archive would not hold it. MuJoCo's
-    # parser accepts "--" in a comment, which Python's XML parsers refuse.
-    with open(xml_path, encoding="utf-8") as f:
-        text = re.sub(r"<!--.*?-->", "", f.read(), flags=re.DOTALL)
-    if re.search(r"<include\b", text):
+def named_files(xml_path: str | os.PathLike[str]) -> list[str]:
+    """Every mesh and texture file that the MJCF file at xml_path names,
+    sorted, at the path that it names them by, relative to its folder.
+    Raise ValueError for an XML that includes another XML, or names a
+    height field or skin file, or a file outside its folder: none of ours
+    does, and a copy of the XML and these files would miss them."""
+    # MuJoCo reads an <include>d file into the spec, so only the XML itself
+    # shows one. MuJoCo's parser accepts "--" in a comment, which Python's
+    # XML parsers refuse.
+    xml = re.sub(r"<!--.*?-->", "", read_xml(xml_path), flags=re.DOTALL)
+    if re.search(r"<include\b", xml):
         raise ValueError(f"{xml_path} includes another XML file")
-    spec = mujoco.MjSpec.from_file(str(xml_path))
+    spec = from_file(xml_path)
     if any(f.file for f in (*spec.hfields, *spec.skins)):
         raise ValueError(f"{xml_path} names a height field or skin file")
     named = [os.path.join(spec.compiler.meshdir, m.file) for m in spec.meshes]
@@ -140,13 +164,26 @@ def write_mjz(xml_path: str | os.PathLike[str], out: str | os.PathLike[str]) -> 
     for name in files:
         if os.path.isabs(name) or name.startswith(".."):
             raise ValueError(f"{xml_path} names {name}, outside its folder")
+    return files
+
+
+def write_mjz(xml_path: str | os.PathLike[str], out: str | os.PathLike[str]) -> None:
+    """Write to out an .mjz archive of the MJCF file at xml_path: its text,
+    read_xml(xml_path), as model.xml, and its named_files. It is that text,
+    not MjSpec.to_xml(), which keeps six significant digits, so the archive
+    compiles to the same model, bit for bit.
+
+    MuJoCo reads the archive with MjSpec.from_zip(out) in Python, and as
+    "out/model.xml" in its WebAssembly build. The same files always give the
+    same bytes."""
     folder = os.path.dirname(os.path.abspath(xml_path))
-    sources = [(MJZ_MODEL, str(xml_path))]
-    sources += [(name, os.path.join(folder, name)) for name in files]
+    contents = [(MJZ_MODEL, read_xml(xml_path).encode("utf-8"))]
+    for name in named_files(xml_path):
+        with open(os.path.join(folder, name), "rb") as f:
+            contents.append((name, f.read()))
     with zipfile.ZipFile(out, "w") as archive:
-        for name, source in sources:
+        for name, data in contents:
             # A fixed date, so that the bytes depend on the files only.
             info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
-            with open(source, "rb") as f:
-                archive.writestr(info, f.read())
+            archive.writestr(info, data)

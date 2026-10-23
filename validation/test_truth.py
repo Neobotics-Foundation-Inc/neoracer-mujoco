@@ -90,7 +90,7 @@ def test_a_sensor_with_a_truth_name_but_another_definition_is_rejected():
         {"cutoff": 0.5},
         {"noise": 0.01},
     ]:
-        spec = mujoco.MjSpec.from_file(assets.DEFAULT_CAR)
+        spec = assets.from_file()
         sensor = spec.add_sensor(
             name=truth.ZAXIS,
             type=mujoco.mjtSensor.mjSENS_FRAMEZAXIS,

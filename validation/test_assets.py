@@ -140,16 +140,16 @@ def test_a_scene_without_visuals_keeps_the_track_meshes():
 
 
 def test_an_mjz_compiles_to_the_model_of_its_xml(tmp_path):
-    """For every car and track, write_mjz packs the XML as written and the
-    files it names, so the archive compiles to the same model, bit for bit,
-    and writing it again gives the same bytes."""
+    """For every car and track, write_mjz packs its XML (assets.read_xml) and
+    the files it names, so the archive compiles to the same model, bit for
+    bit, and writing it again gives the same bytes."""
     first, second = tmp_path / "first.mjz", tmp_path / "second.mjz"
     for path in [*assets.cars(), *TRACKS]:
         name = os.path.basename(path)
         assets.write_mjz(path, first)
         assets.write_mjz(path, second)
         assert first.read_bytes() == second.read_bytes(), name
-        expected = mujoco.MjSpec.from_file(path).compile()
+        expected = assets.from_file(path).compile()
         packed = mujoco.MjSpec.from_zip(str(first)).compile()
         for field in dir(expected):
             value = getattr(expected, field)
@@ -160,8 +160,8 @@ def test_an_mjz_compiles_to_the_model_of_its_xml(tmp_path):
 
 
 def test_write_mjz_refuses_an_xml_that_includes_another(tmp_path):
-    """MjSpec.from_file reads an included XML into the spec, so an archive
-    of the XML alone would not load."""
+    """MuJoCo reads an included XML into the spec, so an archive of the XML
+    alone would not load."""
     (tmp_path / "world.xml").write_text("<mujoco><worldbody/></mujoco>")
     model = tmp_path / "model.xml"
     model.write_text('<mujoco><include file="world.xml"/></mujoco>')
