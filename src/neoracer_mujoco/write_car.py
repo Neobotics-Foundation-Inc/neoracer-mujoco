@@ -1,40 +1,36 @@
 """
-Write the cars into a folder of car files: the numbers of the NeoRacer
-(neoracer_spec.neoracer.NEORACER) and the RACECAR Neo V2
-(neoracer_spec.racecar_neo_v2.RACECAR_NEO_V2) into their XMLs there, in
-place. Run it after a change to a car:
+Write every car of assets/ into a folder, complete: its XML with the numbers
+of its spec (assets.read_xml), and the files that it names. MuJoCo tools
+other than this package then open the cars from there:
 
-    python -m neoracer_mujoco.write_car assets
+    python -m neoracer_mujoco.write_car cars
+    python -m mujoco.viewer --mjcf=cars/neoracer.xml
 """
 
 import os
+import shutil
 import sys
-from collections.abc import Callable
 
-from neoracer_spec import derive_v2, mjcf
-from neoracer_spec.derive import derive
-from neoracer_spec.neoracer import NEORACER
-from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
-
-from . import export
-
-V2_XML_NAME = "racecar_neo_v2.xml"
+from . import assets
 
 
-def _rewrite(path: str, write: Callable[[str], str]) -> None:
-    with open(path, encoding="utf-8") as f:
-        text = write(f.read())
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
+def write(folder: str | os.PathLike[str]) -> None:
+    """Write each car of assets.cars() into folder, which must not be
+    assets/, the folder of the cars' templates."""
+    if os.path.realpath(folder) == os.path.realpath(assets.ASSET_DIR):
+        raise ValueError(f"{folder} is assets/, which holds the templates")
+    os.makedirs(folder, exist_ok=True)
+    for path in assets.cars():
+        with open(
+            os.path.join(folder, os.path.basename(path)), "w", encoding="utf-8"
+        ) as f:
+            f.write(assets.read_xml(path))
+        for name in assets.named_files(path):
+            target = os.path.join(folder, name)
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            shutil.copyfile(os.path.join(assets.ASSET_DIR, name), target)
 
 
 if __name__ == "__main__":
     (folder,) = sys.argv[1:]
-    _rewrite(
-        os.path.join(folder, export.XML_NAME),
-        lambda xml: mjcf.car_xml(derive(NEORACER).model, xml),
-    )
-    _rewrite(
-        os.path.join(folder, V2_XML_NAME),
-        lambda xml: mjcf.racecar_neo_v2_xml(derive_v2.model(RACECAR_NEO_V2), xml),
-    )
+    write(folder)

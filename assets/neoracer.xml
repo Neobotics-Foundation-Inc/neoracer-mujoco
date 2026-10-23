@@ -1,8 +1,10 @@
 <mujoco model="neoracer">
     <!--
-    The NeoRacer, a 1/12-scale autonomous racing car. Its structure is written
-    here by hand; python -m neoracer_mujoco.write_car writes its numbers from
-    the spec, src/neoracer_spec/neoracer.py.
+    The NeoRacer, a 1/12-scale autonomous racing car. Its structure, and the
+    numbers that its spec does not give, are written by hand in the template
+    assets/neoracer.xml. neoracer_spec.mjcf.car_xml adds the numbers of the
+    spec, src/neoracer_spec/neoracer.py, when neoracer_mujoco.assets loads
+    it, and python -m neoracer_mujoco.write_car writes the complete car.
 
     Coordinate frame: +X = forward, +Y = left, +Z = up. Lengths in meters,
     angles in radians, masses in kg.
@@ -37,12 +39,12 @@
 
         <!-- Cosmetic meshes (meters, x=fwd y=left z=up), from the older osracer CAD
              model. The wheel meshes are centred on their wheel body origin and scaled
-             from its 50 mm wheels to the 42.5 mm tyres. None of these affect physics. -->
+             from its 50 mm wheels to the tyres. None of these affect physics. -->
         <mesh name="vis_chassis"  file="meshes/chassis.STL"/>
-        <mesh name="vis_fl_wheel" file="meshes/fl_wheel.STL" scale=".85 .85 .85"/>
-        <mesh name="vis_fr_wheel" file="meshes/fr_wheel.STL" scale=".85 .85 .85"/>
-        <mesh name="vis_rl_wheel" file="meshes/rl_wheel.STL" scale=".85 .85 .85"/>
-        <mesh name="vis_rr_wheel" file="meshes/rr_wheel.STL" scale=".85 .85 .85"/>
+        <mesh name="vis_fl_wheel" file="meshes/fl_wheel.STL"/>
+        <mesh name="vis_fr_wheel" file="meshes/fr_wheel.STL"/>
+        <mesh name="vis_rl_wheel" file="meshes/rl_wheel.STL"/>
+        <mesh name="vis_rr_wheel" file="meshes/rr_wheel.STL"/>
         <mesh name="vis_lidar"    file="meshes/lidar.STL"/>
     </asset>
 
@@ -53,9 +55,9 @@
         <!--
         Wheel drive joint: hinge about the Y-axis (the axle). Its inertia is the
         wheel's own, from the geom: a cylinder of the wheel's mass.
-        geom: cylinder, radius 42.5 mm (the 85 mm tyre of the spec) and half the
-        measured tyre width of 48.25 mm. condim=3 (sliding only); condim=6 adds
-        torsional/rolling contact that chatters on small cylinders.
+        geom: a cylinder of the tyre's radius and half its width. condim=3
+        (sliding only); condim=6 adds torsional/rolling contact that chatters
+        on small cylinders.
         mass is set per wheel instance, not here.
         priority=1: in a contact with the floor or a wall, MuJoCo takes the
         friction and the contact softness of the wheel alone, instead of the
@@ -63,9 +65,8 @@
         so changing its friction changes how much the wheel slips.
         -->
         <default class="wheel">
-            <joint type="hinge" axis="0 1 0" damping=".0005"/>
-            <geom type="cylinder" size=".0425 .024125" zaxis="0 1 0"
-                  friction="1.5 .1 .1" condim="3" priority="1"/>
+            <joint type="hinge" axis="0 1 0"/>
+            <geom type="cylinder" zaxis="0 1 0" condim="3" priority="1"/>
         </default>
 
         <!--
@@ -78,38 +79,37 @@
         shimmies in part-throttle turns.
         -->
         <default class="steer">
-            <joint type="hinge" axis="0 0 1" limited="true" range="-.551706 .551706"
-                   damping=".001" armature=".002" frictionloss=".01"
+            <joint type="hinge" axis="0 0 1" limited="true"
+                   damping=".001" frictionloss=".01"
                    actuatorfrcrange="-100 100"/>
         </default>
 
         <!--
         Suspension joint: prismatic (slide) along Z. Declared FIRST on each wheel
         body so the equality solver can couple the steer joint correctly.
-        Travel: -.010 m droop to +.015 m jounce. stiffness/damping give a slightly
-        overdamped response; replace them with the real coil-over spec when measured.
-        springref preloads each spring with a quarter of the sprung weight
+        Its travel is the spec's droop and jounce, and its stiffness and damping
+        give a slightly overdamped response. springref preloads each spring with a quarter of the sprung weight
         (neoracer_spec.derive.spring_ref), so the car rests at the ride height of the CAD
         model, with the joints near 0.
         -->
         <default class="susp">
-            <joint type="slide" axis="0 0 1" range="-.01 .015"
-                   stiffness="600" springref="-.0113028" damping="25"/>
+            <joint type="slide" axis="0 0 1"/>
         </default>
     </default>
 
     <worldbody>
         <!-- Ground plane; friction matches the wheels. -->
-        <geom type="plane" size="5 5 .01" material="grid" friction="1.5 .1 .1"/>
+        <geom type="plane" size="5 5 .01" material="grid"/>
 
         <!--
         Car body. The geometry is the production car's, measured from its CAD
         model (the playground's neoracer-race.glb, 2026). The body frame is at
-        the middle of the wheelbase, on the axle line. The car spawns 1 mm
-        above its resting height, the axles at the tyre radius. The wheelbase,
-        the track and the radius are the car's (neoracer_spec.neoracer).
+        the middle of the wheelbase, on the axle line. The car spawns just
+        above its resting height, the axles at the tyre radius
+        (neoracer_spec.derive.ModelParams). The wheelbase, the track and the
+        radius are the car's (neoracer_spec.neoracer).
         -->
-        <body name="car" pos="0 0 .0435">
+        <body name="car">
             <freejoint/>
             <light name="top_light" pos="0 0 2" mode="trackcom" diffuse=".4 .4 .4"/>
 
@@ -121,14 +121,12 @@
             URDF's height above the axles. This explicit <inertial> overrides
             geom-derived inertia, so the box's mass is ignored.
             -->
-            <inertial pos="0 0 .0189" mass="2.7552"
-                      diaginertia=".00403992 .00992457 .0119068"/>
+            <inertial/>
 
-            <!-- Chassis collision box: the measured body, 481×241×184 mm, from the
-                 bottom of the chassis tub (19.5 mm above the ground at rest) to the
-                 top of the LiDAR. Collision only; mass set via <inertial> above. -->
-            <geom name="chassis" type="box" pos=".016865 -.00287 .069"
-                  size=".240635 .12042 .09198" rgba=".3 .6 .3 0.1" mass="0"/>
+            <!-- Chassis collision box: the measured body, from the bottom of the
+                 chassis tub to the top of the LiDAR. Collision only; mass set
+                 via <inertial> above. -->
+            <geom name="chassis" type="box" rgba=".3 .6 .3 0.1" mass="0"/>
             <!-- Cosmetic chassis mesh (contype/conaffinity=0 → no physics). It is the
                  older osracer CAD model, not the production car, so it only roughly
                  fills the box; it keeps its old place relative to the wheels. -->
@@ -138,40 +136,31 @@
                   rgba=".75 .75 .75 1"/>
 
             <!-- IMU site at the centre of mass; sensors below reference it. -->
-            <site name="imu" pos="0 0 .0189" size=".01" rgba="1 1 0 1"/>
+            <site name="imu" size=".01" rgba="1 1 0 1"/>
 
             <!-- LiDAR mount site: the centre of the LiDAR, as measured. Its user
                  number is the field the LiDAR sees (rad), centred on the front:
                  the car blocks the rest (contract.lidar_field). -->
-            <site name="lidar_mount" pos="-.0442 0 .11995" size=".02" rgba="1 0 0 .5"
-                  user="4.71239"/>
+            <site name="lidar_mount" size=".02" rgba="1 0 0 .5"/>
 
             <!--
             LiDAR ray sites: 8 beams at 45° intervals in the horizontal plane.
             zaxis="cosθ sinθ 0" points the site's local Z (the rangefinder's
             sensing direction) directly at heading θ from +X (forward), θ
-            measured toward +Y (left). NOTE: this used to be written as
-            euler="0 90 θ", which looked plausible but was wrong for ANY value
-            of θ — MuJoCo composes intrinsic-xyz euler as R = Rx·Ry·Rz applied
-            to the vector, so Rz(θ) is the first rotation applied to the site's
-            local Z axis (0,0,1) and rotating a vector about the axis it
-            already lies on is a no-op; θ could never actually steer the beam.
-            All 8 beams pointed the same direction as a result. zaxis sidesteps
-            euler composition order entirely and was verified beam-by-beam
-            (single-wall placement test) to produce a correctly directional ring.
+            measured toward +Y (left). euler="0 90 θ" would not: MuJoCo applies
+            Rz(θ) first, about the site's Z, which leaves Z where it is.
             Add more beams here (and matching rangefinders below) for richer RL obs.
             -->
-            <site name="lidar_000" pos="-.0442 0 .11995" zaxis="1.000000  0.000000 0" size=".005"/>
-            <site name="lidar_045" pos="-.0442 0 .11995" zaxis="0.707107  0.707107 0" size=".005"/>
-            <site name="lidar_090" pos="-.0442 0 .11995" zaxis="0.000000  1.000000 0" size=".005"/>
-            <site name="lidar_135" pos="-.0442 0 .11995" zaxis="-0.707107 0.707107 0" size=".005"/>
-            <site name="lidar_180" pos="-.0442 0 .11995" zaxis="-1.000000 0.000000 0" size=".005"/>
-            <site name="lidar_225" pos="-.0442 0 .11995" zaxis="-0.707107 -0.707107 0" size=".005"/>
-            <site name="lidar_270" pos="-.0442 0 .11995" zaxis="0.000000  -1.000000 0" size=".005"/>
-            <site name="lidar_315" pos="-.0442 0 .11995" zaxis="0.707107  -0.707107 0" size=".005"/>
+            <site name="lidar_000" zaxis="1.000000  0.000000 0" size=".005"/>
+            <site name="lidar_045" zaxis="0.707107  0.707107 0" size=".005"/>
+            <site name="lidar_090" zaxis="0.000000  1.000000 0" size=".005"/>
+            <site name="lidar_135" zaxis="-0.707107 0.707107 0" size=".005"/>
+            <site name="lidar_180" zaxis="-1.000000 0.000000 0" size=".005"/>
+            <site name="lidar_225" zaxis="-0.707107 -0.707107 0" size=".005"/>
+            <site name="lidar_270" zaxis="0.000000  -1.000000 0" size=".005"/>
+            <site name="lidar_315" zaxis="0.707107  -0.707107 0" size=".005"/>
             <!-- Cosmetic lidar mesh at the mount site. -->
             <geom name="vis_lidar" type="mesh" mass="0" mesh="vis_lidar"
-                  pos="-.0442 0 .11995"
                   contype="0" conaffinity="0" rgba=".2 .2 .2 1"/>
 
             <!--
@@ -179,10 +168,9 @@
             this joint; the two Ackermann equality constraints below split the
             command into fl_steer and fr_steer with the correct inner/outer differential.
             -->
-            <body name="steer_input_body" pos=".14382 0 0">
-                <joint name="steer_input" class="steer" range="-.45 .45"/>
-                <geom type="cylinder" size=".02 .005" contype="0" conaffinity="0"
-                      mass=".01" rgba="1 0 0 .3"/>
+            <body name="steer_input_body">
+                <joint name="steer_input" class="steer"/>
+                <geom type="cylinder" size=".02 .005" contype="0" conaffinity="0" rgba="1 0 0 .3"/>
             </body>
 
             <!--
@@ -194,43 +182,43 @@
               3. fl_drive (hinge Y)  : wheel spin, driven by motor actuator
             All three must stay on the SAME body (see <default class="susp">).
 
-            Position: x=0.14382 (half wheelbase), y=0.112 (half track), z=0 (the
-            axle line). Wheel masses from URDF (~0.058 kg each); inertia is left to
+            Position: half the wheelbase forward and half the track left, on the
+            axle line. Its mass is the spec's wheel mass; its inertia is left to
             MuJoCo's cylinder geom.
             -->
-            <body name="fl_wheel_body" pos=".14382 .112 0">
+            <body name="fl_wheel_body">
                 <joint name="fl_susp"  class="susp"/>
                 <joint name="fl_steer" class="steer"/>
                 <joint name="fl_drive" class="wheel"/>
-                <geom name="fl_wheel" class="wheel" mass=".0587" rgba=".2 .4 1 0.1"/>
+                <geom name="fl_wheel" class="wheel" rgba=".2 .4 1 0.1"/>
                 <geom name="vis_fl_wheel" type="mesh" mass="0" mesh="vis_fl_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
 
             <!-- FRONT RIGHT WHEEL — steerable + driven -->
-            <body name="fr_wheel_body" pos=".14382 -.112 0">
+            <body name="fr_wheel_body">
                 <joint name="fr_susp"  class="susp"/>
                 <joint name="fr_steer" class="steer"/>
                 <joint name="fr_drive" class="wheel"/>
-                <geom name="fr_wheel" class="wheel" mass=".0587" rgba=".2 .4 1 0.1"/>
+                <geom name="fr_wheel" class="wheel" rgba=".2 .4 1 0.1"/>
                 <geom name="vis_fr_wheel" type="mesh" mass="0" mesh="vis_fr_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
 
             <!-- REAR LEFT WHEEL — driven only (no steer joint) -->
-            <body name="rl_wheel_body" pos="-.14382 .112 0">
+            <body name="rl_wheel_body">
                 <joint name="rl_susp"  class="susp"/>
                 <joint name="rl_drive" class="wheel"/>
-                <geom name="rl_wheel" class="wheel" mass=".0587" rgba=".3 .3 .3 0.1"/>
+                <geom name="rl_wheel" class="wheel" rgba=".3 .3 .3 0.1"/>
                 <geom name="vis_rl_wheel" type="mesh" mass="0" mesh="vis_rl_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
 
             <!-- REAR RIGHT WHEEL — driven only -->
-            <body name="rr_wheel_body" pos="-.14382 -.112 0">
+            <body name="rr_wheel_body">
                 <joint name="rr_susp"  class="susp"/>
                 <joint name="rr_drive" class="wheel"/>
-                <geom name="rr_wheel" class="wheel" mass=".0587" rgba=".3 .3 .3 0.1"/>
+                <geom name="rr_wheel" class="wheel" rgba=".3 .3 .3 0.1"/>
                 <geom name="vis_rr_wheel" type="mesh" mass="0" mesh="vis_rr_wheel"
                       contype="0" conaffinity="0" rgba=".15 .15 .15 1"/>
             </body>
@@ -263,31 +251,28 @@
         V / K, and a voltage of 0 brakes. MuJoCo derives K and R from
         nominal = "voltage stall_torque free_speed".
 
-        The motor is the car's RS-545. nominal is its rated voltage, stall
-        torque and free speed, gear its reduction to the wheels and ctrlrange
-        the battery's voltage, all from neoracer_spec.neoracer (motor, battery). The
+        nominal is the motor's rated voltage, stall torque and free speed, gear
+        its reduction to the wheels and ctrlrange the battery's voltage, all
+        from neoracer_spec.neoracer (motor, battery). The
         rotor's inertia is not known, so the model leaves it out.
         -->
-        <dcmotor name="motor" tendon="drivetrain" nominal="12 .0937957 1151.92"
-                 gear="10.55" ctrlrange="-11.1 11.1"/>
+        <dcmotor name="motor" tendon="drivetrain"/>
 
         <!--
         The steering servo, as a DC motor with its own position loop: ctrl is
         the target angle of steer_input (rad), + = left, and the Ackermann
         constraints below turn the two front wheels from it. The loop's
         voltage is kp (target - angle) - kd x speed, clamped to the servo's
-        5 V supply. The motor's torque falls as it speeds up, so it turns the
+        supply. The motor's torque falls as it speeds up, so it turns the
         wheels at most at its free speed, as a real servo does.
 
-        The servo is the car's SPT5435LV-180W. nominal is its supply, stall
-        torque and free speed at steer_input, through the linkage from its
-        horn, controller its loop's kp, ki, kd and voltage clamp, and
+        nominal is the servo's supply, stall torque and free speed at
+        steer_input, through the linkage from its horn, controller its loop's
+        kp, ki, kd and voltage clamp, and
         ctrlrange full lock, where the inner front wheel reaches the angle
         measured on the car: all from neoracer_spec.neoracer (servo, steering).
         -->
-        <dcmotor name="steer_servo" joint="steer_input" input="pos"
-                 nominal="5 3.2785 5.99818" controller="50 0 1 0 0 5"
-                 ctrlrange="-.440491 .440491"/>
+        <dcmotor name="steer_servo" joint="steer_input" input="pos"/>
     </actuator>
 
     <!--
@@ -307,11 +292,9 @@
     -->
     <equality>
         <joint name="ackermann_left" solref=".006 1"
-               joint1="fl_steer" joint2="steer_input"
-               polycoef="-1.36675e-05 1.00127 .390823 .12243 -.0931586"/>
+               joint1="fl_steer" joint2="steer_input"/>
         <joint name="ackermann_right" solref=".006 1"
-               joint1="fr_steer" joint2="steer_input"
-               polycoef="1.36675e-05 1.00127 -.390823 .12243 .0931586"/>
+               joint1="fr_steer" joint2="steer_input"/>
     </equality>
 
     <sensor>
@@ -334,7 +317,8 @@
         <jointpos name="fr_steer_pos"  joint="fr_steer"/>
 
         <!--
-        Wheel angular velocity (rad/s). Multiply by 0.0425 m (wheel_radius) for surface speed in m/s.
+        Wheel angular velocity (rad/s). Multiply by the wheel radius
+        (contract.wheel_radius) for surface speed in m/s.
         Positive = forward rotation.
         -->
         <jointvel name="fl_wheel_vel" joint="fl_drive"/>
@@ -369,14 +353,14 @@
         interval samples the range once a turn, as the head passes the beam,
         and delay holds the sample until the turn ends (mjcf.beam_timing).
         -->
-        <rangefinder name="lidar_000" site="lidar_000" nsample="2" interval=".0333333 0" delay=".0333333"/>
-        <rangefinder name="lidar_045" site="lidar_045" nsample="2" interval=".0333333 -.00416667" delay=".00416667"/>
-        <rangefinder name="lidar_090" site="lidar_090" nsample="2" interval=".0333333 -.00833333" delay=".00833333"/>
-        <rangefinder name="lidar_135" site="lidar_135" nsample="2" interval=".0333333 -.0125" delay=".0125"/>
-        <rangefinder name="lidar_180" site="lidar_180" nsample="2" interval=".0333333 -.0166667" delay=".0166667"/>
-        <rangefinder name="lidar_225" site="lidar_225" nsample="2" interval=".0333333 -.0208333" delay=".0208333"/>
-        <rangefinder name="lidar_270" site="lidar_270" nsample="2" interval=".0333333 -.025" delay=".025"/>
-        <rangefinder name="lidar_315" site="lidar_315" nsample="2" interval=".0333333 -.0291667" delay=".0291667"/>
+        <rangefinder name="lidar_000" site="lidar_000"/>
+        <rangefinder name="lidar_045" site="lidar_045"/>
+        <rangefinder name="lidar_090" site="lidar_090"/>
+        <rangefinder name="lidar_135" site="lidar_135"/>
+        <rangefinder name="lidar_180" site="lidar_180"/>
+        <rangefinder name="lidar_225" site="lidar_225"/>
+        <rangefinder name="lidar_270" site="lidar_270"/>
+        <rangefinder name="lidar_315" site="lidar_315"/>
     </sensor>
 
 </mujoco>
