@@ -14,9 +14,9 @@ The Gymnasium environment and the reinforcement learning are in [neoracer-rl](ht
 from neoracer_spec.neoracer import NEORACER
 
 wheelbase = NEORACER.chassis.wheelbase
-wheelbase.value  # 0.28764 (m)
+wheelbase.value  # in m
 wheelbase.status  # Measured(source=Source(name='CAD', ...))
-wheelbase.conflicts  # the docs say 0.280, the ROS driver 0.285
+wheelbase.conflicts  # what the docs and the ROS driver say instead
 ```
 
 To list what is still a guess:
@@ -46,7 +46,7 @@ The JS package's TypeScript is written from the spec when the package is built (
 
 A second car, the RACECAR Neo V2, has a spec in `src/neoracer_spec/racecar_neo_v2.py` and a model in `assets/racecar_neo_v2.xml`. Its values come from its measurement worksheet, from the calibration runs of a reference car, and from RacecarSim, the RACECAR Neo simulator in Unity, whose model of the car gives its shape and its meshes. These sources measure what the car does, such as its turning radius and its speed at each command, rather than its motor's and servo's ratings. So the V2's parts have their own types, and `derive_v2` turns them into the model's numbers. Values fitted against a reference are `Calibrated`: the LiDAR's mounting angle, and the model's own fits to the reference car's runs, such as the gain of its speed controller. `validation/test_racecar_neo_v2.py` drives those runs on the model and holds it to them.
 
-The V2's firmware holds a speed, so its throttle is a speed command. At 0 the car coasts to a stop on its drag brake; any other throttle holds at least 0.6 m/s, and 1 holds 1.07 m/s. The steer is in radians, as on the NeoRacer, and the car reaches its steering stops at about half of full lock to the right:
+The V2's firmware holds a speed, so its throttle is a speed command. At 0 the car coasts to a stop on its drag brake; any other throttle holds at least the slowest of the speeds that the spec measured (`Drive.steady_speed`), and 1 holds the fastest. The steer is in radians, as on the NeoRacer, and the car reaches its steering stops at about half of full lock to the right:
 
 ```python
 import os
@@ -57,13 +57,13 @@ from neoracer_spec import derive_v2
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
 
 scene = assets.load(os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml"))
-params = derive_v2.derive(RACECAR_NEO_V2)  # its LiDAR has 1080 samples a turn
+params = derive_v2.derive(RACECAR_NEO_V2)  # its LiDAR's slots are its samples a turn
 data = sim.settle(scene.model)
-sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.0))  # 0.84 m/s
+sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.0))  # half speed
 scan = lidar.start(params.lidar, scene.model, data, scene.car).scan
 ```
 
-A `racecar_core` program runs on the V2 with its own LiDAR and encoder: `python examples/run_racecar_core.py my_controller.py --car racecar_neo_v2`. Its drive board reports the speed from the time between its motor's hall sensor edges (`hall_encoder.py`), and, as in RacecarSim, its `racecar_core` starts with a max speed of 0.25, so speed 1 sends a command of 0.25.
+A `racecar_core` program runs on the V2 with its own LiDAR and encoder: `python examples/run_racecar_core.py my_controller.py --car racecar_neo_v2`. Its drive board reports the speed from the time between its motor's hall sensor edges (`hall_encoder.py`), and, as in RacecarSim, its `racecar_core` starts with a max speed below 1 (`Drive.start_max_speed`), the share of a full command that speed 1 sends.
 
 ## A scene
 
@@ -99,7 +99,7 @@ for _ in range(round(1 / scene.model.opt.timestep)):  # 1 s
 read(scene.car.sensors, data)  # IMU, steering angles, wheel speeds, ...
 ```
 
-The throttle runs from -1 to 1, as a fraction of the battery's 11.1 V. The steer is the steering angle in radians, positive to the left, up to 0.4405 at full lock.
+The throttle runs from -1 to 1, as a fraction of the battery's voltage. The steer is the steering angle in radians, positive to the left, up to full lock, `derive(NEORACER).steer_lock`.
 
 ## The car on a track
 
@@ -149,7 +149,7 @@ lap_distance(track, xy)  # m along the centerline from the start
 car_touches_wall(data, scene.car)  # True while the car touches a wall
 ```
 
-The real LiDAR spins 30 times a second and measures its 1440 slots one after another, so the scan of a moving car is skewed. `lidar.sweep` models this. At each physics step it casts the slots that the head passed during that step, from the car's pose at that step, and returns the new `LidarState`.
+The real LiDAR's head turns at its scan rate and measures its slots one after another, so the scan of a moving car is skewed. `lidar.sweep` models this. At each physics step it casts the slots that the head passed during that step, from the car's pose at that step, and returns the new `LidarState`.
 
 `mj_step` leaves the poses at the start of its step, so the loop splits each step. `mj_step1` updates the poses, the sweep reads them, and `mj_step2` integrates:
 
@@ -165,10 +165,10 @@ for _ in range(round(1 / dt)):  # 1 s
     mujoco.mj_step2(scene.model, data)
     mujoco.mj_step1(scene.model, data)
     state = lidar.sweep(params, scene.model, data, scene.car, state, dt)
-state.scan  # the last full turn: 1440 distances (m), clockwise from the front
+state.scan  # the last full turn: a distance (m) a slot, clockwise from the front
 ```
 
-The model's eight rangefinders, `lidar_000` to `lidar_315`, have the same timing in MuJoCo's own sensors, so `mj_step`, `mujoco.rollout` and the Warp batch see it with no loop of their own. Each beam samples the range once a turn, when the head passes it (its `interval`), and shows the sample when the turn ends (its `delay`), as the scan of the last complete turn does. So a beam reads a range up to two turns old: 67 ms on the NeoRacer, 270 ms on the V2. `mjcf.beam_timing` derives both settings from the spec's scan rate. A beam that the car blocks reads -1, no return, as the real scan does: the NeoRacer's LiDAR sees 270 degrees, so its beam straight back never returns. The LiDAR site's user number holds the field, and `contract.lidar_field` reads it. `sensors.read` gives the blocked beams -1, but the rangefinders themselves still measure, so code that reads `sensordata` arrays, as a batch does, sets the beams in `scene.car.sensors.blocked` to -1 itself.
+The model's eight rangefinders, `lidar_000` to `lidar_315`, have the same timing in MuJoCo's own sensors, so `mj_step`, `mujoco.rollout` and the Warp batch see it with no loop of their own. Each beam samples the range once a turn, when the head passes it (its `interval`), and shows the sample when the turn ends (its `delay`), as the scan of the last complete turn does. So a beam reads a range up to two turns old. `mjcf.beam_timing` derives both settings from the spec's scan rate. A beam that the car blocks reads -1, no return, as the real scan does: the NeoRacer's LiDAR sees only its field (`Lidar.field_degrees`), so its beam straight back never returns. The LiDAR site's user number holds the field, and `contract.lidar_field` reads it. `sensors.read` gives the blocked beams -1, but the rangefinders themselves still measure, so code that reads `sensordata` arrays, as a batch does, sets the beams in `scene.car.sensors.blocked` to -1 itself.
 
 `encoder.py` models the speed that the firmware reports from the motor encoder in the same way. `racecar_core_adapter.py` puts the actuators, the LiDAR and the encoder behind the `racecar_core` API that programs for the real car use. Those programs run in the simulator unchanged:
 
@@ -275,18 +275,18 @@ Run these from a clone; the examples aren't in the wheel.
 ## How close the models are to the real cars
 
 Nobody has checked the NeoRacer's model against recordings of the real car yet (issue #4). Use it to develop and compare controllers, not to predict lap times. These are the known gaps:
-- **Speed.** At full throttle the car tops out at about 3.5 m/s, from the RS-545 motor at the docs' 11,000 rpm. The wheel damping is a guess that stands in for every drivetrain loss. The firmware's speed controller isn't modelled, so the throttle is a fraction of the battery voltage (issue #118).
-- **Mass and inertia.** The 3.0 kg total comes from the spec; nobody has weighed the car. The inertia and the height of the centre of mass come from an older car's URDF.
+- **Speed.** At full throttle the car tops out at about 3.5 m/s, from the RS-545 motor at the docs' free speed. The wheel damping is a guess that stands in for every drivetrain loss. The firmware's speed controller isn't modelled, so the throttle is a fraction of the battery voltage (issue #118).
+- **Mass and inertia.** The total mass comes from the spec; nobody has weighed the car. The inertia and the height of the centre of mass come from an older car's URDF.
 - **Tyres and suspension.** The tyre friction and the springs are estimates.
-- **Steering.** At full lock the inner front wheel turns to the measured 30 degrees. The model's servo swings from full left to full right in 0.16 s. People who drive the real car find its steering slower (issue #115).
+- **Steering.** At full lock the inner front wheel turns to its measured angle. People who drive the real car find its steering slower than the model's (issue #115).
 - **Sensors.** They have no noise, bias or latency, and the IMU never saturates. The LiDAR has no minimum range and never misses a return. There is no camera (issue #3).
 
 The RACECAR Neo V2's model drives a reference car's calibration runs as the car did: its steady speeds within 1%, its stops, its arcs at every steering command, its full-lock radii and its yaw rate after a full-lock command. These are the known gaps:
 - **Speed.** After a start the car's speed peaks about 15% above its steady speed a second in, then sinks back over the next two; the model's rises straight to its steady speed. In a long full-lock circle the car slows to 0.56 m/s, the model to 0.59 to 0.61 m/s.
 - **Mass, springs and tyres.** The inertia, the springs and the wheels' mass are RacecarSim's estimates. The tyres' grip is fitted, and MuJoCo's contacts are not a tyre model: at full lock the model's yaw rate wobbles by 3% at about 20 Hz.
-- **Steering.** The servo's deadband and the linkage's play, which make the car drift up to 2.7 degrees a metre at command 0, are not modelled.
-- **Shape.** The meshes and the collision boxes are RacecarSim's model of the car, with the payload lowered 6.6 mm to put the LiDAR at its measured height. RacecarSim's payload is the payload's CAD, part by part, 6 mm higher, so the model's floor sits 0.6 mm below where the measured heights put the CAD's, 96 mm up. `racecar_neo_v2.racecarsim_questions` lists where RacecarSim's model and the car disagree, for the model's designer.
-- **Sensors.** The encoder over-reads in a full-lock turn by 3.4 to 3.6%, where the car's reads 2.5 to 4.2% high. The sensors have no noise or bias, and there is no camera.
+- **Steering.** The servo's deadband and the linkage's play, which make the car drift at command 0 (`Steering.straight_drift_degrees_per_m`), are not modelled.
+- **Shape.** The meshes and the collision boxes are RacecarSim's model of the car, with the payload lowered by `Shape.payload_drop` to put the LiDAR at its measured height. RacecarSim's payload is the payload's CAD, part by part, a little higher, so the model's payload floor sits a little below where the measured heights put the CAD's (`racecar_neo_v2.py` gives the numbers). `racecar_neo_v2.racecarsim_questions` lists where RacecarSim's model and the car disagree, for the model's designer.
+- **Sensors.** The encoder over-reads in a full-lock turn by 3.4 to 3.6%, about as much as the car's (`Odometry.turn_overread`). The sensors have no noise or bias, and there is no camera.
 
 ## Citing
 

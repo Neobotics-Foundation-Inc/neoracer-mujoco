@@ -20,8 +20,8 @@ one speed, so it reaches each edge at that edge's share of its turn: that
 times the timeout at each edge, and the time after its last edge.
 
 Limit: the filter runs once a step that passes an edge, as in RacecarSim;
-the board may run it on each edge. At 360 Hz a car at 1 m/s passes about
-one edge a step.
+the board may run it on each edge. At the model's step a car at 1 m/s
+passes about one edge a step.
 """
 
 import math

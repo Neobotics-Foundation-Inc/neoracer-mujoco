@@ -32,7 +32,8 @@
 
         <!-- Cosmetic meshes (meters, x=fwd y=left z=up), from the older osracer CAD
              model. The wheel meshes are centred on their wheel body origin and scaled
-             from its 50 mm wheels to the tyres. None of these affect physics. -->
+             from its wheels (the spec's Visuals.mesh_wheel_radius) to the tyres.
+             None of these affect physics. -->
         <mesh name="vis_chassis"  file="meshes/chassis.STL"/>
         <mesh name="vis_fl_wheel" file="meshes/fl_wheel.STL"/>
         <mesh name="vis_fr_wheel" file="meshes/fr_wheel.STL"/>

@@ -1,16 +1,17 @@
 """
-The spinning LiDAR: 1440 slots a turn, one every 0.25 degrees, 30 turns a
-second, with the rear 90 degrees blocked by the car.
+The spinning LiDAR: its slots a turn, its turns a second and the bearings
+that it sees past the car, as LidarParams gives them from the car's spec.
 
 The real LiDAR measures each slot when its head passes it, not the whole
 turn at once. So sweep() casts, at each physics step, the rays of the slots
-that the head passed in that step, from the car's pose at that step: at
-360 Hz, 120 slots a step and 12 steps a scan. The scan of a moving car is
-then skewed as the real one is. The rays start at the LiDAR site
-(contract.LIDAR_SITE) and lie in its XY plane, so they tilt with the car.
-Like a MuJoCo rangefinder, a ray does not see the geoms of the site's body.
+that the head passed in that step, from the car's pose at that step: a turn
+takes several steps, and each casts its share of the slots. The scan of a
+moving car is then skewed as the real one is. The rays start at the LiDAR
+site (contract.LIDAR_SITE) and lie in its XY plane, so they tilt with the
+car. Like a MuJoCo rangefinder, a ray does not see the geoms of the site's
+body.
 
-Slot i points i * 0.25 degrees clockwise from the front, the order of a
+Slot i points i / slots of a turn clockwise from the front, the order of a
 racecar_core scan. It holds the distance (m) to the first geom along its
 ray, or NO_RETURN (-1, as a rangefinder reads) for a blocked slot or no geom
 within range. LidarParams holds the numbers.
