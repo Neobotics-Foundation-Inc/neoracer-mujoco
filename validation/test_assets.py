@@ -159,6 +159,22 @@ def test_an_mjz_compiles_to_the_model_of_its_xml(tmp_path):
                 )
 
 
+def test_an_xml_outside_assets_loads_as_mujoco_reads_it(tmp_path, monkeypatch):
+    """from_file adds a spec's numbers only to the cars' templates in
+    assets/. MuJoCo reads any other XML itself, with the files that it
+    includes beside it, from any working directory."""
+    (tmp_path / "car").mkdir()
+    (tmp_path / "car" / "body.xml").write_text(
+        '<mujoco><worldbody><body name="car"><freejoint/>'
+        '<geom size=".1"/></body></worldbody></mujoco>'
+    )
+    model = tmp_path / "car" / "model.xml"
+    model.write_text('<mujoco><include file="body.xml"/></mujoco>')
+    monkeypatch.chdir(tmp_path)
+    assert assets.read_xml(model) == model.read_text()
+    assert assets.from_file(model).compile().nbody == 2
+
+
 def test_write_mjz_refuses_an_xml_that_includes_another(tmp_path):
     """MuJoCo reads an included XML into the spec, so an archive of the XML
     alone would not load."""

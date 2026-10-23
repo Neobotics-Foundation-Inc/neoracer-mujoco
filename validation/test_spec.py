@@ -87,6 +87,12 @@ def test_a_template_that_holds_a_number_of_the_spec_is_refused():
                 with pytest.raises(ValueError, match="which the spec gives"):
                     mjcf.apply(held, edits)
 
+    # The writer knows the attribute however the XML spells it.
+    for spelling in ('pos="0 0 1"', "pos='0 0 1'", 'pos = "0 0 1"'):
+        tag = f'<body name="car" {spelling}/>'
+        with pytest.raises(ValueError, match="which the spec gives"):
+            mjcf.apply(tag, [('<body name="car"', "pos", "0 0 2")])
+
 
 BOX = CAR.chassis.collision_box.value
 

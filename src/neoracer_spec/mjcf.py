@@ -40,7 +40,7 @@ def _put(xml: str, element: str, attribute: str, value: str) -> str:
     if len(tags) != 1:
         raise ValueError(f"{len(tags)} elements match {element!r}, not 1")
     tag = tags[0]
-    if re.search(rf'\s{attribute}="', tag.group(0)):
+    if re.search(rf"\s{attribute}\s*=", tag.group(0)):
         raise ValueError(f"{element!r} has {attribute}, which the spec gives")
     end = tag.end() - (2 if tag.group(0).endswith("/>") else 1)
     return f'{xml[:end]} {attribute}="{value}"{xml[end:]}'

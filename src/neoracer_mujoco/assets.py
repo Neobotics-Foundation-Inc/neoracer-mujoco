@@ -60,25 +60,40 @@ def read_xml(path: str | os.PathLike[str]) -> str:
     """The MJCF of the XML at path: the file's text, with the numbers of the
     car's spec added if it is the NeoRacer's or the RACECAR Neo V2's
     template in assets/."""
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
-    if os.path.realpath(os.path.dirname(path)) != os.path.realpath(ASSET_DIR):
-        return text
-    match os.path.basename(path):
-        case "neoracer.xml":
-            return mjcf.car_xml(derive(NEORACER).model, text)
-        case "racecar_neo_v2.xml":
-            return mjcf.racecar_neo_v2_xml(derive_v2.model(RACECAR_NEO_V2), text)
-        case _:
-            return text
+    completed = _completed(path)
+    return _read(path) if completed is None else completed
 
 
 def from_file(path: str | os.PathLike[str] = DEFAULT_CAR) -> mujoco.MjSpec:
-    """The MjSpec of read_xml(path), whose files are read from path's
-    folder. The XML must not include another XML."""
-    spec = mujoco.MjSpec.from_string(read_xml(path))
+    """The MjSpec of the XML at path. A car's template in assets/ gets the
+    numbers of its spec (read_xml); MuJoCo reads any other XML as
+    MjSpec.from_file does, with the files that it includes."""
+    completed = _completed(path)
+    if completed is None:
+        return mujoco.MjSpec.from_file(str(path))
+    spec = mujoco.MjSpec.from_string(completed)
     spec.modelfiledir = os.path.dirname(os.path.abspath(path))
     return spec
+
+
+def _completed(path: str | os.PathLike[str]) -> str | None:
+    """The car's template at path with the numbers of its spec, or None if
+    path is not a template in assets/."""
+    if os.path.realpath(os.path.dirname(path)) != os.path.realpath(ASSET_DIR):
+        return None
+    match os.path.basename(path):
+        case "neoracer.xml":
+            return mjcf.car_xml(derive(NEORACER).model, _read(path))
+        case "racecar_neo_v2.xml":
+            p = derive_v2.model(RACECAR_NEO_V2)
+            return mjcf.racecar_neo_v2_xml(p, _read(path))
+        case _:
+            return None
+
+
+def _read(path: str | os.PathLike[str]) -> str:
+    with open(path, encoding="utf-8") as f:
+        return f.read()
 
 
 def load(path: str | os.PathLike[str] = DEFAULT_CAR) -> Scene:
