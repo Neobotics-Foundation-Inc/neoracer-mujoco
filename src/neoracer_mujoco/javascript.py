@@ -16,6 +16,8 @@ the repository root:
 import json
 import os
 import sys
+from collections.abc import Mapping
+from types import MappingProxyType
 
 from neoracer_spec import typescript
 from neoracer_spec.neoracer import NEORACER
@@ -26,18 +28,20 @@ HEADER = "// Written by python -m neoracer_mujoco.javascript. Do not edit.\n"
 
 # The constants of shared.ts: the parts of the car that code finds by name,
 # and the numbers that both packages need to agree on.
-SHARED: dict[str, object] = {
-    "CAR_BODY": scene.CAR_BODY,
-    "DRIVE_ACTUATOR": contract.DRIVE_ACTUATOR,
-    "STEER_ACTUATOR": contract.STEER_ACTUATOR,
-    "LIDAR_SITE": contract.LIDAR_SITE,
-    "DRIVE_POS_SENSOR": contract.DRIVE_POS_SENSOR,
-    "IMU_ACCEL_SENSOR": contract.IMU_ACCEL_SENSOR,
-    "IMU_GYRO_SENSOR": contract.IMU_GYRO_SENSOR,
-    "WHEEL_GEOMS": contract.WHEEL_GEOMS,
-    "NO_RETURN": sensors.NO_RETURN,
-    "SETTLE_STEPS": sim.SETTLE_STEPS,
-}
+SHARED: Mapping[str, object] = MappingProxyType(
+    {
+        "CAR_BODY": scene.CAR_BODY,
+        "DRIVE_ACTUATOR": contract.DRIVE_ACTUATOR,
+        "STEER_ACTUATOR": contract.STEER_ACTUATOR,
+        "LIDAR_SITE": contract.LIDAR_SITE,
+        "DRIVE_POS_SENSOR": contract.DRIVE_POS_SENSOR,
+        "IMU_ACCEL_SENSOR": contract.IMU_ACCEL_SENSOR,
+        "IMU_GYRO_SENSOR": contract.IMU_GYRO_SENSOR,
+        "WHEEL_GEOMS": contract.WHEEL_GEOMS,
+        "NO_RETURN": sensors.NO_RETURN,
+        "SETTLE_STEPS": sim.SETTLE_STEPS,
+    }
+)
 
 
 def shared() -> str:
