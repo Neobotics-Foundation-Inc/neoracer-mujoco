@@ -224,8 +224,8 @@ NEORACER = Spec(
             "a 180-degree servo over 500 to 2500 us, so 90 degrees over the"
             " firmware's 1000 to 2000 us",
         ),
-        kp=chosen(50.0, "so the servo settles without chatter at the 1/360 s step"),
-        kd=chosen(1.0, "so the servo settles without chatter at the 1/360 s step"),
+        kp=chosen(50.0, "so the servo settles without chatter at the model's step"),
+        kd=chosen(1.0, "so the servo settles without chatter at the model's step"),
     ),
     steering=Steering(
         inner_lock_degrees=measured(
@@ -244,7 +244,7 @@ NEORACER = Spec(
             "tuned in simulation, not measured: the servo's rotor inertia and"
             " gear ratio are not known. Of 0.0002, 0.002 and 0.005, the smallest"
             " that stops the car shimmying at 15 to 30 Hz in part-throttle turns"
-            " at the 1/360 s step; 0.0002 left the servo-held steering ringing"
+            " at the model's step; 0.0002 left the servo-held steering ringing"
             " near 60 Hz, faster than the step resolves",
         ),
     ),

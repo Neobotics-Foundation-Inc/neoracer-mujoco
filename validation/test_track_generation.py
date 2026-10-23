@@ -15,7 +15,7 @@ import mujoco
 import numpy as np
 import pytest
 from cases import case
-from scenes import assert_car_rests, assert_keeps_car_solver_options
+from scenes import assert_car_rests, assert_takes_car_solver_options
 
 from neoracer_mujoco import Scene, assets
 from neoracer_mujoco.collision import car_touches_wall
@@ -259,7 +259,7 @@ def test_walls_track_the_generated_edges_closely():
 
 def test_the_car_rests_on_a_generated_track_with_its_solver_options():
     track = _track(0, 3)
-    assert_keeps_car_solver_options(to_spec(track))
+    assert_takes_car_solver_options(to_spec(track))
     assert_car_rests(_scene(0, 3))
 
 

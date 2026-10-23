@@ -13,7 +13,7 @@ import mujoco
 import numpy as np
 import pytest
 from cases import case
-from scenes import assert_car_rests, assert_keeps_car_solver_options
+from scenes import assert_car_rests, assert_takes_car_solver_options
 
 from neoracer_mujoco import assets, sim
 from neoracer_mujoco.control.steering import ControlCommand
@@ -29,7 +29,7 @@ def test_the_car_composes_onto_every_track_and_rests_on_its_floor():
     for track in TRACKS:
         with case(os.path.basename(track)):
             for car_path in assets.cars():
-                assert_keeps_car_solver_options(
+                assert_takes_car_solver_options(
                     mujoco.MjSpec.from_file(track), car_path
                 )
             assert_car_rests(assets.compose(mujoco.MjSpec.from_file(track)))

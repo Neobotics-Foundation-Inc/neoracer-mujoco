@@ -66,8 +66,9 @@ export function deleteVisuals(mj: Mujoco, spec: MjSpec): void {
 
 /**
  * Compile the track's MJCF with the car attached at pos (m), facing +X, and
- * without the meshes that only show the car. The track keeps its own floor
- * and <option>. carXml defaults to assets/neoracer.xml.
+ * without the meshes that only show the car. The track keeps its own floor,
+ * and the scene takes the car's <option>, as in assets.compose. carXml
+ * defaults to assets/neoracer.xml.
  */
 export function compose(
   mj: Mujoco,
@@ -77,6 +78,7 @@ export function compose(
 ): Scene {
   const spec = mj.parseXMLString(trackXml);
   const car = mj.parseXMLString(carXml);
+  spec.option = car.option;
   deleteVisuals(mj, car);
   // The car's root default class is "main", as the track's is: a name of
   // its own keeps the two apart, as in assets.compose.

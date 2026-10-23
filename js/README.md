@@ -15,7 +15,7 @@ const mj = await loadMujoco();
 const scene = compose(mj, trackXml);           // the car at the origin, facing +X
 const { model } = scene;
 const data = settle(mj, model);               // at rest on the track
-const dt = model.opt.timestep;                // 1/360 s
+const dt = model.opt.timestep;                // s
 const angle = () => data.sensordata[scene.car.drivePos];
 
 // After mj_step, the sensors and poses are those before its integration.
@@ -25,7 +25,7 @@ const angle = () => data.sensordata[scene.car.drivePos];
 mj.mj_step1(model, data);
 let encoder = startEncoder(ENCODER, angle());
 let lidar = startLidar(mj, LIDAR, scene, data);
-for (let i = 0; i < 360; i++) {
+for (let i = 0; i < Math.round(1 / dt); i++) { // 1 s
   // racecar_core's rc.drive.set_speed_angle(0.5, -0.2): half throttle, a little left.
   applyCommand(scene, data, speedAngle(actuatorLimits(model, scene.car), 0.5, -0.2));
   mj.mj_step2(model, data);

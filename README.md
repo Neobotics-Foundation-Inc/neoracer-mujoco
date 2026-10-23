@@ -94,7 +94,7 @@ from neoracer_mujoco.control.steering import ControlCommand
 scene = load()
 data = sim.settle(scene.model)  # the car at rest on the floor
 sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.2))
-for _ in range(360):  # 1 s at 360 Hz
+for _ in range(round(1 / scene.model.opt.timestep)):  # 1 s
     mujoco.mj_step(scene.model, data)
 read(scene.car.sensors, data)  # IMU, steering angles, wheel speeds, ...
 ```
@@ -161,7 +161,7 @@ dt = scene.model.opt.timestep  # s
 data = sim.settle(scene.model)
 mujoco.mj_step1(scene.model, data)
 state = lidar.start(params, scene.model, data, scene.car)
-for _ in range(360):
+for _ in range(round(1 / dt)):  # 1 s
     mujoco.mj_step2(scene.model, data)
     mujoco.mj_step1(scene.model, data)
     state = lidar.sweep(params, scene.model, data, scene.car, state, dt)
