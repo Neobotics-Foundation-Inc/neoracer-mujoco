@@ -18,7 +18,7 @@ computes, such as lambda car: car.mass.value + 1, raises TypeError here.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, assert_never, cast
@@ -74,6 +74,14 @@ class _Recorder:
 
     def __getitem__(self, key: object) -> _Recorder:
         return _Recorder((*self._tree_steps, Item(key)))
+
+    # A where that tests or loops over the tree computes; it does not read a
+    # path. Without these, a test would take one branch and a loop never end.
+    def __bool__(self) -> bool:
+        raise TypeError("where may only read attributes and items of its argument")
+
+    def __iter__(self) -> Iterator[object]:
+        raise TypeError("where may only read attributes and items of its argument")
 
 
 def _rebuild(node: Any, steps: tuple[Step, ...], f: Callable[[Any], Any]) -> Any:
