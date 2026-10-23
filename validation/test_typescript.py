@@ -1,13 +1,12 @@
 """
-Laws for neoracer_spec.typescript: js/src/spec.ts is what it writes, every
-dataclass of Spec and DerivedParams has an interface with each of its
-fields, and the members of a union of dataclasses carry their kind.
+Laws for neoracer_spec.typescript: every dataclass of Spec and
+DerivedParams has an interface with each of its fields, and the members of
+a union of dataclasses carry their kind.
 """
 
 import dataclasses
 import re
 import typing
-from pathlib import Path
 
 import pytest
 
@@ -15,14 +14,7 @@ from neoracer_spec import derive, provenance, typescript
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.spec import Spec
 
-SPEC_TS = Path(__file__).resolve().parent.parent / "js" / "src" / "spec.ts"
 TEXT = typescript.module()
-
-
-def test_the_checked_in_typescript_is_what_the_generator_writes():
-    """After a change to the spec, run
-    python -m neoracer_spec.typescript js/src/spec.ts."""
-    assert SPEC_TS.read_text(encoding="utf-8") == TEXT
 
 
 def _interfaces() -> dict[str, list[str]]:

@@ -228,8 +228,10 @@ class Stamped[T]:
 
 ## 10. Structure
 
-- Keep one source of truth for an interface.
+- Keep one source of truth for each value, name and interface, and copy it nowhere.
   `contract.py` is the example: code, examples and tests all read it.
+  A file that a program writes from the source, such as the JS package's TypeScript, is written where it is needed and is not checked in.
+  A test that two copies agree means that one of them should be written from the other.
 - Put imports at the top of the file.
   Import a module by its name (`from . import sensors`, not `as _sensors`).
 - Order a module from the top down. It starts with what it is for: its main type, or the functions that callers use.

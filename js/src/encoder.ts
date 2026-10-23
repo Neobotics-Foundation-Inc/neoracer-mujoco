@@ -4,13 +4,9 @@
 // the new window. A window closes at the first step on or after each tick
 // and is measured over its own length.
 
-import { NEORACER_PARAMS } from './spec.js';
+import { type EncoderParams, NEORACER_PARAMS } from './generated/spec.js';
 
-/** How the firmware measures the speed. */
-export interface EncoderParams {
-  readonly window: number; // s, the firmware's control period
-  readonly alpha: number; // the weight of the new window in the filter
-}
+export type { EncoderParams };
 
 /** The NeoRacer's: encoder.EncoderParams() in Python. */
 export const ENCODER: EncoderParams = NEORACER_PARAMS.encoder;
