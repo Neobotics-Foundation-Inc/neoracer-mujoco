@@ -245,9 +245,7 @@ The package is not on PyPI. Each [GitHub Release](https://github.com/Neobotics-F
 - `neoracer.mjz`, the car for MuJoCo without Python;
 - the JS package.
 
-```sh
-pip install https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/download/v0.14.0/neoracer_mujoco-0.14.0-py3-none-any.whl
-```
+The notes of the [latest release](https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/latest) start with the `pip install` and `npm install` commands that install it.
 
 To work on the package, clone it with [Git LFS](https://git-lfs.com) installed, since the meshes are LFS objects.
 

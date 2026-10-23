@@ -51,7 +51,7 @@
           ];
           env = python.withPackages (project.renderers.withPackages { inherit python extras; });
           # The nixpkgs versions that break a pin in pyproject.toml, such as
-          # mujoco==3.16.0 after a nixpkgs update.
+          # MuJoCo's exact version after a nixpkgs update.
           conflicts = lib.mapAttrs (_: c: c.version) (
             project.validators.validateVersionConstraints { inherit python extras; }
           );

@@ -232,6 +232,7 @@ class Stamped[T]:
   `contract.py` is the example: code, examples and tests all read it.
   A file that a program writes from the source, such as the JS package's TypeScript, is written where it is needed and is not checked in.
   A test that two copies agree means that one of them should be written from the other.
+  The exception is a value that two tools each read from their own file, such as MuJoCo's version, which pip reads from `pyproject.toml` and npm from `js/package.json`; then a test holds them equal.
 - Put imports at the top of the file.
   Import a module by its name (`from . import sensors`, not `as _sensors`).
 - Order a module from the top down. It starts with what it is for: its main type, or the functions that callers use.
