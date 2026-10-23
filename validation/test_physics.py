@@ -141,8 +141,8 @@ def test_a_faster_lidar_shows_its_scans_sooner():
     """With lidar_rate f, a driving car's front beam shows a new scan every
     turn of the head, 1 / (scan rate x f), to a physics step."""
     scan_rates = (
-        derive.model(NEORACER).lidar_scan_rate,
-        derive_v2.model(RACECAR_NEO_V2).lidar_scan_rate,
+        derive.model(NEORACER).lidar.scan_rate,
+        derive_v2.model(RACECAR_NEO_V2).lidar.scan_rate,
     )
     for car_path, scan_rate in zip(CARS, scan_rates, strict=True):
         scene = _scene(car_path)

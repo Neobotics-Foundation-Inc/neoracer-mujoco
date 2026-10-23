@@ -28,6 +28,7 @@ from neoracer_spec import (
     derive,
     derive_v2,
     mjcf,
+    parts,
     provenance,
     racecar_neo_v2,
     spec,
@@ -105,8 +106,8 @@ def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
     a new turn can show a step early or late."""
     bearings = range(0, 360, 45)
     cars = (
-        (assets.DEFAULT_CAR, MODEL.lidar_scan_rate),
-        (V2_XML, derive_v2.model(RACECAR_NEO_V2).lidar_scan_rate),
+        (assets.DEFAULT_CAR, MODEL.lidar.scan_rate),
+        (V2_XML, derive_v2.model(RACECAR_NEO_V2).lidar.scan_rate),
     )
     for path, scan_rate in cars:
         car = assets.from_file(path)
@@ -157,7 +158,7 @@ def test_a_beam_on_the_edge_of_the_lidars_field_is_in_it():
     """At the model's precision, the beams that lie on the edges of a field
     of 90, 180, 270 or 360 degrees are in it, and the beams beyond are not."""
     for degrees in (90, 180, 270, 360):
-        field = derive.precise(math.radians(degrees))
+        field = parts.precise(math.radians(degrees))
         for name in sensors.LIDAR_BEAM_ORDER:
             bearing = int(name.removeprefix("lidar_"))
             off_front = min(bearing, 360 - bearing)  # degrees
@@ -401,8 +402,8 @@ def test_a_car_whose_full_lock_leaves_the_fit_range_is_refused():
 
 def test_a_number_reads_back_at_the_models_precision():
     for x in (0.0, 0.1, -0.2, 3.0, 1151.917, -0.0000136675, 0.0425 + 0.001):
-        assert float(mjcf.number(x)) == derive.precise(x), x
-        assert derive.precise(x) == pytest.approx(x, rel=5e-6), x
+        assert float(mjcf.number(x)) == parts.precise(x), x
+        assert parts.precise(x) == pytest.approx(x, rel=5e-6), x
 
 
 def test_the_spec_runs_without_mujoco():
