@@ -16,8 +16,9 @@ lidar_beams, and each car's edits are those writers' and its own.
 import math
 import re
 import xml.etree.ElementTree as ET
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from . import derive_v2, parts
 from .derive import ModelParams
@@ -92,7 +93,9 @@ def solver(s: parts.Solver) -> list[Edit]:
 
 
 # Each wheel's corner: the signs of its x and y, and its axle (0 front).
-CORNERS = {"fl": (1, 1, 0), "fr": (1, -1, 0), "rl": (-1, 1, 1), "rr": (-1, -1, 1)}
+CORNERS: Mapping[str, tuple[int, int, int]] = MappingProxyType(
+    {"fl": (1, 1, 0), "fr": (1, -1, 0), "rl": (-1, 1, 1), "rr": (-1, -1, 1)}
+)
 
 
 def inertial(i: parts.Inertial) -> list[Edit]:
