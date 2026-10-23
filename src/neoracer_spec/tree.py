@@ -11,8 +11,11 @@ again (__post_init__), a tuple as a new tuple, and a mapping as a new
 MappingProxyType. Every branch off the path is shared with the old tree.
 
 A type checker reads where as a function of the tree, so it checks the path
-and the new value's type. It does not check that where only reads: one that
-computes, such as lambda car: car.mass.value + 1, raises TypeError here.
+and the new value's type. It does not check that where only reads, so at
+runs where on the tree as well and raises TypeError unless it returns the
+node at the end of the recorded path. A where that computes, such as
+lambda car: car.mass.value + 1, a slice or a choice by a test of the tree,
+fails, unless it chooses between nodes that are one object.
 """
 
 from __future__ import annotations
@@ -28,6 +31,11 @@ def at[T, V](tree: T, where: Callable[[T], V]) -> Focus[T, V]:
     """The node of tree that where reads."""
     found: object = where(cast(T, _Recorder(())))
     if not isinstance(found, _Recorder):
+        raise TypeError(_ONLY_READ)
+    # The recorder cannot see an identity test (is), which no object can
+    # intercept, nor an item that is a new value, such as a slice. Either
+    # makes where return other than the recorded path's node.
+    if where(tree) is not _node(tree, found._tree_steps):
         raise TypeError(_ONLY_READ)
     return Focus(tree, found._tree_steps)
 
@@ -88,6 +96,16 @@ class _Recorder:
 
     def __iter__(self) -> Iterator[object]:
         raise TypeError(_ONLY_READ)
+
+
+def _node(tree: Any, steps: tuple[Step, ...]) -> Any:
+    for step in steps:
+        match step:
+            case Attr(name=name):
+                tree = getattr(tree, name)
+            case Item(key=key):
+                tree = tree[key]
+    return tree
 
 
 def _rebuild(node: Any, steps: tuple[Step, ...], f: Callable[[Any], Any]) -> Any:
