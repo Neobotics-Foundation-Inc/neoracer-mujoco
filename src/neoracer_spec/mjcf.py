@@ -5,13 +5,16 @@ written into the cars' XML.
 assets/neoracer.xml and assets/racecar_neo_v2.xml are templates: their
 structure, their comments and the numbers that the spec does not give.
 car_xml and racecar_neo_v2_xml add each number that the spec gives to the
-start tag that holds it, and refuse a template that already has it, so the
-spec's numbers live in the spec alone. neoracer_mujoco.assets reads the
-cars through them.
+element that holds it, which an Edit finds by its tag and its name or class,
+and refuse a template that already has it, so the spec's numbers live in
+the spec alone. neoracer_mujoco.assets reads the cars through them.
 """
 
 import math
 import re
+import xml.etree.ElementTree as ET
+from collections.abc import Iterable
+from dataclasses import dataclass
 
 from . import derive_v2
 from .derive import ModelParams, precise
@@ -28,29 +31,48 @@ def numbers(*xs: float) -> str:
     return " ".join(number(x) for x in xs)
 
 
-type Edit = tuple[str, str, str]  # (element, attribute, value)
+@dataclass(frozen=True)
+class Edit:
+    """An attribute that the spec gives, on the one element that path finds."""
+
+    path: str  # an ElementTree path from the root, such as named("body", "car")
+    attribute: str
+    value: str
 
 
-def _put(xml: str, element: str, attribute: str, value: str) -> str:
-    """xml with attribute="value" added to the one start tag that matches
-    the regex element (which matches from its "<"). Raise ValueError if the
-    tag already has the attribute: the spec gives it, so the template must
-    not."""
-    tags = list(re.finditer(element + r"[^>]*>", xml))
-    if len(tags) != 1:
-        raise ValueError(f"{len(tags)} elements match {element!r}, not 1")
-    tag = tags[0]
-    if re.search(rf"\s{attribute}\s*=", tag.group(0)):
-        raise ValueError(f"{element!r} has {attribute}, which the spec gives")
-    end = tag.end() - (2 if tag.group(0).endswith("/>") else 1)
-    return f'{xml[:end]} {attribute}="{value}"{xml[end:]}'
+def named(tag: str, name: str) -> str:
+    """The path of the element tag named name."""
+    return f".//{tag}[@name='{name}']"
 
 
-def apply(xml: str, edits: list[Edit]) -> str:
-    """xml with each edit's attribute added (see _put)."""
-    for element, attribute, value in edits:
-        xml = _put(xml, element, attribute, value)
-    return xml
+def default(cls: str, tag: str) -> str:
+    """The path of the element tag in the default class cls."""
+    return f".//default[@class='{cls}']/{tag}"
+
+
+def put(path: str, **attributes: str) -> list[Edit]:
+    """The edits that give the element at path these attributes."""
+    return [Edit(path, a, v) for a, v in attributes.items()]
+
+
+def apply(xml: str, edits: Iterable[Edit]) -> str:
+    """xml with each edit's attribute added. Raise ValueError if an edit's
+    path finds other than one element, or if the element already has the
+    attribute: the spec gives it, so the template must not. The comments
+    stay; the layout inside a tag does not."""
+    builder = ET.TreeBuilder(insert_comments=True)
+    root = ET.fromstring(xml, parser=ET.XMLParser(target=builder))
+    for edit in edits:
+        found = root.findall(edit.path)
+        if len(found) != 1:
+            raise ValueError(f"{len(found)} elements match {edit.path!r}, not 1")
+        (element,) = found
+        if edit.attribute in element.attrib:
+            raise ValueError(
+                f"{edit.path!r} has {edit.attribute}, which the spec gives"
+            )
+        element.set(edit.attribute, edit.value)
+    return ET.tostring(root, encoding="unicode") + "\n"
 
 
 def beam_timing(scan_rate: float, bearing: int) -> tuple[float, float, float]:
@@ -73,13 +95,13 @@ def beam_timing(scan_rate: float, bearing: int) -> tuple[float, float, float]:
 def _beam_edits(scan_rate: float, bearing: int) -> list[Edit]:
     """The attributes of the beam's rangefinder that time its readings."""
     period, phase, delay = beam_timing(scan_rate, bearing)
-    rangefinder = rf'<rangefinder name="lidar_{bearing:03d}"'
-    return [
+    return put(
+        named("rangefinder", f"lidar_{bearing:03d}"),
         # Two samples: the one the beam shows, and the next until it shows.
-        (rangefinder, "nsample", "2"),
-        (rangefinder, "interval", numbers(period, phase)),
-        (rangefinder, "delay", number(delay)),
-    ]
+        nsample="2",
+        interval=numbers(period, phase),
+        delay=number(delay),
+    )
 
 
 def car_xml(p: ModelParams, xml: str) -> str:
@@ -94,64 +116,72 @@ def car_edits(p: ModelParams) -> list[Edit]:
     mirror = (-poly[0], poly[1], -poly[2], poly[3], -poly[4])
     m, s = p.motor, p.servo
     friction = numbers(p.wheel_friction, 0.1, 0.1)
-    wheel_default = r'<default class="wheel">\s*<joint[^>]*>\s*<geom'
-    susp = r'<default class="susp">\s*<joint'
     edits = [
-        (r'<geom type="plane"', "friction", friction),
-        (r'<body name="car"', "pos", numbers(0, 0, p.spawn_height)),
-        (r"<inertial[\s/]", "mass", number(p.chassis_mass)),
-        (r"<inertial[\s/]", "diaginertia", numbers(*p.chassis_inertia)),
-        (r"<inertial[\s/]", "pos", numbers(0, 0, p.com_height)),
-        (r'<geom name="chassis"', "pos", numbers(*p.box_center)),
-        (r'<geom name="chassis"', "size", numbers(*p.box_half_size)),
-        (r'<site name="imu"', "pos", numbers(*p.imu_position)),
-        (r'<site name="lidar_mount"', "pos", numbers(*p.lidar_position)),
-        (r'<site name="lidar_mount"', "user", number(p.lidar_field)),
-        (r'<geom name="vis_lidar"', "pos", numbers(*p.lidar_position)),
-        (r'<body name="steer_input_body"', "pos", numbers(x, 0, 0)),
-        (
-            r'<geom type="cylinder" size="[^"]*" contype',
-            "mass",
-            number(p.input_body_mass),
+        *put(".//geom[@type='plane']", friction=friction),
+        *put(named("body", "car"), pos=numbers(0, 0, p.spawn_height)),
+        *put(
+            named("body", "car") + "/inertial",
+            mass=number(p.chassis_mass),
+            diaginertia=numbers(*p.chassis_inertia),
+            pos=numbers(0, 0, p.com_height),
         ),
-        (r'<default class="wheel">\s*<joint', "damping", number(p.wheel_damping)),
-        (wheel_default, "size", numbers(p.wheel_radius, p.tyre_half_width)),
-        (wheel_default, "friction", friction),
-        (susp, "range", numbers(-p.droop, p.jounce)),
-        (susp, "stiffness", number(p.spring_stiffness)),
-        (susp, "damping", number(p.spring_damping)),
-        (susp, "springref", number(p.spring_ref)),
-        (
-            r'<default class="steer">\s*<joint',
-            "range",
-            numbers(-p.wheel_steer_range, p.wheel_steer_range),
+        *put(
+            named("geom", "chassis"),
+            pos=numbers(*p.box_center),
+            size=numbers(*p.box_half_size),
         ),
-        (
-            r'<default class="steer">\s*<joint',
-            "armature",
-            number(p.steer_armature),
+        *put(named("site", "imu"), pos=numbers(*p.imu_position)),
+        *put(
+            named("site", "lidar_mount"),
+            pos=numbers(*p.lidar_position),
+            user=number(p.lidar_field),
         ),
-        (r'<dcmotor name="motor"', "nominal", numbers(*m.nominal)),
-        (r'<dcmotor name="motor"', "gear", number(m.gear)),
-        (r'<dcmotor name="motor"', "ctrlrange", numbers(-m.ctrl_limit, m.ctrl_limit)),
-        (r'<dcmotor name="steer_servo"', "nominal", numbers(*s.nominal)),
-        (
-            r'<dcmotor name="steer_servo"',
-            "controller",
-            numbers(s.kp, 0, s.kd, 0, 0, s.voltage_limit),
+        *put(named("geom", "vis_lidar"), pos=numbers(*p.lidar_position)),
+        *put(named("body", "steer_input_body"), pos=numbers(x, 0, 0)),
+        *put(
+            named("body", "steer_input_body") + "/geom",
+            mass=number(p.input_body_mass),
         ),
-        (r'<dcmotor name="steer_servo"', "ctrlrange", numbers(-s.lock, s.lock)),
-        (
-            r'<joint name="steer_input"',
-            "range",
-            numbers(-p.steer_input_range, p.steer_input_range),
+        *put(default("wheel", "joint"), damping=number(p.wheel_damping)),
+        *put(
+            default("wheel", "geom"),
+            size=numbers(p.wheel_radius, p.tyre_half_width),
+            friction=friction,
         ),
-        (r'<joint name="ackermann_left"', "polycoef", numbers(*poly)),
-        (r'<joint name="ackermann_right"', "polycoef", numbers(*mirror)),
+        *put(
+            default("susp", "joint"),
+            range=numbers(-p.droop, p.jounce),
+            stiffness=number(p.spring_stiffness),
+            damping=number(p.spring_damping),
+            springref=number(p.spring_ref),
+        ),
+        *put(
+            default("steer", "joint"),
+            range=numbers(-p.wheel_steer_range, p.wheel_steer_range),
+            armature=number(p.steer_armature),
+        ),
+        *put(
+            named("dcmotor", "motor"),
+            nominal=numbers(*m.nominal),
+            gear=number(m.gear),
+            ctrlrange=numbers(-m.ctrl_limit, m.ctrl_limit),
+        ),
+        *put(
+            named("dcmotor", "steer_servo"),
+            nominal=numbers(*s.nominal),
+            controller=numbers(s.kp, 0, s.kd, 0, 0, s.voltage_limit),
+            ctrlrange=numbers(-s.lock, s.lock),
+        ),
+        *put(
+            named("joint", "steer_input"),
+            range=numbers(-p.steer_input_range, p.steer_input_range),
+        ),
+        *put(named("joint", "ackermann_left"), polycoef=numbers(*poly)),
+        *put(named("joint", "ackermann_right"), polycoef=numbers(*mirror)),
     ]
     for bearing in range(0, 360, 45):
-        edits.append(
-            (rf'<site name="lidar_{bearing:03d}"', "pos", numbers(*p.lidar_position))
+        edits += put(
+            named("site", f"lidar_{bearing:03d}"), pos=numbers(*p.lidar_position)
         )
         edits += _beam_edits(p.lidar_scan_rate, bearing)
     scale = numbers(*[p.wheel_mesh_scale] * 3)
@@ -162,9 +192,9 @@ def car_edits(p: ModelParams) -> list[Edit]:
         "rr": (-x, -y),
     }.items():
         edits += [
-            (rf'<body name="{corner}_wheel_body"', "pos", numbers(cx, cy, 0)),
-            (rf'<geom name="{corner}_wheel"', "mass", number(p.wheel_mass)),
-            (rf'<mesh name="vis_{corner}_wheel"', "scale", scale),
+            *put(named("body", f"{corner}_wheel_body"), pos=numbers(cx, cy, 0)),
+            *put(named("geom", f"{corner}_wheel"), mass=number(p.wheel_mass)),
+            *put(named("mesh", f"vis_{corner}_wheel"), scale=scale),
         ]
     return edits
 
@@ -180,83 +210,82 @@ def racecar_neo_v2_edits(p: derive_v2.ModelParams) -> list[Edit]:
     d, s, st = p.drive, p.servo, p.steering
     ax, ay, az = p.antenna_center
     edits = [
-        (r'<body name="car"', "pos", numbers(0, 0, p.spawn_height)),
-        (r"<inertial[\s/]", "pos", numbers(*p.chassis_com)),
-        (r"<inertial[\s/]", "mass", number(p.chassis_mass)),
-        (r"<inertial[\s/]", "diaginertia", numbers(*p.chassis_inertia)),
-        (r'<site name="imu"', "pos", numbers(*p.imu_position)),
-        (r'<site name="lidar_mount"', "pos", numbers(*p.lidar_position)),
-        (r'<site name="lidar_mount"', "euler", numbers(0, 0, p.lidar_yaw)),
-        (r'<site name="lidar_mount"', "user", number(p.lidar_field)),
-        (r'<geom name="antenna_left"', "pos", numbers(ax, ay, az)),
-        (r'<geom name="antenna_right"', "pos", numbers(ax, -ay, az)),
-        (r'<body name="steer_input_body"', "pos", numbers(x, 0, 0)),
-        (r'<joint name="steer_input"', "range", numbers(st.stops[1], st.stops[0])),
-        (
-            r'<geom type="cylinder" size="[^"]*" contype',
-            "mass",
-            number(p.input_body_mass),
+        *put(named("body", "car"), pos=numbers(0, 0, p.spawn_height)),
+        *put(
+            named("body", "car") + "/inertial",
+            pos=numbers(*p.chassis_com),
+            mass=number(p.chassis_mass),
+            diaginertia=numbers(*p.chassis_inertia),
         ),
-        (r'<default class="wheel">\s*<joint', "damping", number(d.wheel_damping)),
-        (
-            r'<default class="wheel">\s*<joint[^>]*>\s*<geom',
-            "size",
-            numbers(p.wheel_radius, p.tyre_half_width),
+        *put(named("site", "imu"), pos=numbers(*p.imu_position)),
+        *put(
+            named("site", "lidar_mount"),
+            pos=numbers(*p.lidar_position),
+            euler=numbers(0, 0, p.lidar_yaw),
+            user=number(p.lidar_field),
         ),
-        (
-            r'<default class="steer">\s*<joint',
-            "range",
-            numbers(-st.wheel_steer_range, st.wheel_steer_range),
+        *put(named("geom", "antenna_left"), pos=numbers(ax, ay, az)),
+        *put(named("geom", "antenna_right"), pos=numbers(ax, -ay, az)),
+        *put(named("body", "steer_input_body"), pos=numbers(x, 0, 0)),
+        *put(named("joint", "steer_input"), range=numbers(st.stops[1], st.stops[0])),
+        *put(
+            named("body", "steer_input_body") + "/geom",
+            mass=number(p.input_body_mass),
         ),
-        (
-            r'<default class="susp">\s*<joint',
-            "range",
-            numbers(-p.half_travel, p.half_travel),
+        *put(default("wheel", "joint"), damping=number(d.wheel_damping)),
+        *put(default("wheel", "geom"), size=numbers(p.wheel_radius, p.tyre_half_width)),
+        *put(
+            default("steer", "joint"),
+            range=numbers(-st.wheel_steer_range, st.wheel_steer_range),
         ),
-        (r'<fixed name="drivetrain"', "frictionloss", number(d.brake)),
-        (r'<general name="motor"', "gear", number(d.gear)),
-        (r'<general name="motor"', "gainprm", number(d.gain)),
-        (r'<general name="motor"', "ctrlrange", numbers(-d.ctrl_limit, d.ctrl_limit)),
-        (r'<general name="motor"', "user", numbers(d.slope, d.step, 0)),
-        (r'<general name="motor"', "delay", number(d.latency)),
-        (r'<general name="motor"', "nsample", str(d.nsample)),
-        (r'<general name="motor_engage"', "gear", number(d.gear)),
-        (r'<general name="motor_engage"', "gainprm", numbers(0, 0, -d.gain)),
-        (r'<general name="motor_engage"', "delay", number(d.latency)),
-        (r'<general name="motor_engage"', "nsample", str(d.nsample)),
-        (r'<dcmotor name="steer_servo"', "nominal", numbers(*s.nominal)),
-        (
-            r'<dcmotor name="steer_servo"',
-            "controller",
-            numbers(s.kp, 0, s.kd, 0, 0, s.voltage_limit),
+        *put(default("susp", "joint"), range=numbers(-p.half_travel, p.half_travel)),
+        *put(named("fixed", "drivetrain"), frictionloss=number(d.brake)),
+        *put(
+            named("general", "motor"),
+            gear=number(d.gear),
+            gainprm=number(d.gain),
+            ctrlrange=numbers(-d.ctrl_limit, d.ctrl_limit),
+            user=numbers(d.slope, d.step, 0),
+            delay=number(d.latency),
+            nsample=str(d.nsample),
         ),
-        (r'<dcmotor name="steer_servo"', "ctrlrange", numbers(-st.lock, st.lock)),
-        (r'<dcmotor name="steer_servo"', "delay", number(s.latency)),
-        (r'<dcmotor name="steer_servo"', "nsample", str(s.nsample)),
-        (r'<joint name="ackermann_left"', "polycoef", numbers(*st.ackermann_left)),
-        (r'<joint name="ackermann_right"', "polycoef", numbers(*st.ackermann_right)),
+        *put(
+            named("general", "motor_engage"),
+            gear=number(d.gear),
+            gainprm=numbers(0, 0, -d.gain),
+            delay=number(d.latency),
+            nsample=str(d.nsample),
+        ),
+        *put(
+            named("dcmotor", "steer_servo"),
+            nominal=numbers(*s.nominal),
+            controller=numbers(s.kp, 0, s.kd, 0, 0, s.voltage_limit),
+            ctrlrange=numbers(-st.lock, st.lock),
+            delay=number(s.latency),
+            nsample=str(s.nsample),
+        ),
+        *put(named("joint", "ackermann_left"), polycoef=numbers(*st.ackermann_left)),
+        *put(named("joint", "ackermann_right"), polycoef=numbers(*st.ackermann_right)),
     ]
     for box in p.boxes:
-        edits += [
-            (rf'<geom name="{box.name}"', "pos", numbers(*box.center)),
-            (rf'<geom name="{box.name}"', "size", numbers(*box.half_size)),
-        ]
+        edits += put(
+            named("geom", box.name),
+            pos=numbers(*box.center),
+            size=numbers(*box.half_size),
+        )
     for name in ("antenna_left", "antenna_right"):
-        edits.append(
-            (
-                rf'<geom name="{name}"',
-                "size",
-                numbers(p.antenna_radius, p.antenna_half_length),
-            )
+        edits += put(
+            named("geom", name),
+            size=numbers(p.antenna_radius, p.antenna_half_length),
         )
     for bearing in range(0, 360, 45):
         a = math.radians(bearing) + p.lidar_yaw
-        site = rf'<site name="lidar_{bearing:03d}"'
-        edits += [
-            (site, "pos", numbers(*p.lidar_position)),
-            (site, "zaxis", numbers(math.cos(a), math.sin(a), 0)),
-            *_beam_edits(p.lidar_scan_rate, bearing),
-        ]
+        edits += put(
+            named("site", f"lidar_{bearing:03d}"),
+            pos=numbers(*p.lidar_position),
+            zaxis=numbers(math.cos(a), math.sin(a), 0),
+        )
+        edits += _beam_edits(p.lidar_scan_rate, bearing)
     stiffness, damping, ref, grip = (
         p.spring_stiffness,
         p.spring_damping,
@@ -269,17 +298,18 @@ def racecar_neo_v2_edits(p: derive_v2.ModelParams) -> list[Edit]:
         "rl": (-x, y, 1),
         "rr": (-x, -y, 1),
     }.items():
-        susp = rf'<joint name="{corner}_susp"'
         edits += [
-            (rf'<body name="{corner}_wheel_body"', "pos", numbers(cx, cy, 0)),
-            (susp, "stiffness", number(stiffness[axle])),
-            (susp, "damping", number(damping[axle])),
-            (susp, "springref", number(ref[axle])),
-            (rf'<geom name="{corner}_wheel"', "mass", number(p.wheel_mass)),
-            (
-                rf'<geom name="{corner}_wheel"',
-                "friction",
-                numbers(grip[axle], 0.1, 0.1),
+            *put(named("body", f"{corner}_wheel_body"), pos=numbers(cx, cy, 0)),
+            *put(
+                named("joint", f"{corner}_susp"),
+                stiffness=number(stiffness[axle]),
+                damping=number(damping[axle]),
+                springref=number(ref[axle]),
+            ),
+            *put(
+                named("geom", f"{corner}_wheel"),
+                mass=number(p.wheel_mass),
+                friction=numbers(grip[axle], 0.1, 0.1),
             ),
         ]
     return edits

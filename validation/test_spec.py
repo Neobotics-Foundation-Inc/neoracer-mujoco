@@ -81,17 +81,18 @@ def test_a_template_that_holds_a_number_of_the_spec_is_refused():
         with open(path, encoding="utf-8") as f:
             template = f.read()
         mjcf.apply(template, edits)
-        for element, attribute, value in edits:
-            with case(f"{os.path.basename(path)}: {element} {attribute}"):
-                held = mjcf.apply(template, [(element, attribute, value)])
+        for edit in edits:
+            with case(f"{os.path.basename(path)}: {edit.path} {edit.attribute}"):
+                held = mjcf.apply(template, [edit])
                 with pytest.raises(ValueError, match="which the spec gives"):
                     mjcf.apply(held, edits)
 
     # The writer knows the attribute however the XML spells it.
+    car = mjcf.Edit(mjcf.named("body", "car"), "pos", "0 0 2")
     for spelling in ('pos="0 0 1"', "pos='0 0 1'", 'pos = "0 0 1"'):
-        tag = f'<body name="car" {spelling}/>'
+        xml = f'<mujoco><body name="car" {spelling}/></mujoco>'
         with pytest.raises(ValueError, match="which the spec gives"):
-            mjcf.apply(tag, [('<body name="car"', "pos", "0 0 2")])
+            mjcf.apply(xml, [car])
 
 
 BOX = CAR.chassis.collision_box.value
