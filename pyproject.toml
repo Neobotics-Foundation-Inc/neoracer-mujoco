@@ -11,7 +11,7 @@ requires-python = ">=3.14"
 dependencies = [
     # One exact version: MuJoCo's WebAssembly build of the same version gives
     # the same physics, and its models (.mjb) load only in the version that
-    # wrote them. Change it here and in requirements.txt together.
+    # wrote them.
     "mujoco==3.16.0",
     "numpy>=1.26.4",
     # CubicSpline (track centerline) and KDTree (self-touch check) in
