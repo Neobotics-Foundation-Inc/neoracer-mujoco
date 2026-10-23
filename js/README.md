@@ -41,6 +41,12 @@ for (let i = 0; i < 360; i++) {
 
 The scene has no meshes that only show the car: render the car with your own model of it.
 
-`spec` holds the car's specification, typed and generated from the Python package's (`src/spec.ts`): `spec.NEORACER`, each value with its source and status, and `spec.NEORACER_PARAMS`, the parameters derived from it.
+`spec` holds the car's specification, typed and written from the Python package's: `spec.NEORACER`, each value with its source and status, and `spec.NEORACER_PARAMS`, the parameters derived from it.
 
-To build and test the package, run `npm ci` in `js/`, then, from the repository root with the Python package installed, `python js/test/fixtures.py js/test/fixtures.json` and `npm test --prefix js`.
+The package's spec, the names it shares with the Python package and the car's MJCF are written from the Python package into `src/generated/`, which is not checked in. To build and test the package, run `npm ci` in `js/`, then, from the repository root with the Python package installed:
+
+```sh
+python -m neoracer_mujoco.javascript js/src/generated
+python js/test/fixtures.py js/test/fixtures.json
+npm test --prefix js
+```

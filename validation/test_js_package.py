@@ -1,69 +1,32 @@
 """
 Laws for js/, the JS package that runs the car in MuJoCo's WebAssembly
 build. Its own tests (npm test) compare it with this package in Node. These
-check, without Node, that the values it copies from this package agree.
+check, without Node, the sources that this package writes for it
+(neoracer_mujoco.javascript) and its manifest.
 """
 
 import json
-import math
 import re
 import tomllib
 from pathlib import Path
 
-from neoracer_mujoco import contract, lidar, sim
+from neoracer_mujoco import javascript
 
 _REPO = Path(__file__).resolve().parent.parent
 _JS = _REPO / "js"
 
 
-def _constants(name: str) -> dict[str, str]:
-    """The `export const NAME = value;` lines of js/src/<name>.ts."""
-    text = (_JS / "src" / f"{name}.ts").read_text()
-    return dict(
-        re.findall(r"^export const (\w+)(?:: \w+)? = (.+?);", text, flags=re.MULTILINE)
+def test_the_shared_constants_read_back_as_the_python_packages():
+    """shared.ts gives each name and number that both packages use its value
+    here, so the JS package holds no copy of them."""
+    text = javascript.shared()
+    written = dict(
+        re.findall(r"^export const (\w+) = (.+?)(?: as const)?;$", text, re.MULTILINE)
     )
-
-
-def _number(text: str) -> float:
-    """A TS number literal, or one times Math.PI: `12`, `1.5 * Math.PI`."""
-    factor, times_pi, _ = text.strip().partition(" * Math.PI")
-    return float(factor) * (math.pi if times_pi else 1.0)
-
-
-def _fields(literal: str) -> dict[str, float]:
-    """The fields of a TS object literal of numbers, `{ a: 1, b: 2 * Math.PI }`."""
-    return {k: _number(v) for k, v in re.findall(r"(\w+): ([^,}]+)", literal)}
-
-
-def test_the_part_names_are_those_of_contract_py():
-    names = _constants("contract")
-    assert (
-        json.loads(names["DRIVE_ACTUATOR"].replace("'", '"')) == contract.DRIVE_ACTUATOR
-    )
-    assert (
-        json.loads(names["STEER_ACTUATOR"].replace("'", '"')) == contract.STEER_ACTUATOR
-    )
-    assert json.loads(names["LIDAR_SITE"].replace("'", '"')) == contract.LIDAR_SITE
-    assert (
-        json.loads(names["DRIVE_POS_SENSOR"].replace("'", '"'))
-        in contract.REQUIRED_SENSORS
-    )
-    assert json.loads(names["CAR_BODY"].replace("'", '"')) == "car"
-    for sensor in ("IMU_ACCEL_SENSOR", "IMU_GYRO_SENSOR"):
-        assert json.loads(names[sensor].replace("'", '"')) in contract.REQUIRED_SENSORS
-    wheels = names["WHEEL_GEOMS"].removesuffix(" as const")
-    assert tuple(json.loads(wheels.replace("'", '"'))) == contract.WHEEL_GEOMS
-
-
-def test_the_numbers_are_those_of_the_python_package():
-    """The LiDAR's and the encoder's settings come from src/spec.ts, which
-    test_typescript.py holds to the Python package's; the rest are copies."""
-    assert "NEORACER_PARAMS.lidar" in (_JS / "src" / "lidar.ts").read_text()
-    encoder_ts = (_JS / "src" / "encoder.ts").read_text()
-    assert "NEORACER_PARAMS.encoder" in encoder_ts
-    assert "NEORACER_PARAMS.wheel_radius" in encoder_ts
-    assert float(_constants("lidar")["NO_RETURN"]) == lidar.NO_RETURN
-    assert int(_constants("scene")["SETTLE_STEPS"]) == sim.SETTLE_STEPS
+    assert written.keys() == javascript.SHARED.keys()
+    for name, value in javascript.SHARED.items():
+        expected = list(value) if isinstance(value, tuple) else value
+        assert json.loads(written[name]) == expected, name
 
 
 def test_it_has_the_version_and_the_mujoco_of_the_python_package():

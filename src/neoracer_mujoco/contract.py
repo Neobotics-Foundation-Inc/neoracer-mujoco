@@ -48,9 +48,12 @@ WHEEL_GEOMS = ("fl_wheel", "fr_wheel", "rl_wheel", "rr_wheel")
 # scan's bearing 0, and its XY plane is the plane the scan sweeps. Its user
 # number is the field that the LiDAR sees (lidar_field).
 LIDAR_SITE = "lidar_mount"
+IMU_ACCEL_SENSOR = "imu_accel"  # specific force at the IMU (m/s^2), car frame
+IMU_GYRO_SENSOR = "imu_gyro"  # angular velocity at the IMU (rad/s), car frame
+DRIVE_POS_SENSOR = "drive_pos"  # the drivetrain's angle (rad), the encoder's
 REQUIRED_SENSORS = (
-    "imu_accel",
-    "imu_gyro",
+    IMU_ACCEL_SENSOR,
+    IMU_GYRO_SENSOR,
     "imu_quat",
     "imu_linvel",
     "steer_cmd_pos",
@@ -60,7 +63,7 @@ REQUIRED_SENSORS = (
     "fr_wheel_vel",
     "rl_wheel_vel",
     "rr_wheel_vel",
-    "drive_pos",
+    DRIVE_POS_SENSOR,
     "fl_susp_pos",
     "fr_susp_pos",
     "rl_susp_pos",

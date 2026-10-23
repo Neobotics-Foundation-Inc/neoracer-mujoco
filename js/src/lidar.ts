@@ -9,9 +9,8 @@
 import type { MjData } from '@mujoco/mujoco';
 
 import type { Mujoco, Scene } from './scene.js';
-import { NEORACER_PARAMS } from './spec.js';
-
-export const NO_RETURN = -1; // what a slot reads with nothing in range
+import { NO_RETURN } from './generated/shared.js';
+import { NEORACER_PARAMS } from './generated/spec.js';
 
 /** The LiDAR's scan, as LidarParams in lidar.py. */
 export interface LidarParams {

@@ -79,10 +79,12 @@ jobs:
           /tmp/wheel-env/bin/python -c "import mujoco; mujoco.MjSpec.from_zip('dist/neoracer.mjz').compile()"
 
       # The JS package (js/), for MuJoCo's WebAssembly build, as an npm
-      # tarball. It must install and load the car before it is published.
+      # tarball, its generated sources written by the wheel. It must install
+      # and load the car before it is published.
       - name: Pack the JS package
         run: |
           npm ci --prefix js --no-audit --no-fund
+          /tmp/wheel-env/bin/python -m neoracer_mujoco.javascript js/src/generated
           (cd js && npm pack --pack-destination ../dist)
           mkdir /tmp/js-check && cd /tmp/js-check
           npm init -y > /dev/null
