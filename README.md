@@ -34,12 +34,13 @@ The simulators don't read the spec directly. `derive(spec)` computes what they n
 - the encoder's filter;
 - full lock.
 
-After you edit the spec, regenerate the two files that come from it. A test fails if either one is stale.
+After you edit the spec, regenerate the numbers in the cars' XML in `assets/`. A test fails if they are stale.
 
 ```sh
-python -m neoracer_mujoco.write_car assets          # the numbers in the cars' XML in assets/
-python -m neoracer_spec.typescript js/src/spec.ts   # the spec as TypeScript, for js/
+python -m neoracer_mujoco.write_car assets
 ```
+
+The JS package's TypeScript is written from the spec when the package is built (`js/README.md`).
 
 ## The RACECAR Neo V2
 

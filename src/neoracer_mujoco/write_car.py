@@ -2,11 +2,9 @@
 Write the cars into a folder of car files: the numbers of the NeoRacer
 (neoracer_spec.neoracer.NEORACER) and the RACECAR Neo V2
 (neoracer_spec.racecar_neo_v2.RACECAR_NEO_V2) into their XMLs there, in
-place. Run it after a change to a car, with the TypeScript generator for the
-JS package:
+place. Run it after a change to a car:
 
     python -m neoracer_mujoco.write_car assets
-    python -m neoracer_spec.typescript js/src/spec.ts
 """
 
 import os

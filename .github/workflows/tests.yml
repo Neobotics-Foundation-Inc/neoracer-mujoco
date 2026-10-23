@@ -78,6 +78,7 @@ jobs:
       - name: Run the JS tests against the Python package
         run: |
           nix develop --command npm ci --prefix js --no-audit --no-fund
+          nix develop --command python -m neoracer_mujoco.javascript js/src/generated
           nix develop --command python js/test/fixtures.py js/test/fixtures.json
           nix develop --command npm test --prefix js
 

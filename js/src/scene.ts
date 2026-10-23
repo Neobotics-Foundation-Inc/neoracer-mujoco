@@ -10,8 +10,9 @@ import {
   DRIVE_ACTUATOR,
   DRIVE_POS_SENSOR,
   LIDAR_SITE,
+  SETTLE_STEPS,
   STEER_ACTUATOR,
-} from './contract.js';
+} from './generated/shared.js';
 import { CAR_XML } from './generated/car.js';
 
 export type Mujoco = MainModule;
@@ -32,9 +33,6 @@ export interface Scene {
   readonly model: MjModel;
   readonly car: Car;
 }
-
-/** Steps of zero control that bring a new car to rest, as sim.SETTLE_STEPS. */
-export const SETTLE_STEPS = 400;
 
 function elements(mj: Mujoco, spec: MjSpec, type: mjtObj): MjsElement[] {
   const out: MjsElement[] = [];
