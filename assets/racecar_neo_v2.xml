@@ -19,8 +19,9 @@
 
     <compiler angle="radian" autolimits="true"/>
 
-    <!-- The NeoRacer's options, which every track in tracks/ sets too. -->
-    <option timestep="0.002777777777777778" integrator="implicitfast" cone="elliptic" impratio="10"/>
+    <!-- The solver's options, neoracer_spec.parts.SOLVER. A scene with the
+         car takes them from it (neoracer_mujoco.assets.compose). -->
+    <option/>
 
     <asset>
         <texture name="grid" type="2d" builtin="checker" width="512" height="512"

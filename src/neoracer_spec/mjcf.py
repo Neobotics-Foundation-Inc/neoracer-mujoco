@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 from . import derive_v2
 from .derive import ModelParams, precise
+from .parts import SOLVER, Solver
 
 
 def number(x: float) -> str:
@@ -75,6 +76,18 @@ def apply(xml: str, edits: Iterable[Edit]) -> str:
     return ET.tostring(root, encoding="unicode") + "\n"
 
 
+def solver(s: Solver) -> list[Edit]:
+    """The model's options. The timestep is written whole, not to the
+    model's precision, so that it is s.timestep."""
+    return put(
+        "./option",
+        timestep=repr(s.timestep),
+        integrator=s.integrator,
+        cone=s.cone,
+        impratio=number(s.impratio),
+    )
+
+
 def beam_timing(scan_rate: float, bearing: int) -> tuple[float, float, float]:
     """When the rangefinder of the LiDAR beam at bearing (degrees,
     counterclockwise from the scan's 0) reads, as the period and the phase of
@@ -117,6 +130,7 @@ def car_edits(p: ModelParams) -> list[Edit]:
     m, s = p.motor, p.servo
     friction = numbers(p.wheel_friction, 0.1, 0.1)
     edits = [
+        *solver(SOLVER),
         *put(".//geom[@type='plane']", friction=friction),
         *put(named("body", "car"), pos=numbers(0, 0, p.spawn_height)),
         *put(
@@ -210,6 +224,7 @@ def racecar_neo_v2_edits(p: derive_v2.ModelParams) -> list[Edit]:
     d, s, st = p.drive, p.servo, p.steering
     ax, ay, az = p.antenna_center
     edits = [
+        *solver(SOLVER),
         *put(named("body", "car"), pos=numbers(0, 0, p.spawn_height)),
         *put(
             named("body", "car") + "/inertial",

@@ -37,21 +37,19 @@ def reversed_car(path: str = assets.DEFAULT_CAR) -> Scene:
     return compile_scene(spec)
 
 
-def assert_keeps_car_solver_options(
+def assert_takes_car_solver_options(
     track: mujoco.MjSpec, car_path: str = assets.DEFAULT_CAR
 ) -> None:
-    """Attach the car to track and check the solver options of the result.
-
-    When MuJoCo attaches a car to a track, it keeps the <option> of the track.
-    So the track must have the friction cone and impratio of the car, and the
-    attach must give no warning."""
+    """Attach the car to track and check the solver options of the result:
+    the scene runs with the car's options, and the attach gives no
+    warning."""
     car = assets.load(car_path).model
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         composed = assets.compose(track, car_path).model
     assert [str(w.message) for w in caught] == []
-    assert composed.opt.cone == car.opt.cone
-    assert composed.opt.impratio == car.opt.impratio
+    for name in ("timestep", "integrator", "cone", "impratio"):
+        assert getattr(composed.opt, name) == getattr(car.opt, name), name
 
 
 def assert_car_rests(scene: Scene) -> None:

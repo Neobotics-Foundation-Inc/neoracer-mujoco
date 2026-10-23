@@ -112,8 +112,10 @@ def compose(
     export.spec(car) for a variant. Neither track nor a car's MjSpec is
     changed: the car is attached from copies.
 
-    Only the car body is attached, so the track keeps its own floor and
-    <option>, and the track XML never names the car file.
+    Only the car body is attached, so the track keeps its own floor, and
+    the track XML never names the car file. The scene takes the car's
+    <option>, the solver's settings that its model is made for, so a track
+    sets none.
 
     With visuals=False, the car has none of the meshes that only show it
     (see delete_visuals), and the model is much smaller and steps faster.
@@ -124,6 +126,7 @@ def compose(
     """
     scene = track.copy()
     car = car.copy() if isinstance(car, mujoco.MjSpec) else from_file(car)
+    scene.option = car.option
     frame = scene.worldbody.add_frame()
     frame.pos = np.array(pos)
     if not visuals:

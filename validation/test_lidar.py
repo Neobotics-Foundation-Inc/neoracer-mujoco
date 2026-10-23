@@ -42,8 +42,6 @@ def _wall_ahead(x: float) -> Scene:
     the scan plane."""
     track = mujoco.MjSpec.from_string(
         f"""<mujoco>
-        <option timestep="0.002777777777777778" integrator="implicitfast"
-                cone="elliptic" impratio="10"/>
         <worldbody>
         <geom type="plane" size="0 0 1"/>
         <geom type="box" pos="{x + 0.05} 0 1" size=".05 2 1"/>

@@ -20,16 +20,9 @@
 
     <compiler angle="radian" autolimits="true"/>
 
-    <!-- Elliptic friction cone + high impratio: MuJoCo's recommended setting for
-         wheeled vehicles — stiffens tangential contact so the tires creep less
-         sideways (measured at 0.4 rad of steering: full-lock radius 0.77 m → 0.74 m vs 0.68 m ideal).
-         The time step is 1/360 s: 12 steps to a 30 Hz LiDAR scan and 6 to a
-         60 Hz frame. implicitfast integrates the actuators' speed damping (the
-         motors' back-EMF and the servo's kd), which explicit Euler cannot hold
-         steady at this step: the servo then chatters.
-         When this car is attached to a track scene, MuJoCo keeps the track's
-         <option>, so every track in tracks/ sets the same values. -->
-    <option timestep="0.002777777777777778" integrator="implicitfast" cone="elliptic" impratio="10"/>
+    <!-- The solver's options, neoracer_spec.parts.SOLVER. A scene with the
+         car takes them from it (neoracer_mujoco.assets.compose). -->
+    <option/>
 
     <asset>
         <texture name="grid" type="2d" builtin="checker" width="512" height="512"
@@ -75,7 +68,7 @@
         (neoracer_spec.derive.wheel_steer_range), so it never opposes the Ackermann
         constraints. Its armature stands for the servo's rotor, seen through its
         gears; it is an estimate (neoracer_spec.neoracer, steering), and at less
-        the steering rings faster than the 1/360 s step resolves and the car
+        the steering rings faster than the model's step resolves and the car
         shimmies in part-throttle turns.
         -->
         <default class="steer">
@@ -288,7 +281,7 @@
 
     solref "0.006 1" makes the linkage stiffer than MuJoCo's default (0.02 s):
     under the tyres' load the wheels then lag their Ackermann angles by 0.004
-    rad, not 0.04. The time constant stays above two time steps at 360 Hz.
+    rad, not 0.04. The time constant stays above two of the model's steps.
     -->
     <equality>
         <joint name="ackermann_left" solref=".006 1"
