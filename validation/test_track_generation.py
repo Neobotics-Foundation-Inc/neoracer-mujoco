@@ -8,7 +8,7 @@ clearance and the geom count. Other modules depend on these conventions.
 
 import functools
 import itertools
-from dataclasses import replace
+from copy import replace
 from typing import assert_never
 
 import mujoco

@@ -4,7 +4,6 @@ it, gives an MjSpec that compiles and composes onto a track, and a folder
 whose archive loads to the same model.
 """
 
-import dataclasses
 import os
 
 import mujoco
@@ -14,11 +13,9 @@ import pytest
 from neoracer_mujoco import assets, export
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.provenance import chosen
-from neoracer_spec.spec import Battery
+from neoracer_spec.tree import at
 
-SLOW = dataclasses.replace(
-    NEORACER, battery=Battery(voltage=chosen(7.4, "a slower car"))
-)
+SLOW = at(NEORACER, lambda c: c.battery.voltage).set(chosen(7.4, "a slower car"))
 
 
 def test_a_variant_composes_onto_a_track_with_its_parts():

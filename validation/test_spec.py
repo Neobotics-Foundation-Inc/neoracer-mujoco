@@ -36,15 +36,11 @@ from neoracer_spec import (
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.provenance import Sourced
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
+from neoracer_spec.tree import at
 
 CAR = NEORACER
 MODEL = derive.model(CAR)
 V2_XML = os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml")
-
-
-def value[T](s: Sourced[T], v: T) -> Sourced[T]:
-    """s with the value v and the same source."""
-    return dataclasses.replace(s, value=v)
 
 
 @pytest.fixture(scope="module")
@@ -94,9 +90,6 @@ def test_a_template_that_holds_a_number_of_the_spec_is_refused():
         xml = f'<mujoco><body name="car" {spelling}/></mujoco>'
         with pytest.raises(ValueError, match="which the spec gives"):
             mjcf.apply(xml, [car])
-
-
-BOX = CAR.chassis.collision_box.value
 
 
 def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
@@ -260,30 +253,22 @@ def test_a_change_to_the_chassis_changes_the_xml():
     with open(assets.DEFAULT_CAR, encoding="utf-8") as f:
         template = f.read()
     xml = mjcf.car_xml(MODEL, template)
-    c = CAR.chassis
-    for name, chassis in [
+    for name, car in [
         (
             "collision box center",
-            dataclasses.replace(
-                c,
-                collision_box=value(
-                    c.collision_box, spec.Box((0.02, 0.0, 0.07), BOX.half_size)
-                ),
+            at(CAR, lambda c: c.chassis.collision_box.value.center).set(
+                (0.02, 0.0, 0.07)
             ),
         ),
         (
             "collision box size",
-            dataclasses.replace(
-                c,
-                collision_box=value(
-                    c.collision_box, spec.Box(BOX.center, (0.2, 0.1, 0.09))
-                ),
+            at(CAR, lambda c: c.chassis.collision_box.value.half_size).set(
+                (0.2, 0.1, 0.09)
             ),
         ),
-        ("wheelbase", dataclasses.replace(c, wheelbase=value(c.wheelbase, 0.29))),
-        ("com_height", dataclasses.replace(c, com_height=value(c.com_height, 0.02))),
+        ("wheelbase", at(CAR, lambda c: c.chassis.wheelbase.value).set(0.29)),
+        ("com_height", at(CAR, lambda c: c.chassis.com_height.value).set(0.02)),
     ]:
-        car = dataclasses.replace(CAR, chassis=chassis)
         assert mjcf.car_xml(derive.model(car), template) != xml, name
 
 
@@ -315,9 +300,7 @@ def test_a_rewound_motor_stalls_in_proportion_to_its_free_speed():
 
 def test_the_servo_has_its_datasheet_rating_at_a_rated_voltage():
     for rating in (CAR.servo.low.value, CAR.servo.high.value):
-        servo = dataclasses.replace(
-            CAR.servo, supply=value(CAR.servo.supply, rating.voltage)
-        )
+        servo = at(CAR.servo, lambda s: s.supply.value).set(rating.voltage)
         assert derive.servo_rating(servo) == pytest.approx(rating), rating.voltage
 
 
@@ -392,12 +375,8 @@ def test_the_car_weighs_its_mass(scene):
 
 
 def test_a_car_whose_full_lock_leaves_the_fit_range_is_refused():
-    s = CAR.steering
-    steering = dataclasses.replace(
-        s, inner_lock_degrees=value(s.inner_lock_degrees, 31.0)
-    )
     with pytest.raises(ValueError, match="fit_range"):
-        dataclasses.replace(CAR, steering=steering)
+        at(CAR, lambda c: c.steering.inner_lock_degrees.value).set(31.0)
 
 
 def test_a_number_reads_back_at_the_models_precision():

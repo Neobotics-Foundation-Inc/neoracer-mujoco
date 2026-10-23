@@ -4,7 +4,8 @@ Numbers used by exactly one stage live in that stage's module, not here.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from copy import replace
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal
 
@@ -107,8 +108,8 @@ _TURN_JITTER: Mapping[Difficulty, float] = MappingProxyType(
 
 def settings_for_difficulty(difficulty: Difficulty) -> TrackSettings:
     """Stock TrackSettings with the curvature and width limits and the turn
-    noise of difficulty. To change other knobs too, use dataclasses.replace on
-    the result."""
+    noise of difficulty. To change other knobs too, use copy.replace on the
+    result."""
     return replace(
         TrackSettings(),
         max_curvature=_MAX_CURVATURE[difficulty],
