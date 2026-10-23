@@ -68,11 +68,13 @@ def test_a_record_is_checked_again_when_it_is_rebuilt():
 
 def test_a_where_that_computes_is_refused():
     """A where that does more than read a path, such as arithmetic, a
-    constant, a test or a loop over the tree, raises."""
+    constant, a comparison, a test or a loop over the tree, raises."""
     for where in (
         lambda c: c.chassis.mass.value + 1.0,
         lambda c: 0.29,
         lambda c: c.chassis.track if c.chassis.mass.value else c.chassis.wheelbase,
+        lambda c: c.chassis.track if c.chassis.mass.value == 0 else c.chassis.mass,
+        lambda c: c.chassis.track if c.chassis.mass.value != 0 else c.chassis.mass,
         lambda c: list(c.lidar.position.value),
     ):
         with pytest.raises(TypeError):
