@@ -44,6 +44,8 @@ jobs:
           python-version: "3.14"
 
       # A pushed tag must match the version. A manual run must start from main.
+      # pyproject.toml holds the version; the JS package and the release's
+      # notes get it from here.
       - name: Choose the tag from the version in pyproject.toml
         id: tag
         run: |
@@ -55,6 +57,7 @@ jobs:
             test "$GITHUB_REF" = refs/heads/main || { echo "run the release from main, not $GITHUB_REF"; exit 1; }
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build the wheel
         run: |
@@ -79,16 +82,19 @@ jobs:
           /tmp/wheel-env/bin/python -c "import mujoco; mujoco.MjSpec.from_zip('dist/neoracer.mjz').compile()"
 
       # The JS package (js/), for MuJoCo's WebAssembly build, as an npm
-      # tarball, its generated sources written by the wheel. It must install
+      # tarball with the version of pyproject.toml, its generated sources
+      # written by the wheel. It must install, with the MuJoCo that it names,
       # and load the car before it is published.
       - name: Pack the JS package
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
         run: |
           npm ci --prefix js --no-audit --no-fund
           /tmp/wheel-env/bin/python -m neoracer_mujoco.javascript js/src/generated
-          (cd js && npm pack --pack-destination ../dist)
+          (cd js && npm pkg set version="$VERSION" && npm pack --pack-destination ../dist)
           mkdir /tmp/js-check && cd /tmp/js-check
           npm init -y > /dev/null
-          npm install --no-audit --no-fund "$GITHUB_WORKSPACE"/dist/neoracer-mujoco-*.tgz @mujoco/mujoco@3.16.0
+          npm install --no-audit --no-fund "$GITHUB_WORKSPACE"/dist/neoracer-mujoco-*.tgz
           cat > check.mjs <<'EOF'
           import loadMujoco from '@mujoco/mujoco';
           import { compose, settle } from 'neoracer-mujoco';
@@ -104,7 +110,9 @@ jobs:
       # A manual run creates the tag on the commit that this job built. GitHub
       # refuses to create a tag that already exists, so the run stops instead of
       # publishing under a tag that points at another commit. --verify-tag stops
-      # gh from creating a tag itself.
+      # gh from creating a tag itself. The notes start with the commands that
+      # install this release, which the READMEs point to, and GitHub's
+      # generated notes follow them.
       - name: Attach the wheel, neoracer.mjz and the JS package to a GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -113,4 +121,18 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > /dev/null
           fi
-          gh release create "$TAG" dist/*.whl dist/neoracer.mjz dist/neoracer-mujoco-*.tgz --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --generate-notes
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          cat > notes.md <<EOF
+          Install the Python package:
+
+          \`\`\`sh
+          pip install $url/$(basename dist/*.whl)
+          \`\`\`
+
+          Install the JS package, which brings the MuJoCo that it needs:
+
+          \`\`\`sh
+          npm install $url/$(basename dist/neoracer-mujoco-*.tgz)
+          \`\`\`
+          EOF
+          gh release create "$TAG" dist/*.whl dist/neoracer.mjz dist/neoracer-mujoco-*.tgz --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --notes-file notes.md --generate-notes

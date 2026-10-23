@@ -234,7 +234,7 @@ def test_reset_gives_the_done_rows_the_state_and_physics_of_initial():
 def test_command_rejects_a_model_with_other_actuators():
     """command writes every ctrl of the car's: an actuator that the car does
     not drive, with no throttle map, is not the car's."""
-    spec = mujoco.MjSpec.from_file(assets.DEFAULT_CAR)
+    spec = assets.from_file()
     spec.add_actuator(
         name="extra", target="steer_input", trntype=mujoco.mjtTrn.mjTRN_JOINT
     )

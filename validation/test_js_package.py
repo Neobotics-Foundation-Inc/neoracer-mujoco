@@ -29,15 +29,14 @@ def test_the_shared_constants_read_back_as_the_python_packages():
         assert json.loads(written[name]) == expected, name
 
 
-def test_it_has_the_version_and_the_mujoco_of_the_python_package():
+def test_it_needs_the_mujoco_of_the_python_package():
+    """pip and npm each read their own list of dependencies, so MuJoCo's
+    version is in pyproject.toml and in package.json. The JS package names
+    it once, as a peer dependency, which npm installs with it."""
     package = json.loads((_JS / "package.json").read_text())
     pyproject = tomllib.loads((_REPO / "pyproject.toml").read_text())
-    assert package["version"] == pyproject["project"]["version"]
     pinned = [
         d for d in pyproject["project"]["dependencies"] if d.startswith("mujoco==")
     ]
     assert pinned == [f"mujoco=={package['peerDependencies']['@mujoco/mujoco']}"]
-    assert (
-        package["devDependencies"]["@mujoco/mujoco"]
-        == package["peerDependencies"]["@mujoco/mujoco"]
-    )
+    assert "@mujoco/mujoco" not in package["devDependencies"]

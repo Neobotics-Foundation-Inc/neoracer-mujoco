@@ -1,9 +1,9 @@
 """
 Laws for neoracer_spec: every value of a car's specification has a source,
-each car's XML holds the numbers derived from its spec, each derivation
-keeps what it derives from, the settings beside the model are the sensor
-modules' defaults, and the package runs without MuJoCo in the Python of the
-browser's Pyodide.
+each car's XML gets the numbers derived from its spec and holds none itself,
+each derivation keeps what it derives from, the settings beside the model
+are the sensor modules' defaults, and the package runs without MuJoCo in the
+Python of the browser's Pyodide.
 """
 
 import ast
@@ -69,24 +69,32 @@ def test_every_value_of_a_car_has_a_source():
                 assert alt.value != s.value, path
 
 
-def test_the_xml_holds_the_numbers_derived_from_the_spec():
-    """The checked-in XML is what car_xml writes: after a change to the car,
-    run python -m neoracer_mujoco.write_car assets."""
-    with open(assets.DEFAULT_CAR) as f:
-        xml = f.read()
-    assert mjcf.car_xml(MODEL, xml) == xml
+def test_a_template_that_holds_a_number_of_the_spec_is_refused():
+    """The spec's numbers live in the spec alone. Each car's template in
+    assets/ holds none of them, and the writer refuses it if it holds any
+    one."""
+    cars = [
+        (assets.DEFAULT_CAR, mjcf.car_edits(MODEL)),
+        (V2_XML, mjcf.racecar_neo_v2_edits(derive_v2.model(RACECAR_NEO_V2))),
+    ]
+    for path, edits in cars:
+        with open(path, encoding="utf-8") as f:
+            template = f.read()
+        mjcf.apply(template, edits)
+        for element, attribute, value in edits:
+            with case(f"{os.path.basename(path)}: {element} {attribute}"):
+                held = mjcf.apply(template, [(element, attribute, value)])
+                with pytest.raises(ValueError, match="which the spec gives"):
+                    mjcf.apply(held, edits)
+
+    # The writer knows the attribute however the XML spells it.
+    for spelling in ('pos="0 0 1"', "pos='0 0 1'", 'pos = "0 0 1"'):
+        tag = f'<body name="car" {spelling}/>'
+        with pytest.raises(ValueError, match="which the spec gives"):
+            mjcf.apply(tag, [('<body name="car"', "pos", "0 0 2")])
 
 
 BOX = CAR.chassis.collision_box.value
-
-
-def test_the_v2_xml_holds_the_numbers_derived_from_its_spec():
-    """The checked-in RACECAR Neo V2 XML is what racecar_neo_v2_xml writes:
-    after a change to the car, run python -m neoracer_mujoco.write_car
-    assets."""
-    with open(V2_XML) as f:
-        xml = f.read()
-    assert mjcf.racecar_neo_v2_xml(derive_v2.model(RACECAR_NEO_V2), xml) == xml
 
 
 def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
@@ -100,7 +108,7 @@ def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
         (V2_XML, derive_v2.model(RACECAR_NEO_V2).lidar_scan_rate),
     )
     for path, scan_rate in cars:
-        car = mujoco.MjSpec.from_file(path)
+        car = assets.from_file(path)
         for bearing in bearings:
             beam = car.sensor(f"lidar_{bearing:03d}")
             car.add_sensor(
@@ -247,8 +255,9 @@ def test_the_v2_spec_lists_its_questions_for_racecarsim():
 def test_a_change_to_the_chassis_changes_the_xml():
     """Every chassis value reaches the model: a car with one of them changed
     gets a different XML."""
-    with open(assets.DEFAULT_CAR) as f:
-        xml = f.read()
+    with open(assets.DEFAULT_CAR, encoding="utf-8") as f:
+        template = f.read()
+    xml = mjcf.car_xml(MODEL, template)
     c = CAR.chassis
     for name, chassis in [
         (
@@ -273,7 +282,7 @@ def test_a_change_to_the_chassis_changes_the_xml():
         ("com_height", dataclasses.replace(c, com_height=value(c.com_height, 0.02))),
     ]:
         car = dataclasses.replace(CAR, chassis=chassis)
-        assert mjcf.car_xml(derive.model(car), xml) != xml, name
+        assert mjcf.car_xml(derive.model(car), template) != xml, name
 
 
 def test_the_derived_settings_are_the_sensor_modules_defaults():

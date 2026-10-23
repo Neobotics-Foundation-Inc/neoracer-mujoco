@@ -22,7 +22,7 @@ def corridor_scene() -> Scene:
 def reversed_car(path: str = assets.DEFAULT_CAR) -> Scene:
     """The car of the XML at path, the default car's by default, with its
     actuators and its sensors in reverse order."""
-    root = ET.parse(path).getroot()
+    root = ET.fromstring(assets.read_xml(path))
     for tag in ("actuator", "sensor"):
         section = root.find(tag)
         assert section is not None, tag

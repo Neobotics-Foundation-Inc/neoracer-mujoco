@@ -2,13 +2,12 @@
 The car models' numbers (derive.ModelParams, derive_v2.ModelParams)
 written into the cars' XML.
 
-car_xml and racecar_neo_v2_xml set each number in the start tag that holds
-it and leave the rest of the XML, its structure and its comments, as it is.
-The checked-in assets/neoracer.xml and assets/racecar_neo_v2.xml are what
-they write for neoracer.NEORACER and racecar_neo_v2.RACECAR_NEO_V2; a test
-holds them there. After a change to a car, run
-
-    python -m neoracer_mujoco.write_car assets
+assets/neoracer.xml and assets/racecar_neo_v2.xml are templates: their
+structure, their comments and the numbers that the spec does not give.
+car_xml and racecar_neo_v2_xml add each number that the spec gives to the
+start tag that holds it, and refuse a template that already has it, so the
+spec's numbers live in the spec alone. neoracer_mujoco.assets reads the
+cars through them.
 """
 
 import math
@@ -29,17 +28,29 @@ def numbers(*xs: float) -> str:
     return " ".join(number(x) for x in xs)
 
 
-def _set(xml: str, element: str, attribute: str, value: str) -> str:
-    """xml with attribute set to value in the one start tag that matches the
-    regex element (which matches from its "<")."""
+type Edit = tuple[str, str, str]  # (element, attribute, value)
+
+
+def _put(xml: str, element: str, attribute: str, value: str) -> str:
+    """xml with attribute="value" added to the one start tag that matches
+    the regex element (which matches from its "<"). Raise ValueError if the
+    tag already has the attribute: the spec gives it, so the template must
+    not."""
     tags = list(re.finditer(element + r"[^>]*>", xml))
     if len(tags) != 1:
         raise ValueError(f"{len(tags)} elements match {element!r}, not 1")
     tag = tags[0]
-    new, n = re.subn(rf'(\s{attribute}=")[^"]*(")', rf"\g<1>{value}\g<2>", tag.group(0))
-    if n != 1:
-        raise ValueError(f"{element!r} has {n} {attribute} attributes, not 1")
-    return xml[: tag.start()] + new + xml[tag.end() :]
+    if re.search(rf"\s{attribute}\s*=", tag.group(0)):
+        raise ValueError(f"{element!r} has {attribute}, which the spec gives")
+    end = tag.end() - (2 if tag.group(0).endswith("/>") else 1)
+    return f'{xml[:end]} {attribute}="{value}"{xml[end:]}'
+
+
+def apply(xml: str, edits: list[Edit]) -> str:
+    """xml with each edit's attribute added (see _put)."""
+    for element, attribute, value in edits:
+        xml = _put(xml, element, attribute, value)
+    return xml
 
 
 def beam_timing(scan_rate: float, bearing: int) -> tuple[float, float, float]:
@@ -59,7 +70,7 @@ def beam_timing(scan_rate: float, bearing: int) -> tuple[float, float, float]:
     return period, phase, (1.0 - passes) * period
 
 
-def _beam_edits(scan_rate: float, bearing: int) -> list[tuple[str, str, str]]:
+def _beam_edits(scan_rate: float, bearing: int) -> list[Edit]:
     """The attributes of the beam's rangefinder that time its readings."""
     period, phase, delay = beam_timing(scan_rate, bearing)
     rangefinder = rf'<rangefinder name="lidar_{bearing:03d}"'
@@ -72,7 +83,12 @@ def _beam_edits(scan_rate: float, bearing: int) -> list[tuple[str, str, str]]:
 
 
 def car_xml(p: ModelParams, xml: str) -> str:
-    """The car's XML, xml, with the numbers of p."""
+    """The car's XML from its template, xml, and the numbers of p."""
+    return apply(xml, car_edits(p))
+
+
+def car_edits(p: ModelParams) -> list[Edit]:
+    """The numbers of p, by the element and the attribute that hold each."""
     x, y = p.half_wheelbase, p.half_track
     poly = p.ackermann_left
     mirror = (-poly[0], poly[1], -poly[2], poly[3], -poly[4])
@@ -83,9 +99,9 @@ def car_xml(p: ModelParams, xml: str) -> str:
     edits = [
         (r'<geom type="plane"', "friction", friction),
         (r'<body name="car"', "pos", numbers(0, 0, p.spawn_height)),
-        (r"<inertial\s", "mass", number(p.chassis_mass)),
-        (r"<inertial\s", "diaginertia", numbers(*p.chassis_inertia)),
-        (r"<inertial\s", "pos", numbers(0, 0, p.com_height)),
+        (r"<inertial[\s/]", "mass", number(p.chassis_mass)),
+        (r"<inertial[\s/]", "diaginertia", numbers(*p.chassis_inertia)),
+        (r"<inertial[\s/]", "pos", numbers(0, 0, p.com_height)),
         (r'<geom name="chassis"', "pos", numbers(*p.box_center)),
         (r'<geom name="chassis"', "size", numbers(*p.box_half_size)),
         (r'<site name="imu"', "pos", numbers(*p.imu_position)),
@@ -152,21 +168,24 @@ def car_xml(p: ModelParams, xml: str) -> str:
             (rf'<geom name="{corner}_wheel"', "mass", number(p.wheel_mass)),
             (rf'<mesh name="vis_{corner}_wheel"', "scale", scale),
         ]
-    for element, attribute, value in edits:
-        xml = _set(xml, element, attribute, value)
-    return xml
+    return edits
 
 
 def racecar_neo_v2_xml(p: derive_v2.ModelParams, xml: str) -> str:
-    """The RACECAR Neo V2's XML, xml, with the numbers of p."""
+    """The RACECAR Neo V2's XML from its template, xml, and the numbers of p."""
+    return apply(xml, racecar_neo_v2_edits(p))
+
+
+def racecar_neo_v2_edits(p: derive_v2.ModelParams) -> list[Edit]:
+    """The numbers of p, by the element and the attribute that hold each."""
     x, y = p.half_wheelbase, p.half_track
     d, s, st = p.drive, p.servo, p.steering
     ax, ay, az = p.antenna_center
     edits = [
         (r'<body name="car"', "pos", numbers(0, 0, p.spawn_height)),
-        (r"<inertial\s", "pos", numbers(*p.chassis_com)),
-        (r"<inertial\s", "mass", number(p.chassis_mass)),
-        (r"<inertial\s", "diaginertia", numbers(*p.chassis_inertia)),
+        (r"<inertial[\s/]", "pos", numbers(*p.chassis_com)),
+        (r"<inertial[\s/]", "mass", number(p.chassis_mass)),
+        (r"<inertial[\s/]", "diaginertia", numbers(*p.chassis_inertia)),
         (r'<site name="imu"', "pos", numbers(*p.imu_position)),
         (r'<site name="lidar_mount"', "pos", numbers(*p.lidar_position)),
         (r'<site name="lidar_mount"', "euler", numbers(0, 0, p.lidar_yaw)),
@@ -265,6 +284,4 @@ def racecar_neo_v2_xml(p: derive_v2.ModelParams, xml: str) -> str:
                 numbers(grip[axle], 0.1, 0.1),
             ),
         ]
-    for element, attribute, value in edits:
-        xml = _set(xml, element, attribute, value)
-    return xml
+    return edits
