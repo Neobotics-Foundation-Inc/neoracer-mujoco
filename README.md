@@ -46,7 +46,7 @@ The JS package's TypeScript is written from the spec when the package is built (
 
 A second car, the RACECAR Neo V2, has a spec in `src/neoracer_spec/racecar_neo_v2.py` and a model in `assets/racecar_neo_v2.xml`. Its values come from its measurement worksheet, from the calibration runs of a reference car, and from RacecarSim, the RACECAR Neo simulator in Unity, whose model of the car gives its shape and its meshes. These sources measure what the car does, such as its turning radius and its speed at each command, rather than its motor's and servo's ratings. So the V2's parts have their own types, and `derive_v2` turns them into the model's numbers. Values fitted against a reference are `Calibrated`: the LiDAR's mounting angle, and the model's own fits to the reference car's runs, such as the gain of its speed controller. `validation/test_racecar_neo_v2.py` drives those runs on the model and holds it to them.
 
-The V2's firmware holds a speed, so its throttle is a speed command. At 0 the car coasts to a stop on its drag brake; any other throttle holds at least the slowest of the speeds that the spec measured (`Drive.steady_speed`), and 1 holds the fastest. The steer is in radians, as on the NeoRacer, and the car reaches its steering stops at about half of full lock to the right:
+The V2's firmware holds a speed, so its throttle is a speed command. At 0 the car coasts to a stop on its drag brake; any other throttle holds at least the floor of the line fitted through the speeds that the spec measured (`derive_v2.steady_speed_line`), and 1 holds about the fastest of them. The steer is in radians, as on the NeoRacer, and the car reaches its steering stops at about half of full lock to the right:
 
 ```python
 import os
@@ -59,7 +59,7 @@ from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
 scene = assets.load(os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml"))
 params = derive_v2.derive(RACECAR_NEO_V2)  # its LiDAR's slots are its samples a turn
 data = sim.settle(scene.model)
-# It holds the steady speed that the spec measured at throttle 0.5.
+# Half throttle holds about the speed that the spec measured there.
 sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.0))
 scan = lidar.start(params.lidar, scene.model, data, scene.car).scan
 ```
