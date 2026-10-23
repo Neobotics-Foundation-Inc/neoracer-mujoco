@@ -13,9 +13,10 @@ MappingProxyType. Every branch off the path is shared with the old tree.
 A type checker reads where as a function of the tree, so it checks the path
 and the new value's type. It does not check that where only reads, so at
 runs where on the tree as well and raises TypeError unless it returns the
-node at the end of the recorded path. A where that computes, such as
-lambda car: car.mass.value + 1, a slice or a choice by a test of the tree,
-fails, unless it chooses between nodes that are one object.
+node at the end of the recorded path, by steps that set can rebuild. A
+where that computes, such as lambda car: car.mass.value + 1, a property, a
+slice or a choice by a test of the tree, fails, unless it chooses between
+nodes that are one object.
 """
 
 from __future__ import annotations
@@ -33,8 +34,7 @@ def at[T, V](tree: T, where: Callable[[T], V]) -> Focus[T, V]:
     if not isinstance(found, _Recorder):
         raise TypeError(_ONLY_READ)
     # The recorder cannot see an identity test (is), which no object can
-    # intercept, nor an attribute that computes, such as a property. Either
-    # makes where return other than the recorded path's node.
+    # intercept: it makes where return other than the recorded path's node.
     if where(tree) is not _node(tree, found._tree_steps):
         raise TypeError(_ONLY_READ)
     return Focus(tree, found._tree_steps)
@@ -83,10 +83,6 @@ class _Recorder:
         return _Recorder((*self._tree_steps, Attr(name)))
 
     def __getitem__(self, key: object) -> _Recorder:
-        # A slice is not a node of the tree, though it can be the same object
-        # as one, as t[:] is t for a tuple t.
-        if isinstance(key, slice):
-            raise TypeError(_ONLY_READ)
         return _Recorder((*self._tree_steps, Item(key)))
 
     # A where that compares, tests or loops over the tree computes; it does
@@ -103,13 +99,27 @@ class _Recorder:
 
 
 def _node(tree: Any, steps: tuple[Step, ...]) -> Any:
+    """The node at the end of steps from tree's root. Raise TypeError at a
+    step that set cannot rebuild, though it may return a node of the tree,
+    such as a property or a slice of a tuple (t[:] is t)."""
     for step in steps:
         match step:
-            case Attr(name=name):
+            case Attr(name=name) if name in _fields(tree):
                 tree = getattr(tree, name)
-            case Item(key=key):
+            case Item(key=int() as i) if isinstance(tree, tuple):
+                tree = tree[i]
+            case Item(key=key) if isinstance(tree, Mapping):
                 tree = tree[key]
+            case _:
+                raise TypeError(f"set cannot rebuild {step} of a {type(tree).__name__}")
     return tree
+
+
+def _fields(node: object) -> set[str]:
+    """The fields that dataclasses.replace can give node."""
+    if not dataclasses.is_dataclass(node) or isinstance(node, type):
+        return set()
+    return {f.name for f in dataclasses.fields(node) if f.init}
 
 
 def _rebuild(node: Any, steps: tuple[Step, ...], f: Callable[[Any], Any]) -> Any:

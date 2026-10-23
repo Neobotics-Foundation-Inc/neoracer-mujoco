@@ -25,6 +25,10 @@ class Gains:
 class Tree:
     gains: tuple[Gains, ...] = (Gains(), Gains())
 
+    @property
+    def first(self) -> Gains:
+        return self.gains[0]
+
 
 def test_a_set_value_reads_back_and_the_old_tree_is_unchanged():
     """The new tree has the value at the path, the old one its own value,
@@ -78,9 +82,20 @@ def test_a_where_that_computes_is_refused():
         lambda c: c.chassis.track if c.chassis.mass.value != 0 else c.chassis.mass,
         lambda c: c.chassis.track if c.chassis is c.chassis else c.chassis.wheelbase,
         lambda c: c.lidar.position.value[:2],
-        lambda c: c.lidar.position.value[:2][0],
-        lambda c: c.lidar.position.value[:],
         lambda c: list(c.lidar.position.value),
     ):
         with pytest.raises(TypeError):
             at(NEORACER, where)
+
+
+def test_a_path_that_set_cannot_rebuild_is_refused():
+    """A property or a slice can return a node of the tree, but set cannot
+    replace it there, so at raises."""
+    for where in (
+        lambda t: t.first,
+        lambda t: t.first.by_axle,
+        lambda t: t.gains[:],
+        lambda t: t.gains[:1][0],
+    ):
+        with pytest.raises(TypeError):
+            at(Tree(), where)
