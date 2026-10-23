@@ -1,14 +1,14 @@
 """
-A change deep in a tree of frozen dataclasses, tuples and mappings, which
-leaves the tree as it is and returns a new one:
+A change deep in a tree of frozen dataclasses, tuples and MappingProxyTypes,
+which leaves the tree as it is and returns a new one:
 
     wide = at(NEORACER, lambda car: car.chassis.track.value).set(0.20)
 
 where reads a path from the tree's root. at runs it once on a recorder
 that notes each attribute and item it reads, and set and apply rebuild the
 tree along that path: a dataclass with dataclasses.replace, which checks it
-again (__post_init__), a tuple as a new tuple, and a mapping as a new
-MappingProxyType. Every branch off the path is shared with the old tree.
+again (__post_init__), a tuple as a new tuple, and a MappingProxyType as a
+new one. Every branch off the path is shared with the old tree.
 
 A type checker reads where as a function of the tree, so it checks the path
 and the new value's type. It does not check that where only reads, so at
@@ -22,7 +22,7 @@ nodes that are one object.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, assert_never, cast
@@ -100,15 +100,17 @@ class _Recorder:
 
 def _node(tree: Any, steps: tuple[Step, ...]) -> Any:
     """The node at the end of steps from tree's root. Raise TypeError at a
-    step that set cannot rebuild, though it may return a node of the tree,
-    such as a property or a slice of a tuple (t[:] is t)."""
+    step that set cannot rebuild, though it may return a node of the tree:
+    a property, a slice of a tuple (t[:] is t), or an item of a named tuple
+    or a dict, which set would rebuild as a plain tuple or a
+    MappingProxyType."""
     for step in steps:
         match step:
             case Attr(name=name) if name in _fields(tree):
                 tree = getattr(tree, name)
-            case Item(key=int() as i) if isinstance(tree, tuple):
+            case Item(key=int() as i) if type(tree) is tuple:
                 tree = tree[i]
-            case Item(key=key) if isinstance(tree, Mapping):
+            case Item(key=key) if type(tree) is MappingProxyType:
                 tree = tree[key]
             case _:
                 raise TypeError(f"set cannot rebuild {step} of a {type(tree).__name__}")
@@ -131,10 +133,10 @@ def _rebuild(node: Any, steps: tuple[Step, ...], f: Callable[[Any], Any]) -> Any
             return dataclasses.replace(
                 node, **{name: _rebuild(getattr(node, name), rest, f)}
             )
-        case Item(key=key) if isinstance(node, tuple):
+        case Item(key=key) if type(node) is tuple:
             i = range(len(node))[cast(int, key)]
             return (*node[:i], _rebuild(node[i], rest, f), *node[i + 1 :])
-        case Item(key=key) if isinstance(node, Mapping):
+        case Item(key=key) if type(node) is MappingProxyType:
             return MappingProxyType({**node, key: _rebuild(node[key], rest, f)})
         case Item():
             raise TypeError(f"no item of a {type(node).__name__} can be replaced")

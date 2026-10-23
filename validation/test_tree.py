@@ -5,6 +5,7 @@ tuples and mappings gives a new tree and leaves the old one as it is.
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import NamedTuple
 
 import pytest
 from cases import case
@@ -28,6 +29,11 @@ class Tree:
     @property
     def first(self) -> Gains:
         return self.gains[0]
+
+
+class Point(NamedTuple):
+    x: float
+    y: float
 
 
 def test_a_set_value_reads_back_and_the_old_tree_is_unchanged():
@@ -90,7 +96,8 @@ def test_a_where_that_computes_is_refused():
 
 def test_a_path_that_set_cannot_rebuild_is_refused():
     """A property or a slice can return a node of the tree, but set cannot
-    replace it there, so at raises."""
+    replace it there, and set would rebuild a named tuple or a dict as
+    another type, so at raises."""
     for where in (
         lambda t: t.first,
         lambda t: t.first.by_axle,
@@ -99,3 +106,7 @@ def test_a_path_that_set_cannot_rebuild_is_refused():
     ):
         with pytest.raises(TypeError):
             at(Tree(), where)
+    with pytest.raises(TypeError):
+        at(Point(1.0, 2.0), lambda p: p[0])
+    with pytest.raises(TypeError):
+        at({"easy": 1.0}, lambda d: d["easy"])
