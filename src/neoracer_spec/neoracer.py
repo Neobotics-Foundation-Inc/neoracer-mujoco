@@ -219,9 +219,6 @@ NEORACER = Spec(
                 voltage=5.0, stall_torque_kgf_cm=17.0, seconds_per_60_degrees=0.13
             ),
             SERVO_DATASHEET,
-            note="the car's servo (the team, 2026-10-22). Until then the model"
-            " took the SPT5435LV-180W (the team, 2026-10-16), 29 kgf·cm and"
-            " 0.16 s at 4.8 V",
         ),
         high=documented(
             ServoRating(
