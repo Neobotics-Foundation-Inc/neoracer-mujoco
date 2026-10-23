@@ -7,7 +7,7 @@ The XML is assets/neoracer.xml with the numbers that the car's parts give
 (neoracer_spec.mjcf.car_xml), so a variant of the NeoRacer is a car of its
 own:
 
-    car = dataclasses.replace(NEORACER, battery=Battery(chosen(7.4, "slower")))
+    car = at(NEORACER, lambda c: c.battery.voltage).set(chosen(7.4, "slower"))
     scene = compose(track, spec(car))     # CPU, or a batch on the GPU
     write(car, "dist/slow")               # dist/slow/neoracer.mjz for the web
 """

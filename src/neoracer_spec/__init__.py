@@ -16,5 +16,5 @@ Python with numpy, no MuJoCo, so any program can read the car.
                         solver's options (SOLVER)
 
 Each step is a pure function from one type to the next. A variant of the
-car is a variant of its parts: dataclasses.replace(NEORACER, motor=...).
+car is a variant of its parts: tree.at(NEORACER, lambda car: car.motor).set(...).
 """

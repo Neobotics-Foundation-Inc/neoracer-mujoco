@@ -5,7 +5,8 @@ synthetic scans. The tests use no physics and no unseeded random numbers.
 Frame: +X forward, +Y left. A steering angle is + = left.
 """
 
-from dataclasses import replace
+import dataclasses
+from copy import replace
 from typing import assert_never
 
 import numpy as np
@@ -222,7 +223,7 @@ def test_no_path_keeps_state_and_recovers_toward_closer_option():
 def test_params_reject_a_grid_without_a_straight_path_or_horizon():
     for bad in [{"n_candidates": 80}, {"n_candidates": 1}, {"planning_horizon_m": 0.0}]:
         with pytest.raises(ValueError):
-            replace(PARAMS, **bad)
+            dataclasses.replace(PARAMS, **bad)
 
 
 def test_arc_spacing_is_at_most_arc_sample_ds():

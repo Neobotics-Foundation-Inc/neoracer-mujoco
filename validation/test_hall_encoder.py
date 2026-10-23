@@ -6,7 +6,7 @@ rc.physics.get_encoder_speed() on the V2.
 
 import math
 import os
-from dataclasses import replace
+from copy import replace
 
 import pytest
 
