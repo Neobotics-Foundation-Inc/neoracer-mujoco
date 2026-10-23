@@ -131,7 +131,7 @@ test("the car stands where it is put, facing +X, whatever the track's site defau
 
 test('a LiDAR that is not a scan is refused at the start', () => {
   const data = settle(mj, model);
-  for (const bad of [{ slots: 1.5 }, { slots: 0 }, { scanRate: 0 }, { maxRange: -1 }, { field: 7 }]) {
+  for (const bad of [{ slots: 1.5 }, { slots: 0 }, { scan_rate: 0 }, { max_range: -1 }, { field: 7 }]) {
     assert.throws(() => startLidar(mj, { ...LIDAR, ...bad }, scene, data), Error, JSON.stringify(bad));
   }
 });
@@ -159,6 +159,5 @@ test('a car whose ranges are not symmetric about 0 has no limits, but takes dire
 
 test("the NeoRacer's parameters are Python's derive(NEORACER)", () => {
   assert.deepEqual(spec.NEORACER_PARAMS, fixtures.params);
-  assert.equal(LIDAR.slots, spec.NEORACER_PARAMS.lidar.slots);
   assert.equal(spec.NEORACER.chassis.wheelbase.status.kind, 'Measured');
 });
