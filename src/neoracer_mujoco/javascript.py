@@ -22,7 +22,7 @@ from types import MappingProxyType
 from neoracer_spec import typescript
 from neoracer_spec.neoracer import NEORACER
 
-from . import contract, encoder, export, lidar, sensors, sim
+from . import assets, contract, encoder, export, lidar, sensors, sim
 
 HEADER = "// Written by python -m neoracer_mujoco.javascript. Do not edit.\n"
 
@@ -31,6 +31,7 @@ HEADER = "// Written by python -m neoracer_mujoco.javascript. Do not edit.\n"
 SHARED: Mapping[str, object] = MappingProxyType(
     {
         "CAR_BODY": contract.CAR_BODY,
+        "START_SITE": assets.START_SITE,
         "DRIVE_ACTUATOR": contract.DRIVE_ACTUATOR,
         "STEER_ACTUATOR": contract.STEER_ACTUATOR,
         "LIDAR_SITE": contract.LIDAR_SITE,

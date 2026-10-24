@@ -47,8 +47,9 @@
          -Y └───────────────╱       ╲───────────────┘   outer (y=-3)
               x=-4                                 x=4
 
-    The car spawns centered in the bottom straight segment (y=-2.5, midway
-    between the inner and outer bottom walls), facing +X -- same
+    The car starts at the site "start", centered in the bottom straight
+    segment (y=-2.5, midway between the inner and outer bottom walls),
+    facing +X; assets.compose puts it there. This is the same
     "car spawns already centered, facing down a straight" convention as
     straight_corridor.xml. Because the wall-following controller centers
     between whichever two walls it currently sees (not "always follow the
@@ -79,6 +80,7 @@
     <worldbody>
         <geom name="floor" type="plane" size="4.5 3.9 .01" pos="0 0 0"
               material="loop_floor" friction="1.5 0.1 0.1"/>
+        <site name="start" pos="0 -2.5 0"/>
 
         <body name="walls">
             <!-- outer ring (8m x 6m outer footprint): each straight wall is cut

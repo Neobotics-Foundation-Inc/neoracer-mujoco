@@ -115,22 +115,33 @@ test('set_speed_angle writes the controls that the Python adapter writes', () =>
   }
 });
 
-test("the car stands where it is put, facing +X, whatever the track's site defaults", () => {
-  const defaults = [
-    '<site quat="0 0 0 1"/>',
-    '<site euler="0 0 1.2"/>',
-    '<site fromto="0 0 0 1 1 1" size=".01"/>',
+test("the car stands at the track's start, facing its +X, or at the origin facing +X without one", () => {
+  const start = '<site name="start" pos="0 -2.5 0"/>';
+  const replaced = (xml, from, to) => {
+    const out = xml.replace(from, to);
+    assert.notEqual(out, xml, from);
+    return out;
+  };
+  const yaw = (degrees) => {
+    const half = (degrees * Math.PI) / 360;
+    return [Math.cos(half), 0, 0, Math.sin(half)];
+  };
+  const bare = replaced(trackXml, start, '');
+  const tracks = [
+    ['loop', trackXml, [0, -2.5], yaw(0)],
+    ['turned', replaced(trackXml, start, '<site name="start" pos="1 -2 0" euler="0 0 30"/>'), [1, -2], yaw(30)],
+    // Without a start, whatever the track's site defaults.
+    ...['<site quat="0 0 0 1"/>', '<site euler="0 0 1.2"/>', '<site fromto="0 0 0 1 1 1" size=".01"/>'].map(
+      (site) => [site, replaced(bare, '<default>', `<default>${site}`), [0, 0], yaw(0)],
+    ),
   ];
-  for (const site of defaults) {
-    const xml = trackXml.replace('<default>', `<default>${site}`);
-    assert.notEqual(xml, trackXml);
-    const placed = compose(mj, xml, [1, -2, 0]);
+  for (const [name, xml, xy, quat] of tracks) {
+    const placed = compose(mj, xml);
     const data = new mj.MjData(placed.model);
     mj.mj_forward(placed.model, data);
     const b = placed.car.body;
-    assert.deepEqual(Array.from(data.xquat.subarray(4 * b, 4 * b + 4), (x) => Math.round(x * 1e9) / 1e9), [1, 0, 0, 0], site);
-    const xy = Array.from(data.xpos.subarray(3 * b, 3 * b + 2));
-    assert.ok(Math.abs(xy[0] - 1) < 1e-9 && Math.abs(xy[1] + 2) < 1e-9, site);
+    assert.ok(maxDiff(Array.from(data.xquat.subarray(4 * b, 4 * b + 4)), quat) < 1e-9, name);
+    assert.ok(maxDiff(Array.from(data.xpos.subarray(3 * b, 3 * b + 2)), xy) < 1e-9, name);
   }
 });
 
@@ -152,7 +163,7 @@ test('a car whose ranges are not symmetric about 0 has no limits, but takes dire
     const pattern = new RegExp(`(<[a-z]+ name="${actuator}"[^>]*?ctrlrange=")[^"]*(")`, 's');
     const xml = CAR_XML.replace(pattern, `$1${range}$2`);
     assert.notEqual(xml, CAR_XML, actuator);
-    const odd = compose(mj, trackXml, [0, 0, 0], xml);
+    const odd = compose(mj, trackXml, xml);
     assert.throws(() => actuatorLimits(odd.model, odd.car), /ctrlrange/, actuator);
     // A direct command needs no symmetric range, as sim.apply_command.
     const data = new mj.MjData(odd.model);

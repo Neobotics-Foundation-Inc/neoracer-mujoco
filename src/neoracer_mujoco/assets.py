@@ -21,7 +21,6 @@ import zipfile
 from importlib import resources
 
 import mujoco
-import numpy as np
 
 from neoracer_spec import derive_v2, mjcf
 from neoracer_spec.derive import derive
@@ -42,8 +41,7 @@ ASSET_DIR = str(_packaged) if _packaged.is_dir() else _checkout
 TRACK_DIR = os.path.join(ASSET_DIR, "tracks")
 DEFAULT_CAR = os.path.join(ASSET_DIR, "neoracer.xml")
 MJZ_MODEL = "model.xml"  # the name of the XML in an archive of write_mjz
-
-type Position = tuple[float, float, float]  # m, world frame
+START_SITE = "start"  # the site of a track where compose puts the car
 
 
 def cars() -> list[str]:
@@ -112,13 +110,13 @@ def load(path: str | os.PathLike[str] = DEFAULT_CAR) -> Scene:
 def compose(
     track: mujoco.MjSpec,
     car: str | os.PathLike[str] | mujoco.MjSpec = DEFAULT_CAR,
-    pos: Position = (0.0, 0.0, 0.0),
     visuals: bool = True,
 ) -> Scene:
     """Compile the track with the car's root body (contract.CAR_BODY)
-    attached at pos (m), facing +X. The car is a car XML's path or a car's
-    MjSpec, such as export.spec(car) for a variant. Neither track nor a
-    car's MjSpec is changed: the car is attached from copies.
+    attached at the track's start: its site START_SITE, facing the site's
+    +X, or the origin, facing +X, if it has none. The car is a car XML's
+    path or a car's MjSpec, such as export.spec(car) for a variant. Neither
+    track nor a car's MjSpec is changed: the car is attached from copies.
 
     Only the car body is attached, so the track keeps its own floor, and
     the track XML never names the car file. The scene takes the car's
@@ -135,8 +133,8 @@ def compose(
     scene = track.copy()
     car = car.copy() if isinstance(car, mujoco.MjSpec) else from_file(car)
     scene.option = car.option
-    frame = scene.worldbody.add_frame()
-    frame.pos = np.array(pos)
+    start = scene.site(START_SITE)
+    mount = start if start is not None else scene.worldbody.add_frame()
     if not visuals:
         delete_visuals(car)
     # The car's root default class is "main", as the track's is. Attached
@@ -144,7 +142,7 @@ def compose(
     # <default> with no class, which the XML parser rejects. A name of its
     # own makes the scene's XML load again.
     car.default.name = "car"
-    frame.attach_body(car.body(contract.CAR_BODY), "", "")
+    mount.attach_body(car.body(contract.CAR_BODY), "", "")
     return compile_scene(scene)
 
 

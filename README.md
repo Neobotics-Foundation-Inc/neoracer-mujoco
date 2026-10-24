@@ -104,7 +104,7 @@ The throttle runs from -1 to 1, as a fraction of the battery's voltage. The stee
 
 ## The car on a track
 
-A track is an `MjSpec` with all its walls in a body named `walls`. `assets.compose` attaches the car to a track and compiles both into a `Scene`:
+A track is an `MjSpec` with all its walls in a body named `walls`, and it may mark where the car starts with a site named `start` (`assets.START_SITE`). `assets.compose` attaches the car there, facing the site's +X, or at the origin facing +X if the track has no start, and compiles both into a `Scene`:
 
 ```python
 import os

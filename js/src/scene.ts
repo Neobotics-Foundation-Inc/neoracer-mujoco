@@ -11,12 +11,12 @@ import {
   DRIVE_POS_SENSOR,
   LIDAR_SITE,
   SETTLE_TIME,
+  START_SITE,
   STEER_ACTUATOR,
 } from './generated/shared.js';
 import { CAR_XML } from './generated/car.js';
 
 export type Mujoco = MainModule;
-export type Position = readonly [number, number, number]; // m, world frame
 
 /** The parts of the car, as indices into the compiled model. */
 export interface Car {
@@ -65,17 +65,13 @@ export function deleteVisuals(mj: Mujoco, spec: MjSpec): void {
 }
 
 /**
- * Compile the track's MJCF with the car attached at pos (m), facing +X, and
- * without the meshes that only show the car. The track keeps its own floor,
- * and the scene takes the car's <option>, as in assets.compose. carXml
- * defaults to assets/neoracer.xml.
+ * Compile the track's MJCF with the car attached at the track's start, its
+ * site START_SITE, facing the site's +X, or the origin, facing +X, if it has
+ * none, and without the meshes that only show the car. The track keeps its
+ * own floor, and the scene takes the car's <option>, as in assets.compose.
+ * carXml defaults to assets/neoracer.xml.
  */
-export function compose(
-  mj: Mujoco,
-  trackXml: string,
-  pos: Position = [0, 0, 0],
-  carXml: string = CAR_XML,
-): Scene {
+export function compose(mj: Mujoco, trackXml: string, carXml: string = CAR_XML): Scene {
   const spec = mj.parseXMLString(trackXml);
   const car = mj.parseXMLString(carXml);
   spec.option = car.option;
@@ -83,16 +79,8 @@ export function compose(
   // The car's root default class is "main", as the track's is: a name of
   // its own keeps the two apart, as in assets.compose.
   mj.mjs_setName(mj.mjs_getSpecDefault(car)!.element, 'car');
-  // A body attaches to a site or a frame, and the bindings cannot add a
-  // frame to the world body, so the car hangs from a site at pos.
-  const world = mj.mjs_findBody(spec, 'world')!;
-  const mount = mj.mjs_addSite(world, mj.mjs_getSpecDefault(spec)!)!;
-  // The site takes the track's site defaults: undo any pose they give it,
-  // so the car stands at pos facing +X.
-  mount.pos.set(pos);
-  mount.quat.set([1, 0, 0, 0]);
-  mount.alt.type = mj.mjtOrientation.mjORIENTATION_QUAT;
-  mount.fromto.set([NaN, NaN, NaN, NaN, NaN, NaN]);
+  const start = mj.mjs_findElement(spec, mj.mjtObj.mjOBJ_SITE, START_SITE);
+  const mount = start ? mj.mjs_asSite(start)! : origin(mj, spec);
   const body = mj.mjs_findBody(car, CAR_BODY);
   if (!body) throw new Error(`the car has no "${CAR_BODY}" body`);
   if (!mj.mjs_attach(mount.element, body.element, '', '')) throw new Error(mj.mjs_getError(spec));
@@ -111,6 +99,21 @@ export function compose(
       drivePos: model.sensor_adr[id(O.mjOBJ_SENSOR, DRIVE_POS_SENSOR)],
     },
   };
+}
+
+/**
+ * A new site at the origin, facing +X. A body attaches to a site or a frame,
+ * and the bindings cannot add a frame to the world body.
+ */
+function origin(mj: Mujoco, spec: MjSpec) {
+  const world = mj.mjs_findBody(spec, 'world')!;
+  const site = mj.mjs_addSite(world, mj.mjs_getSpecDefault(spec)!)!;
+  // The site takes the track's site defaults: undo any pose they give it.
+  site.pos.set([0, 0, 0]);
+  site.quat.set([1, 0, 0, 0]);
+  site.alt.type = mj.mjtOrientation.mjORIENTATION_QUAT;
+  site.fromto.set([NaN, NaN, NaN, NaN, NaN, NaN]);
+  return site;
 }
 
 /** New data for model, stepped for SETTLE_TIME with zero control so the car rests. */

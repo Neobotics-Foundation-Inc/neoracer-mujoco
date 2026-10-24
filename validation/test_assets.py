@@ -35,6 +35,27 @@ def test_the_car_composes_onto_every_track_and_rests_on_its_floor():
             assert_car_rests(assets.compose(mujoco.MjSpec.from_file(track)))
 
 
+def test_the_car_starts_at_the_tracks_start():
+    """compose puts the car at the track's start site, facing the site's +X,
+    and at the origin, facing +X, on a track without one."""
+    loop = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
+    turned, bare = mujoco.MjSpec.from_file(loop), mujoco.MjSpec.from_file(loop)
+    start = turned.site(assets.START_SITE)
+    start.pos = np.array([1.0, -2.0, 0.0])
+    start.quat = np.array([np.cos(0.3), 0.0, 0.0, np.sin(0.3)])
+    bare.delete(bare.site(assets.START_SITE))
+    for name, track, xy, quat in [
+        ("loop", mujoco.MjSpec.from_file(loop), (0.0, -2.5), (1.0, 0.0, 0.0, 0.0)),
+        ("turned", turned, (1.0, -2.0), (np.cos(0.3), 0.0, 0.0, np.sin(0.3))),
+        ("bare", bare, (0.0, 0.0), (1.0, 0.0, 0.0, 0.0)),
+    ]:
+        with case(name):
+            scene = assets.compose(track, visuals=False)
+            body = scene.model.bind_scalar(scene.car.body)
+            np.testing.assert_allclose(body.pos[:2], xy, atol=1e-12)
+            np.testing.assert_allclose(body.quat, quat, atol=1e-12)
+
+
 def test_the_wheel_puts_assets_where_assets_py_looks():
     """pyproject.toml copies assets/ into the wheel, and assets.py finds it
     there by name. If one of them changes the name, an installed package

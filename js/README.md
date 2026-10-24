@@ -12,7 +12,7 @@ import {
 } from 'neoracer-mujoco';
 
 const mj = await loadMujoco();
-const scene = compose(mj, trackXml);           // the car at the origin, facing +X
+const scene = compose(mj, trackXml);           // the car at the track's start site
 const { model } = scene;
 const data = settle(mj, model);               // at rest on the track
 const dt = model.opt.timestep;                // s

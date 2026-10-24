@@ -114,9 +114,7 @@ def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
                 intprm=beam.intprm.tolist(),
             )
         loop = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
-        scene = assets.compose(
-            mujoco.MjSpec.from_file(loop), car, pos=(0.0, -2.5, 0.0), visuals=False
-        )
+        scene = assets.compose(mujoco.MjSpec.from_file(loop), car, visuals=False)
         model = scene.model
         dt = model.opt.timestep
         timed = [scene.spec.sensor(f"lidar_{b:03d}") for b in bearings]
@@ -170,9 +168,7 @@ def test_a_beam_that_the_car_blocks_reads_no_return():
         (V2_XML, derive_v2.derive(RACECAR_NEO_V2).lidar.field, set()),
     )
     for path, field, blocked in cars:
-        scene = assets.compose(
-            mujoco.MjSpec.from_file(loop), path, pos=(0.0, -2.5, 0.0), visuals=False
-        )
+        scene = assets.compose(mujoco.MjSpec.from_file(loop), path, visuals=False)
         model_field = contract.lidar_field(scene.model, scene.car.lidar)
         assert model_field == pytest.approx(field, rel=1e-5), path
         assert scene.car.sensors.blocked == blocked, path

@@ -7,7 +7,7 @@ Frame: +X forward, +Y left, +Z up.
 
 import os
 from dataclasses import dataclass
-from typing import Literal, assert_never
+from typing import Literal
 
 import mujoco
 import numpy as np
@@ -18,25 +18,10 @@ from neoracer_mujoco.scene import Scene
 type TrackName = Literal["straight_corridor.xml", "loop_corridor.xml"]
 
 
-def _spawn_offset(track: TrackName) -> assets.Position:
-    """World position (m) of the car at the start of track."""
-    match track:
-        case "straight_corridor.xml":
-            return (0.0, 0.0, 0.0)
-        case "loop_corridor.xml":
-            # The bottom straight is at y = -2.5 m, midway between the inner
-            # wall (y = -2 m) and the outer wall (y = -3 m).
-            return (0.0, -2.5, 0.0)
-        case _:
-            assert_never(track)
-
-
 def load_track_scene(track: TrackName) -> Scene:
-    """Compile assets/tracks/<track> with the car at the center of the
-    corridor, facing +X."""
+    """Compile assets/tracks/<track> with the car at the track's start."""
     return assets.compose(
-        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, track)),
-        pos=_spawn_offset(track),
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, track))
     )
 
 
