@@ -21,26 +21,35 @@ window, small beside any speed a program acts on.
 
 from dataclasses import dataclass
 
+import numpy as np
+import numpy.typing as npt
+
 from neoracer_spec.derive import EncoderParams
+
+type Value = float | npt.NDArray[np.float64]
+"""A car's value, or a batch's, one a row. The windows of a batch's rows
+close together, as one firmware's would, so span and due are one for all."""
 
 
 @dataclass(frozen=True)
 class EncoderState:
     """The encoder between two physics steps. Start it with start()."""
 
-    angle: float
+    angle: Value
     """The drivetrain's angle (rad) when the window opened."""
     span: float
     """The time (s) since the window opened."""
     due: float
     """The time (s) until the firmware's next tick."""
-    speed: float
+    speed: Value
     """The last speed (m/s, + = forward) that the firmware reported."""
 
 
-def start(params: EncoderParams, angle: float) -> EncoderState:
-    """The encoder of a car at rest, its drivetrain at angle (rad)."""
-    return EncoderState(angle=angle, span=0.0, due=params.window, speed=0.0)
+def start(params: EncoderParams, angle: Value) -> EncoderState:
+    """The encoder of a car at rest, or of a batch's, its drivetrain at angle
+    (rad)."""
+    speed = np.zeros_like(np.asarray(angle, dtype=np.float64))[()]
+    return EncoderState(angle=angle, span=0.0, due=params.window, speed=speed)
 
 
 WINDOW_EPS = 1e-9
@@ -49,7 +58,7 @@ lands on a tick, up to rounding, closes the window."""
 
 
 def step(
-    params: EncoderParams, state: EncoderState, angle: float, dt: float
+    params: EncoderParams, state: EncoderState, angle: Value, dt: float
 ) -> EncoderState:
     """The encoder after a physics step of dt (s) that left the drivetrain at
     angle (rad)."""

@@ -14,9 +14,10 @@ from dataclasses import fields
 import mujoco
 import numpy as np
 import pytest
+from cases import case
 from scenes import corridor_scene, reversed_car
 
-from neoracer_mujoco import Scene, assets, batch, physics, sim
+from neoracer_mujoco import Scene, assets, batch, physics, sim, speed_loop
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import Physics
 from neoracer_mujoco.scene import compile_scene
@@ -28,6 +29,8 @@ from neoracer_mujoco.track_generation import (
     settings_for_difficulty,
     to_spec,
 )
+from neoracer_spec.derive import derive
+from neoracer_spec.neoracer import NEORACER
 
 NBATCH, NSTEP, CALLS = 6, 17, 8
 NOMINAL = [Physics()]
@@ -233,6 +236,58 @@ def test_reset_gives_the_done_rows_the_state_and_physics_of_initial():
     sim_batch.close()
 
 
+def test_drive_runs_every_rows_speed_loop_as_one_car_runs_its_own():
+    """batch.drive gives each row what one MjData gives that steps with its
+    own speed loop (speed_loop.step after each step, on the drivetrain's
+    angle at the step's end, which drive_pos reads once mj_forward refreshes
+    it) holding its own commanded speed and steer: the throttle changes at
+    the loop's ticks, and the solver starts cold at each tick and each call,
+    where the batch's pieces start. The two rows ask for speeds of opposite
+    signs, so a batch that ran one loop for both fails."""
+    scene = _loop_scene()
+    model, car = scene.model, scene.car
+    params = derive(NEORACER).speed_loop
+    dt = float(model.opt.timestep)
+    commanded, steer = np.array([1.5, -0.8]), np.array([0.1, -0.2])
+    start = sim.settle(model)
+    mujoco.mj_forward(model, start)
+    angle = float(start.bind_scalar(car.sensors.drive_pos).data[0])
+    sim_batch = batch.CpuBatch(scene, 2, nthread=0)
+    state = sim_batch.initial([start] * 2, [scene] * 2, NOMINAL * 2)
+    loop = speed_loop.start(params, np.full(2, angle))
+    got = []
+    for _ in range(CALLS):
+        state, sensordata, loop = batch.drive(
+            sim_batch, model, car, params, state, loop, commanded, steer, NSTEP
+        )
+        got.append(sensordata)
+    sim_batch.close()
+    got = np.array(got)  # (CALLS, 2, NSTEP, n)
+    for i in range(2):
+        data = copy.deepcopy(start)
+        row = speed_loop.start(params, angle)
+        expected = []
+        for _ in range(CALLS):
+            fresh = True
+            for _ in range(NSTEP):
+                if fresh:
+                    data.qacc_warmstart[:] = 0
+                    sim.apply_command(
+                        car, data, ControlCommand(float(row.throttle), steer[i])
+                    )
+                mujoco.mj_step(model, data)
+                expected.append(data.sensordata.copy())
+                mujoco.mj_forward(model, data)
+                drive_pos = float(data.bind_scalar(car.sensors.drive_pos).data[0])
+                row = speed_loop.step(params, row, commanded[i], drive_pos, dt)
+                fresh = row.measure.span == 0.0
+        np.testing.assert_array_equal(
+            got[:, i].reshape(CALLS * NSTEP, -1), np.array(expected), err_msg=f"row {i}"
+        )
+    throttle = np.asarray(loop.throttle)
+    assert throttle[0] > 0.0 > throttle[1]
+
+
 def test_command_rejects_a_model_with_other_actuators():
     """command writes every ctrl of the car's: an actuator that the car does
     not drive, with no throttle map, is not the car's."""
@@ -320,6 +375,82 @@ def test_the_warp_batch_follows_the_cpu_batch(warp):
     cpu_pos = batch.read(scene.model, cpu_data[:, -1], pos)
     warp_pos = np.asarray(batch.read(scene.model, warp_data[:, -1], pos))
     np.testing.assert_allclose(warp_pos, cpu_pos, atol=1e-3)
+
+
+def test_drive_steps_at_least_once():
+    """drive refuses fewer than one step, as step does."""
+    scene = _loop_scene()
+    params = derive(NEORACER).speed_loop
+    start = sim.settle(scene.model)
+    sim_batch = batch.CpuBatch(scene, 1, nthread=0)
+    state = sim_batch.initial([start], [scene], NOMINAL)
+    loop = speed_loop.start(params, np.zeros(1))
+    for nstep in (0, -1):
+        with case(nstep), pytest.raises(ValueError, match="nstep"):
+            batch.drive(
+                sim_batch,
+                scene.model,
+                scene.car,
+                params,
+                state,
+                loop,
+                np.ones(1),
+                np.zeros(1),
+                nstep,
+            )
+    sim_batch.close()
+
+
+def test_drive_on_warp_follows_drive_on_the_cpu(warp):
+    """batch.drive on MuJoCo Warp, with rows that ask for speeds either way,
+    one of them standing, ends within 1 mm of the CPU batch's drive, and its
+    loops' measured speeds (m/s) and throttles end within 0.01 of the CPU's:
+    Warp's physics is close to the CPU's, not equal, and the loop reads it.
+    The steer may be a JAX array, as Warp's ctrl is, and the sensor values
+    stay JAX arrays, on the GPU where there is one."""
+    jnp, scene, warp_batch = warp
+    params = derive(NEORACER).speed_loop
+    datas = [sim.settle(scene.model)] * 4
+    angle = float(datas[0].bind_scalar(scene.car.sensors.drive_pos).data[0])
+    commanded = np.array([1.5, -0.8, 0.0, 3.0])
+    steer = np.array([0.1, -0.2, 0.3, 0.0])
+    cpu = batch.CpuBatch(scene, 4, 2)
+    cpu_state = cpu.initial(datas, [scene] * 4, NOMINAL * 4)
+    warp_state = warp_batch.initial(datas, [scene] * 4, NOMINAL * 4)
+    cpu_loop = warp_loop = speed_loop.start(params, np.full(4, angle))
+    for _ in range(CALLS):
+        cpu_state, cpu_data, cpu_loop = batch.drive(
+            cpu,
+            scene.model,
+            scene.car,
+            params,
+            cpu_state,
+            cpu_loop,
+            commanded,
+            steer,
+            NSTEP,
+        )
+        warp_state, warp_data, warp_loop = batch.drive(
+            warp_batch,
+            scene.model,
+            scene.car,
+            params,
+            warp_state,
+            warp_loop,
+            commanded,
+            jnp.asarray(steer),
+            NSTEP,
+        )
+    cpu.close()
+    assert isinstance(warp_data, jnp.ndarray)
+    pos = scene.car.truth.pos
+    cpu_pos = batch.read(scene.model, cpu_data[:, -1], pos)
+    warp_pos = batch.read(scene.model, warp_data[:, -1], pos)
+    np.testing.assert_allclose(warp_pos, cpu_pos, atol=1e-3)
+    np.testing.assert_allclose(
+        warp_loop.measure.speed, cpu_loop.measure.speed, atol=1e-2
+    )
+    np.testing.assert_allclose(warp_loop.throttle, cpu_loop.throttle, atol=1e-2)
 
 
 @pytest.fixture(scope="module")

@@ -147,8 +147,8 @@ class MujocoDrive:
             throttle = speed * self._max_speed
         else:
             params, state = self._loop
-            self._target = speed_loop.target(params, speed, self._max_speed)
-            throttle = state.throttle
+            self._target = float(speed_loop.target(params, speed, self._max_speed))
+            throttle = float(state.throttle)
         self._command = ControlCommand(throttle=throttle, steer=steer)
         sim.apply_command(self._car, self._data, self._command)
 
@@ -176,7 +176,7 @@ class MujocoDrive:
         state = speed_loop.step(params, state, self._target, self._angle(), self._dt)
         self._loop = (params, state)
         self._command = ControlCommand(
-            throttle=state.throttle, steer=self._command.steer
+            throttle=float(state.throttle), steer=self._command.steer
         )
         sim.apply_command(self._car, self._data, self._command)
 
@@ -289,7 +289,7 @@ class MujocoPhysics:
 
     def get_encoder_speed(self) -> float:
         """The car's speed (m/s) from its motor encoder, + = forward."""
-        return self._encoder.state.speed
+        return float(self._encoder.state.speed)
 
 
 class MujocoController:
