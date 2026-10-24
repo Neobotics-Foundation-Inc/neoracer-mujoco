@@ -279,11 +279,11 @@ Run these from a clone; the examples aren't in the wheel.
 
 ## How close the models are to the real cars
 
-Nobody has checked the NeoRacer's model against recordings of the real car yet (issue #4). Use it to develop and compare controllers, not to predict lap times. These are the known gaps:
+The NeoRacer's model is checked against one set of recordings of the real car, its steering steps at rest; nothing else is checked yet (issue #4). Use it to develop and compare controllers, not to predict lap times. These are the known gaps:
 - **Speed.** At full throttle the car tops out at about 3.5 m/s, from the RS-545 motor at the docs' free speed. The wheel damping is a guess that stands in for every drivetrain loss. The firmware's speed controller isn't modeled, so the throttle is a fraction of the battery voltage (issue #118).
 - **Mass and inertia.** The total mass comes from the spec; nobody has weighed the car. The inertia and the height of the center of mass come from an older car's URDF.
 - **Tires and suspension.** The tire friction and the springs are estimates.
-- **Steering.** At full lock the inner front wheel turns to its measured angle. People who drive the real car find its steering slower than the model's (issue #115).
+- **Steering.** At full lock the inner front wheel turns to its measured angle. The servo is the car's at its datasheet rating, and its command delay is fitted to the car's steering steps at rest (`SteeringServo.steps_at_rest`), which `validation/test_spec.py` holds the model to. Nobody has timed the steering while the car moves.
 - **Sensors.** They have no noise, bias or latency, and the IMU never saturates. The LiDAR has no minimum range and never misses a return. There is no camera (issue #3).
 
 The RACECAR Neo V2's model drives a reference car's calibration runs as the car did: its steady speeds within 1%, its stops, its arcs at every steering command, its full-lock radii and its yaw rate after a full-lock command. These are the known gaps:
