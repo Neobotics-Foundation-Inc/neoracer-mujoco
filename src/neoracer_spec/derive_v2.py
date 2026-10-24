@@ -5,8 +5,8 @@ and the settings beside the model (DerivedParams). Pure functions of the
 values, without their provenance; no MuJoCo.
 
 The car's firmware holds a speed, so its drive is two actuators on the
-drivetrain, not the NeoRacer's DC motor. They push at the tyres' contact
-with the floor: their gear is the tyre's radius, so a force is in N and a
+drivetrain, not the NeoRacer's DC motor. They push at the tires' contact
+with the floor: their gear is the tire's radius, so a force is in N and a
 speed in m/s.
 - motor: a force of gain * ctrl.
 - motor_engage: a force of -gain * speed * ctrl, with ctrl 1 while the
@@ -78,7 +78,7 @@ class HallEncoderParams:
     edges of the motor's hall sensors."""
 
     edge_angle: float  # rad of the drivetrain from one edge to the next
-    radius: float  # m, the tyre's, that it measures the speed at
+    radius: float  # m, the tire's, that it measures the speed at
     alpha: float  # the weight of each new edge's speed in its filter
     stop_timeout: float  # s without an edge, after which it reads 0
 
@@ -204,7 +204,7 @@ def chassis_mass(spec: RacecarNeoV2) -> float:
 
 
 def chassis_com(spec: RacecarNeoV2) -> Vec3:
-    """The chassis body's centre of mass: the car's, less the wheels and the
+    """The chassis body's center of mass: the car's, less the wheels and the
     steering input's body, which sit on the axle line."""
     x, y, z = (float(v) for v in _chassis_com(spec))
     return (x, y, z)
@@ -212,37 +212,37 @@ def chassis_com(spec: RacecarNeoV2) -> Vec3:
 
 def _chassis_com(spec: RacecarNeoV2) -> np.ndarray:
     m, mw = spec.chassis.mass.value, spec.wheel.mass.value
-    moment = m * car_com(spec) - mw * sum(_wheel_centres(spec))
-    moment -= INPUT_BODY_MASS * _input_centre(spec)
+    moment = m * car_com(spec) - mw * sum(_wheel_centers(spec))
+    moment -= INPUT_BODY_MASS * _input_center(spec)
     return moment / chassis_mass(spec)
 
 
 def car_com(spec: RacecarNeoV2) -> np.ndarray:
-    """The whole car's centre of mass in the body frame: front_weight_share
-    of the wheelbase ahead of the rear axle, centred, at com_height."""
+    """The whole car's center of mass in the body frame: front_weight_share
+    of the wheelbase ahead of the rear axle, centered, at com_height."""
     c = spec.chassis
     x = c.front_weight_share.value * c.wheelbase.value
     return np.array(body(spec, (x, 0.0, c.com_height.value)))
 
 
-def _wheel_centres(spec: RacecarNeoV2) -> list[np.ndarray]:
+def _wheel_centers(spec: RacecarNeoV2) -> list[np.ndarray]:
     x, y = spec.chassis.wheelbase.value / 2, spec.chassis.track.value / 2
     return [np.array([sx * x, sy * y, 0.0]) for sx in (1, -1) for sy in (1, -1)]
 
 
-def _input_centre(spec: RacecarNeoV2) -> np.ndarray:
+def _input_center(spec: RacecarNeoV2) -> np.ndarray:
     return np.array([spec.chassis.wheelbase.value / 2, 0.0, 0.0])
 
 
 def chassis_inertia(spec: RacecarNeoV2) -> Vec3:
-    """The chassis body's principal inertia (kg·m²) about its own centre of
+    """The chassis body's principal inertia (kg·m²) about its own center of
     mass: the whole car's, less the wheels' and the steering input's body's
-    about the car's centre of mass, moved to the chassis' (parallel axes)."""
+    about the car's center of mass, moved to the chassis' (parallel axes)."""
     com, mw = car_com(spec), spec.wheel.mass.value
     inertia = np.diag(spec.chassis.inertia.value).astype(float)
-    for centre in _wheel_centres(spec):
-        inertia -= np.diag(wheel_inertia(spec)) + _shift(mw, centre - com)
-    inertia -= _shift(INPUT_BODY_MASS, _input_centre(spec) - com)
+    for center in _wheel_centers(spec):
+        inertia -= np.diag(wheel_inertia(spec)) + _shift(mw, center - com)
+    inertia -= _shift(INPUT_BODY_MASS, _input_center(spec) - com)
     inertia -= _shift(chassis_mass(spec), _chassis_com(spec) - com)
     return (float(inertia[0, 0]), float(inertia[1, 1]), float(inertia[2, 2]))
 
@@ -253,7 +253,7 @@ def _shift(mass: float, d: np.ndarray) -> np.ndarray:
 
 
 def wheel_inertia(spec: RacecarNeoV2) -> Vec3:
-    """A wheel's principal inertia (kg·m²) about its centre, as a solid
+    """A wheel's principal inertia (kg·m²) about its center, as a solid
     cylinder: about X, its spin axis Y, and Z."""
     m, r, w = spec.wheel.mass.value, wheel_radius(spec), spec.wheel.width.value
     across = m * (3 * r**2 + w**2) / 12
@@ -265,7 +265,7 @@ def wheel_radius(spec: RacecarNeoV2) -> float:
 
 
 def effective_mass(spec: RacecarNeoV2) -> float:
-    """The mass that a force at the tyres accelerates (kg): the car's and
+    """The mass that a force at the tires accelerates (kg): the car's and
     its wheels' spin. A solid wheel adds half its mass for each of four."""
     return (
         spec.chassis.mass.value + 4 * wheel_inertia(spec)[1] / wheel_radius(spec) ** 2
@@ -288,7 +288,7 @@ def spring_refs(spec: RacecarNeoV2) -> Axles:
 @dataclass(frozen=True)
 class DriveParams:
     gain: float  # N per m/s
-    gear: float  # m, the tyre's radius
+    gear: float  # m, the tire's radius
     slope: float  # of the throttle map, m/s
     step: float  # of the throttle map, m/s
     ctrl_limit: float  # m/s, the map at throttle 1
@@ -307,7 +307,7 @@ def drive(spec: RacecarNeoV2) -> DriveParams:
         step=precise(step),
         ctrl_limit=precise(slope + step),
         # The drivetrain's length is the wheels' mean angle: a force f on it
-        # is f / r at the tyres.
+        # is f / r at the tires.
         brake=precise(brake * r),
         delay=parts.delay(spec.drive.latency.value),
     )
@@ -315,7 +315,7 @@ def drive(spec: RacecarNeoV2) -> DriveParams:
 
 def wheel_damping(spec: RacecarNeoV2) -> float:
     """Each wheel's spin damping (N·m·s/rad): the drag per speed at the
-    tyres, shared by the four wheels."""
+    tires, shared by the four wheels."""
     _, drag = coast_drag(spec)
     return precise(drag * wheel_radius(spec) ** 2 / 4)
 
@@ -339,7 +339,7 @@ def steady_speed_line(spec: RacecarNeoV2) -> tuple[float, float]:
 
 
 def coast_drag(spec: RacecarNeoV2) -> tuple[float, float]:
-    """The forces at the tyres that slow the coasting car: its drag brake
+    """The forces at the tires that slow the coasting car: its drag brake
     (N) and its drag per speed (N per m/s)."""
     a0, a1 = spec.drive.coast.value
     m = effective_mass(spec)

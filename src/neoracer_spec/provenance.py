@@ -5,7 +5,7 @@ A value of the specification is a Sourced[T]: the value, its status (how we
 know it) and the values that other sources give for it, when they disagree.
 
     measured(0.28764, CAD, conflicts=(Alternative(0.280, DOCS_CHASSIS),))
-    estimated(1.5, "no tyre has been tested")
+    estimated(1.5, "no tire has been tested")
 
 walk lists every Sourced value of a specification by its path, so that code
 and tests can ask which values are estimated or disputed.

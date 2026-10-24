@@ -45,7 +45,7 @@ class Solver:
 # and the servo's kd), which explicit Euler cannot hold steady at this step:
 # the servo then chatters. The elliptic
 # friction cone with a high impratio is MuJoCo's setting for wheeled
-# vehicles: it stiffens the tyres' sideways contact, so they creep less (on
+# vehicles: it stiffens the tires' sideways contact, so they creep less (on
 # the NeoRacer at 0.4 rad of steering, a full-lock radius of 0.74 m against
 # 0.77 m with the defaults and 0.68 m ideal).
 SOLVER = Solver(
@@ -57,11 +57,11 @@ G = 9.81  # m/s², MuJoCo's gravity
 
 @dataclass(frozen=True)
 class Inertial:
-    """The chassis body's mass and its principal inertia about its centre
+    """The chassis body's mass and its principal inertia about its center
     of mass."""
 
     mass: float  # kg
-    pos: Vec3  # m, the centre of mass
+    pos: Vec3  # m, the center of mass
     diaginertia: Vec3  # kg·m²
 
 
@@ -80,10 +80,10 @@ class LidarBeams:
     the scan's bearing 0: where they start, where they point, and when they
     read."""
 
-    position: Vec3  # m, the centre of the scan
+    position: Vec3  # m, the center of the scan
     yaw: float  # rad, of the scan's bearing 0 from +X
     scan_rate: float  # Hz, turns of its head a second
-    field: float  # rad of bearings it sees, centred on bearing 0
+    field: float  # rad of bearings it sees, centered on bearing 0
 
 
 @dataclass(frozen=True)
@@ -92,11 +92,11 @@ class Wheels:
 
     half_wheelbase: float  # m
     half_track: float  # m
-    radius: float  # m, the tyre's
-    half_width: float  # m, the tyre's
+    radius: float  # m, the tire's
+    half_width: float  # m, the tire's
     mass: float  # kg, each
     damping: float  # N·m·s/rad, on each wheel's spin
-    friction: Axles  # the tyres' sliding friction on the floor
+    friction: Axles  # the tires' sliding friction on the floor
 
 
 @dataclass(frozen=True)
@@ -225,7 +225,7 @@ def delay(latency: float) -> Delay:
 
 def spawn_height(wheel_radius: float) -> float:
     """Where the car body spawns (m above the floor): 1 mm above its
-    resting height, the axles at the tyre radius."""
+    resting height, the axles at the tire radius."""
     return precise(wheel_radius + 0.001)
 
 

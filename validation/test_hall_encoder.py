@@ -37,7 +37,7 @@ def test_an_edge_comes_every_2_25_mm():
     assert PARAMS.edge_angle * PARAMS.radius == pytest.approx(distance)
 
 
-def test_the_filter_converges_to_the_tyres_surface_speed():
+def test_the_filter_converges_to_the_tires_surface_speed():
     """At a steady speed every step that passes edges measures omega * r,
     since it splits its time in proportion to the angle. From rest, the
     filter, which keeps 1 - alpha of its last value, then reports

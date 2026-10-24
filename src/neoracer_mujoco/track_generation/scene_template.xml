@@ -6,7 +6,7 @@
 
     Not loadable as-is -- the placeholders are not valid MJCF. Editing this
     file changes every generated track, so it is the place to change wall
-    colour, floor texture, or friction. Wall box size and placement come from
+    color, floor texture, or friction. Wall box size and placement come from
     the track geometry, so those live in mjcf.py.
 
     Generated tracks are scenery ONLY -- this does not name the car. Attach

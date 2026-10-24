@@ -49,7 +49,7 @@ def test_windows_close_on_the_firmwares_ticks():
             assert state.speed == last.speed
 
 
-def test_the_filter_converges_to_the_tyres_surface_speed():
+def test_the_filter_converges_to_the_tires_surface_speed():
     """Each window measures its own length, so at a steady speed every window
     reads omega * r, r the params' radius, whether it ran seven steps or
     eight. From rest, the filter, which keeps 1 - alpha of its last value,

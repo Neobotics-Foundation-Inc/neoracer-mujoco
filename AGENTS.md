@@ -286,6 +286,7 @@ Many readers are students who are new to robotics.
 - Give a commit or pull request a title that names the behavior. Then say what was wrong, what you changed, and how a reader can see the change.
 - Keep it short. The diff shows which files and tests changed, and CI shows that the tests pass, so do not retell them. One example value is enough.
 - Do not use headings, slogans, sentence fragments or em dashes.
+- Use American spelling, in prose and in names: center, tire, color, modeled, traveled.
 
 A good pull request reads like this (the change is invented):
 

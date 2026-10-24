@@ -182,12 +182,12 @@ def test_a_beam_that_the_car_blocks_reads_no_return():
                 assert distance > 0.0, (path, name)
 
 
-def test_the_v2_model_has_the_cars_mass_centre_of_mass_and_inertia():
+def test_the_v2_model_has_the_cars_mass_center_of_mass_and_inertia():
     """The chassis, the wheels and the steering input's body together weigh
-    the car's mass, with its centre of mass and its principal moments of
+    the car's mass, with its center of mass and its principal moments of
     inertia, as MuJoCo computes them from the bodies. The derivation counts
     the steering input's body as a point; its own inertia is 1e-6 kg·m². The
-    chassis' principal axes are the car's, so the wheels, below the centre
+    chassis' principal axes are the car's, so the wheels, below the center
     of mass and not midway along the car, leave products of inertia of
     under 0.2% of the moments."""
     model = assets.load(V2_XML).model
@@ -315,7 +315,7 @@ def test_the_servo_at_the_steering_input_is_its_rating_through_the_linkage(scene
 
 def test_the_steps_at_rest_take_the_cars_times(scene):
     """The model's steering, stepped at rest as the car's was (the driver's
-    full lock from the centre, to the other lock and back, each held 1 s),
+    full lock from the center, to the other lock and back, each held 1 s),
     first moves (2% of the way) and ends each swing (95% of the way) within
     0.015 s of the car, timed from the command. The car's swing ends where
     its chassis stops turning, which is near the end of the swing."""
@@ -325,9 +325,9 @@ def test_the_steps_at_rest_take_the_cars_times(scene):
     lock = model.bind_scalar(scene.car.steer).ctrlrange[1]
     steps = CAR.servo.steps_at_rest.value
     for name, target, end in (
-        ("centre to lock", lock, steps.centre_to_lock),
+        ("center to lock", lock, steps.center_to_lock),
         ("lock to lock", -lock, steps.lock_to_lock),
-        ("lock to centre", 0.0, steps.lock_to_centre),
+        ("lock to center", 0.0, steps.lock_to_center),
     ):
         begin = float(servo.length[0])
         servo.ctrl = target

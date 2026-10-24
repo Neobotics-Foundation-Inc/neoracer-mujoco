@@ -6,7 +6,7 @@ model to the values in neoracer_spec.racecar_neo_v2, within the spread of
 the car's runs and of what the summaries leave unsaid, such as when a stop
 begins.
 
-The model's speed is the encoder's: the drivetrain's speed times the tyre's
+The model's speed is the encoder's: the drivetrain's speed times the tire's
 radius, as /odom/integrated after its calibrated scale. Its pose is
 base_link's, on the floor below the middle of the rear axle.
 """

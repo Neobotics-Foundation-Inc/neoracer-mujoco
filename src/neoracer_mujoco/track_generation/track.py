@@ -33,7 +33,7 @@ class Track:
     left_normal: Points  # unit vector 90 deg left of the tangent
     curvature: Samples  # 1/meters, positive where the loop turns left
     half_width: Samples  # corridor half-width, meters
-    distance_along: Samples  # distance from sample 0 travelling forward
+    distance_along: Samples  # distance from sample 0 traveling forward
     total_length: float  # meters around the whole loop
     seed: int
 

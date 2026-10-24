@@ -10,7 +10,7 @@ The values come from these sources:
   reference car (2026-10-04 and 05), the parameter files they wrote, and
   the recordings of the runs;
 - RacecarSim, the RACECAR Neo simulator in Unity: its model of the car's
-  shape, and its estimates of the car's inertia, springs and tyres;
+  shape, and its estimates of the car's inertia, springs and tires;
 - the payload's CAD model: the shape and the layout of everything on the
   chassis' body posts, which the measured heights of the LiDAR and the
   camera place on the car. RacecarSim's model of the payload is this one,
@@ -81,13 +81,13 @@ class RacecarNeoV2:
 @dataclass(frozen=True)
 class Chassis:
     wheelbase: Sourced[float]  # m, between the front and rear axles
-    track: Sourced[float]  # m, between the rear wheels' centres
+    track: Sourced[float]  # m, between the rear wheels' centers
     mass: Sourced[float]  # kg, with the battery
-    # The share of the weight on the front wheels. The centre of mass is
-    # this share of the wheelbase ahead of the rear axle, and laterally centred.
+    # The share of the weight on the front wheels. The center of mass is
+    # this share of the wheelbase ahead of the rear axle, and laterally centered.
     front_weight_share: Sourced[float]
-    com_height: Sourced[float]  # m, of the centre of mass above the floor
-    # kg·m², the whole car's principal moments about its centre of mass:
+    com_height: Sourced[float]  # m, of the center of mass above the floor
+    # kg·m², the whole car's principal moments about its center of mass:
     # roll (about X), pitch (Y), yaw (Z)
     inertia: Sourced[Vec3]
     ride_height: Sourced[float]  # m, of the chassis above the floor, moving
@@ -134,11 +134,11 @@ class NamedBox:
 
 @dataclass(frozen=True)
 class Wheel:
-    diameter: Sourced[float]  # m, the tyre's
-    width: Sourced[float]  # m, the tyre's
+    diameter: Sourced[float]  # m, the tire's
+    width: Sourced[float]  # m, the tire's
     axle_height: Sourced[float]  # m, of the rear axle above the floor
-    mass: Sourced[float]  # kg, each, with its tyre
-    # The model's sliding friction of each axle's tyres on the floor.
+    mass: Sourced[float]  # kg, each, with its tire
+    # The model's sliding friction of each axle's tires on the floor.
     friction: Sourced[Axles[float]]
 
 
@@ -154,8 +154,8 @@ class Steering:
     # At full lock, at the middle of the rear axle. The wheels' angles at
     # full lock follow from it and the wheelbase and track.
     min_turn_radius: Sourced[Sides[float]]  # m
-    # From the centre to full lock, timed from the yaw rate: an upper bound,
-    # since it includes the tyres' lag in following the wheels.
+    # From the center to full lock, timed from the yaw rate: an upper bound,
+    # since it includes the tires' lag in following the wheels.
     center_to_lock_time: Sourced[Sides[float]]  # s
     # The curvature of the path that a steering command gives, 1/m, + left.
     response: Sourced[tuple[AtCommand[Span], ...]]
@@ -229,7 +229,7 @@ class Odometry:
 
 @dataclass(frozen=True)
 class Lidar:
-    position: Sourced[Vec3]  # m, the centre of the scan
+    position: Sourced[Vec3]  # m, the center of the scan
     yaw_degrees: Sourced[float]  # of the scan's zero bearing, from +X
     tilt_degrees: Sourced[tuple[float, float]]  # roll, pitch
     samples: Sourced[int]  # a turn
@@ -243,7 +243,7 @@ class Imu:
     """The LSM9DS1 on the drive-controller board. The firmware reports
     (raw - bias) * scale."""
 
-    position: Sourced[Vec3]  # m, the breakout's centre
+    position: Sourced[Vec3]  # m, the breakout's center
     rotation_degrees: Sourced[Vec3]  # roll, pitch, yaw of the chip's axes
     accel_bias: Sourced[Vec3]  # m/s²
     accel_scale: Sourced[Vec3]
@@ -256,7 +256,7 @@ class Imu:
 @dataclass(frozen=True)
 class Camera:
     front: Sourced[float]  # m, x of its front face
-    y: Sourced[float]  # m, of its centre
+    y: Sourced[float]  # m, of its center
     bottom: Sourced[float]  # m, z of its underside
     pitch_degrees: Sourced[float]
 
@@ -484,7 +484,7 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             C_L,
             note="the firmware reads the speed about 10% high"
             " (Odometry.speed_scale), as if the wheels rolled 65.1 mm across: it"
-            " depends on the tyres' diameter and wear",
+            " depends on the tires' diameter and wear",
             conflicts=(Alternative(0.071, M_Z),),
         ),
         width=measured(0.029, C_L, conflicts=(Alternative(0.030, M_Z),)),
@@ -494,9 +494,9 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             Axles(front=0.987, rear=1.204),
             FIT,
             "the full-lock circles: their radii and the encoder's over-read",
-            note="MuJoCo's contacts are not a model of a tyre. The front tyres'"
-            " lower grip stands for the slip of tyres steered 25 to 35 degrees,"
-            " which the locked centre shaft drags; with the same grip front and"
+            note="MuJoCo's contacts are not a model of a tire. The front tires'"
+            " lower grip stands for the slip of tires steered 25 to 35 degrees,"
+            " which the locked center shaft drags; with the same grip front and"
             " rear the model's encoder over-reads 6 to 10%. RacecarSim estimates"
             " 0.8 for a smooth floor",
         ),
@@ -545,9 +545,9 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         trim=calibrated(
             0.0,
             STEERING,
-            "the LiDAR: the drift at command 0 over the curvature near the centre",
+            "the LiDAR: the drift at command 0 over the curvature near the center",
             note="a first fit of +0.0188 read the difference between the sides as"
-            " a centre offset; it moved the drift by under 0.1 degree/m",
+            " a center offset; it moved the drift by under 0.1 degree/m",
         ),
         deadband=measured(
             0.02,
@@ -567,11 +567,11 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             ),
             FIT,
             "the curvature table (response) and the full-lock circles",
-            note="the model's tyres slip more than the car's: Ackermann geometry"
+            note="the model's tires slip more than the car's: Ackermann geometry"
             " turns its virtual wheel 0.501 rad left and 0.457 right at the"
             " measured full-lock radii",
         ),
-        servo_stall_torque=chosen(3.0, "strong enough that the tyres do not move it"),
+        servo_stall_torque=chosen(3.0, "strong enough that the tires do not move it"),
         servo_free_speed=calibrated(
             7.92, FIT, "the full-lock circles' yaw rate after the steering command"
         ),
@@ -651,7 +651,7 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             0.90406,
             ODOM,
             "the LiDAR, driving straight at a wall",
-            note="it depends on the tyres' diameter and wear. Earlier runs against"
+            note="it depends on the tires' diameter and wear. Earlier runs against"
             " a tape gave 0.903 and 0.865",
         ),
         yaw_rate_scale=calibrated(
@@ -660,7 +660,7 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         turn_overread=measured(
             Sides(left=0.0415, right=0.0245),
             DYNAMICS,
-            note="the centre shaft is locked, so the encoder reads a speed between"
+            note="the center shaft is locked, so the encoder reads a speed between"
             " the rear and the front axles'",
         ),
         telemetry_rate=measured(
