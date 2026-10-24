@@ -38,7 +38,7 @@ from typing import Literal, assert_never
 import glfw
 import mujoco
 
-from neoracer_mujoco import assets, collision, sensors, sim
+from neoracer_mujoco import assets, collision, contract, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.scene import Scene
 from neoracer_spec import derive
@@ -135,10 +135,12 @@ def update(
     )
 
 
-def print_sensors(s: sensors.SensorReadings) -> None:
-    """Print a one-line summary of the most useful sensor values."""
+def print_sensors(s: sensors.SensorReadings, wheel_radius: float) -> None:
+    """Print a one-line summary of the most useful sensor values; the speed
+    is the motor encoder's at the tyre of wheel_radius (m)."""
+    speed = sensors.motor_encoder_rad_s(s) * wheel_radius  # m/s
     print(
-        f"spd={sensors.estimated_linear_speed_ms(sensors.motor_encoder_rad_s(s)):+5.2f}m/s  "
+        f"spd={speed:+5.2f}m/s  "
         f"steer={s.steer_cmd_pos:+.3f}({s.fl_steer_pos:+.3f}/{s.fr_steer_pos:+.3f})  "
         f"susp=[{s.fl_susp_pos:+.3f} {s.fr_susp_pos:+.3f} "
         f"{s.rl_susp_pos:+.3f} {s.rr_susp_pos:+.3f}]m  "
@@ -255,7 +257,9 @@ def drive(scene: Scene, params: ManualDriveParams) -> None:
 
         hud_accum += dt
         if hud_accum >= params.hud_period_s:
-            print_sensors(sensors.read(car.sensors, data))
+            print_sensors(
+                sensors.read(car.sensors, data), contract.wheel_radius(model, car)
+            )
             hud_accum = 0.0
 
     glfw.terminate()

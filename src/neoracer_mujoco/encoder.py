@@ -3,9 +3,9 @@ The speed that the car's firmware reports from its motor encoder.
 
 Every window (EncoderParams.window, the spec's MotorEncoder.report_period),
 the car's ESP32 (its firmware's task_control) reads the motor encoder's
-count over the window and turns it into the tyre's surface speed. It then
-low-pass filters it, with the weight EncoderParams.alpha on the new
-window's speed. It reports the result as /encoder/speed, which a program
+count over the window and turns it into the surface speed of a tyre of
+EncoderParams.radius. It then low-pass filters it, with the weight
+EncoderParams.alpha on the new window's speed. It reports the result as /encoder/speed, which a program
 reads as rc.physics.get_encoder_speed().
 
 This module computes the same speed from the drivetrain's angle, the
@@ -22,8 +22,6 @@ window, small beside any speed a program acts on.
 from dataclasses import dataclass
 
 from neoracer_spec.derive import EncoderParams
-
-from .sensors import WHEEL_RADIUS
 
 
 @dataclass(frozen=True)
@@ -54,6 +52,6 @@ def step(
     span, due = state.span + dt, state.due - dt
     if due >= _EPS:
         return EncoderState(state.angle, span, due, state.speed)
-    raw = (angle - state.angle) * WHEEL_RADIUS / span  # m/s over the window
+    raw = (angle - state.angle) * params.radius / span  # m/s over the window
     speed = params.alpha * raw + (1.0 - params.alpha) * state.speed
     return EncoderState(angle, 0.0, due + params.window, speed)

@@ -14,7 +14,7 @@ import { type LidarParams, NEORACER_PARAMS } from './generated/spec.js';
 
 export type { LidarParams };
 
-/** The NeoRacer's LiDAR: lidar.LidarParams() in Python. */
+/** The NeoRacer's LiDAR: derive(NEORACER).lidar in Python. */
 export const LIDAR: LidarParams = NEORACER_PARAMS.lidar;
 
 /** Whether it sees slot i: its bearing is in [-field / 2, field / 2). */

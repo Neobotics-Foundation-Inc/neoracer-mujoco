@@ -10,6 +10,7 @@ racecar_core signs: + speed = forward, + angle = right. contract.py signs:
 + throttle = forward, + steer = left.
 """
 
+import copy
 import os
 
 import mujoco
@@ -18,13 +19,13 @@ import pytest
 
 from neoracer_mujoco import Scene, assets, contract, lidar, sim
 from neoracer_mujoco.racecar_core_adapter import (
-    CarParams,
     MujocoDrive,
     MujocoLidar,
     MujocoRacecar,
+    neoracer_params,
 )
 
-LIDAR = lidar.LidarParams()
+LIDAR = neoracer_params().lidar
 
 
 @pytest.fixture(scope="module")
@@ -99,7 +100,7 @@ def test_set_max_speed_without_an_argument_restores_the_start(scene):
         assert _drive_ctrl(scene, data) == pytest.approx(expected), start
     for start in (2.0, -0.25):
         with pytest.raises(ValueError, match="start_max_speed"):
-            CarParams(start_max_speed=start)
+            copy.replace(neoracer_params(), start_max_speed=start)
 
 
 def test_a_scan_is_clockwise_from_the_front_in_cm(corridor):

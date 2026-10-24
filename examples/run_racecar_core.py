@@ -47,6 +47,7 @@ from neoracer_mujoco import assets, sim
 from neoracer_mujoco.racecar_core_adapter import (
     CarParams,
     MujocoRacecar,
+    neoracer_params,
     racecar_neo_v2_params,
 )
 from neoracer_mujoco.scene import Scene
@@ -98,7 +99,7 @@ def build_racecar(
 def _car_params(car: CarName) -> CarParams:
     match car:
         case "neoracer":
-            return CarParams()
+            return neoracer_params()
         case "racecar_neo_v2":
             return racecar_neo_v2_params()
         case _:

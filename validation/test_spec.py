@@ -21,7 +21,7 @@ import pytest
 from cases import case
 
 import neoracer_spec
-from neoracer_mujoco import assets, contract, encoder, lidar, sensors, sim
+from neoracer_mujoco import assets, contract, sensors, sim
 from neoracer_mujoco.control import ControlCommand
 from neoracer_spec import (
     ackermann,
@@ -270,13 +270,6 @@ def test_a_change_to_the_chassis_changes_the_xml():
         ("com_height", at(CAR, lambda c: c.chassis.com_height.value).set(0.02)),
     ]:
         assert mjcf.car_xml(derive.model(car), template) != xml, name
-
-
-def test_the_derived_settings_are_the_sensor_modules_defaults():
-    p = derive.derive(CAR)
-    assert p.model == MODEL
-    assert p.lidar == lidar.LidarParams()
-    assert p.encoder == encoder.EncoderParams()
 
 
 def test_the_drive_motor_turns_at_its_free_speed_and_stalls_at_its_torque(scene):

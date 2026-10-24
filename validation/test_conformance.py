@@ -298,15 +298,14 @@ def test_top_speed_bounded(scene):
 
 
 def test_sensors_finite_under_load(scene):
-    """After 1 s of full throttle and full steer, every sensor, the motor
-    encoder and the speed estimate are finite."""
+    """After 1 s of full throttle and full steer, every sensor and the motor
+    encoder are finite."""
     steer = contract.actuator_limits(scene.model, scene.car).steer_rad
     s = _read(scene, _drive(scene, throttle=1.0, steer=steer, seconds=1.0))
     bad = [f.name for f in fields(s) if not np.all(np.isfinite(getattr(s, f.name)))]
     assert not bad, f"non-finite sensors: {bad}"
     motor_rad_s = sensors.motor_encoder_rad_s(s)
     assert np.isfinite(motor_rad_s), f"non-finite motor encoder: {motor_rad_s}"
-    assert np.isfinite(sensors.estimated_linear_speed_ms(motor_rad_s))
 
 
 def test_deterministic(scene):

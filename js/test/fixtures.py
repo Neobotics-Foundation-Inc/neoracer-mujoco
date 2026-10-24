@@ -34,7 +34,7 @@ def main(out: str) -> None:
 
     settled = sim.settle(model)
     data = sim.settle(model)
-    params = encoder.EncoderParams()
+    params = derive(NEORACER).encoder
     drive_pos = data.bind_scalar(car.sensors.drive_pos)
     state = encoder.start(params, float(drive_pos.data[0]))
     sim.apply_command(car, data, DRIVE)
@@ -45,7 +45,7 @@ def main(out: str) -> None:
         )
 
     # A turn swept from 13 poses, each 1 cm to the left of the last.
-    lidar_params = lidar.LidarParams()
+    lidar_params = derive(NEORACER).lidar
     poses = []
     sweep_data = sim.settle(model)
     joint = sweep_data.bind_scalar(car.joint)

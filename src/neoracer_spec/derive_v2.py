@@ -46,21 +46,16 @@ class DerivedParams:
     model: ModelParams
     lidar: LidarParams
     encoder: HallEncoderParams
-    wheel_radius: float  # m, that the encoder's speed is measured at
-    steer_lock: float  # rad of steering input at a command of 1
     start_max_speed: (
         float  # the share of full throttle that racecar_core's speed 1 sends
     )
 
 
 def derive(spec: RacecarNeoV2) -> DerivedParams:
-    m = model(spec)
     return DerivedParams(
-        model=m,
+        model=model(spec),
         lidar=lidar_params(spec),
         encoder=encoder_params(spec),
-        wheel_radius=m.wheels.radius,
-        steer_lock=m.servo.lock,
         start_max_speed=spec.drive.start_max_speed.value,
     )
 
