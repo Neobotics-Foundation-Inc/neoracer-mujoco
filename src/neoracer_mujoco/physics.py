@@ -33,6 +33,7 @@ import mujoco
 import numpy as np
 import numpy.typing as npt
 
+from . import sensors
 from .scene import Scene
 
 
@@ -124,18 +125,8 @@ def apply_physics(model: mujoco.MjModel, scene: Scene, physics: Physics) -> None
     servo.gainprm[4] = servo0.gainprm[4] * physics.steer_stiffness
     # A beam's interval is its period and phase. MjModel's sensor views have
     # no interval or delay, so these two go by the sensor's id.
-    s = car.sensors
-    for beam in (
-        s.lidar_000,
-        s.lidar_045,
-        s.lidar_090,
-        s.lidar_135,
-        s.lidar_180,
-        s.lidar_225,
-        s.lidar_270,
-        s.lidar_315,
-    ):
-        i = nominal.bind_scalar(beam).id
+    for name in sensors.LIDAR_BEAM_ORDER:
+        i = nominal.bind_scalar(getattr(car.sensors, name)).id
         model.sensor_interval[i] = nominal.sensor_interval[i] / physics.lidar_rate
         model.sensor_delay[i] = nominal.sensor_delay[i] / physics.lidar_rate
     mujoco.mj_setConst(model, mujoco.MjData(model))
