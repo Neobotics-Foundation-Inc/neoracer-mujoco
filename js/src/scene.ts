@@ -67,8 +67,9 @@ export function deleteVisuals(mj: Mujoco, spec: MjSpec): void {
 /**
  * Compile the track's MJCF with the car attached at the track's start, its
  * site START_SITE, facing the site's +X, or the origin, facing +X, if it has
- * none, and without the meshes that only show the car. The track keeps its
- * own floor, and the scene takes the car's <option>, as in assets.compose.
+ * none, and without the meshes that only show the car. The site must be on
+ * the world body, as the car's free joint must. The track keeps its own
+ * floor, and the scene takes the car's <option>, as in assets.compose.
  * carXml defaults to assets/neoracer.xml.
  */
 export function compose(mj: Mujoco, trackXml: string, carXml: string = CAR_XML): Scene {
@@ -80,6 +81,10 @@ export function compose(mj: Mujoco, trackXml: string, carXml: string = CAR_XML):
   // its own keeps the two apart, as in assets.compose.
   mj.mjs_setName(mj.mjs_getSpecDefault(car)!.element, 'car');
   const start = mj.mjs_findElement(spec, mj.mjtObj.mjOBJ_SITE, START_SITE);
+  const parent = start && mj.mjs_getName(mj.mjs_getParent(start)!.element);
+  if (start && parent !== 'world') {
+    throw new Error(`the track's ${START_SITE} site is on the body ${parent}, not on the world body, where the car's free joint must be`);
+  }
   const mount = start ? mj.mjs_asSite(start)! : origin(mj, spec);
   const body = mj.mjs_findBody(car, CAR_BODY);
   if (!body) throw new Error(`the car has no "${CAR_BODY}" body`);

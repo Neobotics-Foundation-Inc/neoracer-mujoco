@@ -37,7 +37,8 @@ def test_the_car_composes_onto_every_track_and_rests_on_its_floor():
 
 def test_the_car_starts_at_the_tracks_start():
     """compose puts the car at the track's start site, facing the site's +X,
-    and at the origin, facing +X, on a track without one."""
+    and at the origin, facing +X, on a track without one. It refuses a start
+    off the world body, where the car's free joint cannot be."""
     loop = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
     turned, bare = mujoco.MjSpec.from_file(loop), mujoco.MjSpec.from_file(loop)
     start = turned.site(assets.START_SITE)
@@ -54,6 +55,11 @@ def test_the_car_starts_at_the_tracks_start():
             body = scene.model.bind_scalar(scene.car.body)
             np.testing.assert_allclose(body.pos[:2], xy, atol=1e-12)
             np.testing.assert_allclose(body.quat, quat, atol=1e-12)
+    nested = mujoco.MjSpec.from_file(loop)
+    nested.delete(nested.site(assets.START_SITE))
+    nested.body("walls").add_site(name=assets.START_SITE)
+    with pytest.raises(ValueError, match="world body"):
+        assets.compose(nested, visuals=False)
 
 
 def test_the_wheel_puts_assets_where_assets_py_looks():

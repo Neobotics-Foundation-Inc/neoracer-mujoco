@@ -115,7 +115,7 @@ test('set_speed_angle writes the controls that the Python adapter writes', () =>
   }
 });
 
-test("the car stands at the track's start, facing its +X, or at the origin facing +X without one", () => {
+test("the car stands at the track's start, facing its +X, or at the origin facing +X without one, and not off the world body", () => {
   const start = '<site name="start" pos="0 -2.5 0"/>';
   const replaced = (xml, from, to) => {
     const out = xml.replace(from, to);
@@ -143,6 +143,8 @@ test("the car stands at the track's start, facing its +X, or at the origin facin
     assert.ok(maxDiff(Array.from(data.xquat.subarray(4 * b, 4 * b + 4)), quat) < 1e-9, name);
     assert.ok(maxDiff(Array.from(data.xpos.subarray(3 * b, 3 * b + 2)), xy) < 1e-9, name);
   }
+  const nested = replaced(bare, '<body name="walls">', `<body name="walls">${start}`);
+  assert.throws(() => compose(mj, nested), /world body/);
 });
 
 test('a LiDAR that is not a scan is refused at the start', () => {

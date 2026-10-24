@@ -114,7 +114,8 @@ def compose(
 ) -> Scene:
     """Compile the track with the car's root body (contract.CAR_BODY)
     attached at the track's start: its site START_SITE, facing the site's
-    +X, or the origin, facing +X, if it has none. The car is a car XML's
+    +X, or the origin, facing +X, if it has none. The site must be on the
+    world body, as the car's free joint must. The car is a car XML's
     path or a car's MjSpec, such as export.spec(car) for a variant. Neither
     track nor a car's MjSpec is changed: the car is attached from copies.
 
@@ -134,6 +135,11 @@ def compose(
     car = car.copy() if isinstance(car, mujoco.MjSpec) else from_file(car)
     scene.option = car.option
     start = scene.site(START_SITE)
+    if start is not None and start.parent != scene.worldbody:
+        raise ValueError(
+            f"the track's {START_SITE} site is on the body {start.parent.name},"
+            " not on the world body, where the car's free joint must be"
+        )
     mount = start if start is not None else scene.worldbody.add_frame()
     if not visuals:
         delete_visuals(car)
