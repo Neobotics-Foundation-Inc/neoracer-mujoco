@@ -7,7 +7,7 @@ Install it with the `npm install` command at the top of the notes of the [latest
 ```js
 import loadMujoco from '@mujoco/mujoco';
 import {
-  ENCODER, LIDAR, SPEED_LOOP, actuatorLimits, applyCommand, compose, settle, speedAngle,
+  ENCODER, LIDAR, SPEED_LOOP, actuatorLimits, applyCommand, compose, driveAngle, settle, speedAngle,
   startEncoder, startLidar, startSpeedLoop, stepEncoder, stepSpeedLoop, sweepLidar,
 } from 'neoracer-mujoco';
 
@@ -16,7 +16,7 @@ const scene = compose(mj, trackXml);           // the car at the track's start s
 const { model } = scene;
 const data = settle(mj, model);               // at rest on the track
 const dt = model.opt.timestep;                // s
-const angle = () => data.sensordata[scene.car.drivePos];
+const angle = () => driveAngle(scene.car, data.qpos); // at the last step's end
 
 // After mj_step, the sensors and poses are those before its integration.
 // So run each step in two halves, as the Python adapter does: mj_step1

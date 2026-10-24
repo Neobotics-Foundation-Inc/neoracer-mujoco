@@ -24,6 +24,7 @@ import {
   applyCommand,
   attachCar,
   compose,
+  driveAngle,
   findCar,
   settle,
   settleSteps,
@@ -76,7 +77,7 @@ test('it settles as many steps as Python at any timestep', () => {
 
 test('a second of driving ends where it ends in Python, and the encoder agrees', () => {
   const data = settle(mj, model);
-  const angle = () => data.sensordata[car.drivePos];
+  const angle = () => driveAngle(car, data.qpos);
   let state = startEncoder(ENCODER, angle());
   applyCommand(scene, data, { throttle: fixtures.drive.throttle, steer: fixtures.drive.steer });
   for (let i = 0; i < fixtures.drive.steps; i++) {
@@ -87,6 +88,18 @@ test('a second of driving ends where it ends in Python, and the encoder agrees',
   // about 1e-14 m.
   assert.ok(maxDiff(data.qpos, fixtures.drive.qpos) < 1e-9);
   assert.ok(Math.abs(state.speed - fixtures.drive.encoder_speed) < 1e-9);
+});
+
+test('driveAngle reads drive_pos at the end of a step, where mj_step leaves the sensors at its start', () => {
+  const data = settle(mj, model);
+  applyCommand(scene, data, { throttle: 0.5, steer: 0 });
+  for (let i = 0; i < 10; i++) mj.mj_step(model, data);
+  const sensor = model.sensor_adr[mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR.value, DRIVE_POS_SENSOR)];
+  const start = data.sensordata[sensor];
+  const end = driveAngle(car, data.qpos);
+  mj.mj_forward(model, data);
+  assert.equal(end, data.sensordata[sensor]);
+  assert.notEqual(end, start);
 });
 
 test('a turn swept from 13 poses reads what Python reads', () => {

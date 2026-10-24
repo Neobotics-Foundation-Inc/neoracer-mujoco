@@ -30,8 +30,8 @@ export interface Car {
   readonly steer: number;
   /** The LiDAR site. */
   readonly lidar: number;
-  /** The address of drive_pos in sensordata. */
-  readonly drivePos: number;
+  /** The drivetrain's angle as a sum over qpos: drive_pos's fixed tendon, coef[k] times qpos[qpos[k]] (driveAngle). */
+  readonly drivetrain: { readonly qpos: readonly number[]; readonly coef: readonly number[] };
 }
 
 /** A compiled scene: spec is what model was compiled from. */
@@ -119,8 +119,35 @@ export function findCar(mj: Mujoco, spec: MjSpec, model: MjModel, prefix = ''): 
     drive: id(O.mjOBJ_ACTUATOR, DRIVE_ACTUATOR),
     steer: id(O.mjOBJ_ACTUATOR, STEER_ACTUATOR),
     lidar: id(O.mjOBJ_SITE, LIDAR_SITE),
-    drivePos: model.sensor_adr[id(O.mjOBJ_SENSOR, DRIVE_POS_SENSOR)],
+    drivetrain: drivetrain(mj, model, id(O.mjOBJ_SENSOR, DRIVE_POS_SENSOR)),
   };
+}
+
+/** The fixed tendon whose length the drive_pos sensor reads, as batch.drive_angle reads it: refused if it reads anything
+ *  else. */
+function drivetrain(mj: Mujoco, model: MjModel, sensor: number): Car['drivetrain'] {
+  const refused = new Error("the drive_pos sensor does not read a fixed tendon's length");
+  if (model.sensor_type[sensor] !== mj.mjtSensor.mjSENS_TENDONPOS.value) throw refused;
+  const tendon = model.sensor_objid[sensor];
+  const wraps = Array.from({ length: model.tendon_num[tendon] }, (_, k) => model.tendon_adr[tendon] + k);
+  if (wraps.some((w) => model.wrap_type[w] !== mj.mjtWrap.mjWRAP_JOINT.value)) throw refused;
+  return {
+    qpos: wraps.map((w) => model.jnt_qposadr[model.wrap_objid[w]]),
+    coef: wraps.map((w) => model.wrap_prm[w]),
+  };
+}
+
+/**
+ * The drivetrain's angle (rad) at qpos, summed as MuJoCo sums the tendon, so
+ * it is drive_pos's reading there, as batch.drive_angle. After mj_step the
+ * sensors still hold the state at the step's start; this reads it at the
+ * step's end.
+ */
+export function driveAngle(car: Car, qpos: ArrayLike<number>): number {
+  const { qpos: adr, coef } = car.drivetrain;
+  let angle = 0;
+  for (let k = 0; k < adr.length; k++) angle += coef[k] * qpos[adr[k]];
+  return angle;
 }
 
 /**

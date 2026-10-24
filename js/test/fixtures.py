@@ -14,7 +14,7 @@ import sys
 
 import mujoco
 
-from neoracer_mujoco import assets, encoder, lidar, sim, speed_loop
+from neoracer_mujoco import assets, batch, encoder, lidar, sim, speed_loop
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.racecar_core_adapter import MujocoDrive
 from neoracer_spec.derive import derive
@@ -35,15 +35,13 @@ def main(out: str) -> None:
     settled = sim.settle(model)
     data = sim.settle(model)
     params = derive(NEORACER).encoder
-    drive_pos = data.bind_scalar(car.sensors.drive_pos)
-    state = encoder.start(params, float(drive_pos.data[0]))
+    state = encoder.start(params, batch.drive_angle(model, car, data.qpos))
     sim.apply_command(car, data, DRIVE)
     drive_steps = round(DRIVE_SECONDS / model.opt.timestep)
     for _ in range(drive_steps):
         mujoco.mj_step(model, data)
-        state = encoder.step(
-            params, state, float(drive_pos.data[0]), model.opt.timestep
-        )
+        angle = batch.drive_angle(model, car, data.qpos)
+        state = encoder.step(params, state, angle, model.opt.timestep)
 
     # A turn swept from 13 poses, each 1 cm to the left of the last.
     lidar_params = derive(NEORACER).lidar
