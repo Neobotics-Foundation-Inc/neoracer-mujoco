@@ -227,13 +227,14 @@ def drive[S, A: Array, M](
     commanded: npt.NDArray[np.float64],
     steer: A,
     nstep: int,
-) -> tuple[S, SensorData, speed_loop.SpeedLoopState]:
+) -> tuple[S, A, speed_loop.SpeedLoopState]:
     """Step nstep physics steps with the firmware's speed loop of every row
     (speed_loop.py) holding the speed commanded (m/s), on the host, and the
     steer servo holding steer (rad), an array of sim's, as its ctrl is; both
     (nbatch,). The rows' loops tick together, so the steps run in pieces from
     one tick to the next, the throttle held over each. Returns the state, the
-    sensor values after each step (nbatch, nstep, nsensordata) and the loop.
+    sensor values after each step (nbatch, nstep, nsensordata), arrays of
+    sim's, and the loop.
 
     Only a piece's last step can close the firmware's window, and the encoder
     reads the drivetrain only then, so the loop reads it once a piece: at the
@@ -254,9 +255,10 @@ def drive[S, A: Array, M](
         angle = np.asarray(contract.drive_angle(drivetrain, sim.qpos(state)))
         for _ in range(k):
             loop = speed_loop.step(params, loop, commanded, angle, dt)
-        pieces.append(np.asarray(sensordata))
+        pieces.append(sensordata)
         left -= k
-    return state, np.concatenate(pieces, axis=1), loop
+    xs = pieces[0].__array_namespace__()  # the backend's: numpy or jax.numpy
+    return state, xs.concatenate(pieces, axis=1), loop
 
 
 def read[A: Array](model: mujoco.MjModel, sensordata: A, sensor: mujoco.MjsSensor) -> A:

@@ -381,7 +381,8 @@ def test_drive_on_warp_follows_drive_on_the_cpu(warp):
     one of them standing, ends within 1 mm of the CPU batch's drive, and its
     loops' measured speeds (m/s) and throttles end within 0.01 of the CPU's:
     Warp's physics is close to the CPU's, not equal, and the loop reads it.
-    The steer may be a JAX array, as Warp's ctrl is."""
+    The steer may be a JAX array, as Warp's ctrl is, and the sensor values
+    stay JAX arrays, on the GPU where there is one."""
     jnp, scene, warp_batch = warp
     params = derive(NEORACER).speed_loop
     datas = [sim.settle(scene.model)] * 4
@@ -416,6 +417,7 @@ def test_drive_on_warp_follows_drive_on_the_cpu(warp):
             NSTEP,
         )
     cpu.close()
+    assert isinstance(warp_data, jnp.ndarray)
     pos = scene.car.truth.pos
     cpu_pos = batch.read(scene.model, cpu_data[:, -1], pos)
     warp_pos = batch.read(scene.model, warp_data[:, -1], pos)
