@@ -9,7 +9,7 @@
 import type { MjData } from '@mujoco/mujoco';
 
 import type { Mujoco, Scene } from './scene.js';
-import { NO_RETURN } from './generated/shared.js';
+import { NO_RETURN, SLOT_EPS } from './generated/shared.js';
 import { type LidarParams, NEORACER_PARAMS } from './generated/spec.js';
 
 export type { LidarParams };
@@ -29,9 +29,6 @@ export interface LidarState {
   readonly sweeping: Float64Array; // the turn in progress; slots at or past head are stale
   readonly scan: Float64Array; // the last complete turn: what the LiDAR reports
 }
-
-// The part of a slot below which the head has not reached it.
-const EPS = 1e-9;
 
 /** The distance (m) of each of slots from the LiDAR at the pose of data, or NO_RETURN. */
 function measure(mj: Mujoco, params: LidarParams, scene: Scene, data: MjData, slots: readonly number[]): Float64Array {
@@ -103,14 +100,14 @@ export function sweepLidar(
   const n = params.slots;
   let end = state.head + n * params.scan_rate * dt;
   if (!(end - state.head > 0 && end - state.head < n)) throw new Error(`a step of ${dt} s is not between 0 and a turn`);
-  const slots = range(Math.ceil(state.head - EPS), Math.ceil(end - EPS));
+  const slots = range(Math.ceil(state.head - SLOT_EPS), Math.ceil(end - SLOT_EPS));
   const values = measure(mj, params, scene, data, slots.map((s) => s % n));
   let sweeping = state.sweeping.slice();
   let scan = state.scan;
   slots.forEach((s, k) => {
     if (s < n) sweeping[s] = values[k];
   });
-  if (end >= n - EPS) {
+  if (end >= n - SLOT_EPS) {
     scan = sweeping;
     sweeping = new Float64Array(n).fill(NO_RETURN);
     slots.forEach((s, k) => {

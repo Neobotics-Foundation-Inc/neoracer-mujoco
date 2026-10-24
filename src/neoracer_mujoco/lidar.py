@@ -58,7 +58,7 @@ def start(
 
 # The part of a slot below which the head has not reached it: a step that
 # lands on a slot, up to rounding, does not measure it.
-_EPS = 1e-9
+SLOT_EPS = 1e-9
 
 
 def sweep(
@@ -75,12 +75,12 @@ def sweep(
     end = state.head + n * params.scan_rate * dt
     if not 0 < end - state.head < n:
         raise ValueError(f"a step of {dt} s is not between 0 and a turn")
-    slots = np.arange(math.ceil(state.head - _EPS), math.ceil(end - _EPS))
+    slots = np.arange(math.ceil(state.head - SLOT_EPS), math.ceil(end - SLOT_EPS))
     values = _measure(params, model, data, car, slots % n)
     sweeping, scan = state.sweeping.copy(), state.scan
     done = slots < n
     sweeping[slots[done]] = values[done]
-    if end >= n - _EPS:  # the turn is complete
+    if end >= n - SLOT_EPS:  # the turn is complete
         scan, sweeping = sweeping, np.full(n, NO_RETURN)
         sweeping[slots[~done] - n] = values[~done]
         end -= n

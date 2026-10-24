@@ -41,7 +41,7 @@ def start(params: EncoderParams, angle: float) -> EncoderState:
 
 # A window closes when less than this is left of it (s), so that a step that
 # lands on a tick, up to rounding, closes the window.
-_EPS = 1e-9
+WINDOW_EPS = 1e-9
 
 
 def step(
@@ -50,7 +50,7 @@ def step(
     """The encoder after a physics step of dt (s) that left the drivetrain at
     angle (rad)."""
     span, due = state.span + dt, state.due - dt
-    if due >= _EPS:
+    if due >= WINDOW_EPS:
         return EncoderState(state.angle, span, due, state.speed)
     raw = (angle - state.angle) * params.radius / span  # m/s over the window
     speed = params.alpha * raw + (1.0 - params.alpha) * state.speed
