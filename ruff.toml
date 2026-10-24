@@ -8,6 +8,8 @@ extend-exclude = ["users", "validation/testdata", "examples/ultimate_wall_follow
 # remove this section.
 [lint.flake8-bugbear]
 extend-immutable-calls = [
+  "examples.driving.ChaseCam",
+  "examples.driving.Shaping",
   "neoracer_mujoco.control.steering.ShapingConfig",
   "neoracer_mujoco.sim.SpawnRange",
   "neoracer_mujoco.track_generation.mjcf.WallParams",
