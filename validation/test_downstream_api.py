@@ -9,6 +9,8 @@ the same release.
 import dataclasses
 import importlib
 
+import pytest
+
 from neoracer_mujoco.contract import ActuatorLimits
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import PhysicsRanges
@@ -27,7 +29,6 @@ USED_BY_NEORACER_RL = (
     "neoracer_mujoco.batch.CpuBatch",
     "neoracer_mujoco.batch.command",
     "neoracer_mujoco.batch.read",
-    "neoracer_mujoco.batch_warp.WarpBatch",
     "neoracer_mujoco.collision.car_touches_wall",
     "neoracer_mujoco.contract.actuator_limits",
     "neoracer_mujoco.contract.wheel_radius",
@@ -64,12 +65,26 @@ USED_BY_NEORACER_RL = (
 )
 
 
-def test_the_names_used_by_neoracer_rl_exist():
+# Names that need the jax extra, which neoracer-rl installs.
+USED_BY_NEORACER_RL_WITH_JAX = ("neoracer_mujoco.batch_warp.WarpBatch",)
+
+
+def _missing(names: tuple[str, ...]) -> list[str]:
     def exists(name):
         module, attr = name.rsplit(".", 1)
         return hasattr(importlib.import_module(module), attr)
 
-    assert [name for name in USED_BY_NEORACER_RL if not exists(name)] == []
+    return [name for name in names if not exists(name)]
+
+
+def test_the_names_used_by_neoracer_rl_exist():
+    assert _missing(USED_BY_NEORACER_RL) == []
+
+
+def test_the_names_used_by_neoracer_rl_with_the_jax_extra_exist():
+    for module in ("jax", "mujoco.mjx", "mujoco_warp"):
+        pytest.importorskip(module)
+    assert _missing(USED_BY_NEORACER_RL_WITH_JAX) == []
 
 
 def test_records_used_by_neoracer_rl_keep_their_fields():
