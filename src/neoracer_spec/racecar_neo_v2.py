@@ -58,7 +58,7 @@ from .provenance import (
     measured,
     walk,
 )
-from .spec import Vec3
+from .spec import DriveCommand, Vec3
 
 
 @dataclass(frozen=True)
@@ -227,6 +227,8 @@ class Linkage:
 class Drive:
     """The firmware holds a speed: a drive command is a share of max_speed."""
 
+    command: Sourced[DriveCommand]
+    """What the car's computer sets with a drive command."""
     max_speed: Sourced[float]
     """The firmware's ceiling, rc.drive.set_max_speed."""
     speed_floor: Sourced[float]
@@ -648,6 +650,11 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         ),
     ),
     drive=Drive(
+        command=measured(
+            "speed",
+            DYNAMICS,
+            note="the straight runs hold a steady speed at each command (steady_speed)",
+        ),
         max_speed=documented(
             1.0,
             REFERENCE_CAR,

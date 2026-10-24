@@ -299,6 +299,13 @@ class DriveParams:
 
 
 def drive(spec: RacecarNeoV2) -> DriveParams:
+    """The motor that holds the speed that a drive command sets
+    (Drive.command), as the car's drive board does."""
+    if spec.drive.command.value != "speed":
+        raise ValueError(
+            "the model's motor holds the speed that a drive command sets, so it"
+            f" takes no {spec.drive.command.value} command"
+        )
     r = wheel_radius(spec)
     slope, step = throttle_map(spec)
     brake, _ = coast_drag(spec)

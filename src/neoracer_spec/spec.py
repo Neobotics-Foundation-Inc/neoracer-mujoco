@@ -22,6 +22,11 @@ from .provenance import Sourced
 
 type Vec3 = tuple[float, float, float]
 
+type DriveCommand = Literal["speed", "throttle"]
+"""What a car's computer sets with a drive command: a speed, which the car
+holds, or a throttle, the share of the battery's voltage that the motor
+gets."""
+
 
 @dataclass(frozen=True)
 class Spec:
@@ -33,6 +38,7 @@ class Spec:
     esc: Esc
     servo: SteeringServo
     steering: Steering
+    command: Command
     speed_controller: SpeedController
     encoder: MotorEncoder
     imu: Imu
@@ -213,6 +219,19 @@ class Steering:
     """The inertia added at the steering input and at each front wheel's steer
     joint (kg·m²): the servo's rotor, seen through its gears, turns with
     them."""
+
+
+@dataclass(frozen=True)
+class Command:
+    """What the car's computer sends the firmware to drive: a drive command
+    and a steering angle."""
+
+    drive: Sourced[DriveCommand]
+    """What a drive command sets. On the NeoRacer, a speed, which the speed
+    loop (SpeedController) holds."""
+    timeout: Sourced[float]
+    """The time without a command after which the firmware stops the car and
+    centers the steering."""
 
 
 @dataclass(frozen=True)
