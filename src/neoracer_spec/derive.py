@@ -15,10 +15,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-import numpy as np
-
 from . import ackermann, parts
-from .parts import Nominal, Polynomial, precise, precise3
+from .parts import Nominal, precise, precise3
 from .spec import (
     DcMotorRating,
     ServoRating,
@@ -26,8 +24,6 @@ from .spec import (
     SteeringServo,
     Vec3,
 )
-
-G = 9.81  # m/s^2, MuJoCo's gravity
 
 
 @dataclass(frozen=True)
@@ -118,7 +114,6 @@ class ModelParams:
     common: parts.Model
     motor: DcMotorParams
     wheel_mesh_scale: float  # of the cosmetic wheel meshes, to the tyre
-    steer_armature: float  # kg·m², at the steering input and steer joints
 
 
 @dataclass(frozen=True)
@@ -131,8 +126,7 @@ class DcMotorParams:
 def model(spec: Spec) -> ModelParams:
     c, w, s = spec.chassis, spec.wheel, spec.suspension
     box = c.collision_box.value
-    poly = ackermann_left(spec)
-    fit = precise(spec.steering.fit_range.value)
+    fit = spec.steering.fit_range.value
     friction = precise(w.friction.value)
     k, d, ref = precise(s.stiffness.value), precise(s.damping.value), spring_ref(spec)
     return ModelParams(
@@ -170,13 +164,13 @@ def model(spec: Spec) -> ModelParams:
                 damping=(d, d),
                 springref=(precise(ref), precise(ref)),
             ),
-            steering=parts.SteeringInput(
+            # The steering input is the virtual wheel's angle.
+            steering=parts.steering_input(
+                c.wheelbase.value,
+                c.track.value,
                 stops=(-fit, fit),
-                wheel_range=precise(wheel_steer_range(spec)),
-                ackermann_left=poly,
-                # The right wheel's is the left's mirror image.
-                ackermann_right=(-poly[0], poly[1], -poly[2], poly[3], -poly[4]),
-                input_body_mass=precise(spec.steering.input_body_mass.value),
+                virtual=lambda x: x,
+                armature=spec.steering.armature.value,
             ),
             servo=parts.Servo(
                 nominal=precise3(servo_nominal(spec)),
@@ -192,24 +186,7 @@ def model(spec: Spec) -> ModelParams:
             ctrl_limit=precise(spec.battery.voltage.value),
         ),
         wheel_mesh_scale=precise(w.radius.value / spec.visuals.mesh_wheel_radius.value),
-        steer_armature=precise(spec.steering.armature.value),
     )
-
-
-def ackermann_left(spec: Spec) -> Polynomial:
-    """The left wheel's angle as a 4th-order polynomial of the steering input,
-    a least-squares fit to ideal Ackermann steering over its range, to the
-    model's precision. The right wheel's is its mirror image,
-    (-a0, a1, -a2, a3, -a4)."""
-    l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
-    r = spec.steering.fit_range.value
-    # An even count of points leaves out 0, where left_wheel divides by 0.
-    x = np.linspace(-r, r, 400)
-    y = [ackermann.left_wheel(l, w, s) for s in x]
-    a0, a1, a2, a3, a4 = (
-        precise(float(a)) for a in np.polynomial.polynomial.polyfit(x, y, 4)
-    )
-    return (a0, a1, a2, a3, a4)
 
 
 def nominal(rating: DcMotorRating) -> Nominal:
@@ -263,9 +240,7 @@ def steer_lock(spec: Spec) -> float:
 
 
 def chassis_mass(spec: Spec) -> float:
-    """The chassis body's mass (kg): the sprung mass less the steering input's
-    body."""
-    return sprung_mass(spec) - spec.steering.input_body_mass.value
+    return parts.chassis_mass(spec.chassis.mass.value, spec.wheel.mass.value)
 
 
 def sprung_mass(spec: Spec) -> float:
@@ -283,13 +258,5 @@ def chassis_inertia(spec: Spec) -> Vec3:
 
 def spring_ref(spec: Spec) -> float:
     """The springs' rest position (m): each holds a quarter of the sprung
-    weight with its joint at 0."""
-    return -sprung_mass(spec) * G / 4 / spec.suspension.stiffness.value
-
-
-def wheel_steer_range(spec: Spec) -> float:
-    """How far (rad) each front wheel's steer joint turns: past the inner
-    wheel's angle at the edge of the steering input's range."""
-    l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
-    s = spec.steering
-    return ackermann.left_wheel(l, w, s.fit_range.value) + s.wheel_range_margin.value
+    mass."""
+    return parts.spring_ref(sprung_mass(spec) / 4, spec.suspension.stiffness.value)

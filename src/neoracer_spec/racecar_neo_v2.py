@@ -170,6 +170,9 @@ class Steering:
     servo_kd: Sourced[float]  # V·s/rad
     servo_supply: Sourced[float]  # V
     latency: Sourced[float]  # s, from a command to the servo
+    # Inertia added at the steering input and at each front wheel's steer
+    # joint: the servo's rotor, seen through its gears, turns with them.
+    armature: Sourced[float]  # kg·m²
 
 
 @dataclass(frozen=True)
@@ -577,6 +580,9 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         servo_supply=chosen(5.0, "the loop's voltage clamp; kp is per this supply"),
         latency=calibrated(
             0.086, FIT, "the full-lock circles' yaw rate after the steering command"
+        ),
+        armature=chosen(
+            0.002, "the NeoRacer's: it stops the steering ringing at the model's step"
         ),
     ),
     drive=Drive(

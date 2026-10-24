@@ -66,7 +66,7 @@
         <!--
         Steering joint: hinge about the Z-axis (vertical). Its range is wider
         than the inner front wheel's angle at the edge of steer_input's range
-        (neoracer_spec.derive.wheel_steer_range), so it never opposes the Ackermann
+        (neoracer_spec.parts.steering_input), so it never opposes the Ackermann
         constraints. Its armature stands for the servo's rotor, seen through its
         gears; it is an estimate (neoracer_spec.neoracer, steering), and at less
         the steering rings faster than the model's step resolves and the car
@@ -276,7 +276,7 @@
         fr_steer = arctan(L / (L/tan(δ) + W/2))   (outer wheel, turns less)
 
     L is the wheelbase and W the track. The coefficients are a least-squares
-    fit to these over the range of steer_input (neoracer_spec.derive.ackermann_left).
+    fit to these over the range of steer_input (neoracer_spec.parts.steering_input).
 
     polycoef: a0 a1 a2 a3 a4  →  y = a0 + a1·x + a2·x² + a3·x³ + a4·x⁴
 
