@@ -9,7 +9,7 @@
 import type { MjData } from '@mujoco/mujoco';
 
 import type { Mujoco, Scene } from './scene.js';
-import { NO_RETURN, SLOT_EPS } from './generated/shared.js';
+import { FIELD_EPS, NO_RETURN, SLOT_EPS } from './generated/shared.js';
 import { type LidarParams, NEORACER_PARAMS } from './generated/spec.js';
 
 export type { LidarParams };
@@ -17,10 +17,10 @@ export type { LidarParams };
 /** The NeoRacer's LiDAR: derive(NEORACER).lidar in Python. */
 export const LIDAR: LidarParams = NEORACER_PARAMS.lidar;
 
-/** Whether it sees slot i: its bearing is in [-field / 2, field / 2). */
+/** Whether it sees slot i: its bearing in its field, the closed rule of contract.in_field. */
 export function isVisible(params: LidarParams, i: number): boolean {
   const bearing = i * ((2 * Math.PI) / params.slots);
-  return bearing < params.field / 2 || bearing >= 2 * Math.PI - params.field / 2;
+  return Math.min(bearing, 2 * Math.PI - bearing) <= params.field / 2 + FIELD_EPS;
 }
 
 /** The LiDAR between two physics steps. */

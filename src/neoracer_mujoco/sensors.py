@@ -154,12 +154,8 @@ def find_sensors(spec: mujoco.MjSpec, model: mujoco.MjModel) -> CarSensors:
 
 def beam_in_field(name: str, field: float) -> bool:
     """Whether a LiDAR that sees field (rad), centred on its front, sees the
-    beam of LIDAR_BEAM_ORDER called name. A beam on the field's edge is in,
-    with the field at the model's precision (6 significant digits, 1e-5 rad
-    at most); the beams are 45 degrees apart."""
-    degrees = int(name.removeprefix("lidar_"))
-    off_front = math.radians(min(degrees, 360 - degrees))
-    return off_front <= field / 2 + 1e-5
+    beam of LIDAR_BEAM_ORDER called name (contract.in_field)."""
+    return contract.in_field(math.radians(int(name.removeprefix("lidar_"))), field)
 
 
 def read(sensors: CarSensors, data: mujoco.MjData) -> SensorReadings:

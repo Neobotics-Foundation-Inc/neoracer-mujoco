@@ -13,7 +13,7 @@ import mujoco
 import numpy as np
 import pytest
 
-from neoracer_mujoco import Scene, assets, lidar, sim
+from neoracer_mujoco import Scene, assets, lidar, sensors, sim
 from neoracer_spec.derive import derive
 from neoracer_spec.neoracer import NEORACER
 
@@ -33,10 +33,19 @@ def _shift(scene: Scene, data: mujoco.MjData, dy: float) -> None:
 
 
 def test_it_sees_its_field_centered_on_the_front():
-    seen = lidar.visible(LIDAR)
-    assert seen.sum() == round(LIDAR.slots * LIDAR.field / (2 * math.pi))
-    assert seen[0]
-    assert not seen[LIDAR.slots // 2]  # straight behind
+    """It sees the slots within half its field of the front, either way, the
+    edges included, and not straight behind: the same slots on either side,
+    and the beams of the car's model where they share a bearing."""
+    seen, n = lidar.visible(LIDAR), LIDAR.slots
+    assert seen[0] and not seen[n // 2]
+    assert all(seen[i] == seen[-i % n] for i in range(n))
+    edge = LIDAR.field / 2 / (2 * math.pi) * n  # slots from the front to an edge
+    k = round(edge)
+    assert math.isclose(edge, k)  # the NeoRacer's edges fall on slots
+    assert seen[k] and seen[n - k] and not seen[k + 1] and not seen[n - k - 1]
+    for name in sensors.LIDAR_BEAM_ORDER:
+        slot = int(name.removeprefix("lidar_")) * n // 360
+        assert seen[slot] == sensors.beam_in_field(name, LIDAR.field), name
 
 
 def _wall_ahead(x: float) -> Scene:
