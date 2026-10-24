@@ -292,7 +292,9 @@ class Camera:
 @dataclass(frozen=True)
 class Resolution:
     width: int
+    """The width in pixels."""
     height: int
+    """The height in pixels."""
     fps: float
 
 
