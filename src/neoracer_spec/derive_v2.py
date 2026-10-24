@@ -110,19 +110,10 @@ def encoder_params(spec: RacecarNeoV2) -> HallEncoderParams:
 
 
 @dataclass(frozen=True)
-class ModelParams:
-    """The car model's numbers: the parts that both cars' models have
-    (parts), and the V2's own. Positions are in the car's body frame."""
+class ModelParams(parts.Model):
+    """The RACECAR Neo V2's model: the parts that both cars' models have,
+    and its own."""
 
-    spawn_height: float  # m, of the body frame above the floor
-    inertial: parts.Inertial
-    boxes: tuple[parts.CollisionBox, ...]
-    imu_position: Vec3  # m
-    lidar: parts.LidarBeams
-    wheels: parts.Wheels
-    springs: parts.Springs
-    steering: parts.SteeringInput
-    servo: parts.Servo
     servo_delay: parts.Delay
     drive: DriveParams
     antenna_center: Vec3  # m, the left antenna's; the right one is its mirror

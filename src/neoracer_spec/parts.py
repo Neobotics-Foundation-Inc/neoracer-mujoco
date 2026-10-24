@@ -137,6 +137,22 @@ class Delay:
     nsample: int
 
 
+@dataclass(frozen=True)
+class Model:
+    """The parts that both cars' models have, which each car's ModelParams
+    extends with its own. Positions are in the car's body frame."""
+
+    spawn_height: float  # m, of the body frame above the floor
+    inertial: Inertial
+    boxes: tuple[CollisionBox, ...]
+    imu_position: Vec3  # m
+    lidar: LidarBeams
+    wheels: Wheels
+    springs: Springs
+    steering: SteeringInput
+    servo: Servo
+
+
 def delay(latency: float) -> Delay:
     """A delay of latency (s), with a sample a step of SOLVER and two to
     spare."""

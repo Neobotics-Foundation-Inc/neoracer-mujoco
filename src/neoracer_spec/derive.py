@@ -111,19 +111,10 @@ def encoder_params(spec: Spec) -> EncoderParams:
 
 
 @dataclass(frozen=True)
-class ModelParams:
-    """The car model's numbers: the parts that both cars' models have
-    (parts), and the NeoRacer's own. Positions are in the car's body frame."""
+class ModelParams(parts.Model):
+    """The NeoRacer's model: the parts that both cars' models have, and its
+    own."""
 
-    spawn_height: float  # m, of the body frame above the floor
-    inertial: parts.Inertial
-    boxes: tuple[parts.CollisionBox, ...]
-    imu_position: Vec3  # m
-    lidar: parts.LidarBeams
-    wheels: parts.Wheels
-    springs: parts.Springs
-    steering: parts.SteeringInput
-    servo: parts.Servo
     motor: DcMotorParams
     wheel_mesh_scale: float  # of the cosmetic wheel meshes, to the tyre
     steer_armature: float  # kg·m², at the steering input and steer joints
