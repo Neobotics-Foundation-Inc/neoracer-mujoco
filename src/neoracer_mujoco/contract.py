@@ -23,7 +23,7 @@ its element in the scene's MjSpec (scene.Car).
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 import mujoco
 
@@ -81,6 +81,26 @@ MASS_MIN, MASS_MAX = 1.0, 8.0  # kg
 
 
 type ThrottleMap = tuple[float, float, float]
+
+
+class Array(Protocol):
+    """A numpy or a JAX array, or a numpy scalar: what throttle_ctrl and the
+    batch's command and read need of one."""
+
+    def __array_namespace__(self, *, api_version: None = None) -> Any: ...
+
+    def __getitem__(self, key: Any, /) -> Any: ...
+
+    def __mul__(self, other: float, /) -> Any: ...
+
+
+def throttle_ctrl[A: Array](tmap: ThrottleMap, throttle: A) -> A:
+    """The ctrl that throttle, in [-1, 1], gives an actuator of throttle map
+    tmap (throttle_map): a t + b sign(t) + c |sign(t)|."""
+    a, b, c = tmap
+    xp = throttle.__array_namespace__()  # numpy or jax.numpy
+    sign = xp.sign(throttle)
+    return throttle * a + sign * b + xp.abs(sign) * c
 
 
 def throttle_map(model: mujoco.MjModel, actuator: mujoco.MjsActuator) -> ThrottleMap:
