@@ -13,7 +13,10 @@ import pytest
 from cases import case
 
 from examples.driving import Drive, Rates, Shaping, apply_and_step, next_drive
-from neoracer_mujoco import assets, contract
+from neoracer_mujoco import assets, collision, contract, sim
+from neoracer_mujoco.control.steering import ControlCommand
+
+LOOP = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
 
 # Rates of their own toward an input and back to 0, so the laws tell them apart.
 SHAPING = Shaping(
@@ -119,6 +122,28 @@ def test_the_car_tops_out_then_brakes_when_the_throttle_is_released():
     # At zero throttle the motor brakes in proportion to its speed: from full
     # speed the car loses half of it in about 0.35 s.
     assert _speed(scene, data) < 0.5 * v_release
+
+
+def test_a_frame_says_whether_the_car_touched_a_wall_in_any_step():
+    """apply_and_step steps the whole frame and says whether the car touched
+    a wall in any of its steps, as the same steps taken one at a time show.
+    On the loop, full throttle and full lock reach the inner wall."""
+    scene = assets.compose(mujoco.MjSpec.from_file(LOOP), visuals=False)
+    model, car = scene.model, scene.car
+    framed, stepped = mujoco.MjData(model), mujoco.MjData(model)
+    hit = Drive(throttle=1.0, steer=1.0)
+    lock = contract.actuator_limits(model, car).steer_rad
+    said, touched = [], []
+    for _ in range(round(3.0 / DT)):
+        said.append(apply_and_step(scene, framed, hit, DT))
+        sim.apply_command(car, stepped, ControlCommand(throttle=1.0, steer=lock))
+        steps = []
+        while stepped.time < framed.time:
+            mujoco.mj_step(model, stepped)
+            steps.append(collision.car_touches_wall(stepped, car))
+        touched.append(any(steps))
+    assert said == touched
+    assert any(said)
 
 
 def test_the_car_drives_forward_on_every_track():
