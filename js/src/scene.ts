@@ -116,7 +116,12 @@ export function compose(
 /** New data for model, stepped for SETTLE_TIME with zero control so the car rests. */
 export function settle(mj: Mujoco, model: MjModel): MjData {
   const data = new mj.MjData(model);
-  const steps = Math.round(SETTLE_TIME / model.opt.timestep);
+  const steps = settleSteps(model.opt.timestep);
   for (let i = 0; i < steps; i++) mj.mj_step(model, data);
   return data;
+}
+
+/** The steps of timestep (s) in SETTLE_TIME, half a step rounding up: sim.settle_steps in Python. */
+export function settleSteps(timestep: number): number {
+  return Math.floor(SETTLE_TIME / timestep + 0.5);
 }

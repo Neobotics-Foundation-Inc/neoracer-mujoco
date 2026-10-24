@@ -21,6 +21,7 @@ import {
   applyCommand,
   compose,
   settle,
+  settleSteps,
   speedAngle,
   startEncoder,
   startLidar,
@@ -60,6 +61,10 @@ test("the contract's names are parts of the composed car", () => {
 
 test('the car settles where it settles in Python', () => {
   assert.ok(maxDiff(settle(mj, model).qpos, fixtures.settled_qpos) < 1e-12);
+});
+
+test('it settles as many steps as Python at any timestep', () => {
+  for (const [dt, steps] of fixtures.settle_steps) assert.equal(settleSteps(dt), steps, `timestep ${dt}`);
 });
 
 test('a second of driving ends where it ends in Python, and the encoder agrees', () => {

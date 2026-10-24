@@ -90,6 +90,11 @@ def main(out: str) -> None:
         "sizes": sizes,
         "timestep": model.opt.timestep,
         "settled_qpos": settled.qpos.tolist(),
+        # Timesteps that divide SETTLE_TIME, and one that leaves half a step.
+        "settle_steps": [
+            [dt, sim.settle_steps(dt)]
+            for dt in (model.opt.timestep, 0.002, sim.SETTLE_TIME / 312.5)
+        ],
         "drive": {
             "throttle": DRIVE.throttle,
             "steer": DRIVE.steer,

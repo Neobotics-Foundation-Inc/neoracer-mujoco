@@ -41,8 +41,14 @@ def settle(model: mujoco.MjModel) -> mujoco.MjData:
     """New MjData, stepped for SETTLE_TIME with zero control so the car
     rests on the ground."""
     data = mujoco.MjData(model)
-    apply_ctrl_and_step(model, data, 0.0, round(SETTLE_TIME / model.opt.timestep))
+    apply_ctrl_and_step(model, data, 0.0, settle_steps(model.opt.timestep))
     return data
+
+
+def settle_steps(timestep: float) -> int:
+    """The steps of timestep (s) in SETTLE_TIME, half a step rounding up,
+    as the JS package's settleSteps rounds."""
+    return math.floor(SETTLE_TIME / timestep + 0.5)
 
 
 def car_mass(model: mujoco.MjModel, car: Car) -> float:
