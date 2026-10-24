@@ -149,7 +149,7 @@ class SpeedLoopParams:
     """The speed that a program's full speed commands."""
 
     def __post_init__(self) -> None:
-        for name in ("pulse_limit", "full_throttle_pulse", "max_speed"):
+        for name in ("stop_speed", "pulse_limit", "full_throttle_pulse", "max_speed"):
             if not getattr(self, name) > 0.0:
                 raise ValueError(f"{name} must be > 0, not {getattr(self, name)}")
         if not 0.0 <= self.deadband <= self.feed_forward_limit:

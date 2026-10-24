@@ -70,6 +70,27 @@ def test_a_tick_from_rest_is_the_firmwares_pid_from_a_cleared_loop():
             assert -1.0 <= first.throttle <= 1.0
 
 
+def test_an_esc_at_full_voltage_before_the_pulse_limit_holds_full_throttle():
+    """An ESC that gives the motor the battery's whole voltage at a pulse
+    under the firmware's pulse limit holds the throttle at 1 for any pulse
+    past it, either way."""
+    early = copy.replace(PARAMS, full_throttle_pulse=PARAMS.pulse_limit / 2)
+    for v in (6.0, -6.0):
+        with case(v):
+            first = next(
+                s for s in _run(early, [v] * 8, [0.0] * 9) if s.measure.span == 0.0
+            )
+            assert first.throttle == math.copysign(1.0, v)
+
+
+def test_a_loop_without_a_stop_speed_is_refused():
+    """A loop must send neutral for a commanded speed of 0, so its stop
+    speed must be positive."""
+    for stop in (0.0, -0.05):
+        with case(stop), pytest.raises(ValueError, match="stop_speed"):
+            copy.replace(PARAMS, stop_speed=stop)
+
+
 def test_the_feed_forward_rounds_and_holds_within_its_range():
     """The feed-forward is deadband plus feed_forward per m/s, rounded to a
     microsecond, toward the commanded speed, and held within [deadband,

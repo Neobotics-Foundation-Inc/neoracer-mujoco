@@ -14,9 +14,9 @@ the period.
 
 This module computes the same pulse, as the throttle that sim.apply_command
 writes: the pulse over the ESC's full_throttle_pulse, the share of the
-battery's voltage that the motor gets. A period ends at the first physics
-step on or after each tick, as the encoder's window does, and the throttle
-holds until the next one.
+battery's voltage that the motor gets, held within [-1, 1]. A period ends at
+the first physics step on or after each tick, as the encoder's window does,
+and the throttle holds until the next one.
 
 Limit: the ESC's output is taken as proportional to the pulse past neutral
 (spec.Esc.full_throttle_pulse). Nobody has measured it.
@@ -84,7 +84,8 @@ def step(
         -params.pulse_limit,
         params.pulse_limit,
     )
-    return SpeedLoopState(measure, integral, error, pulse / params.full_throttle_pulse)
+    throttle = _clamp(pulse / params.full_throttle_pulse, -1.0, 1.0)
+    return SpeedLoopState(measure, integral, error, throttle)
 
 
 def feed_forward(params: SpeedLoopParams, commanded: float) -> float:

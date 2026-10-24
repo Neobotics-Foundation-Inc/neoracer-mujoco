@@ -121,6 +121,12 @@ test('the speed loop sets the throttles that Python sets', () => {
   assert.deepEqual(out, fixtures.speed_loop.throttles);
 });
 
+test('a speed loop that the firmware cannot be is refused at the start', () => {
+  for (const bad of [{ stop_speed: 0 }, { pulse_limit: 0 }, { full_throttle_pulse: -1 }, { max_speed: 0 }, { deadband: 600 }]) {
+    assert.throws(() => startSpeedLoop({ ...SPEED_LOOP, ...bad }, 0), Error, JSON.stringify(bad));
+  }
+});
+
 test('set_speed_angle asks for the speed and the steer that the Python adapter asks for', () => {
   const limits = actuatorLimits(model, car);
   for (const c of fixtures.commands) {
