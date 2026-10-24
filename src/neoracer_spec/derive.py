@@ -112,7 +112,7 @@ class ModelParams:
     own."""
 
     common: parts.Model
-    motor: DcMotorParams
+    drive: DcMotorParams
     wheel_mesh_scale: float  # of the cosmetic wheel meshes, to the tyre
 
 
@@ -180,7 +180,7 @@ def model(spec: Spec) -> ModelParams:
                 lock=steer_lock(spec),
             ),
         ),
-        motor=DcMotorParams(
+        drive=DcMotorParams(
             nominal=precise3(nominal(spec.motor.rating.value)),
             gear=precise(spec.motor.gear_ratio.value),
             ctrl_limit=precise(spec.battery.voltage.value),

@@ -254,7 +254,7 @@ def car_xml(p: ModelParams, xml: str) -> str:
 
 def car_edits(p: ModelParams) -> list[Edit]:
     """The numbers of p, by the element and the attribute that hold each."""
-    m = p.motor
+    m = p.drive
     scale = numbers(*[p.wheel_mesh_scale] * 3)
     return [
         *model(p.common),

@@ -277,7 +277,7 @@ def test_the_drive_motor_turns_at_its_free_speed_and_stalls_at_its_torque(scene)
     """MuJoCo's dcmotor reads nominal as voltage, stall torque and free speed:
     its K and R give them back."""
     r, k = scene.model.bind_scalar(scene.car.drive).gainprm[:2]
-    volts, stall, free = MODEL.motor.nominal
+    volts, stall, free = MODEL.drive.nominal
     assert volts / k == pytest.approx(free, rel=1e-5)
     assert volts * k / r == pytest.approx(stall, rel=1e-5)
     rating = CAR.motor.rating.value

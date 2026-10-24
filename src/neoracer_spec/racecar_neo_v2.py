@@ -139,7 +139,7 @@ class Wheel:
     axle_height: Sourced[float]  # m, of the rear axle above the floor
     mass: Sourced[float]  # kg, each, with its tyre
     # The model's sliding friction of each axle's tyres on the floor.
-    grip: Sourced[Axles[float]]
+    friction: Sourced[Axles[float]]
 
 
 @dataclass(frozen=True)
@@ -223,7 +223,7 @@ class Odometry:
     # The drive board times the edges of the motor's hall sensors.
     edges_per_motor_turn: Sourced[int]
     motor_turns_per_wheel_turn: Sourced[float]
-    filter_alpha: Sourced[float]  # the weight of each new edge's speed
+    filter_weight: Sourced[float]  # the weight of each new edge's speed
     stop_timeout: Sourced[float]  # s without an edge, after which it reads 0
 
 
@@ -490,7 +490,7 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         width=measured(0.029, C_L, conflicts=(Alternative(0.030, M_Z),)),
         axle_height=measured(0.036, C_L),
         mass=estimated(0.04, "RacecarSim's"),
-        grip=calibrated(
+        friction=calibrated(
             Axles(front=0.987, rear=1.204),
             FIT,
             "the full-lock circles: their radii and the encoder's over-read",
@@ -676,7 +676,7 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             RACECARSIM_DRIVE,
             note="gears of 18/61 and 15/37, so an edge every 2.25 mm of travel",
         ),
-        filter_alpha=documented(0.8, RACECARSIM_DRIVE),
+        filter_weight=documented(0.8, RACECARSIM_DRIVE),
         stop_timeout=documented(
             0.030,
             RACECARSIM_DRIVE,

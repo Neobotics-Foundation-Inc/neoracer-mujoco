@@ -101,7 +101,7 @@ def encoder_params(spec: RacecarNeoV2) -> HallEncoderParams:
     return HallEncoderParams(
         edge_angle=2 * math.pi / edges,
         radius=wheel_radius(spec),
-        alpha=o.filter_alpha.value,
+        alpha=o.filter_weight.value,
         stop_timeout=o.stop_timeout.value,
     )
 
@@ -161,7 +161,10 @@ def model(spec: RacecarNeoV2) -> ModelParams:
                 half_width=precise(w.width.value / 2),
                 mass=precise(w.mass.value),
                 damping=wheel_damping(spec),
-                friction=(precise(w.grip.value.front), precise(w.grip.value.rear)),
+                friction=(
+                    precise(w.friction.value.front),
+                    precise(w.friction.value.rear),
+                ),
             ),
             springs=parts.Springs(
                 range=(-half_travel, half_travel),
