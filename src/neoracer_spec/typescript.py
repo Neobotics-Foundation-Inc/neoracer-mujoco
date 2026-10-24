@@ -21,11 +21,11 @@ writes; neoracer_mujoco.javascript writes it when the package is built.
 import ast
 import dataclasses
 import inspect
-import io
+import itertools
 import json
 import math
+import sys
 import textwrap
-import tokenize
 import types
 import typing
 from collections.abc import Iterator
@@ -148,48 +148,42 @@ def _value(x: object, tagged: set[type], indent: str = "") -> str:
 def _declaration(t: _Named, tagged: set[type]) -> str:
     if isinstance(t, typing.TypeAliasType):
         params = "".join(f"<{p.__name__}>" for p in t.__type_params__)
-        return f"export type {t.__name__}{params} = {_type(t.__value__)};\n"
+        where = t.__module__
+        assert where is not None, f"a type statement sets {t}'s module"
+        module = ast.parse(inspect.getsource(sys.modules[where]))
+        doc = _attribute_docs(module.body).get(t.__name__, "")
+        alias = f"export type {t.__name__}{params} = {_type(t.__value__)};"
+        return "\n".join([*_tsdoc(doc), alias]) + "\n"
     params = ", ".join(p.__name__ for p in getattr(t, "__type_params__", ()))
     name = f"{t.__name__}<{params}>" if params else t.__name__
-    lines = [f"{_doc(t)}export interface {name} {{"]
+    lines = [*_tsdoc(_docstring(t)), f"export interface {name} {{"]
     if t in tagged:
         lines.append(f"  readonly kind: {json.dumps(t.__name__)};")
-    comments = _comments(t)
+    (cls,) = ast.parse(textwrap.dedent(inspect.getsource(t))).body
+    assert isinstance(cls, ast.ClassDef)
+    docs = _attribute_docs(cls.body)
     for field, hint in typing.get_type_hints(t).items():
-        above, end = comments.get(field, ([], ""))
-        lines += [f"  // {c}" for c in above]
-        lines.append(
-            f"  readonly {field}: {_type(hint)};" + (f" // {end}" if end else "")
-        )
+        lines += [f"  {line}" for line in _tsdoc(docs.get(field, ""))]
+        lines.append(f"  readonly {field}: {_type(hint)};")
     lines.append("}")
     return "\n".join(lines) + "\n"
 
 
-def _comments(t: type) -> dict[str, tuple[list[str], str]]:
-    """Each field's comments in t's source: the lines of comment just above
-    it, and the comment that ends its line."""
-    source = textwrap.dedent(inspect.getsource(t))
-    tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-    comments = {
-        t.start[0]: (
-            t.string.removeprefix("#").strip(),
-            t.line.lstrip().startswith("#"),
-        )
-        for t in tokens
-        if t.type == tokenize.COMMENT
-    }
-    (cls,) = ast.parse(source).body
-    assert isinstance(cls, ast.ClassDef)
-    fields = {}
-    for node in cls.body:
-        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            above, line = [], node.lineno - 1
-            while line in comments and comments[line][1]:
-                above.insert(0, comments[line][0])
-                line -= 1
-            end = comments.get(node.end_lineno or 0, ("", True))
-            fields[node.target.id] = (above, "" if end[1] else end[0])
-    return fields
+def _attribute_docs(body: list[ast.stmt]) -> dict[str, str]:
+    """The docstring of each field or type alias in body: the string just
+    after it."""
+    docs = {}
+    for node, after in itertools.pairwise(body):
+        match node, after:
+            case (
+                ast.AnnAssign(target=ast.Name(id=name))
+                | ast.TypeAlias(name=ast.Name(id=name)),
+                ast.Expr(value=ast.Constant(value=str(doc))),
+            ):
+                docs[name] = doc
+            case _:
+                pass
+    return docs
 
 
 def _type(t: object) -> str:
@@ -221,11 +215,15 @@ def _type(t: object) -> str:
     raise TypeError(f"no TypeScript type for {t!r}")
 
 
-def _doc(t: object) -> str:
-    """The first paragraph of t's docstring as a TSDoc comment, or ""."""
-    doc = getattr(t, "__doc__", None) or ""
+def _docstring(t: type) -> str:
+    """t's docstring, or "" if it has none."""
+    doc = t.__doc__ or ""
     # A dataclass with no docstring gets one from its signature.
-    if not doc or doc.startswith(f"{getattr(t, '__name__', '')}("):
-        return ""
+    return "" if doc.startswith(f"{t.__name__}(") else doc
+
+
+def _tsdoc(doc: str) -> list[str]:
+    """The first paragraph of doc as a TSDoc comment: one line, or none if
+    doc is empty."""
     text = " ".join(doc.strip().split("\n\n")[0].split())
-    return f"/** {text} */\n"
+    return [f"/** {text} */"] if text else []

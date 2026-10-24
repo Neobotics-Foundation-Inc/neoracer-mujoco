@@ -1,14 +1,20 @@
 """
 Laws for neoracer_spec.typescript: every dataclass of Spec and
-DerivedParams has an interface with each of its fields, and the members of
-a union of dataclasses carry their kind.
+DerivedParams has an interface with each of its fields, a field's docstring
+is its TSDoc comment, and the members of a union of dataclasses carry their
+kind.
 """
 
+import ast
 import dataclasses
+import inspect
+import itertools
 import re
+import textwrap
 import typing
 
 import pytest
+from cases import case
 
 from neoracer_spec import derive, provenance, typescript
 from neoracer_spec.neoracer import NEORACER
@@ -45,6 +51,30 @@ def test_each_dataclass_is_an_interface_with_its_fields():
         fields = [f.name for f in dataclasses.fields(cls)]
         got = [f for f in interfaces[cls.__name__] if f != "kind"]
         assert got == fields, cls.__name__
+
+
+def test_a_fields_docstring_is_the_comment_above_it():
+    """The first paragraph of a field's docstring, on one line, is the TSDoc
+    comment just above the field in its interface."""
+    documented = 0
+    for cls in _dataclasses(Spec) | _dataclasses(derive.DerivedParams):
+        (node,) = ast.parse(textwrap.dedent(inspect.getsource(cls))).body
+        assert isinstance(node, ast.ClassDef)
+        for field, after in itertools.pairwise(node.body):
+            if not (
+                isinstance(field, ast.AnnAssign)
+                and isinstance(field.target, ast.Name)
+                and isinstance(after, ast.Expr)
+                and isinstance(after.value, ast.Constant)
+                and isinstance(after.value.value, str)
+            ):
+                continue
+            name = field.target.id
+            text = " ".join(after.value.value.strip().split("\n\n")[0].split())
+            with case(f"{cls.__name__}.{name}"):
+                assert f"  /** {text} */\n  readonly {name}:" in TEXT
+            documented += 1
+    assert documented > 0
 
 
 def test_the_statuses_carry_their_kind():

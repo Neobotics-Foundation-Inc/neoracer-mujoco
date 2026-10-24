@@ -56,56 +56,72 @@ class Spec:
 
 @dataclass(frozen=True)
 class Chassis:
-    wheelbase: Sourced[float]  # m, between the front and rear axles
-    track: Sourced[float]  # m, between the left and right wheels' centers
-    mass: Sourced[float]  # kg, the whole car, wheels included
-    com_height: Sourced[float]  # m, the chassis' center of mass above the axles
-    inertia: Sourced[InertiaReference]  # scaled to the chassis' mass
-    collision_box: Sourced[Box]  # the body less the wheels
+    wheelbase: Sourced[float]
+    """The distance between the front and rear axles."""
+    track: Sourced[float]
+    """The distance between the left and right wheels' centers."""
+    mass: Sourced[float]
+    """The whole car's mass, wheels included."""
+    com_height: Sourced[float]
+    """The height of the chassis' center of mass above the axles."""
+    inertia: Sourced[InertiaReference]
+    """Scaled to the chassis' mass."""
+    collision_box: Sourced[Box]
+    """The body, without the wheels."""
 
 
 @dataclass(frozen=True)
 class InertiaReference:
     """A body whose inertia is known, to scale to another of the same shape:
-    its principal moments about its center of mass, and its mass."""
+    its principal moments (kg·m²) about its center of mass, and its mass."""
 
-    inertia: Vec3  # kg·m^2
-    mass: float  # kg
+    inertia: Vec3
+    mass: float
 
 
 @dataclass(frozen=True)
 class Box:
-    center: Vec3  # m
-    half_size: Vec3  # m
+    center: Vec3
+    half_size: Vec3
 
 
 @dataclass(frozen=True)
 class Wheel:
-    radius: Sourced[float]  # m, the tire's
-    width: Sourced[float]  # m, the tire's
-    mass: Sourced[float]  # kg, each
-    friction: Sourced[float]  # the tire's sliding friction on the floor
-    # Losses from the motor to the tires, as damping on each wheel's spin.
-    drive_damping: Sourced[float]  # N·m·s/rad
+    radius: Sourced[float]
+    """The tire's radius."""
+    width: Sourced[float]
+    """The tire's width."""
+    mass: Sourced[float]
+    """Each wheel's mass."""
+    friction: Sourced[float]
+    """The tire's sliding friction on the floor."""
+    drive_damping: Sourced[float]
+    """The losses from the motor to the tires, as damping on each wheel's spin
+    (N·m·s/rad)."""
 
 
 @dataclass(frozen=True)
 class Suspension:
-    stiffness: Sourced[float]  # N/m, each wheel's spring
-    damping: Sourced[float]  # N·s/m, each wheel's damper
-    droop: Sourced[float]  # m, the wheel's travel down from rest
-    jounce: Sourced[float]  # m, the wheel's travel up from rest
+    stiffness: Sourced[float]
+    """Each wheel's spring (N/m)."""
+    damping: Sourced[float]
+    """Each wheel's damper (N·s/m)."""
+    droop: Sourced[float]
+    """The wheel's travel down from rest."""
+    jounce: Sourced[float]
+    """The wheel's travel up from rest."""
 
 
 @dataclass(frozen=True)
 class Battery:
-    voltage: Sourced[float]  # V
+    voltage: Sourced[float]
 
 
 @dataclass(frozen=True)
 class DriveMotor:
     rating: Sourced[DcMotorRating]
-    gear_ratio: Sourced[float]  # motor turns per wheel turn
+    gear_ratio: Sourced[float]
+    """Motor turns per wheel turn."""
 
 
 @dataclass(frozen=True)
@@ -113,9 +129,9 @@ class DcMotorRating:
     """A DC motor's datasheet line: at voltage, its torque from rest and its
     speed with no load."""
 
-    voltage: float  # V
-    stall_torque: float  # N·m
-    free_speed_rpm: float  # rpm
+    voltage: float
+    stall_torque: float
+    free_speed_rpm: float
 
 
 def rewound(rating: DcMotorRating, free_speed_rpm: float) -> DcMotorRating:
@@ -129,28 +145,32 @@ def rewound(rating: DcMotorRating, free_speed_rpm: float) -> DcMotorRating:
 
 @dataclass(frozen=True)
 class Esc:
-    # What the motor does at neutral throttle: short its windings (brake) or
-    # leave them open (coast). The model only brakes, so derive refuses
-    # coast.
     neutral: Sourced[Literal["brake", "coast"]]
+    """What the motor does at neutral throttle: short its windings (brake) or
+    leave them open (coast). The model only brakes, so derive refuses coast."""
 
 
 @dataclass(frozen=True)
 class SteeringServo:
-    # Two datasheet lines; the rating at supply is interpolated between them.
+    """The steering servo. Its rating at supply is interpolated between two
+    datasheet lines, low and high."""
+
     low: Sourced[ServoRating]
     high: Sourced[ServoRating]
-    supply: Sourced[float]  # V
-    # How far the horn turns from the center over the firmware's pulse range.
+    supply: Sourced[float]
     horn_half_range_degrees: Sourced[float]
-    # The servo's own position loop, the model's.
-    kp: Sourced[float]  # V/rad
-    kd: Sourced[float]  # V·s/rad
-    # How long a command takes from the car's board to the servo's loop: the
-    # firmware's control loop and pulse, and the servo's own dead time.
-    latency: Sourced[float]  # s
-    # The car's steering steps at rest, which latency is fitted to.
+    """How far the horn turns from the center over the firmware's pulse
+    range."""
+    kp: Sourced[float]
+    """The proportional gain of the servo's own position loop, the model's
+    (V/rad)."""
+    kd: Sourced[float]
+    """The derivative gain of that loop (V·s/rad)."""
+    latency: Sourced[float]
+    """How long a command takes from the car's board to the servo's loop: the
+    firmware's control loop and pulse, and the servo's own dead time."""
     steps_at_rest: Sourced[ServoSteps]
+    """The car's steering steps at rest, which latency is fitted to."""
 
 
 @dataclass(frozen=True)
@@ -159,34 +179,36 @@ class ServoSteps:
     on the floor, each timed from the command written to the car's board:
     when the chassis first moves, and when each swing ends."""
 
-    first_motion: float  # s
-    center_to_lock: float  # s
-    lock_to_lock: float  # s
-    lock_to_center: float  # s
+    first_motion: float
+    center_to_lock: float
+    lock_to_lock: float
+    lock_to_center: float
 
 
 @dataclass(frozen=True)
 class ServoRating:
     """A hobby servo's datasheet line, in the units it is rated in."""
 
-    voltage: float  # V
-    stall_torque_kgf_cm: float  # kgf·cm
-    seconds_per_60_degrees: float  # s, with no load
+    voltage: float
+    stall_torque_kgf_cm: float
+    seconds_per_60_degrees: float
+    """With no load."""
 
 
 @dataclass(frozen=True)
 class Steering:
-    # The inner front wheel's angle at full lock.
     inner_lock_degrees: Sourced[float]
-    # The share of the horn's half range that the car's driver commands at
-    # full lock.
+    """The inner front wheel's angle at full lock."""
     driver_lock: Sourced[float]
-    # The steering input's range (rad): the model's Ackermann constraints fit
-    # over it, so it must be wider than full lock.
+    """The share of the horn's half range that the car's driver commands at
+    full lock."""
     fit_range: Sourced[float]
-    # Inertia added at the steering input and at each front wheel's steer
-    # joint: the servo's rotor, seen through its gears, turns with them.
-    armature: Sourced[float]  # kg·m²
+    """The steering input's range. The model's Ackermann constraints fit over
+    it, so it must be wider than full lock."""
+    armature: Sourced[float]
+    """The inertia added at the steering input and at each front wheel's steer
+    joint (kg·m²): the servo's rotor, seen through its gears, turns with
+    them."""
 
 
 @dataclass(frozen=True)
@@ -194,67 +216,88 @@ class SpeedController:
     """The firmware's speed loop: a PID on the encoder's speed, with a
     feed-forward, driving the ESC's pulse."""
 
-    period: Sourced[float]  # s
-    kp: Sourced[float]  # us of pulse per m/s of error
+    period: Sourced[float]
+    kp: Sourced[float]
+    """Microseconds of pulse per m/s of error."""
     ki: Sourced[float]
     kd: Sourced[float]
-    speed_filter_weight: Sourced[float]  # of the new speed in the loop's low-pass
-    feed_forward: Sourced[float]  # us of pulse per m/s commanded
-    deadband: Sourced[float]  # us, the smallest pulse past neutral that it sends
-    full_pulse: Sourced[float]  # us past neutral, full throttle
-    max_speed: Sourced[float]  # m/s
+    speed_filter_weight: Sourced[float]
+    """The weight of the new speed in the loop's low-pass filter."""
+    feed_forward: Sourced[float]
+    """Microseconds of pulse per m/s commanded."""
+    deadband: Sourced[float]
+    """The smallest pulse past neutral that it sends (us)."""
+    full_pulse: Sourced[float]
+    """The pulse past neutral at full throttle (us)."""
+    max_speed: Sourced[float]
 
 
 @dataclass(frozen=True)
 class MotorEncoder:
-    pulses_per_turn: Sourced[int]  # a turn of the motor
-    max_speed_rpm: Sourced[float]  # rpm, its rating
-    # Every report_period the firmware turns the count over the period into
-    # the tire's surface speed and low-pass filters it with filter_weight on
-    # the new period.
-    report_period: Sourced[float]  # s
+    """Every report_period the firmware turns the count over the period into
+    the tire's surface speed, and low-pass filters it with filter_weight on
+    the new period."""
+
+    pulses_per_turn: Sourced[int]
+    """Pulses in a turn of the motor."""
+    max_speed_rpm: Sourced[float]
+    """Its rated speed."""
+    report_period: Sourced[float]
     filter_weight: Sourced[float]
 
 
 @dataclass(frozen=True)
 class Imu:
-    position: Sourced[Vec3]  # m
-    rate: Sourced[float]  # Hz, of the readings the car publishes
-    accel_range_g: Sourced[float]  # g, the accelerometer's full scale
-    gyro_range_dps: Sourced[float]  # degrees/s, the gyroscope's full scale
-    magnetometer_range_gauss: Sourced[float]  # gauss
+    position: Sourced[Vec3]
+    rate: Sourced[float]
+    """The rate of the readings that the car publishes."""
+    accel_range_g: Sourced[float]
+    """The accelerometer's full scale."""
+    gyro_range_dps: Sourced[float]
+    """The gyroscope's full scale."""
+    magnetometer_range_gauss: Sourced[float]
+    """The magnetometer's full scale."""
 
 
 @dataclass(frozen=True)
 class Lidar:
-    position: Sourced[Vec3]  # m, the center of the scan
-    scan_rate: Sourced[float]  # Hz, turns a second
-    resolution_degrees: Sourced[float]  # between two samples
-    field_degrees: Sourced[float]  # of bearings it sees, centered on the front
-    range_bright: Sourced[float]  # m at least, on a target of 90% reflectivity
-    range_dark: Sourced[float]  # m at least, on a target of 10% reflectivity
-    accuracy: Sourced[float]  # m
+    position: Sourced[Vec3]
+    """The center of the scan."""
+    scan_rate: Sourced[float]
+    """Turns a second."""
+    resolution_degrees: Sourced[float]
+    """The angle between two samples."""
+    field_degrees: Sourced[float]
+    """The bearings it sees, centered on the front."""
+    range_bright: Sourced[float]
+    """The least range it reaches on a target of 90% reflectivity."""
+    range_dark: Sourced[float]
+    """The least range it reaches on a target of 10% reflectivity."""
+    accuracy: Sourced[float]
 
 
 @dataclass(frozen=True)
 class Camera:
-    position: Sourced[Vec3]  # m, the lens
-    sensor: Sourced[Resolution]  # the sensor's most
+    position: Sourced[Vec3]
+    """The lens's position."""
+    sensor: Sourced[Resolution]
+    """The sensor's highest resolution."""
     fov_degrees: Sourced[float]
-    focal_length: Sourced[float]  # m
+    focal_length: Sourced[float]
     shutter: Sourced[Literal["global", "rolling"]]
-    stream: Sourced[Resolution]  # what the car's driver asks for
+    stream: Sourced[Resolution]
+    """The resolution that the car's driver asks for."""
 
 
 @dataclass(frozen=True)
 class Resolution:
-    width: int  # pixels
-    height: int  # pixels
-    fps: float  # Hz
+    width: int
+    height: int
+    fps: float
 
 
 @dataclass(frozen=True)
 class Visuals:
-    # The wheels' radius in the cosmetic wheel meshes, which are scaled to the
-    # tire.
-    mesh_wheel_radius: Sourced[float]  # m
+    mesh_wheel_radius: Sourced[float]
+    """The wheels' radius in the cosmetic wheel meshes, which are scaled to
+    the tire."""
