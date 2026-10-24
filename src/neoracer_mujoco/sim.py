@@ -6,8 +6,6 @@ car_upright_cos) that the conformance tests use.
 Frame: +X forward, +Y left, +Z up.
 """
 
-import math
-
 import mujoco
 import numpy as np
 
@@ -32,11 +30,10 @@ def apply_command(car: Car, data: mujoco.MjData, command: ControlCommand) -> Non
     it drives, through their throttle maps (contract.throttle_map: on the
     NeoRacer, that fraction of the motor's voltage limit, the battery), and
     the steer (rad, + = left) to the steer servo."""
-    t = float(command.throttle)
-    sign = math.copysign(1.0, t) if t else 0.0
+    t = np.float64(command.throttle)
     for actuator in car.throttled:
-        a, b, c = contract.throttle_map(data.model, actuator)
-        data.bind_scalar(actuator).ctrl = a * t + b * sign + c * abs(sign)
+        tmap = contract.throttle_map(data.model, actuator)
+        data.bind_scalar(actuator).ctrl = contract.throttle_ctrl(tmap, t)
     data.bind_scalar(car.steer).ctrl = command.steer
 
 
