@@ -208,32 +208,33 @@ def command[A: Array](model: mujoco.MjModel, car: Car, throttle: A, steer: A) ->
     return xp.stack([column[i] for i in range(model.nu)], axis=-1)
 
 
-def drive[S](
-    sim: Batch[S, SensorData, Done],
+def drive[S, A: Array, M](
+    sim: Batch[S, A, M],
     model: mujoco.MjModel,
     car: Car,
     params: SpeedLoopParams,
     state: S,
     loop: speed_loop.SpeedLoopState,
     commanded: npt.NDArray[np.float64],
-    steer: npt.NDArray[np.float64],
+    steer: A,
     nstep: int,
 ) -> tuple[S, SensorData, speed_loop.SpeedLoopState]:
     """Step nstep physics steps with the firmware's speed loop of every row
-    (speed_loop.py) holding the speed commanded (m/s) and the steer servo
-    holding steer (rad), both (nbatch,). The rows' loops tick together, so
-    the steps run in pieces from one tick to the next, the throttle held
-    over each. Returns the state, the sensor values after each step
-    (nbatch, nstep, nsensordata) and the loop.
+    (speed_loop.py) holding the speed commanded (m/s), on the host, and the
+    steer servo holding steer (rad), an array of sim's, as its ctrl is; both
+    (nbatch,). The rows' loops tick together, so the steps run in pieces from
+    one tick to the next, the throttle held over each. Returns the state, the
+    sensor values after each step (nbatch, nstep, nsensordata) and the loop.
 
-    Limit: the loop runs on the host in numpy, so on Warp each piece brings
-    the drivetrain's angles back from the GPU."""
+    Limit: the loop runs on the host in numpy, so on Warp each piece sends
+    the throttle to the GPU and brings the drivetrain's angles back."""
     dt = float(model.opt.timestep)
+    xp = steer.__array_namespace__()  # numpy or jax.numpy
     pieces = []
     left = nstep
     while left > 0:
         k = min(left, speed_loop.steps_to_tick(loop, dt))
-        throttle = np.broadcast_to(loop.throttle, commanded.shape)
+        throttle = xp.asarray(np.broadcast_to(loop.throttle, commanded.shape))
         state, sensordata = sim.step(state, command(model, car, throttle, steer), k)
         angles = np.asarray(read(model, sensordata, car.sensors.drive_pos)[..., 0])
         for j in range(k):
