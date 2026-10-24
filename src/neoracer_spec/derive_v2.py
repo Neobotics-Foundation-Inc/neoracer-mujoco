@@ -110,10 +110,11 @@ def encoder_params(spec: RacecarNeoV2) -> HallEncoderParams:
 
 
 @dataclass(frozen=True)
-class ModelParams(parts.Model):
+class ModelParams:
     """The RACECAR Neo V2's model: the parts that both cars' models have,
     and its own."""
 
+    common: parts.Model
     servo_delay: parts.Delay
     drive: DriveParams
     antenna_center: Vec3  # m, the left antenna's; the right one is its mirror
@@ -136,45 +137,47 @@ def model(spec: RacecarNeoV2) -> ModelParams:
     refs = spring_refs(spec)
     half_travel = precise(s.travel.value / 2)
     return ModelParams(
-        spawn_height=parts.spawn_height(wheel_radius(spec)),
-        inertial=parts.Inertial(
-            mass=precise(chassis_mass(spec)),
-            pos=precise3(chassis_com(spec)),
-            diaginertia=precise3(chassis_inertia(spec)),
-        ),
-        boxes=tuple(
-            parts.CollisionBox(
-                b.name, precise3(body(spec, b.center)), precise3(b.half_size)
-            )
-            for b in sh.chassis_boxes.value + payload
-        ),
-        imu_position=precise3(body(spec, spec.imu.position.value)),
-        lidar=parts.LidarBeams(
-            position=precise3(body(spec, spec.lidar.position.value)),
-            yaw=precise(math.radians(spec.lidar.yaw_degrees.value - 180)),
-            scan_rate=precise(spec.lidar.scan_rate.value),
-            field=precise(lidar_params(spec).field),
-        ),
-        wheels=parts.Wheels(
-            half_wheelbase=precise(c.wheelbase.value / 2),
-            half_track=precise(c.track.value / 2),
-            radius=precise(wheel_radius(spec)),
-            half_width=precise(w.width.value / 2),
-            mass=precise(w.mass.value),
-            damping=wheel_damping(spec),
-            friction=(precise(w.grip.value.front), precise(w.grip.value.rear)),
-        ),
-        springs=parts.Springs(
-            range=(-half_travel, half_travel),
-            stiffness=(
-                precise(s.stiffness.value.front),
-                precise(s.stiffness.value.rear),
+        common=parts.Model(
+            spawn_height=parts.spawn_height(wheel_radius(spec)),
+            inertial=parts.Inertial(
+                mass=precise(chassis_mass(spec)),
+                pos=precise3(chassis_com(spec)),
+                diaginertia=precise3(chassis_inertia(spec)),
             ),
-            damping=(precise(s.damping.value.front), precise(s.damping.value.rear)),
-            springref=(precise(refs[0]), precise(refs[1])),
+            boxes=tuple(
+                parts.CollisionBox(
+                    b.name, precise3(body(spec, b.center)), precise3(b.half_size)
+                )
+                for b in sh.chassis_boxes.value + payload
+            ),
+            imu_position=precise3(body(spec, spec.imu.position.value)),
+            lidar=parts.LidarBeams(
+                position=precise3(body(spec, spec.lidar.position.value)),
+                yaw=precise(math.radians(spec.lidar.yaw_degrees.value - 180)),
+                scan_rate=precise(spec.lidar.scan_rate.value),
+                field=precise(lidar_params(spec).field),
+            ),
+            wheels=parts.Wheels(
+                half_wheelbase=precise(c.wheelbase.value / 2),
+                half_track=precise(c.track.value / 2),
+                radius=precise(wheel_radius(spec)),
+                half_width=precise(w.width.value / 2),
+                mass=precise(w.mass.value),
+                damping=wheel_damping(spec),
+                friction=(precise(w.grip.value.front), precise(w.grip.value.rear)),
+            ),
+            springs=parts.Springs(
+                range=(-half_travel, half_travel),
+                stiffness=(
+                    precise(s.stiffness.value.front),
+                    precise(s.stiffness.value.rear),
+                ),
+                damping=(precise(s.damping.value.front), precise(s.damping.value.rear)),
+                springref=(precise(refs[0]), precise(refs[1])),
+            ),
+            steering=steering(spec),
+            servo=servo(spec),
         ),
-        steering=steering(spec),
-        servo=servo(spec),
         servo_delay=parts.delay(spec.steering.latency.value),
         drive=drive(spec),
         antenna_center=precise3(

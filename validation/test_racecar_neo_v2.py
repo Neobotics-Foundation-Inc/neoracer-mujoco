@@ -30,7 +30,7 @@ from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2 as V2
 PARAMS = derive_v2.derive(V2)
 L = V2.chassis.wheelbase.value  # m
 AXLE = V2.wheel.axle_height.value  # m
-R = PARAMS.model.wheels.radius  # m
+R = PARAMS.model.common.wheels.radius  # m
 SETTLE = 1.0  # s at rest before a run
 
 
@@ -63,7 +63,7 @@ def drive(legs: list[tuple[float, float, float]]) -> Run:
     t0 = data.time
     for seconds, throttle, steer in legs:
         command = ControlCommand(
-            throttle=throttle, steer=steer * PARAMS.model.servo.lock
+            throttle=throttle, steer=steer * PARAMS.model.common.servo.lock
         )
         sim.apply_command(car, data, command)
         for _ in range(round(seconds / model.opt.timestep)):

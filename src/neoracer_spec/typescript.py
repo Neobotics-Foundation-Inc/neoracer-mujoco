@@ -166,17 +166,8 @@ def _declaration(t: _Named, tagged: set[type]) -> str:
 
 
 def _comments(t: type) -> dict[str, tuple[list[str], str]]:
-    """Each field's comments in the source of t and of the dataclasses it
-    extends: the lines of comment just above it, and the comment that ends
-    its line."""
-    fields = {}
-    for base in reversed(t.__mro__):
-        if dataclasses.is_dataclass(base):
-            fields |= _own_comments(base)
-    return fields
-
-
-def _own_comments(t: type) -> dict[str, tuple[list[str], str]]:
+    """Each field's comments in t's source: the lines of comment just above
+    it, and the comment that ends its line."""
     source = textwrap.dedent(inspect.getsource(t))
     tokens = tokenize.generate_tokens(io.StringIO(source).readline)
     comments = {

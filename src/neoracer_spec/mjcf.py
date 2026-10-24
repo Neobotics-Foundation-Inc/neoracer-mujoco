@@ -256,14 +256,14 @@ def car_edits(p: ModelParams) -> list[Edit]:
     m = p.motor
     scale = numbers(*[p.wheel_mesh_scale] * 3)
     return [
-        *model(p),
+        *model(p.common),
         # The NeoRacer's own: its floor, the meshes of its LiDAR and wheels,
         # its steering's armature and its DC drive motor.
         *put(
             ".//geom[@type='plane']",
-            friction=numbers(p.wheels.friction[0], 0.1, 0.1),
+            friction=numbers(p.common.wheels.friction[0], 0.1, 0.1),
         ),
-        *put(named("geom", "vis_lidar"), pos=numbers(*p.lidar.position)),
+        *put(named("geom", "vis_lidar"), pos=numbers(*p.common.lidar.position)),
         *[
             e
             for corner in CORNERS
@@ -290,7 +290,7 @@ def racecar_neo_v2_edits(p: derive_v2.ModelParams) -> list[Edit]:
     ax, ay, az = p.antenna_center
     antenna = numbers(p.antenna_radius, p.antenna_half_length)
     return [
-        *model(p),
+        *model(p.common),
         *delay(named("dcmotor", "steer_servo"), p.servo_delay),
         # The V2's own: its antennas and its speed controller, two actuators
         # on the drivetrain.

@@ -140,7 +140,7 @@ class Delay:
 @dataclass(frozen=True)
 class Model:
     """The parts that both cars' models have, which each car's ModelParams
-    extends with its own. Positions are in the car's body frame."""
+    holds beside its own. Positions are in the car's body frame."""
 
     spawn_height: float  # m, of the body frame above the floor
     inertial: Inertial
