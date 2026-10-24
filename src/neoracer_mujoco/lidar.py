@@ -31,6 +31,7 @@ import numpy.typing as npt
 
 from neoracer_spec.derive import LidarParams
 
+from . import contract
 from .scene import Car
 from .sensors import NO_RETURN
 
@@ -104,9 +105,9 @@ def _measure(
 
 @functools.cache
 def visible(params: LidarParams) -> npt.NDArray[np.bool_]:
-    """The slots it sees: bearings in [-field / 2, field / 2)."""
-    b = bearings(params)
-    return (b < params.field / 2) | (b >= 2 * math.pi - params.field / 2)
+    """The slots it sees: their bearings in its field (contract.in_field),
+    as the beams of a car's model."""
+    return np.array([contract.in_field(b, params.field) for b in bearings(params)])
 
 
 def cast(

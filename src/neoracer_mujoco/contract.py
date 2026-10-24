@@ -23,6 +23,7 @@ Their order in the XML is not part of the contract: code binds each one by
 its element in the scene's MjSpec (scene.Car).
 """
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -123,6 +124,18 @@ def lidar_field(model: mujoco.MjModel, lidar: mujoco.MjsSite) -> float:
     """The bearings (rad) that the LiDAR at the site lidar sees, centred on
     its front: the car blocks the rest. 2 pi if it sees all around."""
     return float(model.bind_scalar(lidar).user[0])
+
+
+# A field at the model's precision, 6 significant digits, is off by less
+# than this (rad), so a bearing that close outside its edge is on it.
+FIELD_EPS = 1e-5
+
+
+def in_field(bearing: float, field: float) -> bool:
+    """Whether a LiDAR that sees field (rad), centred on its front, sees
+    bearing (rad in [0, 2 pi), from the front either way). The field is
+    closed and symmetric: a bearing on either edge is in it."""
+    return min(bearing, 2 * math.pi - bearing) <= field / 2 + FIELD_EPS
 
 
 def actuator_limits(model: mujoco.MjModel, car: Car) -> ActuatorLimits:

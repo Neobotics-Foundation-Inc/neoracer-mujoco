@@ -40,6 +40,7 @@ SHARED: Mapping[str, object] = MappingProxyType(
         "WHEEL_GEOMS": contract.WHEEL_GEOMS,
         "NO_RETURN": sensors.NO_RETURN,
         "SLOT_EPS": lidar.SLOT_EPS,
+        "FIELD_EPS": contract.FIELD_EPS,
         "WINDOW_EPS": encoder.WINDOW_EPS,
         "SETTLE_TIME": sim.SETTLE_TIME,
     }
