@@ -443,6 +443,18 @@ def test_a_car_whose_speed_loop_misses_the_encoders_window_is_refused():
         derive.derive(at(CAR, lambda c: c.speed_controller.period.value).set(0.04))
 
 
+def test_a_car_whose_computer_commands_a_throttle_is_refused():
+    """Each car holds the speed that its computer commands: the NeoRacer with
+    its firmware's speed loop, the V2 with its drive board. The models hold
+    it so, and have no throttle command."""
+    with pytest.raises(ValueError, match="throttle command"):
+        derive.derive(at(CAR, lambda c: c.command.drive.value).set("throttle"))
+    with pytest.raises(ValueError, match="throttle command"):
+        derive_v2.derive(
+            at(RACECAR_NEO_V2, lambda c: c.drive.command.value).set("throttle")
+        )
+
+
 def test_a_car_whose_full_lock_leaves_the_fit_range_is_refused():
     with pytest.raises(ValueError, match="fit_range"):
         at(CAR, lambda c: c.steering.inner_lock_degrees.value).set(31.0)

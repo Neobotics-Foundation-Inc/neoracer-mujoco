@@ -176,9 +176,16 @@ of 0 turns its part of the loop off."""
 
 
 def speed_loop_params(spec: Spec) -> SpeedLoopParams:
-    """The firmware's speed loop. The firmware measures the speed for it in
-    the task that reports the encoder's speed, so the loop's period must be
-    the encoder's report period."""
+    """The firmware's speed loop, which holds the speed that a drive command
+    sets (Command.drive). The firmware measures the speed for it in the task
+    that reports the encoder's speed, so the loop's period must be the
+    encoder's report period."""
+    if spec.command.drive.value != "speed":
+        raise ValueError(
+            "the model holds the speed that a drive command sets with the"
+            f" firmware's speed loop, so it takes no {spec.command.drive.value}"
+            " command"
+        )
     s = spec.speed_controller
     if s.period.value != spec.encoder.report_period.value:
         raise ValueError(

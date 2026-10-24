@@ -24,6 +24,7 @@ from .spec import (
     Box,
     Camera,
     Chassis,
+    Command,
     DcMotorRating,
     DriveMotor,
     Esc,
@@ -79,6 +80,9 @@ FIRMWARE_KCONFIG = Source(
     "firmware", "neoracer-pcb-firmware, firmware/source/main/Kconfig.projbuild"
 )
 FIRMWARE_IMU = Source("firmware", "neoracer-pcb-firmware, firmware/source/main/imu.cpp")
+FIRMWARE_SERIAL = Source(
+    "firmware", "neoracer-pcb-firmware, firmware/source/main/serial_cmd.cpp"
+)
 DRIVER_THROTTLE = Source("driver", "neoracer_ros2_driver, config/throttle.yaml")
 DRIVER_TWIST = Source("driver", "neoracer_ros2_driver, config/twist_bridge.yaml")
 DRIVER_CAMERA = Source("driver", "neoracer_ros2_driver, config/camera.yaml")
@@ -292,6 +296,17 @@ NEORACER = Spec(
             " at the model's step; 0.0002 left the servo-held steering ringing"
             " near 60 Hz, faster than the step resolves",
         ),
+    ),
+    command=Command(
+        drive=documented(
+            "speed",
+            FIRMWARE_SERIAL,
+            note="the v command: a speed (m/s) and a steering angle (degrees);"
+            " the speed is the speed loop's target. In RC mode the throttle"
+            " stick sets the same target (main.cpp), so nothing sends the ESC a"
+            " throttle",
+        ),
+        timeout=documented(0.5, FIRMWARE, note="SERIAL_TIMEOUT, 500 ms"),
     ),
     speed_controller=SpeedController(
         period=documented(0.02, FIRMWARE, note="CONTROL_INTERVAL"),

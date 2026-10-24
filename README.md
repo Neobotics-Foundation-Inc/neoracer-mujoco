@@ -8,7 +8,7 @@ The Gymnasium environment and the reinforcement learning are in [neoracer-rl](ht
 
 ## The spec
 
-`NEORACER`, in `src/neoracer_spec/neoracer.py`, describes the car part by part: the chassis, the wheels, the motor, the servo, the firmware's speed loop and each sensor. Every number in it is a `Sourced[T]`. That holds the value, how we know it (`Measured`, `Calibrated`, `Documented`, `Assumed`, `Estimated` or `Chosen`), and what other sources say when they disagree:
+`NEORACER`, in `src/neoracer_spec/neoracer.py`, describes the car part by part: the chassis, the wheels, the motor, the servo, what the car's computer commands, the firmware's speed loop and each sensor. Every number in it is a `Sourced[T]`. That holds the value, how we know it (`Measured`, `Calibrated`, `Documented`, `Assumed`, `Estimated` or `Chosen`), and what other sources say when they disagree:
 
 ```python
 from neoracer_spec.neoracer import NEORACER
@@ -176,6 +176,8 @@ state.scan  # the last full turn: a distance (m) a slot, clockwise from the fron
 The model's eight rangefinders, `lidar_000` to `lidar_315`, have the same timing in MuJoCo's own sensors, so `mj_step`, `mujoco.rollout` and the Warp batch see it with no loop of their own. Each beam samples the range once a turn, when the head passes it (its `interval`), and shows the sample when the turn ends (its `delay`), as the scan of the last complete turn does. So a beam reads a range up to two turns old. `mjcf.beam_timing` derives both settings from the spec's scan rate. A beam that the car blocks reads -1, no return, as the real scan does: the NeoRacer's LiDAR sees only its field (`Lidar.field_degrees`), so its beam straight back never returns. The LiDAR site's user number holds the field, and `contract.lidar_field` reads it. `sensors.read` gives the blocked beams -1, but the rangefinders themselves still measure, so code that reads `sensordata` arrays, as a batch does, sets the beams in `scene.car.sensors.blocked` to -1 itself.
 
 `encoder.py` models the speed that the firmware reports from the motor encoder in the same way. `speed_loop.py` models how the firmware holds the speed that a program asks for: every 20 ms it measures the speed as the encoder does, with a filter of its own, and sets the ESC's pulse from a feed-forward on the commanded speed and a PID on the error, with the firmware's gains, limits and rounding (`spec.SpeedController`). The throttle is that pulse's share of the ESC's full pulse.
+
+The spec records what the car's computer commands (`spec.Command`). On the NeoRacer it is a speed in both of the firmware's control modes: over serial from the car's computer, and from the radio in RC mode. Nothing sends the ESC a throttle, so `derive` refuses a NeoRacer spec whose computer commands one. The V2's drive board holds a speed too (`racecar_neo_v2.Drive.command`).
 
 `racecar_core_adapter.py` puts the actuators, the LiDAR, the encoder and the speed loop behind the `racecar_core` API that programs for the real car use. On the NeoRacer, `rc.drive.set_speed_angle(speed, angle)` asks for `speed` times the max speed, 6 m/s at full speed, and the loop holds it. Those programs run in the simulator unchanged:
 
