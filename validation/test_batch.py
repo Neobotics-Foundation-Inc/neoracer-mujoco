@@ -36,7 +36,7 @@ V2 = os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml")
 
 def _loop_scene(car: str = assets.DEFAULT_CAR) -> Scene:
     track = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
-    return assets.compose(mujoco.MjSpec.from_file(track), car, pos=(0, -2.5, 0))
+    return assets.compose(mujoco.MjSpec.from_file(track), car)
 
 
 def _commands(seed: int, nbatch: int = NBATCH) -> np.ndarray:

@@ -17,7 +17,7 @@ from neoracer_mujoco.truth import WALLS_BODY
 
 def _loop_scene() -> Scene:
     track = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
-    return assets.compose(mujoco.MjSpec.from_file(track), pos=(0, -2.5, 0))
+    return assets.compose(mujoco.MjSpec.from_file(track))
 
 
 def _wall_contacts(scene: Scene, data: mujoco.MjData) -> int:

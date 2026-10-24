@@ -33,7 +33,7 @@ CHANGED = Physics(
 
 
 def _scene(car: str = assets.DEFAULT_CAR) -> Scene:
-    return assets.compose(mujoco.MjSpec.from_file(TRACK), car, pos=(0, -2.5, 0))
+    return assets.compose(mujoco.MjSpec.from_file(TRACK), car)
 
 
 def _applied(scene: Scene, p: Physics) -> mujoco.MjModel:
