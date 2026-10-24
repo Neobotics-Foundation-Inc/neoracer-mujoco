@@ -21,7 +21,9 @@ import {
   WHEEL_GEOMS,
   actuatorLimits,
   applyCommand,
+  attachCar,
   compose,
+  findCar,
   settle,
   settleSteps,
   speedAngle,
@@ -147,6 +149,26 @@ test("the car stands at the track's start, facing its +X, or at the origin facin
   }
   const nested = replaced(bare, '<body name="walls">', `<body name="walls">${start}`);
   assert.throws(() => compose(mj, nested), /world body/);
+});
+
+test('cars attached behind prefixes share one scene, and findCar finds each by its prefix', () => {
+  const shared = mj.parseXMLString(trackXml);
+  const prefixes = ['', 'car1_'];
+  for (const prefix of prefixes) attachCar(mj, shared, mj.parseXMLString(CAR_XML), prefix);
+  const both = mj.mj_compile(shared);
+  assert.ok(both, mj.mjs_getError(shared));
+  // Each car is the whole car: twice the actuators and sensors of one alone.
+  assert.equal(both.nu, 2 * model.nu);
+  assert.equal(both.nsensordata, 2 * model.nsensordata);
+  const cars = prefixes.map((prefix) => findCar(mj, shared, both, prefix));
+  const O = mj.mjtObj;
+  prefixes.forEach((prefix, k) => {
+    assert.equal(cars[k].body, mj.mj_name2id(both, O.mjOBJ_BODY.value, prefix + CAR_BODY), prefix);
+    assert.equal(cars[k].lidar, mj.mj_name2id(both, O.mjOBJ_SITE.value, prefix + LIDAR_SITE), prefix);
+  });
+  for (const part of Object.keys(car)) assert.notEqual(cars[0][part], cars[1][part], part);
+  // The first car, behind no prefix, is compose's car.
+  assert.deepEqual(cars[0], car);
 });
 
 test('a LiDAR that is not a scan is refused at the start', () => {

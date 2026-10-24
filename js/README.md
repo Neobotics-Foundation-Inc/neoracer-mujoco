@@ -39,6 +39,18 @@ for (let i = 0; i < Math.round(1 / dt); i++) { // 1 s
 
 The scene has no meshes that only show the car: render the car with your own model of it.
 
+For several cars in one scene, attach each behind a prefix of its own, compile once, and find each car's parts by its prefix:
+
+```js
+import { CAR_XML, attachCar, findCar } from 'neoracer-mujoco';
+
+const spec = mj.parseXMLString(trackXml);
+const prefixes = ['', 'car1_', 'car2_'];
+for (const prefix of prefixes) attachCar(mj, spec, mj.parseXMLString(CAR_XML), prefix);
+const model = mj.mj_compile(spec);
+const cars = prefixes.map((prefix) => findCar(mj, spec, model, prefix));
+```
+
 `spec` holds the car's specification, typed and written from the Python package's: `spec.NEORACER`, each value with its source and status, and `spec.NEORACER_PARAMS`, the parameters derived from it.
 
 The package's spec, the names it shares with the Python package and the car's MJCF are written from the Python package into `src/generated/`, which is not checked in. To build and test the package, run `npm ci` in `js/`, then, from the repository root with the Python package installed:
