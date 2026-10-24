@@ -398,6 +398,12 @@ def test_the_car_weighs_its_mass(scene):
     assert car.subtreemass[0] == pytest.approx(CAR.chassis.mass.value)
 
 
+def test_a_car_whose_esc_coasts_at_neutral_is_refused():
+    """The model's motor brakes at 0 V: it cannot be an ESC that coasts."""
+    with pytest.raises(ValueError, match="coast"):
+        derive.derive(at(CAR, lambda c: c.esc.neutral.value).set("coast"))
+
+
 def test_a_car_whose_full_lock_leaves_the_fit_range_is_refused():
     with pytest.raises(ValueError, match="fit_range"):
         at(CAR, lambda c: c.steering.inner_lock_degrees.value).set(31.0)
