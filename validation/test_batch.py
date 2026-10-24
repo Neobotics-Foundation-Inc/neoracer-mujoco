@@ -238,17 +238,18 @@ def test_reset_gives_the_done_rows_the_state_and_physics_of_initial():
 def test_drive_runs_every_rows_speed_loop_as_one_car_runs_its_own():
     """batch.drive gives each row what one MjData gives that steps with its
     own speed loop (speed_loop.step after each step, on the drivetrain's
-    angle that the step's sensors read) holding its own commanded speed and
-    steer: the throttle changes at the loop's ticks, and the solver starts
-    cold at each tick and each call, where the batch's pieces start. The two
-    rows ask for speeds of opposite signs, so a batch that ran one loop for
-    both fails."""
+    angle at the step's end, which drive_pos reads once mj_forward refreshes
+    it) holding its own commanded speed and steer: the throttle changes at
+    the loop's ticks, and the solver starts cold at each tick and each call,
+    where the batch's pieces start. The two rows ask for speeds of opposite
+    signs, so a batch that ran one loop for both fails."""
     scene = _loop_scene()
     model, car = scene.model, scene.car
     params = derive(NEORACER).speed_loop
     dt = float(model.opt.timestep)
     commanded, steer = np.array([1.5, -0.8]), np.array([0.1, -0.2])
     start = sim.settle(model)
+    mujoco.mj_forward(model, start)
     angle = float(start.bind_scalar(car.sensors.drive_pos).data[0])
     sim_batch = batch.CpuBatch(scene, 2, nthread=0)
     state = sim_batch.initial([start] * 2, [scene] * 2, NOMINAL * 2)
@@ -275,6 +276,7 @@ def test_drive_runs_every_rows_speed_loop_as_one_car_runs_its_own():
                     )
                 mujoco.mj_step(model, data)
                 expected.append(data.sensordata.copy())
+                mujoco.mj_forward(model, data)
                 drive_pos = float(data.bind_scalar(car.sensors.drive_pos).data[0])
                 row = speed_loop.step(params, row, commanded[i], drive_pos, dt)
                 fresh = row.measure.span == 0.0

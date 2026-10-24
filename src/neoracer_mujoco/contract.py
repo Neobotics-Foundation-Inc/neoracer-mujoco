@@ -143,6 +143,44 @@ def in_field(bearing: float, field: float) -> bool:
     return min(bearing, 2 * math.pi - bearing) <= field / 2 + FIELD_EPS
 
 
+@dataclass(frozen=True)
+class Drivetrain:
+    """The drivetrain's angle (DRIVE_POS_SENSOR) as a sum over qpos: its
+    fixed tendon, coef[k] times qpos[qpos[k]] for each k."""
+
+    qpos: tuple[int, ...]
+    coef: tuple[float, ...]
+
+
+def drivetrain(model: mujoco.MjModel, car: Car) -> Drivetrain:
+    """The tendon of the car's drive_pos sensor in model. Raise ValueError if
+    it is not a fixed tendon."""
+    sensor = model.bind_scalar(car.sensors.drive_pos)
+    tendon = int(sensor.objid[0])
+    adr, num = int(model.tendon_adr[tendon]), int(model.tendon_num[tendon])
+    wraps = range(adr, adr + num)
+    joint = mujoco.mjtWrap.mjWRAP_JOINT
+    if sensor.objtype[0] != mujoco.mjtObj.mjOBJ_TENDON or any(
+        model.wrap_type[w] != joint for w in wraps
+    ):
+        raise ValueError("the drive_pos sensor does not read a fixed tendon")
+    return Drivetrain(
+        tuple(int(model.jnt_qposadr[model.wrap_objid[w]]) for w in wraps),
+        tuple(float(model.wrap_prm[w]) for w in wraps),
+    )
+
+
+def drive_angle[A: Array](drivetrain: Drivetrain, qpos: A) -> A:
+    """The drivetrain's angle (rad) in each row of qpos (..., nq), summed as
+    MuJoCo sums the tendon, so it is drive_pos's reading at that qpos. After
+    mj_step the sensors still hold the state at the step's start; this reads
+    it at the step's end."""
+    angle: Any = 0.0
+    for adr, coef in zip(drivetrain.qpos, drivetrain.coef, strict=True):
+        angle = angle + coef * qpos[..., adr]
+    return angle
+
+
 def actuator_limits(model: mujoco.MjModel, car: Car) -> ActuatorLimits:
     """Read the actuator limits of the car in model, once per model. Raise
     ValueError if a range is not symmetric about 0: the env and MujocoDrive

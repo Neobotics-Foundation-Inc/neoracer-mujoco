@@ -46,8 +46,10 @@ class EncoderState:
 
 
 def start(params: EncoderParams, angle: Value) -> EncoderState:
-    """The encoder of a car at rest, its drivetrain at angle (rad)."""
-    return EncoderState(angle=angle, span=0.0, due=params.window, speed=0.0)
+    """The encoder of a car at rest, or of a batch's, its drivetrain at angle
+    (rad)."""
+    speed = np.zeros_like(np.asarray(angle, dtype=np.float64))[()]
+    return EncoderState(angle=angle, span=0.0, due=params.window, speed=speed)
 
 
 WINDOW_EPS = 1e-9

@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from cases import case
 
-from neoracer_mujoco import Scene, encoder, load, sim
+from neoracer_mujoco import Scene, assets, contract, encoder, load, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar, neoracer_params
 from neoracer_spec.derive import EncoderParams, derive
@@ -135,3 +135,23 @@ def test_a_bounded_run_counts_its_last_step():
     rc.go()
     assert model.opt.timestep == pytest.approx(1 / 360)
     assert rc.physics.get_encoder_speed() > 0.0
+
+
+def test_drive_angle_is_drive_pos_at_the_steps_end():
+    """After mj_step the drive_pos sensor still holds the drivetrain's angle
+    at the step's start. contract.drive_angle gives it at the step's end, the
+    reading that mj_forward refreshes, on both cars and on a row of qpos."""
+    for path in (assets.DEFAULT_CAR, assets.ASSET_DIR + "/racecar_neo_v2.xml"):
+        with case(path):
+            scene = load(path)
+            drivetrain = contract.drivetrain(scene.model, scene.car)
+            data = sim.settle(scene.model)
+            sim.apply_command(scene.car, data, ControlCommand(0.5, 0.0))
+            for _ in range(10):
+                mujoco.mj_step(scene.model, data)
+            sensor = data.bind_scalar(scene.car.sensors.drive_pos)
+            start = float(sensor.data[0])
+            end = contract.drive_angle(drivetrain, data.qpos)
+            rows = contract.drive_angle(drivetrain, np.stack([data.qpos] * 2))
+            mujoco.mj_forward(scene.model, data)
+            assert end == rows[0] == rows[1] == float(sensor.data[0]) != start

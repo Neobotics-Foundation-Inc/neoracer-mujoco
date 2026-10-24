@@ -139,6 +139,10 @@ class WarpBatch:
             raise ValueError(f"nstep must be at least 1, not {nstep}")
         return self._step(state, ctrl, nstep=nstep)
 
+    def qpos(self, state: WarpState) -> jax.Array:
+        """The joint positions (nbatch, nq) of every environment of state."""
+        return state.data.qpos
+
     def reset(self, state: WarpState, done: jax.Array, initial: WarpState) -> WarpState:
         """state with the environments where done replaced by initial."""
         # Data.where merges only the per-environment fields, as Warp requires.

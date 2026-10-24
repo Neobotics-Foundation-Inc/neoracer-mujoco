@@ -52,8 +52,9 @@ class SpeedLoopState:
 def start(params: SpeedLoopParams, angle: Value) -> SpeedLoopState:
     """The loop of a car at rest, or a batch's, its drivetrain at angle (rad):
     neutral."""
-    zero = np.zeros_like(np.asarray(angle, dtype=np.float64))[()]
-    return SpeedLoopState(encoder.start(params.measure, angle), zero, zero, zero)
+    measure = encoder.start(params.measure, angle)
+    zero = measure.speed
+    return SpeedLoopState(measure, zero, zero, zero)
 
 
 def restart(

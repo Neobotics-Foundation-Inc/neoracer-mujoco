@@ -84,6 +84,10 @@ class Batch[S, A, M](Protocol):
 
     def reset(self, state: S, done: M, initial: S) -> S: ...
 
+    def qpos(self, state: S) -> A:
+        """The joint positions (nbatch, nq) of every row of state."""
+        ...
+
 
 @dataclass(frozen=True)
 class CpuState:
@@ -151,6 +155,11 @@ class CpuBatch:
         )
         # A copy, so the states of the other steps can be freed.
         return CpuState(states[:, -1].copy(), state.models), sensordata
+
+    def qpos(self, state: CpuState) -> Rows:
+        """The joint positions (nbatch, nq) of every row of state."""
+        start = mujoco.mj_stateSize(self.model, mujoco.mjtState.mjSTATE_TIME)
+        return state.rows[:, start : start + self.model.nq]
 
     def reset(self, state: CpuState, done: Done, initial: CpuState) -> CpuState:
         """state with the rows where done replaced by the rows of initial."""
@@ -226,9 +235,15 @@ def drive[S, A: Array, M](
     one tick to the next, the throttle held over each. Returns the state, the
     sensor values after each step (nbatch, nstep, nsensordata) and the loop.
 
+    Only a piece's last step can close the firmware's window, and the encoder
+    reads the drivetrain only then, so the loop reads it once a piece: at the
+    piece's end, from qpos (contract.drive_angle), as the sensors after a
+    step hold its start.
+
     Limit: the loop runs on the host in numpy, so on Warp each piece sends
     the throttle to the GPU and brings the drivetrain's angles back."""
     dt = float(model.opt.timestep)
+    drivetrain = contract.drivetrain(model, car)
     xp = steer.__array_namespace__()  # numpy or jax.numpy
     pieces = []
     left = nstep
@@ -236,9 +251,9 @@ def drive[S, A: Array, M](
         k = min(left, speed_loop.steps_to_tick(loop, dt))
         throttle = xp.asarray(np.broadcast_to(loop.throttle, commanded.shape))
         state, sensordata = sim.step(state, command(model, car, throttle, steer), k)
-        angles = np.asarray(read(model, sensordata, car.sensors.drive_pos)[..., 0])
-        for j in range(k):
-            loop = speed_loop.step(params, loop, commanded, angles[:, j], dt)
+        angle = np.asarray(contract.drive_angle(drivetrain, sim.qpos(state)))
+        for _ in range(k):
+            loop = speed_loop.step(params, loop, commanded, angle, dt)
         pieces.append(np.asarray(sensordata))
         left -= k
     return state, np.concatenate(pieces, axis=1), loop
