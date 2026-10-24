@@ -6,6 +6,8 @@ car_upright_cos) that the conformance tests use.
 Frame: +X forward, +Y left, +Z up.
 """
 
+import math
+
 import mujoco
 import numpy as np
 
