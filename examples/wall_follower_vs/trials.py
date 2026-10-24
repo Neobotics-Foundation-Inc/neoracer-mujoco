@@ -33,11 +33,7 @@ from examples.wall_follower_vs.dense_lidar import (
     lidar_mount,
 )
 from examples.wall_follower_vs.report_utils import Outcome, outcome_header
-from examples.wall_follower_vs.scene_utils import (
-    TrackName,
-    load_track_scene,
-    perturb_spawn,
-)
+from examples.wall_follower_vs.scene_utils import TrackName, load_track_scene
 from examples.wall_follower_vs.vehicle_space_controller import (
     Driving,
     NoPath,
@@ -331,7 +327,7 @@ def run_trial(
     model, car = scene.model, scene.car
     goal = params.goal
     data = sim.settle(model)
-    perturb_spawn(scene, data, np.random.default_rng(seed))
+    sim.perturb_spawn(model, data, car, np.random.default_rng(seed))
 
     d = driver(scene, lidar, params.control_hz)
     max_ticks = int(params.max_sim_time_s / d.dt)

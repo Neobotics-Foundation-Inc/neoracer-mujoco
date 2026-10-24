@@ -17,7 +17,7 @@ import mujoco.viewer
 import numpy as np
 
 from examples.wall_follower_vs.dense_lidar import DenseLidarParams
-from examples.wall_follower_vs.scene_utils import load_track_scene, perturb_spawn
+from examples.wall_follower_vs.scene_utils import load_track_scene
 from examples.wall_follower_vs.trials import TRIALS, driver, tick
 from examples.wall_follower_vs.vehicle_space_controller import (
     VsState,
@@ -46,7 +46,7 @@ def main() -> None:
     scene = load_track_scene(track)
     model, car = scene.model, scene.car
     data = sim.settle(model)
-    perturb_spawn(scene, data, np.random.default_rng(args.seed))
+    sim.perturb_spawn(model, data, car, np.random.default_rng(args.seed))
 
     d = driver(scene, DenseLidarParams(n_beams=args.n), TRIALS[track].control_hz)
     state = VsState()
