@@ -80,30 +80,42 @@ class RacecarNeoV2:
 
 @dataclass(frozen=True)
 class Chassis:
-    wheelbase: Sourced[float]  # m, between the front and rear axles
-    track: Sourced[float]  # m, between the rear wheels' centers
-    mass: Sourced[float]  # kg, with the battery
-    # The share of the weight on the front wheels. The center of mass is
-    # this share of the wheelbase ahead of the rear axle, and laterally centered.
+    wheelbase: Sourced[float]
+    """The distance between the front and rear axles."""
+    track: Sourced[float]
+    """The distance between the rear wheels' centers."""
+    mass: Sourced[float]
+    """The car's mass, with the battery."""
     front_weight_share: Sourced[float]
-    com_height: Sourced[float]  # m, of the center of mass above the floor
-    # kg·m², the whole car's principal moments about its center of mass:
-    # roll (about X), pitch (Y), yaw (Z)
+    """The share of the weight on the front wheels. The center of mass is this
+    share of the wheelbase ahead of the rear axle, and laterally centered."""
+    com_height: Sourced[float]
+    """The height of the center of mass above the floor."""
     inertia: Sourced[Vec3]
-    ride_height: Sourced[float]  # m, of the chassis above the floor, moving
+    """The whole car's principal moments (kg·m²) about its center of mass: roll
+    (about X), pitch (Y), yaw (Z)."""
+    ride_height: Sourced[float]
+    """The chassis' height above the floor while the car moves."""
 
 
 @dataclass(frozen=True)
 class Footprint:
     """The car's outline."""
 
-    front: Sourced[float]  # m, x of the front-most point
-    rear: Sourced[float]  # m, x of the rear-most point
-    left: Sourced[float]  # m, y of the left-most point
-    right: Sourced[float]  # m, y of the right-most point
-    lidar_top: Sourced[float]  # m, z of the top of the LiDAR
-    antenna_top: Sourced[float]  # m, z of the antenna tips, the tallest point
-    payload_bottom: Sourced[float]  # m, z of the payload's underside, its floor
+    front: Sourced[float]
+    """The x of the front-most point."""
+    rear: Sourced[float]
+    """The x of the rear-most point."""
+    left: Sourced[float]
+    """The y of the left-most point."""
+    right: Sourced[float]
+    """The y of the right-most point."""
+    lidar_top: Sourced[float]
+    """The z of the top of the LiDAR."""
+    antenna_top: Sourced[float]
+    """The z of the antenna tips, the tallest point."""
+    payload_bottom: Sourced[float]
+    """The z of the payload's underside, its floor."""
 
 
 @dataclass(frozen=True)
@@ -111,68 +123,90 @@ class Shape:
     """What the car's body collides with, and what the LiDAR sees of it.
 
     The payload is everything on the chassis' body posts. Its values here are
-    as RacecarSim's model has it; the car's payload is payload_drop lower."""
+    as RacecarSim's model has it; the car's payload is payload_drop lower.
+    The antennas are two upright whips at the payload's rear, one each side,
+    within the LiDAR's sweep."""
 
-    # The chassis less the wheels, and the payload less the antennas, as boxes.
     chassis_boxes: Sourced[tuple[NamedBox, ...]]
+    """The chassis less the wheels, as boxes."""
     payload_boxes: Sourced[tuple[NamedBox, ...]]
-    payload_drop: Sourced[float]  # m
-    # Two upright whips at the payload's rear, one each side, within the
-    # LiDAR's sweep.
-    antenna_x: Sourced[float]  # m, of their axes
-    antenna_y: Sourced[float]  # m, of the left one's axis; the right one's is -y
-    antenna_bottom: Sourced[float]  # m, z; Footprint.antenna_top is their top
-    antenna_diameter: Sourced[float]  # m, at the LiDAR's height
+    """The payload less the antennas, as boxes."""
+    payload_drop: Sourced[float]
+    antenna_x: Sourced[float]
+    """The x of the antennas' axes."""
+    antenna_y: Sourced[float]
+    """The y of the left antenna's axis; the right one's is -y."""
+    antenna_bottom: Sourced[float]
+    """The z of the antennas' bottom; Footprint.antenna_top is their top."""
+    antenna_diameter: Sourced[float]
+    """The antennas' diameter at the LiDAR's height."""
 
 
 @dataclass(frozen=True)
 class NamedBox:
     name: str
-    center: Vec3  # m
-    half_size: Vec3  # m
+    center: Vec3
+    half_size: Vec3
 
 
 @dataclass(frozen=True)
 class Wheel:
-    diameter: Sourced[float]  # m, the tire's
-    width: Sourced[float]  # m, the tire's
-    axle_height: Sourced[float]  # m, of the rear axle above the floor
-    mass: Sourced[float]  # kg, each, with its tire
-    # The model's sliding friction of each axle's tires on the floor.
+    diameter: Sourced[float]
+    """The tire's diameter."""
+    width: Sourced[float]
+    """The tire's width."""
+    axle_height: Sourced[float]
+    """The rear axle's height above the floor."""
+    mass: Sourced[float]
+    """Each wheel's mass, with its tire."""
     friction: Sourced[Axles[float]]
+    """The model's sliding friction of each axle's tires on the floor."""
 
 
 @dataclass(frozen=True)
 class Suspension:
-    stiffness: Sourced[Axles[float]]  # N/m, at each wheel
-    damping: Sourced[Axles[float]]  # N·s/m, at each wheel
-    travel: Sourced[float]  # m, from full droop to full jounce; it rests midway
+    stiffness: Sourced[Axles[float]]
+    """Each wheel's spring (N/m)."""
+    damping: Sourced[Axles[float]]
+    """Each wheel's damper (N·s/m)."""
+    travel: Sourced[float]
+    """The travel from full droop to full jounce; it rests midway."""
 
 
 @dataclass(frozen=True)
 class Steering:
-    # At full lock, at the middle of the rear axle. The wheels' angles at
-    # full lock follow from it and the wheelbase and track.
-    min_turn_radius: Sourced[Sides[float]]  # m
-    # From the center to full lock, timed from the yaw rate: an upper bound,
-    # since it includes the tires' lag in following the wheels.
-    center_to_lock_time: Sourced[Sides[float]]  # s
-    # The curvature of the path that a steering command gives, 1/m, + left.
+    """The steering. The servo_ fields describe its servo as a DC motor at the
+    steering input with a position loop."""
+
+    min_turn_radius: Sourced[Sides[float]]
+    """The turning radius at full lock, at the middle of the rear axle. The
+    wheels' angles at full lock follow from it and the wheelbase and track."""
+    center_to_lock_time: Sourced[Sides[float]]
+    """The time from the center to full lock, timed from the yaw rate: an
+    upper bound, since it includes the tires' lag in following the wheels."""
     response: Sourced[tuple[AtCommand[Span], ...]]
-    trim: Sourced[float]  # of command, that the firmware adds to every command
-    deadband: Sourced[float]  # of command: smaller changes do nothing
-    straight_drift_degrees_per_m: Sourced[Span]  # heading change at command 0, + left
+    """The curvature of the path that a steering command gives (1/m), + left."""
+    trim: Sourced[float]
+    """The share of full command that the firmware adds to every command."""
+    deadband: Sourced[float]
+    """A share of full command: smaller changes of command do nothing."""
+    straight_drift_degrees_per_m: Sourced[Span]
+    """The heading change at command 0, + left."""
     linkage: Sourced[Linkage]
-    # The servo, as a DC motor at the steering input with a position loop.
-    servo_stall_torque: Sourced[float]  # N·m
-    servo_free_speed: Sourced[float]  # rad/s
-    servo_kp: Sourced[float]  # V/rad of the loop, at a supply of servo_supply
-    servo_kd: Sourced[float]  # V·s/rad
-    servo_supply: Sourced[float]  # V
-    latency: Sourced[float]  # s, from a command to the servo
-    # Inertia added at the steering input and at each front wheel's steer
-    # joint: the servo's rotor, seen through its gears, turns with them.
-    armature: Sourced[float]  # kg·m²
+    servo_stall_torque: Sourced[float]
+    servo_free_speed: Sourced[float]
+    servo_kp: Sourced[float]
+    """The proportional gain of the servo's position loop (V/rad), at a supply
+    of servo_supply."""
+    servo_kd: Sourced[float]
+    """The derivative gain of the servo's position loop (V·s/rad)."""
+    servo_supply: Sourced[float]
+    latency: Sourced[float]
+    """The time from a command to the servo."""
+    armature: Sourced[float]
+    """The inertia added at the steering input and at each front wheel's steer
+    joint (kg·m²): the servo's rotor, seen through its gears, turns with
+    them."""
 
 
 @dataclass(frozen=True)
@@ -183,59 +217,79 @@ class Linkage:
     its stop on that side. Ackermann geometry turns the front wheels from
     the virtual one."""
 
-    slope: Sides[float]  # rad per unit of command
-    stop: Sides[float]  # rad, the virtual wheel's angle at each stop, > 0
+    slope: Sides[float]
+    """The virtual wheel's angle per unit of command."""
+    stop: Sides[float]
+    """The virtual wheel's angle at each stop, > 0."""
 
 
 @dataclass(frozen=True)
 class Drive:
     """The firmware holds a speed: a drive command is a share of max_speed."""
 
-    max_speed: Sourced[float]  # m/s, the firmware's ceiling, rc.drive.set_max_speed
-    speed_floor: Sourced[float]  # m/s, the least speed the firmware sets
-    steady_speed: Sourced[tuple[AtCommand[float], ...]]  # m/s, true
-    rise_time: Sourced[tuple[AtCommand[float], ...]]  # s, from rest to 90% of it
-    stop_distance: Sourced[tuple[AtCommand[float], ...]]  # m, after command 0
-    stop_time: Sourced[tuple[AtCommand[float], ...]]  # s, after command 0
+    max_speed: Sourced[float]
+    """The firmware's ceiling, rc.drive.set_max_speed."""
+    speed_floor: Sourced[float]
+    """The least speed the firmware sets."""
+    steady_speed: Sourced[tuple[AtCommand[float], ...]]
+    """The true steady speed."""
+    rise_time: Sourced[tuple[AtCommand[float], ...]]
+    """The time from rest to 90% of the steady speed."""
+    stop_distance: Sourced[tuple[AtCommand[float], ...]]
+    """The distance to a stop after command 0."""
+    stop_time: Sourced[tuple[AtCommand[float], ...]]
+    """The time to a stop after command 0."""
     reverse: Sourced[Literal["immediate", "delayed", "double command"]]
-    # At command 0 the speed controller lets go and the car slows at
-    # coast[0] + coast[1] * speed: its drag brake, and drag that grows with
-    # the speed.
-    coast: Sourced[tuple[float, float]]  # m/s², 1/s
-    # At any other command it pushes the car with gain * (set speed - speed).
-    gain: Sourced[float]  # N per m/s
-    latency: Sourced[float]  # s, from a command to the speed controller
-    # The share of a full command that a racecar_core program's speed 1
-    # sends until it calls rc.drive.set_max_speed.
+    coast: Sourced[tuple[float, float]]
+    """At command 0 the speed controller lets go and the car slows at
+    coast[0] + coast[1] * speed (m/s², 1/s): its drag brake, and drag that
+    grows with the speed."""
+    gain: Sourced[float]
+    """The speed controller's gain (N per m/s): at any command but 0 it pushes
+    the car with gain * (set speed - speed)."""
+    latency: Sourced[float]
+    """The time from a command to the speed controller."""
     start_max_speed: Sourced[float]
+    """The share of a full command that a racecar_core program's speed 1 sends
+    until it calls rc.drive.set_max_speed."""
 
 
 @dataclass(frozen=True)
 class Odometry:
-    """The speed and the yaw rate that the firmware reports."""
+    """The speed and the yaw rate that the firmware reports. The drive board
+    times the edges of the motor's hall sensors."""
 
-    min_speed: Sourced[float]  # m/s; below it the reported speed is 0
-    speed_scale: Sourced[float]  # true speed / reported speed
-    yaw_rate_scale: Sourced[float]  # true yaw rate / reported yaw rate
-    # How much more than the true speed the encoder reads at full lock.
+    min_speed: Sourced[float]
+    """The speed below which the reported speed is 0."""
+    speed_scale: Sourced[float]
+    """The true speed over the reported speed."""
+    yaw_rate_scale: Sourced[float]
+    """The true yaw rate over the reported yaw rate."""
     turn_overread: Sourced[Sides[float]]
-    telemetry_rate: Sourced[float]  # Hz
-    # The drive board times the edges of the motor's hall sensors.
+    """How much more than the true speed the encoder reads at full lock."""
+    telemetry_rate: Sourced[float]
     edges_per_motor_turn: Sourced[int]
     motor_turns_per_wheel_turn: Sourced[float]
-    filter_weight: Sourced[float]  # the weight of each new edge's speed
-    stop_timeout: Sourced[float]  # s without an edge, after which it reads 0
+    filter_weight: Sourced[float]
+    """The weight of each new edge's speed."""
+    stop_timeout: Sourced[float]
+    """The time without an edge after which the speed reads 0."""
 
 
 @dataclass(frozen=True)
 class Lidar:
-    position: Sourced[Vec3]  # m, the center of the scan
-    yaw_degrees: Sourced[float]  # of the scan's zero bearing, from +X
-    tilt_degrees: Sourced[tuple[float, float]]  # roll, pitch
-    samples: Sourced[int]  # a turn
-    scan_rate: Sourced[float]  # Hz, turns a second
-    min_range: Sourced[float]  # m
-    max_range: Sourced[float]  # m
+    position: Sourced[Vec3]
+    """The center of the scan."""
+    yaw_degrees: Sourced[float]
+    """The yaw of the scan's zero bearing, from +X."""
+    tilt_degrees: Sourced[tuple[float, float]]
+    """Its roll and pitch."""
+    samples: Sourced[int]
+    """The samples in a turn."""
+    scan_rate: Sourced[float]
+    """Turns a second."""
+    min_range: Sourced[float]
+    max_range: Sourced[float]
 
 
 @dataclass(frozen=True)
@@ -243,21 +297,30 @@ class Imu:
     """The LSM9DS1 on the drive-controller board. The firmware reports
     (raw - bias) * scale."""
 
-    position: Sourced[Vec3]  # m, the breakout's center
-    rotation_degrees: Sourced[Vec3]  # roll, pitch, yaw of the chip's axes
-    accel_bias: Sourced[Vec3]  # m/s²
+    position: Sourced[Vec3]
+    """The breakout's center."""
+    rotation_degrees: Sourced[Vec3]
+    """The roll, pitch and yaw of the chip's axes."""
+    accel_bias: Sourced[Vec3]
+    """The accelerometer's bias (m/s²)."""
     accel_scale: Sourced[Vec3]
-    gyro_bias: Sourced[Vec3]  # rad/s
-    rest_accel: Sourced[Vec3]  # m/s², calibrated, at rest
-    rest_gyro: Sourced[Vec3]  # rad/s, calibrated, at rest
-    gyro_noise: Sourced[float]  # rad/s, 1 sigma a sample, at rest
+    gyro_bias: Sourced[Vec3]
+    rest_accel: Sourced[Vec3]
+    """The calibrated acceleration at rest (m/s²)."""
+    rest_gyro: Sourced[Vec3]
+    """The calibrated gyroscope reading at rest."""
+    gyro_noise: Sourced[float]
+    """The gyroscope's noise at rest, 1 sigma a sample."""
 
 
 @dataclass(frozen=True)
 class Camera:
-    front: Sourced[float]  # m, x of its front face
-    y: Sourced[float]  # m, of its center
-    bottom: Sourced[float]  # m, z of its underside
+    front: Sourced[float]
+    """The x of its front face."""
+    y: Sourced[float]
+    """The y of its center."""
+    bottom: Sourced[float]
+    """The z of its underside."""
     pitch_degrees: Sourced[float]
 
 
@@ -294,7 +357,6 @@ class AtCommand[T]:
     value: T
 
 
-# The sources of RACECAR_NEO_V2's values.
 C_L = Source("C.L", "RACECAR Neo V2 Model Measurement Worksheet, the C.L column")
 M_Z = Source("M.Z", "RACECAR Neo V2 Model Measurement Worksheet, the M.Z column")
 MODEL = Source(

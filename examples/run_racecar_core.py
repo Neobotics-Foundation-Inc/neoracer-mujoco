@@ -55,12 +55,11 @@ from neoracer_spec.parts import SOLVER
 
 type CarName = Literal["neoracer", "racecar_neo_v2"]
 
-# 1.2 s of simulation time.
-# straight_corridor.xml is about 16 m long. The wall_follower.yaml config of the
-# example drives at speed=1.0. In a longer run, the car leaves the far end of
-# the corridor, and the LiDAR then measures nothing. For a longer run on a
-# bigger track, pass --steps.
 DEFAULT_STEPS = round(1.2 / SOLVER.timestep)
+"""The physics steps in 1.2 s of simulation time. straight_corridor.xml is about
+16 m long. The wall_follower.yaml config of the example drives at speed=1.0. In
+a longer run, the car leaves the far end of the corridor, and the LiDAR then
+measures nothing. For a longer run on a bigger track, pass --steps."""
 
 
 def load_scene(car: CarName = "neoracer") -> Scene:

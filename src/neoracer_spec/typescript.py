@@ -20,6 +20,7 @@ writes; neoracer_mujoco.javascript writes it when the package is built.
 
 import ast
 import dataclasses
+import functools
 import inspect
 import itertools
 import json
@@ -28,7 +29,7 @@ import sys
 import textwrap
 import types
 import typing
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 
 from . import derive
 from .neoracer import NEORACER
@@ -150,10 +151,8 @@ def _declaration(t: _Named, tagged: set[type]) -> str:
         params = "".join(f"<{p.__name__}>" for p in t.__type_params__)
         where = t.__module__
         assert where is not None, f"a type statement sets {t}'s module"
-        module = ast.parse(inspect.getsource(sys.modules[where]))
-        doc = _attribute_docs(module.body).get(t.__name__, "")
         alias = f"export type {t.__name__}{params} = {_type(t.__value__)};"
-        return "\n".join([*_tsdoc(doc), alias]) + "\n"
+        return "\n".join([*doc_comment(sys.modules[where], t.__name__), alias]) + "\n"
     params = ", ".join(p.__name__ for p in getattr(t, "__type_params__", ()))
     name = f"{t.__name__}<{params}>" if params else t.__name__
     lines = [*_tsdoc(_docstring(t)), f"export interface {name} {{"]
@@ -169,14 +168,26 @@ def _declaration(t: _Named, tagged: set[type]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _attribute_docs(body: list[ast.stmt]) -> dict[str, str]:
-    """The docstring of each field or type alias in body: the string just
-    after it."""
+def doc_comment(module: types.ModuleType, name: str) -> list[str]:
+    """The TSDoc comment of the docstring of module's constant or type alias
+    name: one line, or none if it has no docstring."""
+    return _tsdoc(_module_docs(module).get(name, ""))
+
+
+@functools.cache
+def _module_docs(module: types.ModuleType) -> Mapping[str, str]:
+    return _attribute_docs(ast.parse(inspect.getsource(module)).body)
+
+
+def _attribute_docs(body: list[ast.stmt]) -> Mapping[str, str]:
+    """The docstring of each field, constant or type alias in body: the
+    string just after it."""
     docs = {}
     for node, after in itertools.pairwise(body):
         match node, after:
             case (
                 ast.AnnAssign(target=ast.Name(id=name))
+                | ast.Assign(targets=[ast.Name(id=name)])
                 | ast.TypeAlias(name=ast.Name(id=name)),
                 ast.Expr(value=ast.Constant(value=str(doc))),
             ):

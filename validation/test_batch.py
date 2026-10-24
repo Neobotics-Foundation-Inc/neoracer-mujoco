@@ -30,7 +30,8 @@ from neoracer_mujoco.track_generation import (
 )
 
 NBATCH, NSTEP, CALLS = 6, 17, 8
-NOMINAL = [Physics()]  # times nbatch: the car of the XML in every row
+NOMINAL = [Physics()]
+"""A list to multiply by nbatch: the car of the XML in every row."""
 V2 = os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml")
 
 
@@ -40,7 +41,8 @@ def _loop_scene(car: str = assets.DEFAULT_CAR) -> Scene:
 
 
 def _commands(seed: int, nbatch: int = NBATCH) -> np.ndarray:
-    """(CALLS, nbatch, 2) random (throttle N·m, steer rad) pairs."""
+    """Random (throttle, steer) pairs, throttle in N·m and steer in rad, of
+    shape (CALLS, nbatch, 2)."""
     rng = np.random.default_rng(seed)
     return rng.uniform((-0.2, -0.4), (0.4, 0.4), (CALLS, nbatch, 2))
 

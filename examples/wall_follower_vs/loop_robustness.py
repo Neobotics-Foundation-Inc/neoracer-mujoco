@@ -48,9 +48,12 @@ type ContactClass = Literal[
 class ClassifyParams:
     """Thresholds of the failure and contact classes."""
 
-    long_no_path_ticks: int = 30  # ticks; 1 s at 30 Hz
+    long_no_path_ticks: int = 30
+    """The length from which a NoPath run counts as long, 1 s at 30 Hz."""
     many_region_switches: int = 100
-    sustained_contact_steps: int = 30  # physics steps; 0.06 s at 2 ms per step
+    sustained_contact_steps: int = 30
+    """The physics steps of contact above which a lap's contact is sustained,
+    0.06 s at 2 ms per step."""
 
 
 def classify_failure(r: TrialResult, params: ClassifyParams) -> FailureClass | None:

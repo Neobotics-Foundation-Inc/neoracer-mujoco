@@ -17,13 +17,13 @@ from . import contract
 from .control.steering import ControlCommand
 from .scene import Car
 
-SETTLE_TIME = 1.0  # s of zero ctrl, to reach static equilibrium
+SETTLE_TIME = 1.0
+"""The time (s) of zero ctrl that lets the car reach static equilibrium."""
 
 
 def apply_ctrl_and_step(
     model: mujoco.MjModel, data: mujoco.MjData, ctrl: float | np.ndarray, steps: int
 ) -> None:
-    """Set data.ctrl to ctrl and step data forward `steps` times."""
     data.ctrl[:] = ctrl
     for _ in range(steps):
         mujoco.mj_step(model, data)
@@ -68,9 +68,12 @@ class SpawnRange:
     """How far perturb_spawn moves the car: each by an amount uniform in
     [-bound, bound]."""
 
-    lateral: float = 0.15  # m, along the car's left
-    yaw: float = 0.15  # rad, about +Z
-    resettle: float = 0.14  # s of steps after the move, so the suspension settles
+    lateral: float = 0.15
+    """The bound (m) of the move along the car's left."""
+    yaw: float = 0.15
+    """The bound (rad) of the turn about +Z."""
+    resettle: float = 0.14
+    """The time (s) of steps after the move, so the suspension settles."""
 
     def __post_init__(self) -> None:
         for name in ("lateral", "yaw", "resettle"):

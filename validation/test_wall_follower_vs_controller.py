@@ -39,7 +39,8 @@ from neoracer_mujoco.control.wall_following import Side
 
 PARAMS = VsParams(car=car_geometry(assets.load()))
 TABLE = arc_table(PARAMS)
-DT = 1.0 / 30.0  # s; one tick at 30 Hz
+DT = 1.0 / 30.0
+"""One tick at 30 Hz (s)."""
 RESOLUTIONS = [24, 270, 540, 1080]
 
 
@@ -113,9 +114,9 @@ def test_a_blocked_road_with_one_side_open_turns_into_the_opening():
 
 
 def test_mirrored_scene_mirrors_safe_arc_lengths():
-    # Law: if the scene is mirrored in y, the safe arc lengths are mirrored
-    # over the candidate grid. The tolerance is one arc sample, for rounding
-    # at the clearance radius.
+    """If the scene is mirrored in y, the safe arc lengths are mirrored over
+    the candidate grid. The tolerance is one arc sample, for rounding at the
+    clearance radius."""
     for n in RESOLUTIONS:
         rng = np.random.default_rng(n)
         scenes = [_forward_blocked_side_open("right")] + [
@@ -133,8 +134,8 @@ def test_mirrored_scene_mirrors_safe_arc_lengths():
 
 
 def test_mirrored_scene_mirrors_steer():
-    # Law: from the start state, a mirrored scene gives the same result case
-    # and a steer command of the opposite sign.
+    """From the start state, a mirrored scene gives the same result case and a
+    steer command of the opposite sign."""
     for n in RESOLUTIONS:
         rng = np.random.default_rng(1000 + n)
         for _ in range(10):
@@ -148,8 +149,8 @@ def test_mirrored_scene_mirrors_steer():
 
 
 def test_inside_min_turn_radius_no_arc_escapes():
-    # A corner 0.3 m ahead is much closer than the minimum turn radius
-    # (about 0.68 m). No arc, not even at full lock, can turn away in time.
+    """A corner 0.3 m ahead is much closer than the minimum turn radius (about
+    0.68 m). No arc, not even at full lock, can turn away in time."""
     walls = [
         ((0.3, -2.0), (0.3, 0.05)),  # wall almost straight ahead
         ((0.3, 0.05), (0.5, 2.0)),  # corner to the left
@@ -160,7 +161,7 @@ def test_inside_min_turn_radius_no_arc_escapes():
 
 
 def test_narrow_corridor_has_no_region():
-    # The corridor half-width of 0.15 m is less than the clearance radius.
+    """The corridor half-width of 0.15 m is less than the clearance radius."""
     for n in RESOLUTIONS:
         safe_m = safe_arc_lengths(PARAMS, *_scan(corridor_walls(half_width_m=0.15), n))
         assert extract_regions(PARAMS, safe_m) == (), f"N={n}"
@@ -253,8 +254,8 @@ def _random_scan(rng: np.random.Generator, n: int) -> Scan:
 
 
 def test_median_filter_equals_median_of_each_window():
-    # Law: the filter gives, bit for bit, the np.median of the ranges in the
-    # angular window of each beam. A beam alone in its window keeps its range.
+    """The filter gives, bit for bit, the np.median of the ranges in the
+    angular window of each beam. A beam alone in its window keeps its range."""
     rng = np.random.default_rng(7)
     window_rad = np.radians(PARAMS.outlier_window_deg)
     for n in [1, 2, 24, 270, 1080]:
@@ -270,10 +271,10 @@ def test_median_filter_equals_median_of_each_window():
 
 
 def test_obstacle_points_are_in_the_car_frame_wherever_the_lidar_is():
-    # Law: the scan's ranges are from the LiDAR, but a wall across the path
-    # 0.4 m ahead of the car center gives points at x = 0.4 m, wherever the
-    # LiDAR is mounted. The median filter's window holds one beam here, so
-    # each point is its own beam's.
+    """The scan's ranges are from the LiDAR, but a wall across the path 0.4 m
+    ahead of the car center gives points at x = 0.4 m, wherever the LiDAR is
+    mounted. The median filter's window holds one beam here, so each point is
+    its own beam's."""
     wall = [((0.4, -0.3), (0.4, 0.3))]
     for lidar_xy_m in [(0.0, 0.0), (-0.0442, 0.0), (0.1, -0.05)]:
         car = replace(PARAMS.car, lidar_xy_m=lidar_xy_m)
@@ -301,8 +302,8 @@ def _all_pairs_safe_arc_lengths(angles: np.ndarray, ranges: np.ndarray) -> np.nd
 
 
 def test_safe_arc_lengths_equal_a_test_of_all_pairs():
-    # Law: the k-d tree search gives, bit for bit, the safe arc lengths of a
-    # direct test of every pair of arc sample and obstacle point.
+    """The k-d tree search gives, bit for bit, the safe arc lengths of a
+    direct test of every pair of arc sample and obstacle point."""
     rng = np.random.default_rng(11)
     for n in [24, 90, 270]:
         for _ in range(5):
@@ -321,8 +322,8 @@ def test_safe_arc_lengths_equal_a_test_of_all_pairs():
 
 
 def test_blocked_samples_include_points_at_the_clearance_radius():
-    # Law: for points at the clearance radius from a sample, to the last bit,
-    # the k-d tree search gives the same blocked samples as a test of all pairs.
+    """For points at the clearance radius from a sample, to the last bit, the
+    k-d tree search gives the same blocked samples as a test of all pairs."""
     rng = np.random.default_rng(3)
     rows = rng.choice(len(TABLE.valid_flat), 200)
     flat = TABLE.valid_flat[rows]

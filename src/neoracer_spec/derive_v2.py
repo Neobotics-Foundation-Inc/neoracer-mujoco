@@ -23,6 +23,7 @@ digits (parts.precise), so the code and the XML hold the same floats.
 Frame: the car body's, as the NeoRacer's: +X forward, +Y left, +Z up, its
 origin at the middle of the wheelbase on the axle line. The spec's positions
 are in base_link, on the floor below the rear axle; body() moves them.
+Quantities are in SI units unless a name says otherwise.
 """
 
 from __future__ import annotations
@@ -46,9 +47,8 @@ class DerivedParams:
     model: ModelParams
     lidar: LidarParams
     encoder: HallEncoderParams
-    start_max_speed: (
-        float  # the share of full throttle that racecar_core's speed 1 sends
-    )
+    start_max_speed: float
+    """The share of full throttle that racecar_core's speed 1 sends."""
 
 
 def derive(spec: RacecarNeoV2) -> DerivedParams:
@@ -77,10 +77,14 @@ class HallEncoderParams:
     """How the drive board measures the speed: from the time between the
     edges of the motor's hall sensors."""
 
-    edge_angle: float  # rad of the drivetrain from one edge to the next
-    radius: float  # m, the tire's, that it measures the speed at
-    alpha: float  # the weight of each new edge's speed in its filter
-    stop_timeout: float  # s without an edge, after which it reads 0
+    edge_angle: float
+    """The angle the drivetrain turns from one edge to the next."""
+    radius: float
+    """The tire's radius, which it measures the speed at."""
+    alpha: float
+    """The weight of each new edge's speed in its filter."""
+    stop_timeout: float
+    """The time without an edge after which it reads 0."""
 
     def __post_init__(self) -> None:
         if not self.edge_angle > 0.0:
@@ -106,9 +110,6 @@ def encoder_params(spec: RacecarNeoV2) -> HallEncoderParams:
     )
 
 
-# --- the model ----------------------------------------------------------------
-
-
 @dataclass(frozen=True)
 class ModelParams:
     """The RACECAR Neo V2's model: the parts that both cars' models have,
@@ -116,9 +117,10 @@ class ModelParams:
 
     common: parts.Model
     drive: DriveParams
-    antenna_center: Vec3  # m, the left antenna's; the right one is its mirror
-    antenna_radius: float  # m
-    antenna_half_length: float  # m
+    antenna_center: Vec3
+    """The left antenna's center; the right one is its mirror."""
+    antenna_radius: float
+    antenna_half_length: float
 
 
 def model(spec: RacecarNeoV2) -> ModelParams:
@@ -194,9 +196,6 @@ def body(spec: RacecarNeoV2, p: Vec3) -> Vec3:
         y,
         z - spec.wheel.axle_height.value,
     )
-
-
-# --- mass ---------------------------------------------------------------------
 
 
 def chassis_mass(spec: RacecarNeoV2) -> float:
@@ -282,17 +281,20 @@ def spring_refs(spec: RacecarNeoV2) -> Axles:
     return (front, rear)
 
 
-# --- drive --------------------------------------------------------------------
-
-
 @dataclass(frozen=True)
 class DriveParams:
-    gain: float  # N per m/s
-    gear: float  # m, the tire's radius
-    slope: float  # of the throttle map, m/s
-    step: float  # of the throttle map, m/s
-    ctrl_limit: float  # m/s, the map at throttle 1
-    brake: float  # N·m, the drivetrain's frictionloss
+    gain: float
+    """The actuators' gain (N per m/s)."""
+    gear: float
+    """The tire's radius."""
+    slope: float
+    """The throttle map's slope (m/s)."""
+    step: float
+    """The throttle map's step (m/s)."""
+    ctrl_limit: float
+    """The throttle map at throttle 1 (m/s)."""
+    brake: float
+    """The drivetrain's frictionloss (N·m)."""
     delay: parts.Delay
 
 
@@ -344,9 +346,6 @@ def coast_drag(spec: RacecarNeoV2) -> tuple[float, float]:
     a0, a1 = spec.drive.coast.value
     m = effective_mass(spec)
     return (m * a0, m * a1)
-
-
-# --- steering -----------------------------------------------------------------
 
 
 def steer_lock(spec: RacecarNeoV2) -> float:

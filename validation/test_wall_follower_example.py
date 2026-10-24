@@ -44,7 +44,6 @@ def test_canonical_wall_follower_runs_unmodified_against_mujoco():
             os.path.join(_FIXTURE_DIR, "wall_follower.py"), run_name="wall_follower"
         )
 
-    # set_start_update() and go() run the callbacks of the controller.
     # start, update, update_slow and control.py contain no MuJoCo code.
     rc.set_start_update(wf["start"], wf["update"], wf["update_slow"])
     rc.go()

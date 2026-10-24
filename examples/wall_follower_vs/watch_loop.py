@@ -29,10 +29,13 @@ from neoracer_mujoco import sim
 
 @dataclass(frozen=True)
 class WatchParams:
-    camera_distance_m: float = 3.0  # m; tracking camera to car
-    camera_azimuth_deg: float = 90.0  # deg
-    camera_elevation_deg: float = -45.0  # deg; negative looks down
-    print_period_s: float = 0.5  # s of sim time between two status lines
+    camera_distance_m: float = 3.0
+    """The distance from the tracking camera to the car."""
+    camera_azimuth_deg: float = 90.0
+    camera_elevation_deg: float = -45.0
+    """A negative elevation looks down."""
+    print_period_s: float = 0.5
+    """The sim time between two status lines."""
 
 
 def main() -> None:

@@ -45,9 +45,6 @@ def _steer_ctrl(scene: Scene, data: mujoco.MjData) -> float:
     return float(data.bind_scalar(scene.car.steer).ctrl[0])
 
 
-# --- Drive: the ctrl mapping, without physics ----------------------------------
-
-
 def test_drive_writes_clipped_and_scaled_commands(scene):
     """For each speed, angle and max_speed, set_speed_angle drives the
     motor with the throttle clip(speed, -1, 1) * clip(max_speed, 0, 1),
@@ -76,9 +73,6 @@ def test_drive_writes_clipped_and_scaled_commands(scene):
     drive.stop()
     assert _drive_ctrl(scene, data) == 0.0
     assert _steer_ctrl(scene, data) == 0.0
-
-
-# --- LiDAR: order, units and no return ----------------------------------------
 
 
 def test_set_max_speed_without_an_argument_restores_the_start(scene):
@@ -131,9 +125,6 @@ def test_no_return_and_the_blocked_rear_read_zero(scene, corridor):
     scan = MujocoLidar(corridor, sim.settle(corridor.model)).get_samples()
     assert np.all(scan[~lidar.visible(LIDAR)] == 0.0)
     assert np.all(scan[lidar.visible(LIDAR)] > 0.0)
-
-
-# --- Racecar: event loop ------------------------------------------------------
 
 
 def test_go_before_set_start_update_raises(scene):

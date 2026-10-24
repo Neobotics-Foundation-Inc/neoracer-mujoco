@@ -28,10 +28,14 @@ from neoracer_spec import derive_v2
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2 as V2
 
 PARAMS = derive_v2.derive(V2)
-L = V2.chassis.wheelbase.value  # m
-AXLE = V2.wheel.axle_height.value  # m
-R = PARAMS.model.common.wheels.radius  # m
-SETTLE = 1.0  # s at rest before a run
+L = V2.chassis.wheelbase.value
+"""The wheelbase (m)."""
+AXLE = V2.wheel.axle_height.value
+"""The axle's height (m)."""
+R = PARAMS.model.common.wheels.radius
+"""The wheels' radius (m)."""
+SETTLE = 1.0
+"""The time at rest before a run (s)."""
 
 
 @functools.cache
@@ -44,11 +48,16 @@ def v2() -> Scene:
 class Run:
     """A run, sampled every physics step from the first command."""
 
-    t: np.ndarray  # s
-    xy: np.ndarray  # m, base_link's position, (n, 2)
-    heading: np.ndarray  # rad
-    speed: np.ndarray  # m/s, the encoder's
-    yaw_rate: np.ndarray  # rad/s
+    t: np.ndarray
+    """The time since the first command (s)."""
+    xy: np.ndarray
+    """The position of base_link (m), of shape (n, 2)."""
+    heading: np.ndarray
+    """The car's heading (rad)."""
+    speed: np.ndarray
+    """The encoder's speed (m/s)."""
+    yaw_rate: np.ndarray
+    """The car's yaw rate (rad/s)."""
 
 
 def drive(legs: list[tuple[float, float, float]]) -> Run:
@@ -91,9 +100,8 @@ def _at(table, command: float) -> float:
     return next(a.value for a in table if a.command == command)
 
 
-# --- the drive ---------------------------------------------------------------
-
-STRAIGHT = {0.25: 3.0, 0.5: 3.0, 1.0: 2.5}  # command: s, as the car drove them
+STRAIGHT = {0.25: 3.0, 0.5: 3.0, 1.0: 2.5}
+"""The straight runs as the car drove them: each speed command and its duration (s)."""
 
 
 def test_the_straight_runs_reach_their_speeds_and_stop():
@@ -149,9 +157,6 @@ def test_the_car_waits_its_latency_before_it_moves():
     assert run.speed[run.t > latency + 0.05].min() > 0.1
 
 
-# --- the steering ------------------------------------------------------------
-
-
 def _arc_curvature(command: float) -> float:
     """The steering tool's arc: the wheels set at rest, 2 s at speed 0.25,
     then a stop. Curvature from the chord and the heading change between
@@ -176,9 +181,12 @@ def test_the_arcs_follow_the_curvature_table():
 
 @dataclass(frozen=True)
 class Circle:
-    radius: float  # m, of base_link's path
-    overread: float  # the encoder's path over base_link's, less 1
-    to_lock: float  # s from the command to 95% of the steady yaw rate
+    radius: float
+    """The radius of base_link's path (m)."""
+    overread: float
+    """The encoder's path over base_link's, less 1."""
+    to_lock: float
+    """The time from the command to 95% of the steady yaw rate (s)."""
 
 
 def _circle(side: float) -> Circle:
@@ -230,9 +238,6 @@ def test_the_full_lock_circles():
             assert c.radius == pytest.approx(radius, rel=0.03)
             assert c.overread == pytest.approx(overread, abs=0.015)
             assert c.to_lock == pytest.approx(to_lock, abs=0.04)
-
-
-# --- the LiDAR ---------------------------------------------------------------
 
 
 def test_the_lidar_sees_the_antennas_as_the_car_does():

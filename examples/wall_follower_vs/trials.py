@@ -48,8 +48,6 @@ from examples.wall_follower_vs.vehicle_space_controller import (
 from neoracer_mujoco import collision, sim
 from neoracer_mujoco.scene import Car, Scene
 
-# --- the control tick, which watch_loop.py shares -----------------------------
-
 
 @dataclass(frozen=True)
 class Driver:
@@ -60,8 +58,10 @@ class Driver:
     mount: LidarMount
     lidar: DenseLidarParams
     params: VsParams
-    dt: float  # s, one control period
-    steps: int  # physics steps in a control period
+    dt: float
+    """One control period (s)."""
+    steps: int
+    """The physics steps in a control period."""
 
 
 def driver(scene: Scene, lidar: DenseLidarParams, control_hz: float) -> Driver:
@@ -92,7 +92,7 @@ class Tick:
 
 def tick(d: Driver, data: mujoco.MjData, state: VsState) -> Tick:
     """Scan, run the controller, and step the physics for one control
-    period with its command."""
+    period with its command. watch_loop.py runs the same tick."""
     model, car = d.scene.model, d.scene.car
     t0 = time.perf_counter()
     scan = cast_dense_lidar(model, data, d.mount, d.lidar)
@@ -115,21 +115,18 @@ def tick(d: Driver, data: mujoco.MjData, state: VsState) -> Tick:
     )
 
 
-# --- the trials ---------------------------------------------------------------
-
-
 @dataclass(frozen=True)
 class AlongX:
     """Drive success_m along +X."""
 
-    success_m: float  # m
+    success_m: float
 
 
 @dataclass(frozen=True)
 class Lap:
     """Drive one lap about the world origin, either way."""
 
-    target_rad: float = 2.0 * math.pi  # rad
+    target_rad: float = 2.0 * math.pi
 
 
 type Goal = AlongX | Lap
@@ -138,19 +135,22 @@ type Goal = AlongX | Lap
 @dataclass(frozen=True)
 class TrialParams:
     """Settings of one trial and of the timing report. Progress is in the
-    goal's unit: m along +X, or rad about the origin."""
+    goal's unit: m along +X, or rad about the origin. The timing report counts
+    the ticks over slow_tick_ms and over very_slow_tick_ms."""
 
     goal: Goal
-    max_sim_time_s: float  # s
-    stuck_window_s: float  # s
-    stuck_progress: float  # minimum progress in stuck_window_s
-    control_hz: float = 30.0  # Hz; controller rate
-    upright_rollover_cos: float = 0.5  # cos(tilt); below this the car has rolled over
-    # s; a contact in this time after the start of a NoPath event counts as
-    # caused by that event
+    max_sim_time_s: float
+    stuck_window_s: float
+    stuck_progress: float
+    """The minimum progress in stuck_window_s."""
+    control_hz: float = 30.0
+    upright_rollover_cos: float = 0.5
+    """The cosine of the car's tilt below which the car has rolled over."""
     contact_after_no_path_s: float = 1.0
-    slow_tick_ms: float = 50.0  # ms; a tick time that the timing report counts
-    very_slow_tick_ms: float = 100.0  # ms; a tick time that the timing report counts
+    """A contact in this time after the start of a NoPath event counts as
+    caused by that event."""
+    slow_tick_ms: float = 50.0
+    very_slow_tick_ms: float = 100.0
 
     @property
     def deadline_ms(self) -> float:
@@ -158,11 +158,10 @@ class TrialParams:
         return 1000.0 / self.control_hz
 
 
-# Each track's goal and limits.
 TRIALS: Mapping[TrackName, TrialParams] = MappingProxyType(
     {
         "straight_corridor.xml": TrialParams(
-            # Near the far end of the corridor, which runs from x = -2 m to 12 m.
+            # Near the far end of the corridor, which runs from x = -2 m to 14 m.
             goal=AlongX(success_m=10.0),
             max_sim_time_s=35.0,
             stuck_window_s=3.0,
@@ -177,6 +176,7 @@ TRIALS: Mapping[TrackName, TrialParams] = MappingProxyType(
         ),
     }
 )
+"""Each track's goal and limits."""
 
 
 def _position(goal: Goal, data: mujoco.MjData, car: Car) -> float:
@@ -246,9 +246,12 @@ def _car_yaw_rad(data: mujoco.MjData, car: Car) -> float:
 class NoPathEvent:
     """A run of adjacent ticks with a NoPath result."""
 
-    t_s: float  # s; sim time at the end of the first tick of the run
-    x_m: float  # m; world x of the car at that time
-    y_m: float  # m; world y of the car at that time
+    t_s: float
+    """The sim time at the end of the first tick of the run."""
+    x_m: float
+    """The car's world x at that time."""
+    y_m: float
+    """The car's world y at that time."""
     duration_ticks: int
 
 
@@ -256,25 +259,35 @@ class NoPathEvent:
 class TrialResult:
     seed: int
     outcome: Outcome
-    sim_time_s: float  # s
-    fraction: float  # of the goal reached
-    contact_steps: int  # physics steps in which the car touches a wall
-    contact_events: int  # runs of adjacent ticks with a contact
-    # m; the smallest valid LiDAR range in the trial; inf if no beam had a return
+    sim_time_s: float
+    fraction: float
+    """The fraction of the goal reached."""
+    contact_steps: int
+    """The physics steps in which the car touches a wall."""
+    contact_events: int
+    """The runs of adjacent ticks with a contact."""
     min_sensed_range_m: float
-    # m; the smallest safe arc length of the 0 deg candidate. This value is a
-    # controller output, not a measured distance.
+    """The smallest valid LiDAR range in the trial, or inf if no beam had a
+    return."""
     min_straight_clear_m: float
+    """The smallest safe arc length of the 0 deg candidate. This value is a
+    controller output, not a measured distance."""
     no_path_events: tuple[NoPathEvent, ...]
-    no_path_caused_contact: bool  # a contact came soon after a NoPath start
-    steer_std_rad: float  # rad; standard deviation of the steer command
-    max_target_jump_deg: float  # deg; largest change of the target in one tick
-    region_switches: int  # ticks at which the start of the selected region changed
-    # Wall-clock time of the ray cast and of step() at each tick.
+    no_path_caused_contact: bool
+    """Whether a contact came soon after a NoPath start."""
+    steer_std_rad: float
+    """The standard deviation of the steer command."""
+    max_target_jump_deg: float
+    """The largest change of the target in one tick."""
+    region_switches: int
+    """The ticks at which the start of the selected region changed."""
     raycast_times_ms: tuple[float, ...]
+    """The wall-clock time of the ray cast at each tick."""
     compute_times_ms: tuple[float, ...]
-    # Obstacle points at each tick (see vehicle_space_controller.obstacle_points).
+    """The wall-clock time of step() at each tick."""
     obstacle_point_counts: tuple[int, ...]
+    """The count of obstacle points at each tick (see
+    vehicle_space_controller.obstacle_points)."""
 
     @property
     def no_path_ticks(self) -> int:
@@ -493,9 +506,12 @@ class TickTimeStats:
     p99_ms: float
     p99_9_ms: float
     max_ms: float
-    pct_over_deadline: float  # % of ticks over TrialParams.deadline_ms
-    pct_over_slow: float  # % of ticks over TrialParams.slow_tick_ms
-    pct_over_very_slow: float  # % of ticks over TrialParams.very_slow_tick_ms
+    pct_over_deadline: float
+    """The percentage of ticks over TrialParams.deadline_ms."""
+    pct_over_slow: float
+    """The percentage of ticks over TrialParams.slow_tick_ms."""
+    pct_over_very_slow: float
+    """The percentage of ticks over TrialParams.very_slow_tick_ms."""
 
 
 def tick_time_stats(
@@ -525,7 +541,8 @@ class DeadlineMisses:
 
     n_misses: int
     seeds_with_misses: tuple[int, ...]
-    mean_points_at_miss: float | None  # None if no tick missed the deadline
+    mean_points_at_miss: float | None
+    """None if no tick missed the deadline."""
     mean_points_overall: float
     pearson_r_points_vs_ms: float
 

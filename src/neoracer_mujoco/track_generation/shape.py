@@ -12,8 +12,10 @@ import scipy.interpolate
 
 from .config import TrackSettings
 
-type Points = npt.NDArray[np.float64]  # shape (N, 2), meters
-type Samples = npt.NDArray[np.float64]  # shape (N,), one value per sample
+type Points = npt.NDArray[np.float64]
+"""Points (m), shape (N, 2)."""
+type Samples = npt.NDArray[np.float64]
+"""One value per sample, shape (N,)."""
 
 
 def draw_control_points(random: np.random.Generator, settings: TrackSettings) -> Points:
@@ -39,9 +41,6 @@ def draw_control_points(random: np.random.Generator, settings: TrackSettings) ->
     length = random.uniform(s.edge_length_min, s.edge_length_max, count)
     steps = length[:, None] * np.stack([np.cos(heading), np.sin(heading)], axis=1)
     return np.cumsum(steps - steps.mean(axis=0), axis=0)
-
-
-# --- the centerline --------------------------------------------------------
 
 
 def shortest_loop_distance(distance: Samples, total_length: float) -> Samples:
@@ -87,12 +86,17 @@ class Centerline:
     """A closed loop sampled every total_length / N meters. Index N-1 wraps
     around to index 0."""
 
-    center: Points  # positions
-    tangent: Points  # unit vector pointing forward along the loop
-    left_normal: Points  # unit vector 90 degrees left of the tangent
-    curvature: Samples  # 1/m, positive where the loop turns left
-    distance_along: Samples  # m from sample 0, traveling forward
-    total_length: float  # m around the whole loop
+    center: Points
+    tangent: Points
+    """The unit vector pointing forward along the loop."""
+    left_normal: Points
+    """The unit vector 90 degrees left of the tangent."""
+    curvature: Samples
+    """The curvature (1/m), positive where the loop turns left."""
+    distance_along: Samples
+    """The distance (m) from sample 0, traveling forward."""
+    total_length: float
+    """The length (m) around the whole loop."""
 
 
 def sample_evenly_by_distance(
@@ -132,17 +136,17 @@ def sample_evenly_by_distance(
     )
 
 
-# --- corridor width --------------------------------------------------------
-# Width is a function of position around the loop, not of the shape there.
-# reject.py is what throws out a width the corners cannot take.
-
-
 @dataclass(frozen=True)
 class WidthWaves:
-    """Sine wave w completes w+1 cycles around the loop."""
+    """Sine wave w completes w+1 cycles around the loop.
 
-    phases: Samples  # rad, one per wave
-    amplitudes: Samples  # m, one per wave
+    The width is a function of position around the loop, not of the shape
+    there. reject.py is what throws out a width the corners cannot take."""
+
+    phases: Samples
+    """The phase of each wave (rad)."""
+    amplitudes: Samples
+    """The amplitude of each wave (m)."""
 
 
 def draw_width_waves(random: np.random.Generator) -> WidthWaves:

@@ -1,7 +1,9 @@
-// A NeoRacer car on a track, compiled in MuJoCo's WebAssembly build, as
-// assets.compose(track, visuals=False) makes it in Python.
-//
-// Frame: +X forward, +Y left, +Z up.
+/**
+ * A NeoRacer car on a track, compiled in MuJoCo's WebAssembly build, as
+ * assets.compose(track, visuals=False) makes it in Python.
+ *
+ * Frame: +X forward, +Y left, +Z up.
+ */
 
 import type { MainModule, MjData, MjModel, MjSpec, MjsElement, mjtObj } from '@mujoco/mujoco';
 
@@ -20,11 +22,16 @@ export type Mujoco = MainModule;
 
 /** The parts of the car, as indices into the compiled model. */
 export interface Car {
-  readonly body: number; // the car's root body
-  readonly drive: number; // the drive motor's actuator
-  readonly steer: number; // the steering servo's actuator
-  readonly lidar: number; // the LiDAR site
-  readonly drivePos: number; // the address of drive_pos in sensordata
+  /** The car's root body. */
+  readonly body: number;
+  /** The drive motor's actuator. */
+  readonly drive: number;
+  /** The steering servo's actuator. */
+  readonly steer: number;
+  /** The LiDAR site. */
+  readonly lidar: number;
+  /** The address of drive_pos in sensordata. */
+  readonly drivePos: number;
 }
 
 /** A compiled scene: spec is what model was compiled from. */

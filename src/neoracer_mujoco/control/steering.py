@@ -34,26 +34,31 @@ class PDState:
     """Controller state from one step to the next. Start an episode with
     PDState()."""
 
-    prev_error: float = 0.0  # m; error signal of the last step, for the D term
-    prev_steer: float = 0.0  # rad; steer command of the last step, for the slew limit
+    prev_error: float = 0.0
+    """The error signal of the last step (m), for the D term."""
+    prev_steer: float = 0.0
+    """The steer command of the last step (rad), for the slew limit."""
 
 
 @dataclass(frozen=True)
 class ShapingConfig:
     """Steer and throttle limits that command() and fallback() apply."""
 
-    # base forward drive command, in [-1, 1]. From rest it pushes as 0.1 N·m on
-    # each wheel did before the motor model, and cruises at about 2 m/s.
     target_throttle: float = 0.5
-    # rad, full lock: the steer_servo's ctrlrange
+    """The base forward drive command, in [-1, 1]. From rest it pushes as 0.1 N·m
+    on each wheel did before the motor model, and cruises at about 2 m/s."""
     steer_limit: float = derive.steer_lock(NEORACER)
-    steer_slew_limit: float = 3.0  # rad/s max steering rate of change
-    steer_slowdown_gain: float = 0.6  # throttle cut fraction at full steer deflection
-    # m; at this front clearance or less, the throttle is 0
+    """Full lock (rad): the steer_servo's ctrlrange."""
+    steer_slew_limit: float = 3.0
+    """The steer's largest rate of change (rad/s)."""
+    steer_slowdown_gain: float = 0.6
+    """The fraction of the throttle cut at full steer deflection."""
     min_safe_forward_distance: float = 0.25
-    # m; below this front clearance, the throttle ramps down
+    """The front clearance (m) at or below which the throttle is 0."""
     slowdown_threshold: float = 0.8
-    safe_fallback_throttle_fraction: float = 0.3  # of target_throttle, during fallback
+    """The front clearance (m) below which the throttle ramps down."""
+    safe_fallback_throttle_fraction: float = 0.3
+    """The throttle during fallback, as a fraction of target_throttle."""
 
     def __post_init__(self) -> None:
         # command() divides by steer_limit and by the slowdown span, so these

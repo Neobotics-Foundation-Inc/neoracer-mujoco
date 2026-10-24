@@ -17,7 +17,8 @@ from neoracer_spec.parts import SOLVER
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2 as V2
 
 PARAMS = derive_v2.encoder_params(V2)
-DT = SOLVER.timestep  # s, the car's physics step
+DT = SOLVER.timestep
+"""The car's physics step (s)."""
 
 
 def _readings(omega: float, seconds: float) -> list[hall_encoder.HallEncoderState]:

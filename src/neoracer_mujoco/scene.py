@@ -32,18 +32,25 @@ from . import contract, sensors, truth
 class Car:
     """The parts of the car, as elements of the scene's MjSpec."""
 
-    body: mujoco.MjsBody  # the car's root body
-    joint: mujoco.MjsJoint  # its free joint: qpos x, y, z, qw, qx, qy, qz
-    drive: mujoco.MjsActuator  # the drive motor (contract.py), + = forward
-    steer: mujoco.MjsActuator  # the steering servo (rad, + = left)
-    # The actuators that the throttle drives (contract.throttle_map): the
-    # motor first, then any others the car has.
+    body: mujoco.MjsBody
+    """The car's root body."""
+    joint: mujoco.MjsJoint
+    """The root body's free joint: qpos x, y, z, qw, qx, qy, qz."""
+    drive: mujoco.MjsActuator
+    """The drive motor (contract.py), + = forward."""
+    steer: mujoco.MjsActuator
+    """The steering servo (rad, + = left)."""
     throttled: tuple[mujoco.MjsActuator, ...]
-    # the fl, fr, rl, rr wheel geoms that touch the ground
+    """The actuators that the throttle drives (contract.throttle_map): the motor
+    first, then any others the car has."""
     wheels: tuple[mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom]
-    lidar: mujoco.MjsSite  # the center of the spinning LiDAR (lidar.py)
-    sensors: sensors.CarSensors  # the sensors of the real car
-    truth: truth.TruthSensors  # what only the simulator knows (truth.py)
+    """The fl, fr, rl, rr wheel geoms that touch the ground."""
+    lidar: mujoco.MjsSite
+    """The center of the spinning LiDAR (lidar.py)."""
+    sensors: sensors.CarSensors
+    """The sensors of the real car."""
+    truth: truth.TruthSensors
+    """What only the simulator knows (truth.py)."""
 
 
 @dataclass(frozen=True)

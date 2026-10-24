@@ -1,4 +1,5 @@
-"""Tunables shared across track generation. All lengths in meters.
+"""Tunables shared across track generation. Quantities are in SI units unless
+a name says otherwise.
 
 Numbers used by exactly one stage live in that stage's module, not here.
 """
@@ -9,52 +10,63 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal
 
-# 0 is gentle and wide, 3 is tight and narrow.
 type Difficulty = Literal[0, 1, 2, 3]
+"""Difficulty 0 is gentle and wide, and 3 is tight and narrow."""
 
 
 @dataclass(frozen=True)
 class TrackSettings:
-    """The knobs `generate_track` reads. Defaults are measured, not guessed."""
+    """The knobs `generate_track` reads. Defaults are measured, not guessed.
 
-    # How finely the smooth loop is sampled. Everything downstream -- curvature,
-    # the self-touch check, the emitted walls -- is defined at these samples.
+    shape.draw_control_points reads the knobs of the walk through the control
+    points, reject.py the limits that make a candidate track invalid, and
+    shape.py the corridor's width band.
+
+    Two samples more than min_separation_along_loop apart *along the loop* must
+    be 2*half_width + extra_separation_margin apart *in space*, or the loop
+    nearly touches itself and there is no room for walls between."""
+
     samples: int = 2048
-    oversample_factor: int = 4  # extra spline samples used to measure length
+    """How finely the smooth loop is sampled. Everything downstream is defined
+    at these samples: the curvature, the self-touch check and the emitted
+    walls."""
+    oversample_factor: int = 4
+    """Extra spline samples used to measure the length."""
 
-    # --- control points (see shape.draw_control_points) ---
     control_points_min: int = 16
     control_points_max: int = 24
-    edge_length_min: float = 2.0  # m; the walk's step from one point to the next
-    edge_length_max: float = 4.0  # m
-    # rad; std dev of the noise on each turn of the walk. More gives more and
-    # sharper bends both ways, and more rejected candidates.
+    edge_length_min: float = 2.0
+    """The shortest step of the walk from one point to the next."""
+    edge_length_max: float = 4.0
+    """The longest step of the walk."""
     turn_jitter: float = 0.9
+    """The standard deviation of the noise on each turn of the walk (rad). More
+    gives more and sharper bends both ways, and more rejected candidates."""
 
-    # --- what makes a candidate track invalid (see reject.py) ---
-    max_curvature: float = 1.0  # 1/m; settings_for_difficulty lowers this
-    max_width_times_curvature: float = 0.8  # corridor must not fold onto itself
+    max_curvature: float = 1.0
+    """The curvature limit (1/m). settings_for_difficulty lowers it."""
+    max_width_times_curvature: float = 0.8
+    """The limit that keeps the corridor from folding onto itself."""
     min_total_length: float = 25.0
     max_total_length: float = 90.0
-    # Two samples more than min_separation_along_loop apart *along the loop*
-    # must be 2*half_width + extra_separation_margin apart *in space*, or the
-    # loop nearly touches itself and there is no room for walls between.
     min_separation_along_loop: float = 2.5
     extra_separation_margin: float = 0.3
 
-    # --- corridor width band (see shape.py) ---
     half_width_base: float = 0.50
-    half_width_min: float = 0.35  # settings_for_difficulty raises this
+    half_width_min: float = 0.35
+    """The narrowest half-width. settings_for_difficulty raises it."""
     half_width_max: float = 0.80
 
-    # --- retry budget ---
-    # 60 attempts because difficulty 1 is the strict end: over seeds 0-199, 20
-    # attempts leave 13 of them with no valid track, 60 leave none.
-    max_attempts: int = 60  # fresh random tracks before giving up
-    max_repairs_per_attempt: int = 5  # nudge-and-recheck passes per track
-    # m; the most that one repair pass moves a control point pair apart, so one
-    # bad pair cannot change the whole loop. Larger moves take several passes.
+    max_attempts: int = 60
+    """How many fresh random tracks to draw before giving up. It is 60 because
+    difficulty 1 is the strict end: over seeds 0-199, 20 attempts leave 13 of
+    them with no valid track, and 60 leave none."""
+    max_repairs_per_attempt: int = 5
+    """The nudge-and-recheck passes per track."""
     max_repair_shift: float = 0.3
+    """The most that one repair pass moves a control point pair apart, so that
+    one bad pair cannot change the whole loop. Larger moves take several
+    passes."""
 
     def __post_init__(self) -> None:
         # These invariants have no Python type, so they are checked once here
@@ -90,20 +102,19 @@ class TrackSettings:
             raise ValueError(f"TrackSettings needs {', '.join(broken)}")
 
 
-# Easy tracks are gentle and wide, hard tracks are tight and narrow. Only these
-# three knobs change with difficulty. All other knobs stay the same.
 _MAX_CURVATURE: Mapping[Difficulty, float] = MappingProxyType(
     {0: 0.4, 1: 0.6, 2: 0.8, 3: 1.0}
-)  # 1/m
+)
+"""Each difficulty's max_curvature (1/m)."""
 _MIN_HALF_WIDTH: Mapping[Difficulty, float] = MappingProxyType(
     {0: 0.60, 1: 0.50, 2: 0.40, 3: 0.35}
-)  # m
-# rad. The curvature limit of difficulty 0 rejects most walks drawn with the
-# default 0.9: over seeds 0-199, 41 gave no track. With 0.6, every seed
-# gives one, with as many bends to the right.
+)
 _TURN_JITTER: Mapping[Difficulty, float] = MappingProxyType(
     {0: 0.6, 1: 0.9, 2: 0.9, 3: 0.9}
 )
+"""Each difficulty's turn_jitter (rad). The curvature limit of difficulty 0
+rejects most walks drawn with the default 0.9: over seeds 0-199, 41 gave no
+track. With 0.6, every seed gives one, with as many bends to the right."""
 
 
 def settings_for_difficulty(difficulty: Difficulty) -> TrackSettings:

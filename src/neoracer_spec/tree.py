@@ -72,7 +72,12 @@ _ONLY_READ = "where may only read attributes and items of its argument"
 
 
 class _Recorder:
-    """Stands in for the tree in where, and notes each step it takes."""
+    """Stands in for the tree in where, and notes each step it takes.
+
+    A where that compares, tests or loops over the tree computes; it does not
+    read a path, so __eq__, __bool__ and __iter__ raise TypeError. Without
+    them, a comparison would be by identity, a test would take one branch and
+    a loop would never end. != calls __eq__."""
 
     __slots__ = ("_tree_steps",)
 
@@ -85,9 +90,6 @@ class _Recorder:
     def __getitem__(self, key: object) -> _Recorder:
         return _Recorder((*self._tree_steps, Item(key)))
 
-    # A where that compares, tests or loops over the tree computes; it does
-    # not read a path. Without these, a comparison would be by identity, a
-    # test would take one branch and a loop would never end. != calls __eq__.
     def __eq__(self, other: object) -> bool:
         raise TypeError(_ONLY_READ)
 

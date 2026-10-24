@@ -44,7 +44,6 @@ from .spec import (
     rewound,
 )
 
-# The sources of NEORACER's values.
 CAD = Source(
     "CAD",
     "the production car's CAD model: the Playground's neoracer-race.glb,"
@@ -110,11 +109,12 @@ SERVO_FIT = Source(
     " validation/test_spec.py holds the model to them",
 )
 
-# The RS-545 winding nearest to the docs' free speed.
 _RS545SH_4075 = DcMotorRating(voltage=12.0, stall_torque=0.0793, free_speed_rpm=9_300.0)
+"""The RS-545 winding nearest to the docs' free speed."""
 
-# The chassis' center of mass above the axles (m). The IMU is assumed there.
 _COM_HEIGHT = 0.0189
+"""The height of the chassis' center of mass above the axles (m). The IMU is
+assumed there."""
 
 NEORACER = Spec(
     chassis=Chassis(

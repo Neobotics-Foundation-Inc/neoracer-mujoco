@@ -31,17 +31,21 @@ from neoracer_spec.spec import Spec
 from . import contract
 from .scene import Scene, compile_scene
 
-PACKAGED_DIR = "data"  # the name of assets/ inside an installed wheel
+PACKAGED_DIR = "data"
+"""The name of assets/ inside an installed wheel."""
 
 _package = resources.files("neoracer_mujoco")
 _packaged = _package / PACKAGED_DIR
-# In a source checkout the package is repo/src/neoracer_mujoco.
 _checkout = os.path.normpath(os.path.join(str(_package), "..", "..", "assets"))
+"""The repo's assets/ in a source checkout, where the package is
+repo/src/neoracer_mujoco."""
 ASSET_DIR = str(_packaged) if _packaged.is_dir() else _checkout
 TRACK_DIR = os.path.join(ASSET_DIR, "tracks")
 DEFAULT_CAR = os.path.join(ASSET_DIR, "neoracer.xml")
-MJZ_MODEL = "model.xml"  # the name of the XML in an archive of write_mjz
-START_SITE = "start"  # the site of a track where compose puts the car
+MJZ_MODEL = "model.xml"
+"""The name of the XML in an archive of write_mjz."""
+START_SITE = "start"
+"""The site of a track where compose puts the car."""
 
 
 def cars() -> list[str]:

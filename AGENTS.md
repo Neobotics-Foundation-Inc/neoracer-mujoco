@@ -54,7 +54,7 @@ Then no code has to check for an invalid state, because it cannot exist.
   ```python
   @dataclass(frozen=True)
   class Hit:
-      distance: float  # m
+      distance: float
 
 
   @dataclass(frozen=True)
@@ -138,12 +138,14 @@ Do not pass closures, callbacks or strategy objects for a closed set of behavior
 ```python
 @dataclass(frozen=True)
 class Progress:
-    weight: float  # reward per rad of progress around the loop
+    weight: float
+    """The reward per rad of progress around the loop."""
 
 
 @dataclass(frozen=True)
 class ContactPenalty:
-    weight: float  # reward per step in contact with a wall
+    weight: float
+    """The reward per step in contact with a wall."""
 
 
 type RewardTerm = Progress | ContactPenalty
@@ -190,7 +192,8 @@ def reward(term: RewardTerm, step: StepInfo) -> float:
 Use the type parameter syntax (Python 3.12 and later):
 
 ```python
-type Pair[T] = tuple[T, T]  # (left, right)
+type Pair[T] = tuple[T, T]
+"""A left and a right."""
 
 
 def mirror[T](pair: Pair[T]) -> Pair[T]:
@@ -201,7 +204,7 @@ def mirror[T](pair: Pair[T]) -> Pair[T]:
 @dataclass(frozen=True)
 class Stamped[T]:
     value: T
-    time: float  # s
+    time: float
 ```
 
 - Make a function generic when its body does not depend on the element type.
@@ -241,18 +244,30 @@ class Stamped[T]:
   `neoracer_spec` also runs on the browser's Python 3.12, so a module there whose types name types below them
   starts with `from __future__ import annotations`.
 - Put a constant just above its first use, unless it is part of the module's interface, like the names in `contract.py`.
-  A car's sources go just above the car's values, under one comment.
+  A car's sources go just above the car's values.
 - Load package files with `importlib.resources`, not with paths built from `__file__`.
 - Put a test in `validation/test_<module>.py`, never in the module that it tests.
 
 ## 11. Numbers, units and frames
 
-- Give each physical quantity its unit in a comment, and its source if it is estimated:
-  `WHEEL_RADIUS = 0.050  # m, ESTIMATED from the STL bounding box`.
-- State the frame and the sign convention once per module: `+X forward, +Y left, +Z up`.
+- State the frame, the sign convention and the units once per module, in its docstring:
+  `+X forward, +Y left, +Z up`, and "Quantities are in SI units unless a name says otherwise."
+  A name carries a unit that is not SI: `inner_lock_degrees`, `free_speed_rpm`.
+- Give a quantity's unit in its docstring when its name and the module's units do not make it plain:
+  a stiffness (N/m), an inertia (kg·m²), a gain (V/rad), a pulse (us).
+  Give its source if it is estimated:
+
+  ```python
+  WHEEL_RADIUS = 0.050
+  """The tire's radius, estimated from the STL's bounding box."""
+  ```
 - Use numpy for vector math. Give array types a name that says the shape:
-  `type Vec3 = npt.NDArray[np.float64]  # shape (3,)`.
-- Mark a known limit with `# Limit:`. Say when it matters and what to do then.
+
+  ```python
+  type Vec3 = npt.NDArray[np.float64]
+  """Shape (3,)."""
+  ```
+- Mark a known limit with `Limit:`, in the docstring of what it limits or in a comment in the body. Say when it matters and what to do then.
 
 ## 12. Few tests: golden runs and laws
 
@@ -268,13 +283,18 @@ class Stamped[T]:
 - Test pure functions directly, without the simulator.
   Use the simulator for the physics conformance tests.
 
-## 13. Names and comments
+## 13. Names, docstrings and comments
 
 - Use the name of the real part: "motor encoder", not "wheel encoder", if the car has a motor encoder.
 - A name says what a thing does. A function that does not use `async` is not called `async`.
-- A comment says what the code does.
-  It does not give history ("issue #7", "reimplemented from PR #29"). The commit message does that.
+- Document a module, class, function, field, constant or type alias with a docstring, not a comment.
+  Editors show a docstring where the name is used, and the TypeScript generator copies a spec field's docstring into `spec.ts`.
+  The docstring of a field, a constant or a type alias is the string on the line after it.
+  In TypeScript, the docstring is a JSDoc comment, `/** ... */`.
 - A docstring describes the contract (inputs, outputs, units) in as few lines as it can.
+- A comment explains a body: why the code does what it does, when the code cannot say it.
+- Do not write what the name, the type or the code already says.
+- Neither a docstring nor a comment gives history ("issue #7", "reimplemented from PR #29"). The commit message does that.
 
 ## 14. Written English
 

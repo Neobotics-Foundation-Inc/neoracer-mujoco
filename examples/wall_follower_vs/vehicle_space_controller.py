@@ -39,9 +39,12 @@ from neoracer_mujoco import contract
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.scene import Scene
 
-type FloatArray = npt.NDArray[np.float64]  # shape (N,): one value per beam
-type CandidateArray = npt.NDArray[np.float64]  # shape (n_candidates,)
-type ArcArray = npt.NDArray[np.float64]  # shape (n_candidates, n_samples)
+type FloatArray = npt.NDArray[np.float64]
+"""One value per beam, shape (N,)."""
+type CandidateArray = npt.NDArray[np.float64]
+"""One value per candidate, shape (n_candidates,)."""
+type ArcArray = npt.NDArray[np.float64]
+"""One value per sample of each candidate's arc, shape (n_candidates, n_samples)."""
 
 
 @dataclass(frozen=True)
@@ -49,11 +52,13 @@ class CarGeometry:
     """The car dimensions that the bicycle model uses. Read them from the
     scene with car_geometry()."""
 
-    wheelbase_m: float  # m; front axle to rear axle
-    steer_max_rad: float  # rad; steer_servo ctrlrange upper limit
-    # m; the LiDAR's position in the car frame (+X forward, +Y left), from
-    # the car center where the arcs start. A scan's ranges are from here.
+    wheelbase_m: float
+    """The distance from the front axle to the rear axle."""
+    steer_max_rad: float
+    """The upper limit of the steer_servo's ctrlrange."""
     lidar_xy_m: tuple[float, float]
+    """The LiDAR's position in the car frame (+X forward, +Y left), from the
+    car center where the arcs start. A scan's ranges are from here."""
 
 
 def car_geometry(scene: Scene) -> CarGeometry:
@@ -89,38 +94,49 @@ class VsParams:
     """Tuning values of the controller. car comes from the model."""
 
     car: CarGeometry
-    n_candidates: int = 81  # steering angles in the grid, from -max to +max
-    clearance_radius_m: float = 0.21  # m; car half-width, swept along each arc
-    planning_horizon_m: float = 3.0  # m; arc length of each candidate path
-    # m between two samples on an arc. It is less than half of
-    # clearance_radius_m, so an obstacle cannot pass between two samples.
+    n_candidates: int = 81
+    """The steering angles in the grid, from -max to +max."""
+    clearance_radius_m: float = 0.21
+    """The car's half-width, swept along each arc."""
+    planning_horizon_m: float = 3.0
+    """The arc length of each candidate path."""
     arc_sample_ds_m: float = 0.1
-    # deg; the median filter replaces each range with the median of the
-    # ranges in this angular window, so one bad beam cannot open or block a path.
+    """The distance between two samples on an arc. It is less than half of
+    clearance_radius_m, so an obstacle cannot pass between two samples."""
     outlier_window_deg: float = 2.0
-    # m; if two adjacent obstacle points are this close or closer, the
-    # controller adds their midpoint, so a wall cannot pass between them.
-    # Points farther apart can be two different surfaces, for example the two
-    # sides of an opening. The controller does not join them.
+    """The median filter replaces each range with the median of the ranges in
+    this angular window, so one bad beam cannot open or block a path."""
     max_segment_gap_m: float = 0.5
-    # m; a candidate joins the region of a peak if its safe arc length is
-    # within this distance of the safe arc length at the peak.
+    """If two adjacent obstacle points are this close or closer, the controller
+    adds their midpoint, so a wall cannot pass between them. Points farther
+    apart can be two different surfaces, for example the two sides of an
+    opening. The controller does not join them."""
     region_margin_m: float = 0.3
-    w_clearance: float = 1.0  # score per m of mean safe arc length in a region
-    w_forward: float = 0.01  # score removed per deg of region center from 0
-    w_continuity: float = 0.02  # score removed per deg from the last target
-    w_width: float = 0.05  # score per candidate in a region
-    max_slew_deg_per_s: float = 90.0  # deg/s; rate limit of the target steering
-    # A new region must have a score this many times the score of the tracked
-    # region before the controller changes to it.
+    """A candidate joins the region of a peak if its safe arc length is within
+    this distance of the safe arc length at the peak."""
+    w_clearance: float = 1.0
+    """The score per m of mean safe arc length in a region."""
+    w_forward: float = 0.01
+    """The score removed per deg of the region center from 0."""
+    w_continuity: float = 0.02
+    """The score removed per deg from the last target."""
+    w_width: float = 0.05
+    """The score per candidate in a region."""
+    max_slew_deg_per_s: float = 90.0
+    """The rate limit of the target steering angle."""
     region_switch_margin: float = 1.15
-    max_throttle: float = 0.16  # in [0, 1]
-    steer_throttle_cut: float = 0.6  # fraction of throttle removed at full steer
-    # minimum throttle while the target path is usable, so the car has
-    # enough torque to complete a sharp turn
+    """A new region must have a score this many times the score of the tracked
+    region before the controller changes to it."""
+    max_throttle: float = 0.16
+    """The largest throttle, in [0, 1]."""
+    steer_throttle_cut: float = 0.6
+    """The fraction of throttle removed at full steer."""
     min_throttle: float = 0.08
-    # Candidates on each side of the target that target_path_clearance() reads.
+    """The minimum throttle while the target path is usable, so the car has
+    enough torque to complete a sharp turn."""
     path_window_candidates: int = 2
+    """The candidates on each side of the target that target_path_clearance()
+    reads."""
 
     def __post_init__(self) -> None:
         # arc_table() divides by n_candidates - 1. extract_regions() divides
@@ -163,21 +179,28 @@ class ArcTable:
     """The candidate grid and the sampled arc of each candidate. The arrays
     are read-only."""
 
-    steer_deg: CandidateArray  # deg; candidate steering angles, ascending
-    s_m: npt.NDArray[np.float64]  # m; arc length of each sample, shape (n_samples,)
-    x_m: ArcArray  # m; car center x at each sample
-    y_m: ArcArray  # m; car center y at each sample
-    # m; arc length at which each arc turns 180 deg, or the horizon if less.
+    steer_deg: CandidateArray
+    """The candidate steering angles, ascending."""
+    s_m: npt.NDArray[np.float64]
+    """The arc length of each sample, shape (n_samples,)."""
+    x_m: ArcArray
+    """The car center's x at each sample."""
+    y_m: ArcArray
+    """The car center's y at each sample."""
     cap_m: CandidateArray
-    valid: npt.NDArray[np.bool_]  # shape (n_candidates, n_samples): s_m <= cap_m
-    # Flat index (candidate * n_samples + sample) of each valid sample, in the
-    # order of the rows of sample_tree. Shape (n_valid,).
+    """The arc length at which each arc turns 180 deg, or the horizon if less."""
+    valid: npt.NDArray[np.bool_]
+    """Whether s_m <= cap_m, shape (n_candidates, n_samples)."""
     valid_flat: npt.NDArray[np.intp]
-    # A k-d tree of the (x_m, y_m) points of the valid samples. A k-d tree is
-    # a search structure that finds all points within a radius quickly.
+    """The flat index (candidate * n_samples + sample) of each valid sample, in
+    the order of the rows of sample_tree, shape (n_valid,)."""
     sample_tree: KDTree
-    straight_index: int  # index of the candidate nearest to 0 deg
-    window_deg: float  # deg; half-width of the window of target_path_clearance()
+    """A k-d tree of the (x_m, y_m) points of the valid samples. A k-d tree is a
+    search structure that finds all points within a radius quickly."""
+    straight_index: int
+    """The index of the candidate nearest to 0 deg."""
+    window_deg: float
+    """The half-width of the window of target_path_clearance()."""
 
 
 @functools.cache
@@ -351,10 +374,14 @@ class Region:
 
     first: int
     last: int
-    start_deg: float  # deg; steering angle of candidate first
-    end_deg: float  # deg; steering angle of candidate last
-    mean_safe_m: float  # m; mean safe arc length of the candidates
-    center_deg: float  # deg; mean steering angle, weighted by safe arc length
+    start_deg: float
+    """The steering angle of candidate first."""
+    end_deg: float
+    """The steering angle of candidate last."""
+    mean_safe_m: float
+    """The mean safe arc length of the candidates."""
+    center_deg: float
+    """The mean steering angle, weighted by safe arc length."""
 
 
 def _split_run_into_plateaus(
@@ -469,15 +496,17 @@ class TrackedRegion:
     """The region that the controller selected at the last tick with a path."""
 
     score: float
-    center_deg: float  # deg
+    center_deg: float
 
 
 @dataclass(frozen=True)
 class VsState:
     """Controller state from one tick to the next. Start a run with VsState()."""
 
-    target_steer_deg: float = 0.0  # deg; target steering angle of the last tick
-    tracked: TrackedRegion | None = None  # None until the first region is found
+    target_steer_deg: float = 0.0
+    """The target steering angle of the last tick."""
+    tracked: TrackedRegion | None = None
+    """None until the first region is found."""
 
 
 @dataclass(frozen=True)
@@ -485,10 +514,14 @@ class Driving:
     """At least one region exists. The car drives toward the selected region."""
 
     command: ControlCommand
-    target_steer_deg: float  # deg; slew-limited target steering angle
-    region: Region  # the selected region
-    straight_clear_m: float  # m; safe arc length of the 0 deg candidate
-    path_clear_m: float  # m; target_path_clearance() at target_steer_deg
+    target_steer_deg: float
+    """The slew-limited target steering angle."""
+    region: Region
+    """The selected region."""
+    straight_clear_m: float
+    """The safe arc length of the 0 deg candidate."""
+    path_clear_m: float
+    """The value of target_path_clearance() at target_steer_deg."""
 
 
 @dataclass(frozen=True)
@@ -497,8 +530,10 @@ class NoPath:
     last target."""
 
     command: ControlCommand
-    target_steer_deg: float  # deg; the target of the last tick
-    straight_clear_m: float  # m; safe arc length of the 0 deg candidate
+    target_steer_deg: float
+    """The target of the last tick."""
+    straight_clear_m: float
+    """The safe arc length of the 0 deg candidate."""
 
 
 type VsResult = Driving | NoPath

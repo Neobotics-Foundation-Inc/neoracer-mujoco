@@ -49,18 +49,21 @@ from neoracer_spec.parts import SOLVER
 
 @dataclass(frozen=True)
 class DemoParams:
-    steps: int = round(6.0 / SOLVER.timestep)  # physics steps of the headless run, 6 s
-    # m, + = toward the left wall. The demo moves the car by this offset after
-    # the settle. The corridor half-width is 0.5 m. Without the offset, the car
-    # starts at the center, and the run does not test the correction.
+    steps: int = round(6.0 / SOLVER.timestep)
+    """The physics steps of the headless run, 6 s."""
     initial_y_offset_m: float = 0.25
-    # s of simulation time in viewer mode. It is the same as the headless run.
-    # In 6 s the car travels about 9 to 10 m (measured). The corridor goes from
-    # x = -2 m to x = 14 m, so the car stays in the corridor.
+    """The sideways offset, + = toward the left wall, by which the demo moves
+    the car after the settle. The corridor half-width is 0.5 m. Without the
+    offset, the car starts at the center, and the run does not test the
+    correction."""
     viewer_duration_s: float = 6.0
-    print_every_steps: int = 50  # physics steps between two status lines; 0.1 s
-    # The car is upright while the cosine of its tilt is above this value.
+    """The simulation time in viewer mode, the same as the headless run. In 6 s
+    the car travels about 9 to 10 m (measured). The corridor goes from x = -2 m
+    to x = 14 m, so the car stays in the corridor."""
+    print_every_steps: int = 50
+    """The physics steps between two status lines, 0.1 s."""
     min_upright_cos: float = 0.7
+    """The car is upright while the cosine of its tilt is above this value."""
 
     def __post_init__(self) -> None:
         # The report compares the first and the last quarter of the run, so
@@ -79,7 +82,8 @@ class DemoParams:
 
 @dataclass(frozen=True)
 class CenteringReport:
-    """The result of the headless run. Distances in m, steer in rad, throttle in [-1, 1]."""
+    """The result of the headless run. Distances in m, steer in rad, throttle
+    in [-1, 1]."""
 
     distance_traveled_x: float
     mean_abs_lateral_error: float

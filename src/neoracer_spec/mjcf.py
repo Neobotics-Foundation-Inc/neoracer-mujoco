@@ -41,7 +41,8 @@ def numbers(*xs: float) -> str:
 class Edit:
     """An attribute that the spec gives, on the one element that path finds."""
 
-    path: str  # an ElementTree path from the root, such as named("body", "car")
+    path: str
+    """An ElementTree path from the root, such as named("body", "car")."""
     attribute: str
     value: str
 
@@ -93,10 +94,10 @@ def solver(s: parts.Solver) -> list[Edit]:
     )
 
 
-# Each wheel's corner: the signs of its x and y, and its axle (0 front).
 CORNERS: Mapping[str, tuple[int, int, int]] = MappingProxyType(
     {"fl": (1, 1, 0), "fr": (1, -1, 0), "rl": (-1, 1, 1), "rr": (-1, -1, 1)}
 )
+"""Each wheel's corner: the signs of its x and y, and its axle (0 front)."""
 
 
 def inertial(i: parts.Inertial) -> list[Edit]:

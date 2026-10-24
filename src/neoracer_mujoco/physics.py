@@ -41,16 +41,20 @@ from .scene import Scene
 class Physics:
     """Factors on the car's parameters, relative to the compiled car."""
 
-    # x the sliding friction of each wheel geom, and so of each wheel's
-    # contacts (the wheels have contact priority). Below 1 the wheels slip more.
     wheel_friction: float = 1.0
-    chassis_mass: float = 1.0  # x the mass and the inertia of the car body
-    # x the motor's torque, at every speed; x the gain of a speed controller
+    """The factor on the sliding friction of each wheel geom, and so of each
+    wheel's contacts (the wheels have contact priority). Below 1 the wheels slip
+    more."""
+    chassis_mass: float = 1.0
+    """The factor on the mass and the inertia of the car body."""
     motor_torque: float = 1.0
-    steer_stiffness: float = 1.0  # x the gain kp of the steering servo's loop
-    # x the LiDAR's scan rate: each beam samples its range, and shows the
-    # sample, in 1 / lidar_rate times the time (mjcf.beam_timing)
+    """The factor on the motor's torque, at every speed, or on the gain of a speed
+    controller."""
+    steer_stiffness: float = 1.0
+    """The factor on the gain kp of the steering servo's loop."""
     lidar_rate: float = 1.0
+    """The factor on the LiDAR's scan rate: each beam samples its range, and shows
+    the sample, in 1 / lidar_rate times the time (mjcf.beam_timing)."""
 
     def __post_init__(self) -> None:
         for f in fields(self):
@@ -132,8 +136,6 @@ def apply_physics(model: mujoco.MjModel, scene: Scene, physics: Physics) -> None
     mujoco.mj_setConst(model, mujoco.MjData(model))
 
 
-# The MjModel fields that apply_physics writes, and those that mj_setConst
-# derives from them. A dot names a field of a field.
 FIELDS = (
     "geom_friction",
     "body_mass",
@@ -149,6 +151,8 @@ FIELDS = (
     "actuator_acc0",
     "stat.meaninertia",  # scales the solver's tolerance
 )
+"""The MjModel fields that apply_physics writes, and those that mj_setConst
+derives from them. A dot names a field of a field."""
 
 
 def field(model: mujoco.MjModel, name: str) -> npt.NDArray[np.float64]:

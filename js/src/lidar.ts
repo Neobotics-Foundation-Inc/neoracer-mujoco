@@ -1,10 +1,12 @@
-// The spinning LiDAR, as lidar.py models it: slots measured when the head
-// passes them, from the pose of that physics step, with one mj_multiRay
-// call. Slot i points i * 360 / slots degrees clockwise from the front and
-// reads the distance (m), or NO_RETURN where the car blocks the rear or
-// nothing lies within range.
-//
-// Frame: +X forward, +Y left, +Z up.
+/**
+ * The spinning LiDAR, as lidar.py models it: slots measured when the head
+ * passes them, from the pose of that physics step, with one mj_multiRay
+ * call. Slot i points i * 360 / slots degrees clockwise from the front and
+ * reads the distance (m), or NO_RETURN where the car blocks the rear or
+ * nothing lies within range.
+ *
+ * Frame: +X forward, +Y left, +Z up.
+ */
 
 import type { MjData } from '@mujoco/mujoco';
 
@@ -25,9 +27,12 @@ export function isVisible(params: LidarParams, i: number): boolean {
 
 /** The LiDAR between two physics steps. */
 export interface LidarState {
-  readonly head: number; // slots of the turn in progress already measured, in [0, slots)
-  readonly sweeping: Float64Array; // the turn in progress; slots at or past head are stale
-  readonly scan: Float64Array; // the last complete turn: what the LiDAR reports
+  /** The slots of the turn in progress already measured, in [0, slots). */
+  readonly head: number;
+  /** The turn in progress. Its slots at or past head are stale. */
+  readonly sweeping: Float64Array;
+  /** The last complete turn: what the LiDAR reports. */
+  readonly scan: Float64Array;
 }
 
 /** The distance (m) of each of slots from the LiDAR at the pose of data, or NO_RETURN. */

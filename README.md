@@ -73,9 +73,12 @@ MuJoCo compiles an `MjSpec`, the editable model, into an `MjModel`, the arrays i
 ```python
 @dataclass(frozen=True)
 class Scene:
-    spec: mujoco.MjSpec  # what was compiled
-    model: mujoco.MjModel  # the compiled model
-    car: Car  # the car's parts, as elements of spec
+    spec: mujoco.MjSpec
+    """What was compiled."""
+    model: mujoco.MjModel
+    """The compiled model."""
+    car: Car
+    """The car's parts, as elements of spec."""
 ```
 
 `Car` holds the car's body, free joint, actuators, wheel geoms, LiDAR site and sensors, each as an element of `spec`. To read or write one, bind it to the model or to an `MjData` instead of looking up an index:

@@ -41,11 +41,11 @@ from neoracer_mujoco.track_generation.mjcf import (
 )
 from neoracer_mujoco.truth import WALLS_BODY
 
-# The largest geom count of a composed scene: walls, floor and car. Over
-# difficulties 0-3 and seeds 0-7, the largest measured count is 298. One box for
-# each centerline sample gives about 4000. So this limit finds a decimation error
-# and still allows a long track.
 MAX_GEOMS = 600
+"""The largest geom count of a composed scene: walls, floor and car. Over
+difficulties 0-3 and seeds 0-7, the largest measured count is 298. One box for
+each centerline sample gives about 4000. So this limit finds a decimation error
+and still allows a long track."""
 
 
 def _generate(seed: int, settings: TrackSettings) -> Track:
@@ -58,12 +58,12 @@ def _generate(seed: int, settings: TrackSettings) -> Track:
             assert_never(other)
 
 
-# The generation of one track takes up to a second, and several tests use the
-# same (seed, difficulty). The cache keeps the run time of this file short. The
-# cache is correct only because the generation is deterministic.
-# test_same_seed_gives_the_same_track_and_mjcf checks that.
 @functools.cache
 def _track(seed: int, difficulty: Difficulty) -> Track:
+    """The generation of one track takes up to a second, and several tests use
+    the same (seed, difficulty). The cache keeps the run time of this file
+    short. The cache is correct only because the generation is deterministic.
+    test_same_seed_gives_the_same_track_and_mjcf checks that."""
     return _generate(seed, settings_for_difficulty(difficulty))
 
 
@@ -71,9 +71,6 @@ def _track(seed: int, difficulty: Difficulty) -> Track:
 def _scene(seed: int, difficulty: Difficulty) -> Scene:
     """The compiled scene, car included, for one generated track."""
     return assets.compose(to_spec(_track(seed, difficulty)))
-
-
-# --- the generator: pure geometry ---------------------------------------------
 
 
 def test_generated_track_is_valid():
@@ -209,9 +206,6 @@ def test_impossible_limits_return_no_valid_track():
     assert generate_track(0, impossible) == NoValidTrack(seed=0, attempts=2)
 
 
-# --- the MJCF layer -----------------------------------------------------------
-
-
 def test_a_generated_scene_is_drivable():
     """For seeds 0 to 2 at difficulties 0 and 3: the walls body holds every
     wall box and not the floor, as the wall contact sensor counts contacts
@@ -262,8 +256,6 @@ def test_the_car_rests_on_a_generated_track_with_its_solver_options():
     assert_takes_car_solver_options(to_spec(track))
     assert_car_rests(_scene(0, 3))
 
-
-# --- fixed-size walls and the lap distance -------------------------------------
 
 FIXED = WallParams(boxes_per_wall=192)
 

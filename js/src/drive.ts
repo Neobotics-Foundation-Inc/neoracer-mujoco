@@ -1,7 +1,9 @@
-// Commands to the car's actuators, as sim.apply_command and the
-// racecar_core adapter's set_speed_angle write them.
-//
-// Frame: +X forward, +Y left, +Z up.
+/**
+ * Commands to the car's actuators, as sim.apply_command and the
+ * racecar_core adapter's set_speed_angle write them.
+ *
+ * Frame: +X forward, +Y left, +Z up.
+ */
 
 import type { MjData, MjModel } from '@mujoco/mujoco';
 
@@ -9,14 +11,17 @@ import type { Car, Scene } from './scene.js';
 
 /** A command to the car. */
 export interface Command {
-  readonly throttle: number; // in [-1, 1]: that fraction of the battery voltage, + = forward
-  readonly steer: number; // rad, + = left
+  /** The fraction of the battery voltage, in [-1, 1], + = forward. */
+  readonly throttle: number;
+  /** The steer angle (rad), + = left. */
+  readonly steer: number;
 }
 
 /** The upper ends of the car's symmetric ctrlranges, as contract.actuator_limits. */
 export interface Limits {
-  readonly voltage: number; // V, the battery
-  readonly steerRad: number; // rad
+  /** The battery's voltage (V). */
+  readonly voltage: number;
+  readonly steerRad: number;
 }
 
 /**

@@ -46,19 +46,19 @@ from examples.driving import (
 )
 from neoracer_mujoco import assets, sensors
 
-# The command follows the input both ways at one rate. The steer's is fast,
-# to smooth the keys' all-or-nothing input, which a stick barely notices.
 SHAPING = Shaping(
     throttle=Rates(toward=2.5, back=2.5), steer=Rates(toward=4.0, back=4.0)
 )
+"""The command follows the input both ways at one rate. The steer's is fast, to
+smooth the keys' all-or-nothing input, which a stick barely notices."""
 
 
 @dataclass(frozen=True)
 class ViewParams:
-    """The window and the chase camera."""
+    """The window, its width and height in pixels, and the chase camera."""
 
-    width: int = 900  # px
-    height: int = 600  # px
+    width: int = 900
+    height: int = 600
     cam: ChaseCam = ChaseCam()
 
 
@@ -71,23 +71,34 @@ class GamepadParams:
     control at a time. Then change the numbers here.
     """
 
-    steer_axis: int = 0  # left stick X, +1 = right
-    accel_axis: int = 5  # right trigger, rests at -1
-    brake_axis: int = 4  # left trigger, rests at -1
-    reset_button: int = 7  # Start
-    deadzone: float = 0.1  # steer input below this is 0
+    steer_axis: int = 0
+    """The left stick's X axis, +1 = right."""
+    accel_axis: int = 5
+    """The right trigger, which rests at -1."""
+    brake_axis: int = 4
+    """The left trigger, which rests at -1."""
+    reset_button: int = 7
+    """The Start button."""
+    deadzone: float = 0.1
+    """A steer input below this is 0."""
 
 
 @dataclass(frozen=True)
 class HudParams:
-    """The LiDAR radar and the WASD key caps."""
+    """The LiDAR radar and the WASD key caps. Sizes on the screen are in
+    pixels."""
 
-    lidar_max: float = 2.0  # m; a beam past this, or with no hit, is drawn at the rim
-    radar_radius: int = 90  # px
-    radar_pad: int = 12  # px from the top-right corner
-    key_size: int = 34  # px per key cap
-    key_gap: int = 4  # px
-    key_pad: int = 12  # px from the bottom-right corner
+    lidar_max: float = 2.0
+    """The radar's range (m). A beam past it, or with no hit, is drawn at the
+    rim."""
+    radar_radius: int = 90
+    radar_pad: int = 12
+    """The radar's distance from the top-right corner."""
+    key_size: int = 34
+    """The size of a key cap."""
+    key_gap: int = 4
+    key_pad: int = 12
+    """The key caps' distance from the bottom-right corner."""
 
 
 type Action = Literal["quit", "reset_car", "toggle_timer", "reset_timer", "none"]

@@ -14,7 +14,8 @@ import numpy as np
 
 from examples.wall_follower_vs.dense_lidar import DenseLidarParams, Scan, scan_angles
 
-type Point = tuple[float, float]  # m, car frame
+type Point = tuple[float, float]
+"""A point (x, y) in the car frame (m)."""
 type Segment = tuple[Point, Point]
 
 

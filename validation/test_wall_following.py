@@ -24,7 +24,8 @@ from neoracer_mujoco.control.wall_following import (
     step,
 )
 
-DT = 0.02  # s, one 50 Hz control step
+DT = 0.02
+"""One 50 Hz control step (s)."""
 RIGHT = WallFollowingConfig(follow_side="right", target_distance=0.3)
 
 
@@ -102,9 +103,6 @@ def test_no_hit_reading_is_not_treated_as_corrupt():
     assert compute_signals(readings, RIGHT).n_corrupt == 0
 
 
-# --- physics integration: the compiled car in the corridor --------------------
-
-
 def test_controller_converges_to_target_distance_on_corridor():
     """Run the controller on the car in the corridor for 3 s. In the last
     quarter of the run, the mean right beam distance is near target_distance.
@@ -119,7 +117,7 @@ def test_controller_converges_to_target_distance_on_corridor():
     state = PDState()
 
     side_distances = []
-    for _ in range(round(3.0 / dt)):  # 3 s
+    for _ in range(round(3.0 / dt)):
         readings = sensors.read(car.sensors, data)
         state, control = step(cfg, state, readings, dt)
         sim.apply_command(car, data, control)

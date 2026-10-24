@@ -36,13 +36,13 @@ _ZERO = SensorReadings(
     lidar_315=0.0,
 )
 
-# Each left beam and the right beam at the same angle. lidar_000 and lidar_180
-# lie on the X axis, so a mirror image does not change them.
 _MIRROR_PAIRS = (
     ("lidar_045", "lidar_315"),
     ("lidar_090", "lidar_270"),
     ("lidar_135", "lidar_225"),
 )
+"""Each left beam and the right beam at the same angle. lidar_000 and lidar_180
+lie on the X axis, so a mirror image does not change them."""
 
 
 def fake_readings(**overrides: float) -> SensorReadings:

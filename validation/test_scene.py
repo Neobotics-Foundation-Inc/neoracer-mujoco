@@ -28,7 +28,7 @@ def test_apply_command_writes_each_named_actuator():
     voltage limit, to the drive motor and the steer to the steering servo,
     whatever their order in the XML."""
     cars = (assets.load(), reversed_car())
-    assert _layout(cars[0]) != _layout(cars[1])  # two different layouts
+    assert _layout(cars[0]) != _layout(cars[1])
     for throttle, steer in [(0.7, -0.3), (-1.0, 0.4)]:
         for scene in cars:
             data = mujoco.MjData(scene.model)
@@ -51,7 +51,7 @@ def test_read_does_not_depend_on_the_sensor_order():
         return sensors.read(scene.car.sensors, data)
 
     car, reversed_ = assets.load(), reversed_car()
-    assert _layout(car) != _layout(reversed_)  # two different layouts
+    assert _layout(car) != _layout(reversed_)
     a, b = settled_readings(car), settled_readings(reversed_)
     for f in fields(sensors.SensorReadings):
         np.testing.assert_allclose(

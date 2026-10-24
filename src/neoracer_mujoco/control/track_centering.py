@@ -95,14 +95,20 @@ from .steering import ControlCommand, PDState, ShapingConfig
 class TrackCenteringConfig:
     """Tuning parameters for step()."""
 
-    # With the servo's delay, a stronger heading term swings the car from wall to wall,
-    # and the shaping slows it for the large steer.
-    kp_lateral: float = 0.5  # rad of steer per meter of lateral_error
-    kp_heading: float = 0.5  # rad of steer per meter of heading_error
-    kd: float = 0.05  # rad of steer per (m/s) of lateral_error rate
-    max_beam_range: float = 3.0  # m; substituted for no-hit(-1) or corrupt beams
-    max_corrupt_beams: int = 4  # of 8; more triggers the safe fallback command
-    shaping: ShapingConfig = ShapingConfig()  # steer and throttle limits
+    kp_lateral: float = 0.5
+    """Radians of steer per meter of lateral_error."""
+    kp_heading: float = 0.5
+    """Radians of steer per meter of heading_error. With the servo's delay, a
+    stronger heading term swings the car from wall to wall, and the shaping slows
+    it for the large steer."""
+    kd: float = 0.05
+    """Radians of steer per m/s of lateral_error's rate."""
+    max_beam_range: float = 3.0
+    """The distance (m) substituted for a beam with no hit (-1) or a corrupt one."""
+    max_corrupt_beams: int = 4
+    """How many of the 8 beams may be corrupt. More triggers the safe fallback
+    command."""
+    shaping: ShapingConfig = ShapingConfig()
 
 
 @dataclass(frozen=True)
@@ -110,10 +116,14 @@ class CenteringSignals:
     """The error signals that step() uses. The demo and the tests read them
     for logs and checks."""
 
-    lateral_error: float  # m; + = more clearance on the left
-    heading_error: float  # m; + = angled toward the right wall
-    front_distance: float  # m; clearance straight ahead (FRONT_BEAM)
-    n_corrupt: int  # count of the 8 beams that were NaN/Inf
+    lateral_error: float
+    """The left clearance less the right (m), + = more clearance on the left."""
+    heading_error: float
+    """The right skew less the left (m), + = angled toward the right wall."""
+    front_distance: float
+    """The clearance straight ahead (m), FRONT_BEAM's reading."""
+    n_corrupt: int
+    """How many of the 8 beams were NaN or infinite."""
 
 
 def compute_signals(

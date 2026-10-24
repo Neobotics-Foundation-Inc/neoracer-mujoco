@@ -35,17 +35,22 @@ from . import contract
 from .scene import Car
 from .sensors import NO_RETURN
 
-type Scan = npt.NDArray[np.float64]  # shape (slots,), m
-type Slots = npt.NDArray[np.intp]  # slot indices
+type Scan = npt.NDArray[np.float64]
+"""Shape (slots,), a distance (m) for each slot."""
+type Slots = npt.NDArray[np.intp]
+"""Slot indices."""
 
 
 @dataclass(frozen=True)
 class LidarState:
     """The LiDAR between two physics steps. Start it with start()."""
 
-    head: float  # slots of the turn in progress already measured, in [0, slots)
-    sweeping: Scan  # the turn in progress; slots at or past head are stale
-    scan: Scan  # the last complete turn: what the LiDAR reports
+    head: float
+    """The slots of the turn in progress already measured, in [0, slots)."""
+    sweeping: Scan
+    """The turn in progress. Its slots at or past head are stale."""
+    scan: Scan
+    """The last complete turn: what the LiDAR reports."""
 
 
 def start(
@@ -57,9 +62,9 @@ def start(
     return LidarState(head=0.0, sweeping=scan, scan=scan)
 
 
-# The part of a slot below which the head has not reached it: a step that
-# lands on a slot, up to rounding, does not measure it.
 SLOT_EPS = 1e-9
+"""The part of a slot below which the head has not reached it: a step that
+lands on a slot, up to rounding, does not measure it."""
 
 
 def sweep(
