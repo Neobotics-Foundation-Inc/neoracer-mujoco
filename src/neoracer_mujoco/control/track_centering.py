@@ -95,8 +95,10 @@ from .steering import ControlCommand, PDState, ShapingConfig
 class TrackCenteringConfig:
     """Tuning parameters for step()."""
 
-    kp_lateral: float = 1.2  # rad of steer per meter of lateral_error
-    kp_heading: float = 3.0  # rad of steer per meter of heading_error
+    # With the servo's delay, a stronger heading term swings the car from wall to wall,
+    # and the shaping slows it for the large steer.
+    kp_lateral: float = 0.5  # rad of steer per meter of lateral_error
+    kp_heading: float = 0.5  # rad of steer per meter of heading_error
     kd: float = 0.05  # rad of steer per (m/s) of lateral_error rate
     max_beam_range: float = 3.0  # m; substituted for no-hit(-1) or corrupt beams
     max_corrupt_beams: int = 4  # of 8; more triggers the safe fallback command

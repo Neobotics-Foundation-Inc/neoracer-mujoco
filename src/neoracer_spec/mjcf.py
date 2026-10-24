@@ -218,12 +218,16 @@ def steering_input(st: parts.SteeringInput, w: parts.Wheels) -> list[Edit]:
 
 
 def servo(s: parts.Servo) -> list[Edit]:
-    return put(
-        named("dcmotor", "steer_servo"),
-        nominal=numbers(*s.nominal),
-        controller=numbers(s.kp, 0, s.kd, 0, 0, s.voltage_limit),
-        ctrlrange=numbers(-s.lock, s.lock),
-    )
+    path = named("dcmotor", "steer_servo")
+    return [
+        *put(
+            path,
+            nominal=numbers(*s.nominal),
+            controller=numbers(s.kp, 0, s.kd, 0, 0, s.voltage_limit),
+            ctrlrange=numbers(-s.lock, s.lock),
+        ),
+        *delay(path, s.delay),
+    ]
 
 
 def delay(path: str, d: parts.Delay) -> list[Edit]:
@@ -291,7 +295,6 @@ def racecar_neo_v2_edits(p: derive_v2.ModelParams) -> list[Edit]:
     antenna = numbers(p.antenna_radius, p.antenna_half_length)
     return [
         *model(p.common),
-        *delay(named("dcmotor", "steer_servo"), p.servo_delay),
         # The V2's own: its antennas and its speed controller, two actuators
         # on the drivetrain.
         *put(named("geom", "antenna_left"), pos=numbers(ax, ay, az), size=antenna),

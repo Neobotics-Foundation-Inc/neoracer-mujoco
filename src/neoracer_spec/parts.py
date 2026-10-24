@@ -133,6 +133,7 @@ class Servo:
     kd: float  # V·s/rad
     voltage_limit: float  # V, the loop's clamp
     lock: float  # rad of steering input, |ctrl| at most
+    delay: Delay  # from a command to the servo acting on it
 
 
 @dataclass(frozen=True)

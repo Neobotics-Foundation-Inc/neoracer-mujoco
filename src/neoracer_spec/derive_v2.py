@@ -115,7 +115,6 @@ class ModelParams:
     and its own."""
 
     common: parts.Model
-    servo_delay: parts.Delay
     drive: DriveParams
     antenna_center: Vec3  # m, the left antenna's; the right one is its mirror
     antenna_radius: float  # m
@@ -178,7 +177,6 @@ def model(spec: RacecarNeoV2) -> ModelParams:
             steering=steering(spec),
             servo=servo(spec),
         ),
-        servo_delay=parts.delay(spec.steering.latency.value),
         drive=drive(spec),
         antenna_center=precise3(
             body(spec, (sh.antenna_x.value, sh.antenna_y.value, (top + bottom) / 2))
@@ -394,4 +392,5 @@ def servo(spec: RacecarNeoV2) -> parts.Servo:
         kd=precise(s.servo_kd.value),
         voltage_limit=precise(s.servo_supply.value),
         lock=steer_lock(spec),
+        delay=parts.delay(s.latency.value),
     )

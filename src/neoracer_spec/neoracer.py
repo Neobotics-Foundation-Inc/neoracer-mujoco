@@ -13,6 +13,7 @@ from .provenance import (
     Alternative,
     Source,
     assumed,
+    calibrated,
     chosen,
     documented,
     estimated,
@@ -32,6 +33,7 @@ from .spec import (
     MotorEncoder,
     Resolution,
     ServoRating,
+    ServoSteps,
     Spec,
     SpeedController,
     Steering,
@@ -63,11 +65,6 @@ TEAM_RATES = Source(
     "team",
     "measured on the car by the team, 2026-07-21: /imu/fused and /odom at 200 Hz",
 )
-OSCORE_SCHEMATIC = Source(
-    "schematic",
-    "OSCORE schematic, pin header block: the servo's power pin is VCC_ESC, which"
-    " only the ESC's red wire (its BEC) feeds",
-)
 OSCORE_MANUAL = Source(
     "manual", "OSCORE manual, table 4.2.1: VCC_ESC = VCC_IN through, 9 to 26 V"
 )
@@ -89,7 +86,29 @@ DRIVER_CAMERA = Source("driver", "neoracer_ros2_driver, config/camera.yaml")
 DRIVER_LIDAR = Source("driver", "neoracer_ros2_driver, launch/lidar.launch.py")
 RS545_TABLE = Source("datasheet", "slypro.net's RS-545 table: the RS-545SH-4075")
 RS545SH = Source("datasheet", "the RS-545SH at 12 V: 24,000 rpm, 214 mN·m")
-SPT5435 = Source("datasheet", "the SPT5435LV-180W's datasheet, spt-servo.com")
+SERVO_DATASHEET = Source(
+    "datasheet",
+    "docs/datasheets/steering-servo-20kg.png: the car's servo's datasheet, a 20 kg"
+    " waterproof high-torque digital servo (the team, 2026-10-22)",
+)
+SERVO_SPEC = Source(
+    "team",
+    "the team's specification for a replacement servo, 2026-10-22: 500 to"
+    " 2500 us for 180 degrees of travel, 1500 us neutral, 50 Hz",
+)
+TEAM_SERVO = Source("team", "stated by the team, 2026-10-22")
+STEPS_AT_REST = Source(
+    "steps at rest",
+    "the team's steering steps on a NeoRacer at rest on the floor, 2026-10-22:"
+    " the driver's full lock written to the OSCORE board at speed 0, three"
+    " cycles of centre, left, right, centre, timed from each command by the"
+    " IMU at 200 Hz",
+)
+SERVO_FIT = Source(
+    "model fit",
+    "fitted in the MuJoCo model, assets/neoracer.xml, to the steps at rest;"
+    " validation/test_spec.py holds the model to them",
+)
 
 # The RS-545 winding nearest to the docs' free speed.
 _RS545SH_4075 = DcMotorRating(voltage=12.0, stall_torque=0.0793, free_speed_rpm=9_300.0)
@@ -197,35 +216,55 @@ NEORACER = Spec(
     servo=SteeringServo(
         low=documented(
             ServoRating(
-                voltage=4.8, stall_torque_kgf_cm=29.0, seconds_per_60_degrees=0.16
+                voltage=5.0, stall_torque_kgf_cm=17.0, seconds_per_60_degrees=0.13
             ),
-            SPT5435,
-            note="the car's servo (the team, 2026-10-16)",
+            SERVO_DATASHEET,
         ),
         high=documented(
             ServoRating(
-                voltage=6.0, stall_torque_kgf_cm=35.0, seconds_per_60_degrees=0.14
+                voltage=7.4, stall_torque_kgf_cm=20.0, seconds_per_60_degrees=0.10
             ),
-            SPT5435,
-            note="the docs (hardware/drivetrain) give a 20 kg·cm stall torque, at"
-            " no stated voltage or speed, which fits no line of this datasheet",
+            SERVO_DATASHEET,
+            note="the docs' 20 kg·cm (hardware/drivetrain) is this line",
         ),
-        supply=assumed(
-            5.0,
-            OSCORE_SCHEMATIC,
-            "the ESC's BEC powers the servo, and nobody has measured its voltage;"
-            " 5 V is the docs' value (oscore-board), which puts the header on"
-            " VCC_5V_IO",
-            conflicts=(Alternative(11.1, OSCORE_MANUAL),),
+        supply=documented(
+            6.0,
+            TEAM_SERVO,
+            note="the ESC's BEC: on the OSCORE schematic its red wire alone feeds"
+            " VCC_ESC, the servo's power pin",
+            conflicts=(Alternative(5.0, DOCS_OSCORE), Alternative(11.1, OSCORE_MANUAL)),
         ),
-        horn_half_range_degrees=assumed(
+        horn_half_range_degrees=documented(
             45.0,
-            SPT5435,
-            "a 180-degree servo over 500 to 2500 us, so 90 degrees over the"
+            SERVO_SPEC,
+            note="180 degrees over 500 to 2500 us, so 90 degrees over the"
             " firmware's 1000 to 2000 us",
         ),
         kp=chosen(50.0, "so the servo settles without chatter at the model's step"),
         kd=chosen(1.0, "so the servo settles without chatter at the model's step"),
+        latency=calibrated(
+            0.045,
+            SERVO_FIT,
+            "the steps at rest: their first motion and the end of each swing,"
+            " with the servo at its datasheet rating at 6 V",
+            note="from the command written to the board. A racecar_core"
+            " program's command also waits for the driver's mux, which resends"
+            " it every 0.02 s (mux.yaml), 0.01 s on average, which this leaves out",
+        ),
+        steps_at_rest=measured(
+            ServoSteps(
+                first_motion=0.059,
+                centre_to_lock=0.175,
+                lock_to_lock=0.229,
+                lock_to_centre=0.157,
+            ),
+            STEPS_AT_REST,
+            note="first motion: the IMU's yaw rate or sideways acceleration leaves"
+            " four times its noise; a swing ends where the yaw rate the scrubbing"
+            " tyres give the chassis falls under a quarter of its peak. With the"
+            " front lifted off the floor the first motion is the same, so the"
+            " delay is not the tyres'",
+        ),
     ),
     steering=Steering(
         inner_lock_degrees=measured(

@@ -146,6 +146,23 @@ class SteeringServo:
     # The servo's own position loop, the model's.
     kp: Sourced[float]  # V/rad
     kd: Sourced[float]  # V·s/rad
+    # How long a command takes from the car's board to the servo's loop: the
+    # firmware's control loop and pulse, and the servo's own dead time.
+    latency: Sourced[float]  # s
+    # The car's steering steps at rest, which latency is fitted to.
+    steps_at_rest: Sourced[ServoSteps]
+
+
+@dataclass(frozen=True)
+class ServoSteps:
+    """Steps between the centre and the driver's full lock, the car at rest
+    on the floor, each timed from the command written to the car's board:
+    when the chassis first moves, and when each swing ends."""
+
+    first_motion: float  # s
+    centre_to_lock: float  # s
+    lock_to_lock: float  # s
+    lock_to_centre: float  # s
 
 
 @dataclass(frozen=True)

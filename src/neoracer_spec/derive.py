@@ -184,6 +184,7 @@ def model(spec: Spec) -> ModelParams:
                 kd=precise(spec.servo.kd.value),
                 voltage_limit=precise(spec.servo.supply.value),
                 lock=steer_lock(spec),
+                delay=parts.delay(spec.servo.latency.value),
             ),
         ),
         drive=DcMotorParams(

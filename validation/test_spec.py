@@ -313,6 +313,38 @@ def test_the_servo_at_the_steering_input_is_its_rating_through_the_linkage(scene
     assert vclamp / k == pytest.approx(horn_free / linkage, rel=1e-5)
 
 
+def test_the_steps_at_rest_take_the_cars_times(scene):
+    """The model's steering, stepped at rest as the car's was (the driver's
+    full lock from the centre, to the other lock and back, each held 1 s),
+    first moves (2% of the way) and ends each swing (95% of the way) within
+    0.015 s of the car, timed from the command. The car's swing ends where
+    its chassis stops turning, which is near the end of the swing."""
+    model = scene.model
+    data = sim.settle(model)
+    servo = data.bind_scalar(scene.car.steer)
+    lock = model.bind_scalar(scene.car.steer).ctrlrange[1]
+    steps = CAR.servo.steps_at_rest.value
+    for name, target, end in (
+        ("centre to lock", lock, steps.centre_to_lock),
+        ("lock to lock", -lock, steps.lock_to_lock),
+        ("lock to centre", 0.0, steps.lock_to_centre),
+    ):
+        begin = float(servo.length[0])
+        servo.ctrl = target
+        first = last = math.inf
+        for i in range(round(1.0 / model.opt.timestep)):
+            mujoco.mj_step(model, data)
+            t = (i + 1) * model.opt.timestep
+            done = (servo.length[0] - begin) / (target - begin)
+            if done >= 0.02:
+                first = min(first, t)
+            if done >= 0.95:
+                last = min(last, t)
+        with case(name):
+            assert first == pytest.approx(steps.first_motion, abs=0.015)
+            assert last == pytest.approx(end, abs=0.015)
+
+
 def test_full_lock_turns_the_inner_wheel_to_its_lock():
     c = CAR.chassis
     lock = derive.steer_lock(CAR)
