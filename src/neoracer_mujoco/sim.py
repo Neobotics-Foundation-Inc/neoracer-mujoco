@@ -72,6 +72,12 @@ class SpawnRange:
     yaw: float = 0.15  # rad, about +Z
     resettle: float = 0.14  # s of steps after the move, so the suspension settles
 
+    def __post_init__(self) -> None:
+        for name in ("lateral", "yaw", "resettle"):
+            value = getattr(self, name)
+            if not 0.0 <= value < math.inf:
+                raise ValueError(f"{name} must be finite and >= 0, not {value}")
+
 
 def perturb_spawn(
     model: mujoco.MjModel,

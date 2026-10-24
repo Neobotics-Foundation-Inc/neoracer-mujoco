@@ -32,6 +32,16 @@ def test_settling_data_again_is_settling_new_data():
     np.testing.assert_array_equal(again.qpos, sim.settle(scene.model).qpos)
 
 
+def test_a_spawn_range_that_is_not_a_range_is_refused():
+    """A bound or a resettle time that is negative, infinite or NaN raises
+    before any spawn; 0 is no perturbation."""
+    sim.SpawnRange(lateral=0.0, yaw=0.0, resettle=0.0)
+    for field in ("lateral", "yaw", "resettle"):
+        for bad in (-0.1, math.inf, math.nan):
+            with case((field, bad)), pytest.raises(ValueError, match=field):
+                sim.SpawnRange(**{field: bad})
+
+
 def test_a_spawn_moves_the_car_square_to_its_heading_and_turns_it():
     """The car moves by the first draw from rng along its left, whichever
     way its start faces, and turns by the second."""
