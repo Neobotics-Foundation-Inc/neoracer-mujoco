@@ -41,7 +41,7 @@ uses an address. They work on numpy and JAX arrays alike.
 import copy
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
 import mujoco
 import numpy as np
@@ -49,6 +49,7 @@ import numpy.typing as npt
 from mujoco import rollout
 
 from . import contract
+from .contract import Array
 from .physics import Physics, apply_physics
 from .scene import Car, Scene
 
@@ -58,16 +59,6 @@ type SensorData = npt.NDArray[np.float64]  # shape (nbatch, nstep, nsensordata)
 type Done = npt.NDArray[np.bool_]  # shape (nbatch,)
 
 FULL_PHYSICS = mujoco.mjtState.mjSTATE_FULLPHYSICS
-
-
-class Array(Protocol):
-    """A numpy or a JAX array: what command and read need of one."""
-
-    def __array_namespace__(self, *, api_version: None = None) -> Any: ...
-
-    def __getitem__(self, key: Any, /) -> Any: ...
-
-    def __mul__(self, other: float, /) -> Any: ...
 
 
 class Batch[S, A, M](Protocol):
@@ -200,11 +191,10 @@ def command[A: Array](model: mujoco.MjModel, car: Car, throttle: A, steer: A) ->
             f"the model has {model.nu} actuators, the car has {len(elements)}"
         )
     xp = throttle.__array_namespace__()  # numpy or jax.numpy
-    sign = xp.sign(throttle)
-    values = []
-    for actuator in car.throttled:
-        a, b, c = contract.throttle_map(model, actuator)
-        values.append(throttle * a + sign * b + xp.abs(sign) * c)
+    values = [
+        contract.throttle_ctrl(contract.throttle_map(model, actuator), throttle)
+        for actuator in car.throttled
+    ]
     values.append(steer)
     column = {
         int(model.bind_scalar(a).id): v for a, v in zip(elements, values, strict=True)

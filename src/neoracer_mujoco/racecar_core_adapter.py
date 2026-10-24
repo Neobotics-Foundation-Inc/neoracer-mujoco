@@ -11,10 +11,10 @@ runs in this simulator without changes.
 This module has Drive, Lidar, Physics, Controller, Display and
 MujocoRacecar. MujocoRacecar is the equivalent of create_racecar(): it
 connects the other parts and runs the start/update/update_slow loop in go().
-CarParams says which car's LiDAR and encoder it has; the default is the
-NeoRacer's, and racecar_neo_v2_params() gives the V2's. Physics has only the
-encoder's speed. This module has no camera, led, nav, slam, telemetry or
-vision, because MuJoCo has no backend for them yet.
+CarParams says which car's LiDAR and encoder it has: neoracer_params()
+gives a NeoRacer's, the default, and racecar_neo_v2_params() a V2's.
+Physics has only the encoder's speed. This module has no camera, led, nav,
+slam, telemetry or vision, because MuJoCo has no backend for them yet.
 
 Frame: +X forward, +Y left, +Z up.
 
@@ -42,10 +42,12 @@ from typing import assert_never
 import mujoco
 import numpy as np
 
-from neoracer_spec import derive_v2
+from neoracer_spec import derive, derive_v2
 from neoracer_spec.derive import EncoderParams, LidarParams
 from neoracer_spec.derive_v2 import HallEncoderParams
-from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
+from neoracer_spec.neoracer import NEORACER
+from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2, RacecarNeoV2
+from neoracer_spec.spec import Spec
 
 from . import contract, encoder, hall_encoder, lidar, sim
 from .control.steering import ControlCommand
@@ -56,11 +58,10 @@ from .scene import Scene
 class CarParams:
     """What a car's racecar_core gives a program beside its model: the
     LiDAR's scan, the encoder's speed, and the share of full throttle that
-    speed 1 drives until the program calls set_max_speed. The defaults are
-    the NeoRacer's."""
+    speed 1 drives until the program calls set_max_speed."""
 
-    lidar: LidarParams = LidarParams()
-    encoder: EncoderParams | HallEncoderParams = EncoderParams()
+    lidar: LidarParams
+    encoder: EncoderParams | HallEncoderParams
     start_max_speed: float = 1.0
 
     def __post_init__(self) -> None:
@@ -70,13 +71,22 @@ class CarParams:
             )
 
 
-def racecar_neo_v2_params() -> CarParams:
-    """The RACECAR Neo V2's LiDAR, its drive board's encoder and its
+def neoracer_params(car: Spec = NEORACER) -> CarParams:
+    """A NeoRacer's LiDAR and its firmware's encoder."""
+    p = derive.derive(car)
+    return CarParams(lidar=p.lidar, encoder=p.encoder)
+
+
+def racecar_neo_v2_params(car: RacecarNeoV2 = RACECAR_NEO_V2) -> CarParams:
+    """A RACECAR Neo V2's LiDAR, its drive board's encoder and its
     racecar_core's start max speed."""
-    p = derive_v2.derive(RACECAR_NEO_V2)
+    p = derive_v2.derive(car)
     return CarParams(
         lidar=p.lidar, encoder=p.encoder, start_max_speed=p.start_max_speed
     )
+
+
+_NEORACER = neoracer_params()
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -117,8 +127,8 @@ class MujocoDrive:
 
     def set_max_speed(self, max_speed: float | None = None) -> None:
         """Set the share of full throttle that speed 1 drives. Without
-        max_speed, the car's start max speed, as its racecar_core has it:
-        1.0 on the NeoRacer, 0.25 on the V2."""
+        max_speed, the car's start max speed, as its racecar_core has it
+        (CarParams.start_max_speed)."""
         limit = self._start_max_speed if max_speed is None else max_speed
         self._max_speed = _clamp(limit, 0.0, 1.0)
 
@@ -136,7 +146,10 @@ class MujocoLidar:
     """
 
     def __init__(
-        self, scene: Scene, data: mujoco.MjData, params: LidarParams = LidarParams()
+        self,
+        scene: Scene,
+        data: mujoco.MjData,
+        params: LidarParams = _NEORACER.lidar,
     ):
         self._model, self._car, self._data = scene.model, scene.car, data
         self._dt = float(scene.model.opt.timestep)  # s
@@ -196,7 +209,7 @@ class MujocoPhysics:
         self,
         scene: Scene,
         data: mujoco.MjData,
-        params: EncoderParams | HallEncoderParams = EncoderParams(),
+        params: EncoderParams | HallEncoderParams = _NEORACER.encoder,
     ):
         self._drive_pos = scene.car.sensors.drive_pos
         self._data = data
@@ -309,7 +322,8 @@ class MujocoRacecar:
     this argument.
 
     car: the car's LiDAR, encoder and start max speed, the NeoRacer's by
-    default. For the V2, pass racecar_neo_v2_params() with its scene.
+    default. For another car, pass its params with its scene, such as
+    racecar_neo_v2_params().
     """
 
     def __init__(
@@ -318,7 +332,7 @@ class MujocoRacecar:
         data: mujoco.MjData,
         max_steps: int | None = None,
         held_buttons: Iterable[MujocoController.Button] = (MujocoController.Button.RB,),
-        car: CarParams = CarParams(),
+        car: CarParams = _NEORACER,
     ):
         # After mj_step, the sensors describe the state before its
         # integration. mj_forward brings them up to data.time, so the

@@ -44,11 +44,12 @@ from neoracer_mujoco.control.track_centering import (
     compute_signals,
 )
 from neoracer_mujoco.scene import Scene
+from neoracer_spec.parts import SOLVER
 
 
 @dataclass(frozen=True)
 class DemoParams:
-    steps: int = 2160  # physics steps of the headless run; 6 s at a 1/360 s timestep
+    steps: int = round(6.0 / SOLVER.timestep)  # physics steps of the headless run, 6 s
     # m, + = toward the left wall. The demo moves the car by this offset after
     # the settle. The corridor half-width is 0.5 m. Without the offset, the car
     # starts at the center, and the run does not test the correction.
@@ -297,7 +298,7 @@ def main() -> None:
     report = run(params)
     print(
         "NeoRacer track-centering demo — straight_corridor.xml, "
-        f"{params.steps} steps after {sim.SETTLE_STEPS}-step settle"
+        f"{params.steps} steps after a {sim.SETTLE_TIME} s settle"
     )
     print()
     print(f"  initial lateral offset        : {params.initial_y_offset_m:+.3f} m")

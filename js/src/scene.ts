@@ -10,13 +10,13 @@ import {
   DRIVE_ACTUATOR,
   DRIVE_POS_SENSOR,
   LIDAR_SITE,
-  SETTLE_STEPS,
+  SETTLE_TIME,
+  START_SITE,
   STEER_ACTUATOR,
 } from './generated/shared.js';
 import { CAR_XML } from './generated/car.js';
 
 export type Mujoco = MainModule;
-export type Position = readonly [number, number, number]; // m, world frame
 
 /** The parts of the car, as indices into the compiled model. */
 export interface Car {
@@ -65,17 +65,14 @@ export function deleteVisuals(mj: Mujoco, spec: MjSpec): void {
 }
 
 /**
- * Compile the track's MJCF with the car attached at pos (m), facing +X, and
- * without the meshes that only show the car. The track keeps its own floor,
- * and the scene takes the car's <option>, as in assets.compose. carXml
- * defaults to assets/neoracer.xml.
+ * Compile the track's MJCF with the car attached at the track's start, its
+ * site START_SITE, facing the site's +X, or the origin, facing +X, if it has
+ * none, and without the meshes that only show the car. The site must be on
+ * the world body, as the car's free joint must. The track keeps its own
+ * floor, and the scene takes the car's <option>, as in assets.compose.
+ * carXml defaults to assets/neoracer.xml.
  */
-export function compose(
-  mj: Mujoco,
-  trackXml: string,
-  pos: Position = [0, 0, 0],
-  carXml: string = CAR_XML,
-): Scene {
+export function compose(mj: Mujoco, trackXml: string, carXml: string = CAR_XML): Scene {
   const spec = mj.parseXMLString(trackXml);
   const car = mj.parseXMLString(carXml);
   spec.option = car.option;
@@ -83,16 +80,12 @@ export function compose(
   // The car's root default class is "main", as the track's is: a name of
   // its own keeps the two apart, as in assets.compose.
   mj.mjs_setName(mj.mjs_getSpecDefault(car)!.element, 'car');
-  // A body attaches to a site or a frame, and the bindings cannot add a
-  // frame to the world body, so the car hangs from a site at pos.
-  const world = mj.mjs_findBody(spec, 'world')!;
-  const mount = mj.mjs_addSite(world, mj.mjs_getSpecDefault(spec)!)!;
-  // The site takes the track's site defaults: undo any pose they give it,
-  // so the car stands at pos facing +X.
-  mount.pos.set(pos);
-  mount.quat.set([1, 0, 0, 0]);
-  mount.alt.type = mj.mjtOrientation.mjORIENTATION_QUAT;
-  mount.fromto.set([NaN, NaN, NaN, NaN, NaN, NaN]);
+  const start = mj.mjs_findElement(spec, mj.mjtObj.mjOBJ_SITE, START_SITE);
+  const parent = start && mj.mjs_getName(mj.mjs_getParent(start)!.element);
+  if (start && parent !== 'world') {
+    throw new Error(`the track's ${START_SITE} site is on the body ${parent}, not on the world body, where the car's free joint must be`);
+  }
+  const mount = start ? mj.mjs_asSite(start)! : origin(mj, spec);
   const body = mj.mjs_findBody(car, CAR_BODY);
   if (!body) throw new Error(`the car has no "${CAR_BODY}" body`);
   if (!mj.mjs_attach(mount.element, body.element, '', '')) throw new Error(mj.mjs_getError(spec));
@@ -113,9 +106,30 @@ export function compose(
   };
 }
 
-/** New data for model, stepped SETTLE_STEPS with zero control so the car rests. */
+/**
+ * A new site at the origin, facing +X. A body attaches to a site or a frame,
+ * and the bindings cannot add a frame to the world body.
+ */
+function origin(mj: Mujoco, spec: MjSpec) {
+  const world = mj.mjs_findBody(spec, 'world')!;
+  const site = mj.mjs_addSite(world, mj.mjs_getSpecDefault(spec)!)!;
+  // The site takes the track's site defaults: undo any pose they give it.
+  site.pos.set([0, 0, 0]);
+  site.quat.set([1, 0, 0, 0]);
+  site.alt.type = mj.mjtOrientation.mjORIENTATION_QUAT;
+  site.fromto.set([NaN, NaN, NaN, NaN, NaN, NaN]);
+  return site;
+}
+
+/** New data for model, stepped for SETTLE_TIME with zero control so the car rests. */
 export function settle(mj: Mujoco, model: MjModel): MjData {
   const data = new mj.MjData(model);
-  for (let i = 0; i < SETTLE_STEPS; i++) mj.mj_step(model, data);
+  const steps = settleSteps(model.opt.timestep);
+  for (let i = 0; i < steps; i++) mj.mj_step(model, data);
   return data;
+}
+
+/** The steps of timestep (s) in SETTLE_TIME, half a step rounding up: sim.settle_steps in Python. */
+export function settleSteps(timestep: number): number {
+  return Math.floor(SETTLE_TIME / timestep + 0.5);
 }

@@ -27,8 +27,6 @@ import mujoco
 
 from . import contract, sensors, truth
 
-CAR_BODY = "car"  # the car's root body, with the free joint
-
 
 @dataclass(frozen=True)
 class Car:
@@ -64,12 +62,10 @@ def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel) -> Car:
     wheel geom, the LiDAR site or a sensor of contract.py is missing, or an
     actuator's user numbers are not a throttle map."""
     problems: list[str] = []
-    body = spec.body(CAR_BODY)
-    if body is None:
-        raise ValueError(f'the model has no "{CAR_BODY}" body')
+    body = _car_body(spec)
     joints = body.joints
     if len(joints) != 1 or joints[0].type != mujoco.mjtJoint.mjJNT_FREE:
-        problems.append(f'the "{CAR_BODY}" body needs exactly one free joint')
+        problems.append(f'the "{contract.CAR_BODY}" body needs exactly one free joint')
     actuators = {name: spec.actuator(name) for name in contract.REQUIRED_ACTUATORS}
     problems += [f"actuator {n} is missing" for n, a in actuators.items() if a is None]
     others = [a for a in spec.actuators if a.name not in contract.REQUIRED_ACTUATORS]
@@ -107,8 +103,15 @@ def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel) -> Car:
 def compile_scene(spec: mujoco.MjSpec) -> Scene:
     """Add the truth sensors to spec (truth.add_sensors) and compile it into a
     Scene. Raise ValueError if the car is not a NeoRacer car (see find_car)."""
-    if spec.body(CAR_BODY) is None:
-        raise ValueError(f'the model has no "{CAR_BODY}" body')
-    truth.add_sensors(spec, CAR_BODY)
+    _car_body(spec)
+    truth.add_sensors(spec)
     model = spec.compile()
     return Scene(spec=spec, model=model, car=find_car(spec, model))
+
+
+def _car_body(spec: mujoco.MjSpec) -> mujoco.MjsBody:
+    """The car's root body in spec. Raise ValueError if spec has none."""
+    body = spec.body(contract.CAR_BODY)
+    if body is None:
+        raise ValueError(f'the model has no "{contract.CAR_BODY}" body')
+    return body

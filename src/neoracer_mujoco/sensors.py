@@ -25,21 +25,15 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from types import MappingProxyType
-from typing import assert_never
+from typing import Any, assert_never
 
 import mujoco
 import numpy as np
 import numpy.typing as npt
 
-from neoracer_spec.neoracer import NEORACER
-
 from . import contract
 
 NO_RETURN = -1.0  # m, what a rangefinder reads with nothing in range
-
-# The NeoRacer's tyre radius, which its wheel geoms also have.
-# contract.wheel_radius reads any car's from its model.
-WHEEL_RADIUS = NEORACER.wheel.radius.value  # m
 
 type Vec3 = npt.NDArray[np.float64]  # shape (3,)
 type Quat = npt.NDArray[np.float64]  # shape (4,), (w, x, y, z)
@@ -160,48 +154,23 @@ def find_sensors(spec: mujoco.MjSpec, model: mujoco.MjModel) -> CarSensors:
 
 def beam_in_field(name: str, field: float) -> bool:
     """Whether a LiDAR that sees field (rad), centred on its front, sees the
-    beam of LIDAR_BEAM_ORDER called name. A beam on the field's edge is in,
-    with the field at the model's precision (6 significant digits, 1e-5 rad
-    at most); the beams are 45 degrees apart."""
-    degrees = int(name.removeprefix("lidar_"))
-    off_front = math.radians(min(degrees, 360 - degrees))
-    return off_front <= field / 2 + 1e-5
+    beam of LIDAR_BEAM_ORDER called name (contract.in_field)."""
+    return contract.in_field(math.radians(int(name.removeprefix("lidar_"))), field)
 
 
 def read(sensors: CarSensors, data: mujoco.MjData) -> SensorReadings:
     """Read every named sensor of data. A LiDAR beam that the car blocks
     reads NO_RETURN."""
-    d, s = data.bind_scalar, sensors
 
-    def beam(sensor: mujoco.MjsSensor) -> float:
-        return NO_RETURN if sensor.name in s.blocked else float(d(sensor).data[0])
+    def value(name: str) -> float | npt.NDArray[np.float64]:
+        if name in sensors.blocked:
+            return NO_RETURN
+        values = data.bind_scalar(getattr(sensors, name)).data
+        return values.copy() if name in VECTOR_SIZE else float(values[0])
 
-    return SensorReadings(
-        imu_accel=d(s.imu_accel).data.copy(),
-        imu_gyro=d(s.imu_gyro).data.copy(),
-        imu_quat=d(s.imu_quat).data.copy(),
-        imu_linvel=d(s.imu_linvel).data.copy(),
-        steer_cmd_pos=float(d(s.steer_cmd_pos).data[0]),
-        fl_steer_pos=float(d(s.fl_steer_pos).data[0]),
-        fr_steer_pos=float(d(s.fr_steer_pos).data[0]),
-        fl_wheel_vel=float(d(s.fl_wheel_vel).data[0]),
-        fr_wheel_vel=float(d(s.fr_wheel_vel).data[0]),
-        rl_wheel_vel=float(d(s.rl_wheel_vel).data[0]),
-        rr_wheel_vel=float(d(s.rr_wheel_vel).data[0]),
-        drive_pos=float(d(s.drive_pos).data[0]),
-        fl_susp_pos=float(d(s.fl_susp_pos).data[0]),
-        fr_susp_pos=float(d(s.fr_susp_pos).data[0]),
-        rl_susp_pos=float(d(s.rl_susp_pos).data[0]),
-        rr_susp_pos=float(d(s.rr_susp_pos).data[0]),
-        lidar_000=beam(s.lidar_000),
-        lidar_045=beam(s.lidar_045),
-        lidar_090=beam(s.lidar_090),
-        lidar_135=beam(s.lidar_135),
-        lidar_180=beam(s.lidar_180),
-        lidar_225=beam(s.lidar_225),
-        lidar_270=beam(s.lidar_270),
-        lidar_315=beam(s.lidar_315),
-    )
+    # Each field's value has the field's type, which no checker can see here.
+    values: dict[str, Any] = {f.name: value(f.name) for f in fields(SensorReadings)}
+    return SensorReadings(**values)
 
 
 def motor_encoder_rad_s(sensors: SensorReadings) -> float:
@@ -216,26 +185,10 @@ def motor_encoder_rad_s(sensors: SensorReadings) -> float:
     return (s.fl_wheel_vel + s.fr_wheel_vel + s.rl_wheel_vel + s.rr_wheel_vel) / 4
 
 
-def estimated_linear_speed_ms(motor_rad_s: float) -> float:
-    """Estimate the NeoRacer's speed (m/s) from the motor speed (rad/s), as
-    motor_rad_s * WHEEL_RADIUS. For another car, multiply by its
-    contract.wheel_radius instead. This estimate assumes that the wheels do not
-    slip. If a wheel slips or locks, the estimate differs from the true speed
-    (SensorReadings.imu_linvel). A real speedometer that measures wheel speed
-    has the same error."""
-    return motor_rad_s * WHEEL_RADIUS
-
-
-# Beam order matches the rangefinder sensors in neoracer.xml, ascending 0deg..315deg.
-LIDAR_BEAM_ORDER = (
-    "lidar_000",
-    "lidar_045",
-    "lidar_090",
-    "lidar_135",
-    "lidar_180",
-    "lidar_225",
-    "lidar_270",
-    "lidar_315",
+# The LiDAR beams, in the order of their SensorReadings fields: their
+# bearings counterclockwise from the front, 0 to 315 degrees.
+LIDAR_BEAM_ORDER = tuple(
+    f.name for f in fields(SensorReadings) if f.name.startswith("lidar_")
 )
 
 # Beam groups shared by the LiDAR controllers (track_centering.py,
@@ -257,19 +210,7 @@ REAR_RIGHT_BEAM = 5  # lidar_225
 
 def lidar_ranges(sensors: SensorReadings) -> Vec8:
     """The 8 lidar_* ranges (m; -1 = no hit) in LIDAR_BEAM_ORDER."""
-    s = sensors
-    return np.array(
-        [
-            s.lidar_000,
-            s.lidar_045,
-            s.lidar_090,
-            s.lidar_135,
-            s.lidar_180,
-            s.lidar_225,
-            s.lidar_270,
-            s.lidar_315,
-        ]
-    )
+    return np.array([getattr(sensors, name) for name in LIDAR_BEAM_ORDER])
 
 
 @dataclass(frozen=True)

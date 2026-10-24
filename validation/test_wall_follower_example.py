@@ -18,7 +18,8 @@ from pathlib import Path
 import numpy as np
 
 from examples import run_racecar_core
-from neoracer_mujoco import contract, lidar
+from neoracer_mujoco import contract
+from neoracer_mujoco.racecar_core_adapter import neoracer_params
 
 _FIXTURE_DIR = Path(__file__).resolve().parent / "testdata" / "ultimate_wall_follower"
 
@@ -31,7 +32,7 @@ def test_canonical_wall_follower_runs_unmodified_against_mujoco():
 
     # rc.drive, rc.lidar, rc.controller and rc.display work before the
     # controller uses them.
-    assert rc.lidar.get_samples().shape == (lidar.LidarParams().slots,)
+    assert rc.lidar.get_samples().shape == (neoracer_params().lidar.slots,)
     rc.drive.stop()
     assert rc.controller.is_down(rc.controller.Button.RB) is True
     rc.display.show_text("ok")  # no-op; must not raise

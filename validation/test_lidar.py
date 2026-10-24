@@ -13,9 +13,11 @@ import mujoco
 import numpy as np
 import pytest
 
-from neoracer_mujoco import Scene, assets, lidar, sim
+from neoracer_mujoco import Scene, assets, lidar, sensors, sim
+from neoracer_spec.derive import derive
+from neoracer_spec.neoracer import NEORACER
 
-LIDAR = lidar.LidarParams()
+LIDAR = derive(NEORACER).lidar
 
 
 @pytest.fixture(scope="module")
@@ -30,11 +32,20 @@ def _shift(scene: Scene, data: mujoco.MjData, dy: float) -> None:
     mujoco.mj_forward(scene.model, data)
 
 
-def test_it_sees_three_quarters_of_a_turn_centered_on_the_front():
-    seen = lidar.visible(LIDAR)
-    assert seen.sum() == 1080
-    assert seen[0]
-    assert not seen[LIDAR.slots // 2]  # straight behind
+def test_it_sees_its_field_centered_on_the_front():
+    """It sees the slots within half its field of the front, either way, the
+    edges included, and not straight behind: the same slots on either side,
+    and the beams of the car's model where they share a bearing."""
+    seen, n = lidar.visible(LIDAR), LIDAR.slots
+    assert seen[0] and not seen[n // 2]
+    assert all(seen[i] == seen[-i % n] for i in range(n))
+    edge = LIDAR.field / 2 / (2 * math.pi) * n  # slots from the front to an edge
+    k = round(edge)
+    assert math.isclose(edge, k)  # the NeoRacer's edges fall on slots
+    assert seen[k] and seen[n - k] and not seen[k + 1] and not seen[n - k - 1]
+    for name in sensors.LIDAR_BEAM_ORDER:
+        slot = int(name.removeprefix("lidar_")) * n // 360
+        assert seen[slot] == sensors.beam_in_field(name, LIDAR.field), name
 
 
 def _wall_ahead(x: float) -> Scene:
@@ -50,32 +61,35 @@ def _wall_ahead(x: float) -> Scene:
     return assets.compose(track, visuals=False)
 
 
-def test_it_sees_a_wall_up_to_25_m_away():
-    """The LakiBeam1 reaches 25 m on a bright target: it sees a wall 20 m
-    ahead and not one 30 m ahead."""
-    for x in (20.0, 30.0):
+def test_it_sees_a_wall_up_to_its_range():
+    """The LakiBeam1 reaches max_range on a bright target: it sees a wall
+    5 m nearer and not one 5 m farther."""
+    for x in (LIDAR.max_range - 5.0, LIDAR.max_range + 5.0):
         scene = _wall_ahead(x)
         data = mujoco.MjData(scene.model)
         mujoco.mj_forward(scene.model, data)
         site_x = data.bind_scalar(scene.car.lidar).xpos[0]
         (front,) = lidar.cast(LIDAR, scene.model, data, scene.car, np.array([0]))
-        if x < 25.0:
+        if x < LIDAR.max_range:
             assert front == pytest.approx(x - site_x, abs=1e-6)
         else:
             assert front == lidar.NO_RETURN
 
 
-def test_a_turn_completes_every_twelve_steps_at_360_hz(corridor):
+def test_a_turn_completes_at_its_scan_rate(corridor):
+    """The step divides a turn, so a turn completes every 1 / scan_rate s."""
     model, car = corridor.model, corridor.car
+    dt = model.opt.timestep
+    steps = round(1 / (LIDAR.scan_rate * dt))  # a turn
     data = sim.settle(model)
     state = lidar.start(LIDAR, model, data, car)
     completed = []
-    for i in range(1, 37):
+    for i in range(1, 3 * steps + 1):
         last = state.scan
-        state = lidar.sweep(LIDAR, model, data, car, state, 1 / 360)
+        state = lidar.sweep(LIDAR, model, data, car, state, dt)
         if state.scan is not last:
             completed.append(i)
-    assert completed == [12, 24, 36]
+    assert completed == [steps, 2 * steps, 3 * steps]
 
 
 def test_each_slot_reads_the_pose_of_the_step_that_passed_it(corridor):
@@ -84,13 +98,15 @@ def test_each_slot_reads_the_pose_of_the_step_that_passed_it(corridor):
     from the second, as the scan of a moving car is skewed."""
     model, car = corridor.model, corridor.car
     data = sim.settle(model)
+    dt = model.opt.timestep
+    half_turn = round(1 / (LIDAR.scan_rate * dt)) // 2  # steps
     state = before = lidar.start(LIDAR, model, data, car)
-    for _ in range(6):
-        state = lidar.sweep(LIDAR, model, data, car, state, 1 / 360)
+    for _ in range(half_turn):
+        state = lidar.sweep(LIDAR, model, data, car, state, dt)
     _shift(corridor, data, 0.2)
     after = lidar.start(LIDAR, model, data, car)
-    for _ in range(6):
-        state = lidar.sweep(LIDAR, model, data, car, state, 1 / 360)
+    for _ in range(half_turn):
+        state = lidar.sweep(LIDAR, model, data, car, state, dt)
     half = LIDAR.slots // 2
     assert not np.array_equal(before.scan, after.scan)
     np.testing.assert_array_equal(state.scan[:half], before.scan[:half])

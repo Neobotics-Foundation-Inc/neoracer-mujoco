@@ -1,6 +1,6 @@
 """
 Robustness report of the vehicle-space wall follower on loop_corridor.xml.
-The script runs many seeded trials of loop_trials.run_loop_trial(), saves the
+The script runs many seeded trials of trials.run_trial(), saves the
 raw results in a pickle file, and prints the failures, contacts, NoPath
 events, lap times and tick times. Run it by hand from the repository root:
 
@@ -16,15 +16,16 @@ from typing import Literal, assert_never
 import numpy as np
 
 from examples.wall_follower_vs.dense_lidar import DenseLidarParams
-from examples.wall_follower_vs.loop_trials import (
-    LoopTrialParams,
-    LoopTrialResult,
-    deadline_misses,
-    run_loop_trial,
-    tick_time_stats,
-)
 from examples.wall_follower_vs.report_utils import outcome_header
 from examples.wall_follower_vs.scene_utils import load_track_scene
+from examples.wall_follower_vs.trials import (
+    TRIALS,
+    TrialParams,
+    TrialResult,
+    deadline_misses,
+    run_trial,
+    tick_time_stats,
+)
 
 type FailureClass = Literal[
     "rollover",
@@ -52,9 +53,9 @@ class ClassifyParams:
     sustained_contact_steps: int = 30  # physics steps; 0.06 s at 2 ms per step
 
 
-def classify_failure(r: LoopTrialResult, params: ClassifyParams) -> FailureClass | None:
+def classify_failure(r: TrialResult, params: ClassifyParams) -> FailureClass | None:
     """The failure class of a trial, or None for a success. The class uses
-    only the values in LoopTrialResult."""
+    only the values in TrialResult."""
     long_no_path = r.longest_no_path_ticks >= params.long_no_path_ticks
     match r.outcome:
         case "success":
@@ -73,7 +74,7 @@ def classify_failure(r: LoopTrialResult, params: ClassifyParams) -> FailureClass
             assert_never(r.outcome)
 
 
-def classify_contact(r: LoopTrialResult, params: ClassifyParams) -> ContactClass:
+def classify_contact(r: TrialResult, params: ClassifyParams) -> ContactClass:
     """The contact class of a trial with at least one contact."""
     match r.outcome:
         case "success":
@@ -91,8 +92,8 @@ def classify_contact(r: LoopTrialResult, params: ClassifyParams) -> ContactClass
 
 
 def report(
-    results: list[LoopTrialResult],
-    trial_params: LoopTrialParams,
+    results: list[TrialResult],
+    trial_params: TrialParams,
     params: ClassifyParams,
 ) -> None:
     n = len(results)
@@ -103,7 +104,7 @@ def report(
         failure = classify_failure(r, params)
         if failure is not None:
             print(
-                f"  seed {r.seed}: {r.outcome} lap={r.lap_frac:.2f} class={failure} "
+                f"  seed {r.seed}: {r.outcome} lap={r.fraction:.2f} class={failure} "
                 f"contact_steps={r.contact_steps} no_path_ticks={r.no_path_ticks} "
                 f"longest_np={r.longest_no_path_ticks}"
             )
@@ -232,13 +233,13 @@ def main() -> None:
 
     scene = load_track_scene("loop_corridor.xml")
     lidar = DenseLidarParams(n_beams=args.n)
-    trial_params = LoopTrialParams()
-    results: list[LoopTrialResult] = []
+    trial_params = TRIALS["loop_corridor.xml"]
+    results: list[TrialResult] = []
     for seed in range(args.seed0, args.seed0 + args.trials):
-        r = run_loop_trial(scene, lidar, seed, trial_params)
+        r = run_trial(scene, lidar, seed, trial_params)
         results.append(r)
         print(
-            f"seed {seed:3d}: {r.outcome:9s} lap={r.lap_frac:5.2f} "
+            f"seed {seed:3d}: {r.outcome:9s} lap={r.fraction:5.2f} "
             f"contact_evt={r.contact_events} no_path_evt={len(r.no_path_events)} "
             f"longest_np={r.longest_no_path_ticks}",
             flush=True,

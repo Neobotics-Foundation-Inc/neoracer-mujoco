@@ -1,6 +1,8 @@
 """
-Drive the NeoRacer with pygame, from the keyboard or a gamepad. The physics
-is in drive_sim.py; this file owns the window, the input and the HUD.
+Drive the NeoRacer with pygame, from the keyboard or a gamepad. What it
+shares with manual_drive.py, the scene, the chase camera and how the command
+follows the input, is in examples/driving.py; this file owns the window, the
+input and the HUD.
 
 Usage (plain python3, NOT mjpython: pygame owns the window):
     python3 -m examples.pygame_drive.drive                          # F1 track
@@ -28,18 +30,27 @@ from types import MappingProxyType
 from typing import Literal, assert_never
 
 import mujoco
-import numpy as np
-import numpy.typing as npt
 import pygame
 
-from examples.pygame_drive.drive_sim import (
-    DriveParams,
-    DriveState,
+from examples.driving import (
+    ChaseCam,
+    Drive,
+    Rates,
+    Shaping,
     apply_and_step,
-    next_state,
+    chase_camera,
+    follow_car,
+    frame_dt,
+    load_scene,
+    next_drive,
 )
 from neoracer_mujoco import assets, sensors
-from neoracer_mujoco.scene import Scene
+
+# The command follows the input both ways at one rate. The steer's is fast,
+# to smooth the keys' all-or-nothing input, which a stick barely notices.
+SHAPING = Shaping(
+    throttle=Rates(toward=2.5, back=2.5), steer=Rates(toward=4.0, back=4.0)
+)
 
 
 @dataclass(frozen=True)
@@ -48,8 +59,7 @@ class ViewParams:
 
     width: int = 900  # px
     height: int = 600  # px
-    cam_distance: float = 1.6  # m behind and above the car
-    cam_elevation: float = -35.0  # deg looking down
+    cam: ChaseCam = ChaseCam()
 
 
 @dataclass(frozen=True)
@@ -80,14 +90,6 @@ class HudParams:
     key_pad: int = 12  # px from the bottom-right corner
 
 
-@dataclass(frozen=True)
-class Inputs:
-    """One frame of driver input, both in [-1, 1]."""
-
-    throttle: float
-    steer: float
-
-
 type Action = Literal["quit", "reset_car", "toggle_timer", "reset_timer", "none"]
 
 _KEY_ACTIONS: Mapping[int, Action] = MappingProxyType(
@@ -112,35 +114,19 @@ def event_action(gamepad: GamepadParams, event: pygame.event.Event) -> Action:
     return "none"
 
 
-def load_scene(track: str, bare: bool) -> Scene:
-    """The car on a track from assets/tracks/, or the car alone on the
-    plane in neoracer.xml."""
-    if bare:
-        return assets.load()
-    return assets.compose(
-        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, track))
-    )
-
-
-def yaw_deg(quat: npt.NDArray[np.float64]) -> float:
-    """Heading (deg) from a MuJoCo (w, x, y, z) quaternion."""
-    w, x, y, z = quat
-    return math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
-
-
-def keyboard_inputs(keys: pygame.key.ScancodeWrapper) -> Inputs:
-    return Inputs(
+def keyboard_inputs(keys: pygame.key.ScancodeWrapper) -> Drive:
+    return Drive(
         throttle=float(keys[pygame.K_w] - keys[pygame.K_s]),
         steer=float(keys[pygame.K_a] - keys[pygame.K_d]),
     )
 
 
-def gamepad_inputs(p: GamepadParams, pad: pygame.joystick.JoystickType) -> Inputs:
+def gamepad_inputs(p: GamepadParams, pad: pygame.joystick.JoystickType) -> Drive:
     throttle = (pad.get_axis(p.accel_axis) + 1) / 2 - (
         pad.get_axis(p.brake_axis) + 1
     ) / 2
     steer = -pad.get_axis(p.steer_axis)  # stick right = steer right = negative
-    return Inputs(throttle=throttle, steer=0.0 if abs(steer) < p.deadzone else steer)
+    return Drive(throttle=throttle, steer=0.0 if abs(steer) < p.deadzone else steer)
 
 
 def draw_lidar(hud: HudParams, screen: pygame.Surface, ranges: sensors.Vec8) -> None:
@@ -191,23 +177,21 @@ def draw_wasd(
         screen.blit(text, text.get_rect(center=rect.center))
 
 
-def main(track: str, bare: bool) -> None:
+def main(track: str | None) -> None:
+    """Drive the car on the track XML at the path track, or alone on its
+    own plane if track is None."""
     view, gamepad, hud = ViewParams(), GamepadParams(), HudParams()
-    scene = load_scene(track, bare)
+    scene = load_scene(track)
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
-    params, state = DriveParams(), DriveState()
+    state = Drive()
 
     # The offscreen buffer must be at least the window size before the
     # Renderer is made. The MJCF default is 640x480.
     model.vis.global_.offwidth = max(view.width, model.vis.global_.offwidth)
     model.vis.global_.offheight = max(view.height, model.vis.global_.offheight)
     renderer = mujoco.Renderer(model, height=view.height, width=view.width)
-    cam = mujoco.MjvCamera()
-    cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-    cam.trackbodyid = model.bind_scalar(car.body).id
-    cam.distance = view.cam_distance
-    cam.elevation = view.cam_elevation
+    cam = chase_camera(view.cam, model, car)
 
     pygame.init()
     screen = pygame.display.set_mode((view.width, view.height))
@@ -230,7 +214,7 @@ def main(track: str, bare: bool) -> None:
                     running = False
                 case "reset_car":
                     mujoco.mj_resetData(model, data)
-                    state = DriveState()
+                    state = Drive()
                 case "toggle_timer":
                     timing = not timing
                 case "reset_timer":
@@ -245,16 +229,18 @@ def main(track: str, bare: bool) -> None:
             gamepad_inputs(gamepad, pad) if pad is not None else keyboard_inputs(keys)
         )
         if keys[pygame.K_SPACE]:
-            state, inputs = DriveState(), Inputs(0.0, 0.0)  # hard stop, no slew
-        state = next_state(params, state, inputs.throttle, inputs.steer, dt)
-        apply_and_step(scene, data, params, state, dt)
+            state, inputs = Drive(), Drive()  # hard stop, no slew
+        state = next_drive(SHAPING, state, inputs, dt)
+        # The car may touch the walls here: Backspace or Start resets it.
+        start = data.time
+        apply_and_step(scene, data, state, frame_dt(SHAPING, dt))
 
-        cam.azimuth = yaw_deg(data.bind_scalar(car.body).xquat)
+        follow_car(view.cam, cam, data, car)
         renderer.update_scene(data, camera=cam)
         frame = renderer.render()  # (h, w, 3); a pygame surface is (w, h)
         screen.blit(pygame.surfarray.make_surface(frame.swapaxes(0, 1)), (0, 0))
         if timing:
-            elapsed += dt
+            elapsed += data.time - start  # s simulated, in whole steps
         ranges = sensors.lidar_ranges(sensors.read(car.sensors, data))
         draw_lidar(hud, screen, ranges)
         draw_wasd(hud, screen, keys, key_font)
@@ -282,4 +268,4 @@ if __name__ == "__main__":
         "--bare", action="store_true", help="the car alone on its own plane"
     )
     args = parser.parse_args()
-    main(args.track, args.bare)
+    main(None if args.bare else os.path.join(assets.TRACK_DIR, args.track))

@@ -31,7 +31,7 @@ from typing import Literal
 import mujoco
 import mujoco.viewer
 
-from neoracer_mujoco import assets, sensors, sim
+from neoracer_mujoco import assets, contract, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.scene import Car
 
@@ -141,6 +141,7 @@ def main() -> None:
     scene = assets.load()
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
+    wheel_radius = contract.wheel_radius(model, car)  # m
 
     print(f"NeoRacer viewer — mode={args.mode}")
     print(
@@ -161,9 +162,7 @@ def main() -> None:
             loop_start = time.time()
 
             readings = sensors.read(car.sensors, data)
-            speed = sensors.estimated_linear_speed_ms(
-                sensors.motor_encoder_rad_s(readings)
-            )
+            speed = sensors.motor_encoder_rad_s(readings) * wheel_radius  # m/s
 
             command = _command(params, data.time, speed)
             sim.apply_command(car, data, command)

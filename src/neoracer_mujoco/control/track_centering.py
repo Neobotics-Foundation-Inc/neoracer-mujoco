@@ -9,7 +9,8 @@ examples/track_centering_demo.py for a demo that does.
 
 Frame: +X forward, +Y left, +Z up.
 Throttle in [-1, 1], + = forward.
-steer_servo target angle (rad), + = left, range [-0.4, 0.4].
+steer_servo target angle (rad), + = left, up to full lock either way
+(neoracer_spec.derive.steer_lock).
 
 LiDAR beams: 8 horizontal beams at 45° steps.
   lidar_000 = straight ahead (+X)      lidar_180 = straight behind (-X)

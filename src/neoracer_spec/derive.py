@@ -15,22 +15,15 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-import numpy as np
-
 from . import ackermann, parts
-from .neoracer import NEORACER
-from .parts import Nominal, Polynomial, precise, precise3
+from .parts import Nominal, precise, precise3
 from .spec import (
     DcMotorRating,
-    Lidar,
-    MotorEncoder,
     ServoRating,
     Spec,
     SteeringServo,
     Vec3,
 )
-
-G = 9.81  # m/s^2, MuJoCo's gravity
 
 
 @dataclass(frozen=True)
@@ -40,34 +33,26 @@ class DerivedParams:
     model: ModelParams
     lidar: LidarParams
     encoder: EncoderParams
-    wheel_radius: float  # m, that the encoder's speed is measured at
-    steer_lock: float  # rad of steering input, full lock
 
 
 def derive(spec: Spec) -> DerivedParams:
     return DerivedParams(
-        model=model(spec),
-        lidar=lidar_params(spec.lidar),
-        encoder=encoder_params(spec.encoder),
-        wheel_radius=precise(spec.wheel.radius.value),
-        steer_lock=steer_lock(spec),
+        model=model(spec), lidar=lidar_params(spec), encoder=encoder_params(spec)
     )
 
 
 # --- the settings beside the model --------------------------------------------
 
-_LIDAR = NEORACER.lidar
-
 
 @dataclass(frozen=True)
 class LidarParams:
-    """The LiDAR's scan. The defaults are the NeoRacer's: lidar_params(NEORACER.lidar)."""
+    """The LiDAR's scan: lidar_params(car) for a NeoRacer,
+    derive_v2.lidar_params(car) for a RACECAR Neo V2."""
 
-    slots: int = round(360 / _LIDAR.resolution_degrees.value)  # slots a turn
-    scan_rate: float = _LIDAR.scan_rate.value  # Hz, turns a second
-    max_range: float = _LIDAR.range_bright.value  # m, its range on a bright target
-    # rad of bearings it sees, centered on the front
-    field: float = math.radians(_LIDAR.field_degrees.value)
+    slots: int  # slots a turn
+    scan_rate: float  # Hz, turns a second
+    max_range: float  # m, its range on a bright target
+    field: float  # rad of bearings it sees, centered on the front
 
     def __post_init__(self) -> None:
         if self.slots < 1:
@@ -80,9 +65,10 @@ class LidarParams:
             raise ValueError(f"field must be in (0, 2 pi] rad, not {self.field}")
 
 
-def lidar_params(lidar: Lidar) -> LidarParams:
+def lidar_params(spec: Spec) -> LidarParams:
     """The scan of the LiDAR: a slot every sample, out to its range on a bright
     target."""
+    lidar = spec.lidar
     return LidarParams(
         slots=round(360 / lidar.resolution_degrees.value),
         scan_rate=lidar.scan_rate.value,
@@ -91,29 +77,29 @@ def lidar_params(lidar: Lidar) -> LidarParams:
     )
 
 
-_ENCODER = NEORACER.encoder
-
-
 @dataclass(frozen=True)
 class EncoderParams:
-    """How the firmware measures the speed from the motor encoder. The
-    defaults are the NeoRacer's: encoder_params(NEORACER.encoder)."""
+    """How the firmware measures the speed from the motor encoder."""
 
-    window: float = _ENCODER.report_period.value  # s, the firmware's control period
-    alpha: float = (
-        _ENCODER.filter_weight.value
-    )  # the weight of the new window in the filter
+    window: float  # s, the firmware's control period
+    radius: float  # m, the tyre's, that it measures the speed at
+    alpha: float  # the weight of the new window in the filter
 
     def __post_init__(self) -> None:
         if not self.window > 0.0:
             raise ValueError(f"window must be > 0 s, not {self.window}")
+        if not self.radius > 0.0:
+            raise ValueError(f"radius must be > 0 m, not {self.radius}")
         if not 0.0 < self.alpha <= 1.0:
             raise ValueError(f"alpha must be in (0, 1], not {self.alpha}")
 
 
-def encoder_params(encoder: MotorEncoder) -> EncoderParams:
+def encoder_params(spec: Spec) -> EncoderParams:
+    """The firmware's encoder, which measures the speed at the car's tyre."""
     return EncoderParams(
-        window=encoder.report_period.value, alpha=encoder.filter_weight.value
+        window=spec.encoder.report_period.value,
+        radius=spec.wheel.radius.value,
+        alpha=spec.encoder.filter_weight.value,
     )
 
 
@@ -122,22 +108,12 @@ def encoder_params(encoder: MotorEncoder) -> EncoderParams:
 
 @dataclass(frozen=True)
 class ModelParams:
-    """The car model's numbers: the parts that both cars' models have
-    (parts), and the NeoRacer's own. Positions are in the car's body frame."""
+    """The NeoRacer's model: the parts that both cars' models have, and its
+    own."""
 
-    spawn_height: float  # m, of the body frame above the floor
-    inertial: parts.Inertial
-    boxes: tuple[parts.CollisionBox, ...]
-    imu_position: Vec3  # m
-    lidar: parts.LidarBeams
-    wheels: parts.Wheels
-    springs: parts.Springs
-    steering: parts.SteeringInput
-    servo: parts.Servo
-    servo_delay: parts.Delay  # the car's board and servo acting on a command
-    motor: DcMotorParams
+    common: parts.Model
+    drive: DcMotorParams
     wheel_mesh_scale: float  # of the cosmetic wheel meshes, to the tyre
-    steer_armature: float  # kg·m², at the steering input and steer joints
 
 
 @dataclass(frozen=True)
@@ -148,86 +124,76 @@ class DcMotorParams:
 
 
 def model(spec: Spec) -> ModelParams:
+    if spec.esc.neutral.value != "brake":
+        # MuJoCo's DC motor at 0 V shorts its windings, so the model cannot
+        # coast.
+        raise ValueError(
+            f"the model's drive brakes at neutral, not {spec.esc.neutral.value!r}"
+        )
     c, w, s = spec.chassis, spec.wheel, spec.suspension
     box = c.collision_box.value
-    poly = ackermann_left(spec)
-    fit = precise(spec.steering.fit_range.value)
+    fit = spec.steering.fit_range.value
     friction = precise(w.friction.value)
     k, d, ref = precise(s.stiffness.value), precise(s.damping.value), spring_ref(spec)
     return ModelParams(
-        spawn_height=parts.spawn_height(w.radius.value),
-        inertial=parts.Inertial(
-            mass=precise(chassis_mass(spec)),
-            pos=(0.0, 0.0, precise(c.com_height.value)),
-            diaginertia=precise3(chassis_inertia(spec)),
-        ),
-        boxes=(
-            parts.CollisionBox(
-                "chassis", precise3(box.center), precise3(box.half_size)
+        common=parts.Model(
+            spawn_height=parts.spawn_height(w.radius.value),
+            inertial=parts.Inertial(
+                mass=precise(chassis_mass(spec)),
+                pos=(0.0, 0.0, precise(c.com_height.value)),
+                diaginertia=precise3(chassis_inertia(spec)),
+            ),
+            boxes=(
+                parts.CollisionBox(
+                    "chassis", precise3(box.center), precise3(box.half_size)
+                ),
+            ),
+            imu_position=precise3(spec.imu.position.value),
+            lidar=parts.LidarBeams(
+                position=precise3(spec.lidar.position.value),
+                yaw=0.0,
+                scan_rate=precise(spec.lidar.scan_rate.value),
+                field=precise(lidar_params(spec).field),
+            ),
+            wheels=parts.Wheels(
+                half_wheelbase=precise(c.wheelbase.value / 2),
+                half_track=precise(c.track.value / 2),
+                radius=precise(w.radius.value),
+                half_width=precise(w.width.value / 2),
+                mass=precise(w.mass.value),
+                damping=precise(w.drive_damping.value),
+                friction=(friction, friction),
+            ),
+            springs=parts.Springs(
+                range=(-precise(s.droop.value), precise(s.jounce.value)),
+                stiffness=(k, k),
+                damping=(d, d),
+                springref=(precise(ref), precise(ref)),
+            ),
+            # The steering input is the virtual wheel's angle.
+            steering=parts.steering_input(
+                c.wheelbase.value,
+                c.track.value,
+                stops=(-fit, fit),
+                virtual=lambda x: x,
+                armature=spec.steering.armature.value,
+            ),
+            servo=parts.Servo(
+                nominal=precise3(servo_nominal(spec)),
+                kp=precise(spec.servo.kp.value),
+                kd=precise(spec.servo.kd.value),
+                voltage_limit=precise(spec.servo.supply.value),
+                lock=steer_lock(spec),
+                delay=parts.delay(spec.servo.latency.value),
             ),
         ),
-        imu_position=precise3(spec.imu.position.value),
-        lidar=parts.LidarBeams(
-            position=precise3(spec.lidar.position.value),
-            yaw=0.0,
-            scan_rate=precise(spec.lidar.scan_rate.value),
-            field=precise(lidar_params(spec.lidar).field),
-        ),
-        wheels=parts.Wheels(
-            half_wheelbase=precise(c.wheelbase.value / 2),
-            half_track=precise(c.track.value / 2),
-            radius=precise(w.radius.value),
-            half_width=precise(w.width.value / 2),
-            mass=precise(w.mass.value),
-            damping=precise(w.drive_damping.value),
-            friction=(friction, friction),
-        ),
-        springs=parts.Springs(
-            range=(-precise(s.droop.value), precise(s.jounce.value)),
-            stiffness=(k, k),
-            damping=(d, d),
-            springref=(precise(ref), precise(ref)),
-        ),
-        steering=parts.SteeringInput(
-            stops=(-fit, fit),
-            wheel_range=precise(wheel_steer_range(spec)),
-            ackermann_left=poly,
-            # The right wheel's is the left's mirror image.
-            ackermann_right=(-poly[0], poly[1], -poly[2], poly[3], -poly[4]),
-            input_body_mass=precise(spec.steering.input_body_mass.value),
-        ),
-        servo=parts.Servo(
-            nominal=precise3(servo_nominal(spec)),
-            kp=precise(spec.servo.kp.value),
-            kd=precise(spec.servo.kd.value),
-            voltage_limit=precise(spec.servo.supply.value),
-            lock=steer_lock(spec),
-        ),
-        servo_delay=parts.delay(spec.servo.latency.value),
-        motor=DcMotorParams(
+        drive=DcMotorParams(
             nominal=precise3(nominal(spec.motor.rating.value)),
             gear=precise(spec.motor.gear_ratio.value),
             ctrl_limit=precise(spec.battery.voltage.value),
         ),
         wheel_mesh_scale=precise(w.radius.value / spec.visuals.mesh_wheel_radius.value),
-        steer_armature=precise(spec.steering.armature.value),
     )
-
-
-def ackermann_left(spec: Spec) -> Polynomial:
-    """The left wheel's angle as a 4th-order polynomial of the steering input,
-    a least-squares fit to ideal Ackermann steering over its range, to the
-    model's precision. The right wheel's is its mirror image,
-    (-a0, a1, -a2, a3, -a4)."""
-    l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
-    r = spec.steering.fit_range.value
-    # An even count of points leaves out 0, where left_wheel divides by 0.
-    x = np.linspace(-r, r, 400)
-    y = [ackermann.left_wheel(l, w, s) for s in x]
-    a0, a1, a2, a3, a4 = (
-        precise(float(a)) for a in np.polynomial.polynomial.polyfit(x, y, 4)
-    )
-    return (a0, a1, a2, a3, a4)
 
 
 def nominal(rating: DcMotorRating) -> Nominal:
@@ -281,9 +247,7 @@ def steer_lock(spec: Spec) -> float:
 
 
 def chassis_mass(spec: Spec) -> float:
-    """The chassis body's mass (kg): the sprung mass less the steering input's
-    body."""
-    return sprung_mass(spec) - spec.steering.input_body_mass.value
+    return parts.chassis_mass(spec.chassis.mass.value, spec.wheel.mass.value)
 
 
 def sprung_mass(spec: Spec) -> float:
@@ -301,13 +265,5 @@ def chassis_inertia(spec: Spec) -> Vec3:
 
 def spring_ref(spec: Spec) -> float:
     """The springs' rest position (m): each holds a quarter of the sprung
-    weight with its joint at 0."""
-    return -sprung_mass(spec) * G / 4 / spec.suspension.stiffness.value
-
-
-def wheel_steer_range(spec: Spec) -> float:
-    """How far (rad) each front wheel's steer joint turns: past the inner
-    wheel's angle at the edge of the steering input's range."""
-    l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
-    s = spec.steering
-    return ackermann.left_wheel(l, w, s.fit_range.value) + s.wheel_range_margin.value
+    mass."""
+    return parts.spring_ref(sprung_mass(spec) / 4, spec.suspension.stiffness.value)

@@ -12,7 +12,7 @@ import {
 } from 'neoracer-mujoco';
 
 const mj = await loadMujoco();
-const scene = compose(mj, trackXml);           // the car at the origin, facing +X
+const scene = compose(mj, trackXml);           // the car at the track's start site
 const { model } = scene;
 const data = settle(mj, model);               // at rest on the track
 const dt = model.opt.timestep;                // s
@@ -33,8 +33,8 @@ for (let i = 0; i < Math.round(1 / dt); i++) { // 1 s
   encoder = stepEncoder(ENCODER, encoder, angle(), dt);
   lidar = sweepLidar(mj, LIDAR, scene, data, lidar, dt);
 }
-// encoder.speed is rc.physics.get_encoder_speed() in m/s; lidar.scan holds
-// 1440 distances in m, clockwise from the front, -1 for no return.
+// encoder.speed is rc.physics.get_encoder_speed() in m/s; lidar.scan holds a
+// distance in m a slot, clockwise from the front, -1 for no return.
 ```
 
 The scene has no meshes that only show the car: render the car with your own model of it.

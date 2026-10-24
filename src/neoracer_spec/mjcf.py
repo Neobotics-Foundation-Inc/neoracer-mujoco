@@ -10,7 +10,8 @@ and refuse a template that already has it, so the spec's numbers live in
 the spec alone. neoracer_mujoco.assets reads the cars through them.
 
 Each part that both cars' models have (parts) has one writer here, such as
-lidar_beams, and each car's edits are those writers' and its own.
+lidar_beams; model writes them all, and each car's edits are model's and its
+own.
 """
 
 import math
@@ -209,6 +210,7 @@ def steering_input(st: parts.SteeringInput, w: parts.Wheels) -> list[Edit]:
         *put(
             default("steer", "joint"),
             range=numbers(-st.wheel_range, st.wheel_range),
+            armature=number(st.armature),
         ),
         *put(named("joint", "ackermann_left"), polycoef=numbers(*st.ackermann_left)),
         *put(named("joint", "ackermann_right"), polycoef=numbers(*st.ackermann_right)),
@@ -216,12 +218,16 @@ def steering_input(st: parts.SteeringInput, w: parts.Wheels) -> list[Edit]:
 
 
 def servo(s: parts.Servo) -> list[Edit]:
-    return put(
-        named("dcmotor", "steer_servo"),
-        nominal=numbers(*s.nominal),
-        controller=numbers(s.kp, 0, s.kd, 0, 0, s.voltage_limit),
-        ctrlrange=numbers(-s.lock, s.lock),
-    )
+    path = named("dcmotor", "steer_servo")
+    return [
+        *put(
+            path,
+            nominal=numbers(*s.nominal),
+            controller=numbers(s.kp, 0, s.kd, 0, 0, s.voltage_limit),
+            ctrlrange=numbers(-s.lock, s.lock),
+        ),
+        *delay(path, s.delay),
+    ]
 
 
 def delay(path: str, d: parts.Delay) -> list[Edit]:
@@ -229,15 +235,8 @@ def delay(path: str, d: parts.Delay) -> list[Edit]:
     return put(path, delay=number(d.latency), nsample=str(d.nsample))
 
 
-def car_xml(p: ModelParams, xml: str) -> str:
-    """The car's XML from its template, xml, and the numbers of p."""
-    return apply(xml, car_edits(p))
-
-
-def car_edits(p: ModelParams) -> list[Edit]:
-    """The numbers of p, by the element and the attribute that hold each."""
-    m = p.motor
-    scale = numbers(*[p.wheel_mesh_scale] * 3)
+def model(p: parts.Model) -> list[Edit]:
+    """The edits of the parts that both cars' models have."""
     return [
         *solver(SOLVER),
         *put(named("body", "car"), pos=numbers(0, 0, p.spawn_height)),
@@ -249,20 +248,32 @@ def car_edits(p: ModelParams) -> list[Edit]:
         *springs(p.springs),
         *steering_input(p.steering, p.wheels),
         *servo(p.servo),
-        *delay(named("dcmotor", "steer_servo"), p.servo_delay),
-        # The NeoRacer's own: its floor, the meshes of its LiDAR and wheels,
-        # its steering's armature and its DC drive motor.
+    ]
+
+
+def car_xml(p: ModelParams, xml: str) -> str:
+    """The car's XML from its template, xml, and the numbers of p."""
+    return apply(xml, car_edits(p))
+
+
+def car_edits(p: ModelParams) -> list[Edit]:
+    """The numbers of p, by the element and the attribute that hold each."""
+    m = p.drive
+    scale = numbers(*[p.wheel_mesh_scale] * 3)
+    return [
+        *model(p.common),
+        # The NeoRacer's own: its floor, the meshes of its LiDAR and wheels
+        # and its DC drive motor.
         *put(
             ".//geom[@type='plane']",
-            friction=numbers(p.wheels.friction[0], 0.1, 0.1),
+            friction=numbers(p.common.wheels.friction[0], 0.1, 0.1),
         ),
-        *put(named("geom", "vis_lidar"), pos=numbers(*p.lidar.position)),
+        *put(named("geom", "vis_lidar"), pos=numbers(*p.common.lidar.position)),
         *[
             e
             for corner in CORNERS
             for e in put(named("mesh", f"vis_{corner}_wheel"), scale=scale)
         ],
-        *put(default("steer", "joint"), armature=number(p.steer_armature)),
         *put(
             named("dcmotor", "motor"),
             nominal=numbers(*m.nominal),
@@ -283,17 +294,7 @@ def racecar_neo_v2_edits(p: derive_v2.ModelParams) -> list[Edit]:
     ax, ay, az = p.antenna_center
     antenna = numbers(p.antenna_radius, p.antenna_half_length)
     return [
-        *solver(SOLVER),
-        *put(named("body", "car"), pos=numbers(0, 0, p.spawn_height)),
-        *inertial(p.inertial),
-        *collision_boxes(p.boxes),
-        *put(named("site", "imu"), pos=numbers(*p.imu_position)),
-        *lidar_beams(p.lidar),
-        *wheels(p.wheels),
-        *springs(p.springs),
-        *steering_input(p.steering, p.wheels),
-        *servo(p.servo),
-        *delay(named("dcmotor", "steer_servo"), p.servo_delay),
+        *model(p.common),
         # The V2's own: its antennas and its speed controller, two actuators
         # on the drivetrain.
         *put(named("geom", "antenna_left"), pos=numbers(ax, ay, az), size=antenna),

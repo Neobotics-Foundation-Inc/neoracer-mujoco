@@ -22,7 +22,7 @@ from neoracer_spec.neoracer import NEORACER
 
 TRACK = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
 DRIVE = ControlCommand(throttle=0.5, steer=0.2)
-DRIVE_STEPS = 360  # 1 s at the 1/360 s timestep
+DRIVE_SECONDS = 1.0  # s
 
 
 def main(out: str) -> None:
@@ -34,18 +34,19 @@ def main(out: str) -> None:
 
     settled = sim.settle(model)
     data = sim.settle(model)
-    params = encoder.EncoderParams()
+    params = derive(NEORACER).encoder
     drive_pos = data.bind_scalar(car.sensors.drive_pos)
     state = encoder.start(params, float(drive_pos.data[0]))
     sim.apply_command(car, data, DRIVE)
-    for _ in range(DRIVE_STEPS):
+    drive_steps = round(DRIVE_SECONDS / model.opt.timestep)
+    for _ in range(drive_steps):
         mujoco.mj_step(model, data)
         state = encoder.step(
             params, state, float(drive_pos.data[0]), model.opt.timestep
         )
 
     # A turn swept from 13 poses, each 1 cm to the left of the last.
-    lidar_params = lidar.LidarParams()
+    lidar_params = derive(NEORACER).lidar
     poses = []
     sweep_data = sim.settle(model)
     joint = sweep_data.bind_scalar(car.joint)
@@ -62,7 +63,7 @@ def main(out: str) -> None:
     angles = [0.3 * math.sin(0.05 * i) + 0.02 * i for i in range(200)]
     speeds, enc = [], encoder.start(params, angles[0])
     for a in angles[1:]:
-        enc = encoder.step(params, enc, a, 1 / 360)
+        enc = encoder.step(params, enc, a, model.opt.timestep)
         speeds.append(enc.speed)
 
     commands = []
@@ -89,10 +90,15 @@ def main(out: str) -> None:
         "sizes": sizes,
         "timestep": model.opt.timestep,
         "settled_qpos": settled.qpos.tolist(),
+        # Timesteps that divide SETTLE_TIME, and one that leaves half a step.
+        "settle_steps": [
+            [dt, sim.settle_steps(dt)]
+            for dt in (model.opt.timestep, 0.002, sim.SETTLE_TIME / 312.5)
+        ],
         "drive": {
             "throttle": DRIVE.throttle,
             "steer": DRIVE.steer,
-            "steps": DRIVE_STEPS,
+            "steps": drive_steps,
             "qpos": data.qpos.tolist(),
             "encoder_speed": state.speed,
         },

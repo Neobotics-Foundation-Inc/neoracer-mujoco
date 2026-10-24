@@ -13,7 +13,7 @@ import mujoco
 import numpy as np
 import pytest
 
-from neoracer_mujoco import Scene, assets, batch, physics, sensors, sim
+from neoracer_mujoco import Scene, assets, batch, contract, physics, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import Physics, PhysicsRanges, Range
 from neoracer_mujoco.scene import find_car
@@ -33,7 +33,7 @@ CHANGED = Physics(
 
 
 def _scene(car: str = assets.DEFAULT_CAR) -> Scene:
-    return assets.compose(mujoco.MjSpec.from_file(TRACK), car, pos=(0, -2.5, 0))
+    return assets.compose(mujoco.MjSpec.from_file(TRACK), car)
 
 
 def _applied(scene: Scene, p: Physics) -> mujoco.MjModel:
@@ -141,8 +141,8 @@ def test_a_faster_lidar_shows_its_scans_sooner():
     """With lidar_rate f, a driving car's front beam shows a new scan every
     turn of the head, 1 / (scan rate x f), to a physics step."""
     scan_rates = (
-        derive.model(NEORACER).lidar.scan_rate,
-        derive_v2.model(RACECAR_NEO_V2).lidar.scan_rate,
+        derive.model(NEORACER).common.lidar.scan_rate,
+        derive_v2.model(RACECAR_NEO_V2).common.lidar.scan_rate,
     )
     for car_path, scan_rate in zip(CARS, scan_rates, strict=True):
         scene = _scene(car_path)
@@ -172,7 +172,7 @@ def test_less_wheel_friction_means_more_slip():
         for _ in range(round(0.5 / model.opt.timestep)):
             mujoco.mj_step(model, data)
         spin = data.bind_scalar(scene.car.sensors.rl_wheel_vel).data[0]  # rad/s
-        surface = spin * sensors.WHEEL_RADIUS
+        surface = spin * contract.wheel_radius(model, scene.car)
         speed = data.bind_scalar(scene.car.sensors.imu_linvel).data[0]
         slips.append(surface - speed)  # m/s
     assert slips[0] > slips[1] > slips[2] > 0

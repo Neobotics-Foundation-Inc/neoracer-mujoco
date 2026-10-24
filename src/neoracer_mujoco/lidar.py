@@ -1,16 +1,17 @@
 """
-The spinning LiDAR: 1440 slots a turn, one every 0.25 degrees, 30 turns a
-second, with the rear 90 degrees blocked by the car.
+The spinning LiDAR: its slots a turn, its turns a second and the bearings
+that it sees past the car, as LidarParams gives them from the car's spec.
 
 The real LiDAR measures each slot when its head passes it, not the whole
 turn at once. So sweep() casts, at each physics step, the rays of the slots
-that the head passed in that step, from the car's pose at that step: at
-360 Hz, 120 slots a step and 12 steps a scan. The scan of a moving car is
-then skewed as the real one is. The rays start at the LiDAR site
-(contract.LIDAR_SITE) and lie in its XY plane, so they tilt with the car.
-Like a MuJoCo rangefinder, a ray does not see the geoms of the site's body.
+that the head passed in that step, from the car's pose at that step: a turn
+takes several steps, and each casts its share of the slots. The scan of a
+moving car is then skewed as the real one is. The rays start at the LiDAR
+site (contract.LIDAR_SITE) and lie in its XY plane, so they tilt with the
+car. Like a MuJoCo rangefinder, a ray does not see the geoms of the site's
+body.
 
-Slot i points i * 0.25 degrees clockwise from the front, the order of a
+Slot i points i / slots of a turn clockwise from the front, the order of a
 racecar_core scan. It holds the distance (m) to the first geom along its
 ray, or NO_RETURN (-1, as a rangefinder reads) for a blocked slot or no geom
 within range. LidarParams holds the numbers.
@@ -30,6 +31,7 @@ import numpy.typing as npt
 
 from neoracer_spec.derive import LidarParams
 
+from . import contract
 from .scene import Car
 from .sensors import NO_RETURN
 
@@ -57,7 +59,7 @@ def start(
 
 # The part of a slot below which the head has not reached it: a step that
 # lands on a slot, up to rounding, does not measure it.
-_EPS = 1e-9
+SLOT_EPS = 1e-9
 
 
 def sweep(
@@ -74,12 +76,12 @@ def sweep(
     end = state.head + n * params.scan_rate * dt
     if not 0 < end - state.head < n:
         raise ValueError(f"a step of {dt} s is not between 0 and a turn")
-    slots = np.arange(math.ceil(state.head - _EPS), math.ceil(end - _EPS))
+    slots = np.arange(math.ceil(state.head - SLOT_EPS), math.ceil(end - SLOT_EPS))
     values = _measure(params, model, data, car, slots % n)
     sweeping, scan = state.sweeping.copy(), state.scan
     done = slots < n
     sweeping[slots[done]] = values[done]
-    if end >= n - _EPS:  # the turn is complete
+    if end >= n - SLOT_EPS:  # the turn is complete
         scan, sweeping = sweeping, np.full(n, NO_RETURN)
         sweeping[slots[~done] - n] = values[~done]
         end -= n
@@ -103,9 +105,9 @@ def _measure(
 
 @functools.cache
 def visible(params: LidarParams) -> npt.NDArray[np.bool_]:
-    """The slots it sees: bearings in [-field / 2, field / 2)."""
-    b = bearings(params)
-    return (b < params.field / 2) | (b >= 2 * math.pi - params.field / 2)
+    """The slots it sees: their bearings in its field (contract.in_field),
+    as the beams of a car's model."""
+    return np.array([contract.in_field(b, params.field) for b in bearings(params)])
 
 
 def cast(

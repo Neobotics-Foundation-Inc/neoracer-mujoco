@@ -4,24 +4,31 @@ from its motor encoder, and for rc.physics.get_encoder_speed(), which reads
 it in the racecar_core adapter.
 """
 
+import copy
 import itertools
 
 import mujoco
 import numpy as np
 import pytest
+from cases import case
 
 from neoracer_mujoco import Scene, encoder, load, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
-from neoracer_mujoco.sensors import WHEEL_RADIUS
+from neoracer_spec.derive import EncoderParams, derive
+from neoracer_spec.neoracer import NEORACER
+from neoracer_spec.parts import SOLVER
 
-DT = 1 / 360  # s, the car's physics step
+PARAMS = derive(NEORACER).encoder
+
+DT = SOLVER.timestep  # s, the car's physics step
 
 
-def _spin(omega: float, seconds: float) -> list[encoder.EncoderState]:
+def _spin(
+    params: EncoderParams, omega: float, seconds: float
+) -> list[encoder.EncoderState]:
     """The encoder after each step of a drivetrain that turns at omega
     (rad/s) from rest, for seconds."""
-    params = encoder.EncoderParams()
     state, states = encoder.start(params, 0.0), []
     for i in range(1, round(seconds / DT) + 1):
         state = encoder.step(params, state, omega * i * DT, DT)
@@ -33,7 +40,7 @@ def test_windows_close_on_the_firmwares_ticks():
     """The step does not divide 20 ms, but the windows close on the firmware's
     20 ms ticks: 50 in a second, of seven or eight steps each, and the speed
     changes only when a window closes."""
-    states = _spin(10.0, 1.0)
+    states = _spin(PARAMS, 10.0, 1.0)
     closes = [i for i, s in enumerate(states) if s.span == 0.0]
     assert len(closes) == 50
     assert {b - a for a, b in itertools.pairwise(closes)} == {7, 8}
@@ -44,15 +51,16 @@ def test_windows_close_on_the_firmwares_ticks():
 
 def test_the_filter_converges_to_the_tyres_surface_speed():
     """Each window measures its own length, so at a steady speed every window
-    reads omega * r, whether it ran seven steps or eight. From rest, the
-    filter, which keeps 1 - alpha of its last value, then reports
-    (1 - (1 - alpha)^k) omega r at the k-th window."""
+    reads omega * r, r the params' radius, whether it ran seven steps or
+    eight. From rest, the filter, which keeps 1 - alpha of its last value,
+    then reports (1 - (1 - alpha)^k) omega r at the k-th window."""
     omega = -12.0  # rad/s, backward
-    alpha = encoder.EncoderParams().alpha
-    windows = [s.speed for s in _spin(omega, 0.5) if s.span == 0.0]
-    for k, speed in enumerate(windows, start=1):
-        expected = (1 - (1 - alpha) ** k) * omega * WHEEL_RADIUS
-        assert speed == pytest.approx(expected), f"window {k}"
+    for params in (PARAMS, copy.replace(PARAMS, radius=2 * PARAMS.radius)):
+        with case(params.radius):
+            windows = [s.speed for s in _spin(params, omega, 0.5) if s.span == 0.0]
+            for k, speed in enumerate(windows, start=1):
+                expected = (1 - (1 - params.alpha) ** k) * omega * params.radius
+                assert speed == pytest.approx(expected), f"window {k}"
 
 
 def test_the_adapter_reads_the_car_speed():
@@ -105,8 +113,7 @@ def test_the_first_window_measures_the_turn_of_the_wheels_in_it():
     rc.go()
     t0, a0, _ = seen[0]
     t1, a1, first = next(x for x in seen if x[2] != 0.0)
-    alpha = encoder.EncoderParams().alpha
-    assert first == pytest.approx(alpha * (a1 - a0) * WHEEL_RADIUS / (t1 - t0))
+    assert first == pytest.approx(PARAMS.alpha * (a1 - a0) * PARAMS.radius / (t1 - t0))
 
 
 def test_a_bounded_run_counts_its_last_step():

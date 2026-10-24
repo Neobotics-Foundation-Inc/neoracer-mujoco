@@ -250,16 +250,10 @@ def test_the_servo_turns_at_a_servos_speed_and_holds_steady(scene):
 
 def test_the_steer_limits_in_the_code_are_full_lock():
     """Code that clamps a steer command by its own copy of the limit reaches
-    full lock, the steer servo's ctrlrange, and no further. The copies are
-    the NeoRacer's, the default car's."""
-    # Imported here: manual_drive imports glfw, which no other test needs.
-    from examples import manual_drive
-    from examples.pygame_drive import drive_sim
-
+    full lock, the steer servo's ctrlrange, and no further. The copy is the
+    NeoRacer's, the default car's."""
     scene = load()
     lock = contract.actuator_limits(scene.model, scene.car).steer_rad
-    assert manual_drive.SteeringParams().max == pytest.approx(lock)
-    assert drive_sim.DriveParams().max_steer == pytest.approx(lock)
     assert ShapingConfig().steer_limit == pytest.approx(lock)
 
 
@@ -298,15 +292,14 @@ def test_top_speed_bounded(scene):
 
 
 def test_sensors_finite_under_load(scene):
-    """After 1 s of full throttle and full steer, every sensor, the motor
-    encoder and the speed estimate are finite."""
+    """After 1 s of full throttle and full steer, every sensor and the motor
+    encoder are finite."""
     steer = contract.actuator_limits(scene.model, scene.car).steer_rad
     s = _read(scene, _drive(scene, throttle=1.0, steer=steer, seconds=1.0))
     bad = [f.name for f in fields(s) if not np.all(np.isfinite(getattr(s, f.name)))]
     assert not bad, f"non-finite sensors: {bad}"
     motor_rad_s = sensors.motor_encoder_rad_s(s)
     assert np.isfinite(motor_rad_s), f"non-finite motor encoder: {motor_rad_s}"
-    assert np.isfinite(sensors.estimated_linear_speed_ms(motor_rad_s))
 
 
 def test_deterministic(scene):

@@ -4,9 +4,9 @@ The NeoRacer, part by part: the one place that says what the car is.
 Every value names its source and how we know it (provenance.py). Where
 sources disagree, the other values are its conflicts and its note says why
 this one was chosen. provenance.walk lists them all. To make a variant of the
-car, replace parts:
+car, change a part with tree.at:
 
-    dataclasses.replace(NEORACER, battery=Battery(voltage=assumed(7.4, ...)))
+    at(NEORACER, lambda car: car.battery.voltage).set(assumed(7.4, ...))
 """
 
 from .provenance import (
@@ -276,8 +276,6 @@ NEORACER = Spec(
         ),
         driver_lock=documented(0.625, DRIVER_THROTTLE, note="max_steering"),
         fit_range=chosen(0.45, "wider than full lock"),
-        wheel_range_margin=chosen(0.015, "so the joint limits never bind"),
-        input_body_mass=chosen(0.01, "a light virtual body"),
         armature=estimated(
             0.002,
             "tuned in simulation, not measured: the servo's rotor inertia and"

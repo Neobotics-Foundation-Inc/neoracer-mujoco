@@ -16,17 +16,19 @@ neoracer_mujoco.write_car writes the complete XMLs, for other MuJoCo tools.
 import glob
 import os
 import re
+import shutil
 import zipfile
 from importlib import resources
 
 import mujoco
-import numpy as np
 
 from neoracer_spec import derive_v2, mjcf
 from neoracer_spec.derive import derive
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
+from neoracer_spec.spec import Spec
 
+from . import contract
 from .scene import Scene, compile_scene
 
 PACKAGED_DIR = "data"  # the name of assets/ inside an installed wheel
@@ -39,8 +41,7 @@ ASSET_DIR = str(_packaged) if _packaged.is_dir() else _checkout
 TRACK_DIR = os.path.join(ASSET_DIR, "tracks")
 DEFAULT_CAR = os.path.join(ASSET_DIR, "neoracer.xml")
 MJZ_MODEL = "model.xml"  # the name of the XML in an archive of write_mjz
-
-type Position = tuple[float, float, float]  # m, world frame
+START_SITE = "start"  # the site of a track where compose puts the car
 
 
 def cars() -> list[str]:
@@ -83,12 +84,17 @@ def _completed(path: str | os.PathLike[str]) -> str | None:
         return None
     match os.path.basename(path):
         case "neoracer.xml":
-            return mjcf.car_xml(derive(NEORACER).model, _read(path))
+            return neoracer_xml(NEORACER)
         case "racecar_neo_v2.xml":
             p = derive_v2.model(RACECAR_NEO_V2)
             return mjcf.racecar_neo_v2_xml(p, _read(path))
         case _:
             return None
+
+
+def neoracer_xml(car: Spec) -> str:
+    """The MJCF of a NeoRacer: assets/neoracer.xml with the numbers of car."""
+    return mjcf.car_xml(derive(car).model, _read(DEFAULT_CAR))
 
 
 def _read(path: str | os.PathLike[str]) -> str:
@@ -104,13 +110,14 @@ def load(path: str | os.PathLike[str] = DEFAULT_CAR) -> Scene:
 def compose(
     track: mujoco.MjSpec,
     car: str | os.PathLike[str] | mujoco.MjSpec = DEFAULT_CAR,
-    pos: Position = (0.0, 0.0, 0.0),
     visuals: bool = True,
 ) -> Scene:
-    """Compile the track with the car's "car" body attached at pos (m),
-    facing +X. The car is a car XML's path or a car's MjSpec, such as
-    export.spec(car) for a variant. Neither track nor a car's MjSpec is
-    changed: the car is attached from copies.
+    """Compile the track with the car's root body (contract.CAR_BODY)
+    attached at the track's start: its site START_SITE, facing the site's
+    +X, or the origin, facing +X, if it has none. The site must be on the
+    world body, as the car's free joint must. The car is a car XML's
+    path or a car's MjSpec, such as export.spec(car) for a variant. Neither
+    track nor a car's MjSpec is changed: the car is attached from copies.
 
     Only the car body is attached, so the track keeps its own floor, and
     the track XML never names the car file. The scene takes the car's
@@ -127,8 +134,13 @@ def compose(
     scene = track.copy()
     car = car.copy() if isinstance(car, mujoco.MjSpec) else from_file(car)
     scene.option = car.option
-    frame = scene.worldbody.add_frame()
-    frame.pos = np.array(pos)
+    start = scene.site(START_SITE)
+    if start is not None and start.parent != scene.worldbody:
+        raise ValueError(
+            f"the track's {START_SITE} site is on the body {start.parent.name},"
+            " not on the world body, where the car's free joint must be"
+        )
+    mount = start if start is not None else scene.worldbody.add_frame()
     if not visuals:
         delete_visuals(car)
     # The car's root default class is "main", as the track's is. Attached
@@ -136,7 +148,7 @@ def compose(
     # <default> with no class, which the XML parser rejects. A name of its
     # own makes the scene's XML load again.
     car.default.name = "car"
-    frame.attach_body(car.body("car"), "", "")
+    mount.attach_body(car.body(contract.CAR_BODY), "", "")
     return compile_scene(scene)
 
 
@@ -183,6 +195,23 @@ def named_files(xml_path: str | os.PathLike[str]) -> list[str]:
         if os.path.isabs(name) or name.startswith(".."):
             raise ValueError(f"{xml_path} names {name}, outside its folder")
     return files
+
+
+def write_car(xml: str, name: str, folder: str | os.PathLike[str]) -> str:
+    """Write the MJCF xml to folder as name, with every file that it names
+    (named_files) copied from assets/, and return the XML's path. folder
+    must not be assets/, which holds the cars' templates."""
+    if os.path.realpath(folder) == os.path.realpath(ASSET_DIR):
+        raise ValueError(f"{folder} is assets/, which holds the templates")
+    path = os.path.join(folder, name)
+    os.makedirs(folder, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(xml)
+    for file in named_files(path):
+        target = os.path.join(folder, file)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(os.path.join(ASSET_DIR, file), target)
+    return path
 
 
 def write_mjz(xml_path: str | os.PathLike[str], out: str | os.PathLike[str]) -> None:

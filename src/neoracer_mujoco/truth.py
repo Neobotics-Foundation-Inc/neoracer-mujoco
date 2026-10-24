@@ -31,6 +31,8 @@ from typing import Literal, assert_never
 import mujoco
 import numpy as np
 
+from . import contract
+
 WALLS_BODY = "walls"
 type Name = Literal["truth_pos", "truth_zaxis", "truth_wall_contact"]
 POS: Name = "truth_pos"
@@ -49,19 +51,20 @@ class TruthSensors:
     wall_contact: mujoco.MjsSensor
 
 
-def add_sensors(spec: mujoco.MjSpec, car_body: str) -> None:
-    """Add the truth sensors of the body named car_body to spec, and an empty
-    walls body if spec has none. A truth sensor that spec already has stays,
-    so the spec of a Scene can be compiled again. Raise ValueError if spec
-    has a sensor with the name of a truth sensor but other settings."""
+def add_sensors(spec: mujoco.MjSpec) -> None:
+    """Add the truth sensors of the car's body (contract.CAR_BODY) to spec,
+    and an empty walls body if spec has none. A truth sensor that spec
+    already has stays, so the spec of a Scene can be compiled again. Raise
+    ValueError if spec has a sensor with the name of a truth sensor but
+    other settings."""
     if spec.body(WALLS_BODY) is None:
         spec.worldbody.add_body(name=WALLS_BODY)
     reference = mujoco.MjSpec()  # holds the truth sensors to compare against
     for name in (POS, ZAXIS, WALL_CONTACT):
         sensor = spec.sensor(name)
         if sensor is None:
-            _add_sensor(spec, name, car_body)
-        elif not _same_sensor(sensor, _add_sensor(reference, name, car_body)):
+            _add_sensor(spec, name)
+        elif not _same_sensor(sensor, _add_sensor(reference, name)):
             raise ValueError(f"the spec has a sensor {name} that is not a truth sensor")
 
 
@@ -73,8 +76,8 @@ def find_sensors(spec: mujoco.MjSpec) -> TruthSensors:
     return TruthSensors(pos=pos, zaxis=zaxis, wall_contact=wall_contact)
 
 
-def _add_sensor(spec: mujoco.MjSpec, name: Name, car_body: str) -> mujoco.MjsSensor:
-    """Add the truth sensor called name, of the body named car_body, to spec."""
+def _add_sensor(spec: mujoco.MjSpec, name: Name) -> mujoco.MjsSensor:
+    """Add the truth sensor called name, of the car's body, to spec."""
     # The body frame, not its inertial frame, in the world frame. For a
     # contact sensor, mjOBJ_XBODY means the body's whole tree (subtree1 in
     # MJCF), and mjOBJ_BODY the body alone (body2).
@@ -89,7 +92,7 @@ def _add_sensor(spec: mujoco.MjSpec, name: Name, car_body: str) -> mujoco.MjsSen
                 name=name,
                 type=mujoco.mjtSensor.mjSENS_CONTACT,
                 objtype=xbody,
-                objname=car_body,
+                objname=contract.CAR_BODY,
                 reftype=mujoco.mjtObj.mjOBJ_BODY,
                 refname=WALLS_BODY,
                 # data="found": one value, the number of matching contacts.
@@ -98,7 +101,9 @@ def _add_sensor(spec: mujoco.MjSpec, name: Name, car_body: str) -> mujoco.MjsSen
             )
         case _:
             assert_never(name)
-    return spec.add_sensor(name=name, type=sensor_type, objtype=xbody, objname=car_body)
+    return spec.add_sensor(
+        name=name, type=sensor_type, objtype=xbody, objname=contract.CAR_BODY
+    )
 
 
 # The fields that decide what a sensor measures and how it reports it. A

@@ -6,7 +6,8 @@ in validation/ run the conformance tests on it with no test edits. The tests
 pass only if the XML satisfies the requirements below.
 
 This module is the one source of truth for the interface. Code, examples and
-tests all read it.
+tests all read it. The sensors that a car must have are the fields of
+sensors.SensorReadings.
 
 Frame: +X forward, +Y left, +Z up.
 Actuators:
@@ -22,13 +23,16 @@ Their order in the XML is not part of the contract: code binds each one by
 its element in the scene's MjSpec (scene.Car).
 """
 
+import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 import mujoco
 
 if TYPE_CHECKING:  # scene.py imports this module
     from .scene import Car
+
+CAR_BODY = "car"  # the car's root body, with the free joint
 
 # --- actuators ---------------------------------------------------------------
 DRIVE_ACTUATOR = "motor"
@@ -51,27 +55,9 @@ LIDAR_SITE = "lidar_mount"
 IMU_ACCEL_SENSOR = "imu_accel"  # specific force at the IMU (m/s^2), car frame
 IMU_GYRO_SENSOR = "imu_gyro"  # angular velocity at the IMU (rad/s), car frame
 DRIVE_POS_SENSOR = "drive_pos"  # the drivetrain's angle (rad), the encoder's
-REQUIRED_SENSORS = (
-    IMU_ACCEL_SENSOR,
-    IMU_GYRO_SENSOR,
-    "imu_quat",
-    "imu_linvel",
-    "steer_cmd_pos",
-    "fl_steer_pos",
-    "fr_steer_pos",
-    "fl_wheel_vel",
-    "fr_wheel_vel",
-    "rl_wheel_vel",
-    "rr_wheel_vel",
-    DRIVE_POS_SENSOR,
-    "fl_susp_pos",
-    "fr_susp_pos",
-    "rl_susp_pos",
-    "rr_susp_pos",
-)
 
 # --- physical sanity --------------------------------------------------------
-# The real NeoRacer weighs 3.0 kg (spec, 2026-09-29). The test checks the total
+# The real NeoRacer's mass is its spec's Chassis.mass. The test checks the total
 # mass, not the mass of each geom, so a mesh can carry mass (a dense battery
 # or motor). If a mesh uses MuJoCo's default density of 1000 kg/m³, the total
 # mass is above MASS_MAX: the chassis box as solid water is 21.3 kg.
@@ -81,6 +67,26 @@ MASS_MIN, MASS_MAX = 1.0, 8.0  # kg
 
 
 type ThrottleMap = tuple[float, float, float]
+
+
+class Array(Protocol):
+    """A numpy or a JAX array, or a numpy scalar: what throttle_ctrl and the
+    batch's command and read need of one."""
+
+    def __array_namespace__(self, *, api_version: None = None) -> Any: ...
+
+    def __getitem__(self, key: Any, /) -> Any: ...
+
+    def __mul__(self, other: float, /) -> Any: ...
+
+
+def throttle_ctrl[A: Array](tmap: ThrottleMap, throttle: A) -> A:
+    """The ctrl that throttle, in [-1, 1], gives an actuator of throttle map
+    tmap (throttle_map): a t + b sign(t) + c |sign(t)|."""
+    a, b, c = tmap
+    xp = throttle.__array_namespace__()  # numpy or jax.numpy
+    sign = xp.sign(throttle)
+    return throttle * a + sign * b + xp.abs(sign) * c
 
 
 def throttle_map(model: mujoco.MjModel, actuator: mujoco.MjsActuator) -> ThrottleMap:
@@ -118,6 +124,18 @@ def lidar_field(model: mujoco.MjModel, lidar: mujoco.MjsSite) -> float:
     """The bearings (rad) that the LiDAR at the site lidar sees, centred on
     its front: the car blocks the rest. 2 pi if it sees all around."""
     return float(model.bind_scalar(lidar).user[0])
+
+
+# A field at the model's precision, 6 significant digits, is off by less
+# than this (rad), so a bearing that close outside its edge is on it.
+FIELD_EPS = 1e-5
+
+
+def in_field(bearing: float, field: float) -> bool:
+    """Whether a LiDAR that sees field (rad), centred on its front, sees
+    bearing (rad in [0, 2 pi), from the front either way). The field is
+    closed and symmetric: a bearing on either edge is in it."""
+    return min(bearing, 2 * math.pi - bearing) <= field / 2 + FIELD_EPS
 
 
 def actuator_limits(model: mujoco.MjModel, car: Car) -> ActuatorLimits:
