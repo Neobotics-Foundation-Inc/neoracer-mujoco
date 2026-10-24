@@ -75,11 +75,15 @@ def test_a_long_frame_is_cut_and_a_negative_one_changes_nothing():
     assert next_drive(SHAPING, drive, Drive(1.0, 1.0), -0.1) == drive
 
 
-def _drive(scene, data, inputs: Drive, seconds: float) -> None:
-    drive = Drive()
+STOPPED = Drive()
+
+
+def _drive(scene, data, inputs: Drive, seconds: float, drive=STOPPED) -> Drive:
+    """The command after seconds with inputs held, from drive."""
     for _ in range(round(seconds / DT)):
         drive = next_drive(SHAPING, drive, inputs, DT)
         apply_and_step(scene, data, drive, DT)
+    return drive
 
 
 def _speed(scene, data) -> float:
@@ -103,7 +107,7 @@ def test_the_car_tops_out_then_brakes_when_the_throttle_is_released():
     scene = assets.load()  # the car alone on its own plane
     data = mujoco.MjData(scene.model)
     x0 = float(data.bind_scalar(scene.car.body).xpos[0])
-    _drive(scene, data, Drive(throttle=1.0), 3.0)
+    full = _drive(scene, data, Drive(throttle=1.0), 3.0)
     assert float(data.bind_scalar(scene.car.body).xpos[0]) - x0 > 1.0
     # The motor's torque falls to 0 at its free speed V / K, so the mean wheel
     # spin (the drivetrain tendon's velocity) stays below it.
@@ -111,7 +115,7 @@ def test_the_car_tops_out_then_brakes_when_the_throttle_is_released():
     free = motor.ctrlrange[1] / motor.gainprm[1]  # rad/s
     assert data.bind_scalar(scene.car.drive).velocity[0] < free
     v_release = _speed(scene, data)
-    _drive(scene, data, Drive(), 4.0)
+    _drive(scene, data, Drive(), 4.0, full)  # the throttle falls at its rate back
     # At zero throttle the motor brakes in proportion to its speed: from full
     # speed the car loses half of it in about 0.35 s.
     assert _speed(scene, data) < 0.5 * v_release

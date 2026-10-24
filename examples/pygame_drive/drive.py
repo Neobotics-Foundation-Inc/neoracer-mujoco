@@ -232,6 +232,7 @@ def main(track: str | None) -> None:
             state, inputs = Drive(), Drive()  # hard stop, no slew
         state = next_drive(SHAPING, state, inputs, dt)
         # The car may touch the walls here: Backspace or Start resets it.
+        start = data.time
         apply_and_step(scene, data, state, frame_dt(SHAPING, dt))
 
         follow_car(view.cam, cam, data, car)
@@ -239,7 +240,7 @@ def main(track: str | None) -> None:
         frame = renderer.render()  # (h, w, 3); a pygame surface is (w, h)
         screen.blit(pygame.surfarray.make_surface(frame.swapaxes(0, 1)), (0, 0))
         if timing:
-            elapsed += frame_dt(SHAPING, dt)
+            elapsed += data.time - start  # s simulated, in whole steps
         ranges = sensors.lidar_ranges(sensors.read(car.sensors, data))
         draw_lidar(hud, screen, ranges)
         draw_wasd(hud, screen, keys, key_font)
