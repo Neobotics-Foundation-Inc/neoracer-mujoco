@@ -14,7 +14,7 @@ import sys
 
 import mujoco
 
-from neoracer_mujoco import assets, encoder, lidar, sim
+from neoracer_mujoco import assets, encoder, lidar, sim, speed_loop
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.racecar_core_adapter import MujocoDrive
 from neoracer_spec.derive import derive
@@ -66,6 +66,15 @@ def main(out: str) -> None:
         enc = encoder.step(params, enc, a, model.opt.timestep)
         speeds.append(enc.speed)
 
+    # The loop on the same turn of the drivetrain, asked for a speed it
+    # reaches, then a stop, then a speed backward.
+    loop_params = derive(NEORACER).speed_loop
+    commanded = [0.4 if i < 120 else 0.0 if i < 150 else -0.3 for i in range(199)]
+    throttles, loop = [], speed_loop.start(loop_params, angles[0])
+    for target, a in zip(commanded, angles[1:], strict=True):
+        loop = speed_loop.step(loop_params, loop, target, a, model.opt.timestep)
+        throttles.append(loop.throttle)
+
     commands = []
     for speed, angle_cmd, max_speed in [
         (1.0, 0.5, 1.0),
@@ -81,7 +90,7 @@ def main(out: str) -> None:
                 "speed": speed,
                 "angle": angle_cmd,
                 "max_speed": max_speed,
-                "drive": float(d.bind_scalar(car.drive).ctrl[0]),
+                "target": drive.target,
                 "steer": float(d.bind_scalar(car.steer).ctrl[0]),
             }
         )
@@ -104,6 +113,7 @@ def main(out: str) -> None:
         },
         "sweep": {"poses": poses, "scan": sweep.scan.tolist(), "head": sweep.head},
         "encoder": {"angles": angles, "speeds": speeds},
+        "speed_loop": {"commanded": commanded, "throttles": throttles},
         "commands": commands,
         "params": dataclasses.asdict(derive(NEORACER)),
     }

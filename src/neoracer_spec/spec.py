@@ -148,6 +148,10 @@ class Esc:
     neutral: Sourced[Literal["brake", "coast"]]
     """What the motor does at neutral throttle: short its windings (brake) or
     leave them open (coast). The model only brakes, so derive refuses coast."""
+    full_throttle_pulse: Sourced[float]
+    """The pulse past neutral at which the motor gets the battery's whole
+    voltage (us). Under it, the model gives the motor that share of the
+    voltage."""
 
 
 @dataclass(frozen=True)
@@ -213,23 +217,36 @@ class Steering:
 
 @dataclass(frozen=True)
 class SpeedController:
-    """The firmware's speed loop: a PID on the encoder's speed, with a
-    feed-forward, driving the ESC's pulse."""
+    """The firmware's speed loop: every period, a PID on the encoder's speed
+    and a feed-forward on the commanded speed set the ESC's pulse. A pulse is
+    in microseconds past neutral."""
 
     period: Sourced[float]
     kp: Sourced[float]
     """Microseconds of pulse per m/s of error."""
     ki: Sourced[float]
+    """Microseconds of pulse per meter of the error's integral."""
     kd: Sourced[float]
+    """Microseconds of pulse per m/s² of the error's change."""
+    integral_limit: Sourced[float]
+    """The bound on the error's integral (m)."""
+    error_deadband: Sourced[float]
+    """The error under which the loop reads none (m/s)."""
+    stop_speed: Sourced[float]
+    """The commanded speed under which the loop sends neutral and starts over."""
     speed_filter_weight: Sourced[float]
     """The weight of the new speed in the loop's low-pass filter."""
     feed_forward: Sourced[float]
     """Microseconds of pulse per m/s commanded."""
     deadband: Sourced[float]
-    """The smallest pulse past neutral that it sends (us)."""
-    full_pulse: Sourced[float]
-    """The pulse past neutral at full throttle (us)."""
+    """The feed-forward's pulse at a commanded speed of 0 (us): the least
+    that moves the car."""
+    feed_forward_limit: Sourced[float]
+    """The most pulse that the feed-forward sends (us)."""
+    pulse_limit: Sourced[float]
+    """The most pulse that the loop sends either way (us)."""
     max_speed: Sourced[float]
+    """The speed that a program's full speed commands."""
 
 
 @dataclass(frozen=True)

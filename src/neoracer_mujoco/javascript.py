@@ -19,7 +19,7 @@ import sys
 from collections.abc import Mapping
 from types import MappingProxyType, ModuleType
 
-from neoracer_spec import typescript
+from neoracer_spec import derive, typescript
 from neoracer_spec.neoracer import NEORACER
 
 from . import assets, contract, encoder, export, lidar, sensors, sim
@@ -41,6 +41,8 @@ SHARED: Mapping[str, ModuleType] = MappingProxyType(
         "SLOT_EPS": lidar,
         "FIELD_EPS": contract,
         "WINDOW_EPS": encoder,
+        "SPEED_LOOP_POSITIVE": derive,
+        "SPEED_LOOP_NONNEGATIVE": derive,
         "SETTLE_TIME": sim,
     }
 )

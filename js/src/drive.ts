@@ -1,6 +1,6 @@
 /**
- * Commands to the car's actuators, as sim.apply_command and the
- * racecar_core adapter's set_speed_angle write them.
+ * Commands to the car's actuators, as sim.apply_command writes them, and
+ * what the racecar_core adapter's set_speed_angle asks of the car.
  *
  * Frame: +X forward, +Y left, +Z up.
  */
@@ -8,6 +8,7 @@
 import type { MjData, MjModel } from '@mujoco/mujoco';
 
 import type { Car, Scene } from './scene.js';
+import { type SpeedLoopParams, targetSpeed } from './speedLoop.js';
 
 /** A command to the car. */
 export interface Command {
@@ -49,14 +50,23 @@ export function applyCommand(scene: Scene, data: MjData, command: Command): void
 
 const clamp = (x: number, low: number, high: number) => Math.min(Math.max(x, low), high);
 
+/** What racecar_core's set_speed_angle(speed, angle) asks of the car. */
+export interface SpeedAngle {
+  /** The speed (m/s) for the speed loop to hold (stepSpeedLoop), + = forward. */
+  readonly target: number;
+  /** The steer angle (rad), + = left, which the car takes at once. */
+  readonly steer: number;
+}
+
 /**
- * The command for racecar_core's set_speed_angle(speed, angle): both in
- * [-1, 1] and clamped there, speed + = forward and angle + = right, with the
- * speed scaled by maxSpeed (set_max_speed, in [0, 1]).
+ * What set_speed_angle(speed, angle) asks for, as the racecar_core
+ * adapter's MujocoDrive asks it: both in [-1, 1] and clamped there, speed
+ * + = forward and angle + = right, with the speed scaled by maxSpeed
+ * (set_max_speed, in [0, 1]) and the loop's max_speed (targetSpeed).
  */
-export function speedAngle(limits: Limits, speed: number, angle: number, maxSpeed = 1): Command {
+export function speedAngle(limits: Limits, params: SpeedLoopParams, speed: number, angle: number, maxSpeed = 1): SpeedAngle {
   return {
-    throttle: clamp(speed, -1, 1) * clamp(maxSpeed, 0, 1),
+    target: targetSpeed(params, speed, maxSpeed),
     // racecar_core turns right for + angle; the steering servo turns left.
     steer: -clamp(angle, -1, 1) * limits.steerRad,
   };

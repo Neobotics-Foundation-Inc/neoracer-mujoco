@@ -436,6 +436,13 @@ def test_a_car_whose_esc_coasts_at_neutral_is_refused():
         derive.derive(at(CAR, lambda c: c.esc.neutral.value).set("coast"))
 
 
+def test_a_car_whose_speed_loop_misses_the_encoders_window_is_refused():
+    """The firmware measures the speed for its loop in the window that it
+    reports the encoder's speed over, so the two periods must agree."""
+    with pytest.raises(ValueError, match="report period"):
+        derive.derive(at(CAR, lambda c: c.speed_controller.period.value).set(0.04))
+
+
 def test_a_car_whose_full_lock_leaves_the_fit_range_is_refused():
     with pytest.raises(ValueError, match="fit_range"):
         at(CAR, lambda c: c.steering.inner_lock_degrees.value).set(31.0)
