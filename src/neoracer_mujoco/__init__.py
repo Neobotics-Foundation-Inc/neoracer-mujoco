@@ -18,7 +18,8 @@ the parts of the car as spec elements, to bind to the model or the data
 (see scene.py).
 
 The `contract` module is the one source of truth for the requirements of a
-NeoRacer car XML: actuator and sensor names and mass band.
+NeoRacer car XML, such as its actuator names and mass band; the fields of
+sensors.SensorReadings are the sensors it must have.
 """
 
 from . import contract

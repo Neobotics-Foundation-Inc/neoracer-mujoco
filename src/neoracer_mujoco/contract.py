@@ -6,7 +6,8 @@ in validation/ run the conformance tests on it with no test edits. The tests
 pass only if the XML satisfies the requirements below.
 
 This module is the one source of truth for the interface. Code, examples and
-tests all read it.
+tests all read it. The sensors that a car must have are the fields of
+sensors.SensorReadings.
 
 Frame: +X forward, +Y left, +Z up.
 Actuators:
@@ -51,24 +52,6 @@ LIDAR_SITE = "lidar_mount"
 IMU_ACCEL_SENSOR = "imu_accel"  # specific force at the IMU (m/s^2), car frame
 IMU_GYRO_SENSOR = "imu_gyro"  # angular velocity at the IMU (rad/s), car frame
 DRIVE_POS_SENSOR = "drive_pos"  # the drivetrain's angle (rad), the encoder's
-REQUIRED_SENSORS = (
-    IMU_ACCEL_SENSOR,
-    IMU_GYRO_SENSOR,
-    "imu_quat",
-    "imu_linvel",
-    "steer_cmd_pos",
-    "fl_steer_pos",
-    "fr_steer_pos",
-    "fl_wheel_vel",
-    "fr_wheel_vel",
-    "rl_wheel_vel",
-    "rr_wheel_vel",
-    DRIVE_POS_SENSOR,
-    "fl_susp_pos",
-    "fr_susp_pos",
-    "rl_susp_pos",
-    "rr_susp_pos",
-)
 
 # --- physical sanity --------------------------------------------------------
 # The real NeoRacer's mass is its spec's Chassis.mass. The test checks the total
