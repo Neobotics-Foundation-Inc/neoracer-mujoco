@@ -159,6 +159,7 @@ test('cars attached behind prefixes share one scene, and findCar finds each by i
   assert.ok(both, mj.mjs_getError(shared));
   // Each car is the whole car: twice the actuators and sensors of one alone.
   assert.equal(both.nu, 2 * model.nu);
+  assert.equal(both.opt.timestep, fixtures.timestep);
   assert.equal(both.nsensordata, 2 * model.nsensordata);
   const cars = prefixes.map((prefix) => findCar(mj, shared, both, prefix));
   const O = mj.mjtObj;

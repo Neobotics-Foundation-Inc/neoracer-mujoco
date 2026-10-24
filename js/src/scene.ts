@@ -73,14 +73,12 @@ export function deleteVisuals(mj: Mujoco, spec: MjSpec): void {
 
 /**
  * Compile the track's MJCF with the car attached (attachCar), as
- * assets.compose does without visuals. The track keeps its own floor, and
- * the scene takes the car's <option>. carXml defaults to assets/neoracer.xml.
+ * assets.compose does without visuals. The track keeps its own floor.
+ * carXml defaults to assets/neoracer.xml.
  */
 export function compose(mj: Mujoco, trackXml: string, carXml: string = CAR_XML): Scene {
   const spec = mj.parseXMLString(trackXml);
-  const car = mj.parseXMLString(carXml);
-  spec.option = car.option;
-  attachCar(mj, spec, car);
+  attachCar(mj, spec, mj.parseXMLString(carXml));
   const model = mj.mj_compile(spec);
   if (!model) throw new Error(mj.mjs_getError(spec));
   return { spec, model, car: findCar(mj, spec, model) };
@@ -90,11 +88,13 @@ export function compose(mj: Mujoco, trackXml: string, carXml: string = CAR_XML):
  * Attach car's root body to spec at the track's start, its site START_SITE,
  * facing the site's +X, or at the origin, facing +X, if it has none, with
  * the names of its elements behind prefix. The site must be on the world
- * body, as the car's free joint must. car loses the meshes that only show
- * it (deleteVisuals). Several cars share a scene, each behind a prefix of
- * its own; findCar finds each one's parts.
+ * body, as the car's free joint must. spec takes car's <option>, the
+ * solver's settings that its model is made for, so a track sets none. car
+ * loses the meshes that only show it (deleteVisuals). Several cars share a
+ * scene, each behind a prefix of its own; findCar finds each one's parts.
  */
 export function attachCar(mj: Mujoco, spec: MjSpec, car: MjSpec, prefix = ''): void {
+  spec.option = car.option;
   deleteVisuals(mj, car);
   // The car's root default class is "main", as the track's is: a name of
   // its own keeps the two apart, as in assets.compose.
