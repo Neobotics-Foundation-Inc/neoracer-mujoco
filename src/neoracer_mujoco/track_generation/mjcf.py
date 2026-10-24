@@ -19,6 +19,7 @@ import mujoco
 import numpy as np
 import numpy.typing as npt
 
+from .. import truth
 from .shape import Points
 from .track import Track, left_edge, right_edge
 
@@ -79,6 +80,7 @@ def to_mjcf(track: Track, walls: WallParams = WallParams()) -> str:
         floor_size_y=f"{floor_size[1]:.5f}",
         floor_pos_x=f"{floor_pos[0]:.5f}",
         floor_pos_y=f"{floor_pos[1]:.5f}",
+        walls_body=truth.WALLS_BODY,
         walls="\n".join(geoms),
     )
 

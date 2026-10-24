@@ -21,6 +21,7 @@ import {
   applyCommand,
   compose,
   settle,
+  settleSteps,
   speedAngle,
   startEncoder,
   startLidar,
@@ -62,6 +63,10 @@ test('the car settles where it settles in Python', () => {
   assert.ok(maxDiff(settle(mj, model).qpos, fixtures.settled_qpos) < 1e-12);
 });
 
+test('it settles as many steps as Python at any timestep', () => {
+  for (const [dt, steps] of fixtures.settle_steps) assert.equal(settleSteps(dt), steps, `timestep ${dt}`);
+});
+
 test('a second of driving ends where it ends in Python, and the encoder agrees', () => {
   const data = settle(mj, model);
   const angle = () => data.sensordata[car.drivePos];
@@ -96,7 +101,7 @@ test('a turn swept from 13 poses reads what Python reads', () => {
 test('the encoder reports the speeds that Python reports', () => {
   const { angles, speeds } = fixtures.encoder;
   let state = startEncoder(ENCODER, angles[0]);
-  const out = angles.slice(1).map((a) => (state = stepEncoder(ENCODER, state, a, 1 / 360)).speed);
+  const out = angles.slice(1).map((a) => (state = stepEncoder(ENCODER, state, a, fixtures.timestep)).speed);
   assert.deepEqual(out, speeds);
 });
 

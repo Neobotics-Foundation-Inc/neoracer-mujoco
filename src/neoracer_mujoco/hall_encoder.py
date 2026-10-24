@@ -2,9 +2,10 @@
 The speed that the RACECAR Neo V2's drive board reports from its motor's
 hall sensors.
 
-The board times the edges of the hall sensors: 12 a turn of the motor, and
-so, through the gears, an edge every 2.25 mm that the tyres roll. The edges
-that come in a sample give a speed, the distance they cover over the time
+The board times the edges of the hall sensors, Odometry.edges_per_motor_turn
+of them a turn of the motor, and so, through the gears, an edge every
+HallEncoderParams.edge_angle of the drivetrain. The edges that come in a
+sample give a speed, the distance they cover over the time
 they took, and the board filters it: alpha of the new speed plus 1 - alpha
 of the last. After stop_timeout without an edge it reads 0, and its filter
 starts again from 0 at the next edge, so the speed of a car that creeps

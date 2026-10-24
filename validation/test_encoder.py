@@ -17,10 +17,11 @@ from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
 from neoracer_spec.derive import EncoderParams, derive
 from neoracer_spec.neoracer import NEORACER
+from neoracer_spec.parts import SOLVER
 
 PARAMS = derive(NEORACER).encoder
 
-DT = 1 / 360  # s, the car's physics step
+DT = SOLVER.timestep  # s, the car's physics step
 
 
 def _spin(

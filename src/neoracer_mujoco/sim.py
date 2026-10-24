@@ -6,6 +6,8 @@ car_upright_cos) that the conformance tests use.
 Frame: +X forward, +Y left, +Z up.
 """
 
+import math
+
 import mujoco
 import numpy as np
 
@@ -13,7 +15,7 @@ from . import contract
 from .control.steering import ControlCommand
 from .scene import Car
 
-SETTLE_STEPS = 400  # zero-ctrl steps to reach static equilibrium
+SETTLE_TIME = 1.0  # s of zero ctrl, to reach static equilibrium
 
 
 def apply_ctrl_and_step(
@@ -38,11 +40,17 @@ def apply_command(car: Car, data: mujoco.MjData, command: ControlCommand) -> Non
 
 
 def settle(model: mujoco.MjModel) -> mujoco.MjData:
-    """New MjData, stepped SETTLE_STEPS with zero control so the car rests
-    on the ground."""
+    """New MjData, stepped for SETTLE_TIME with zero control so the car
+    rests on the ground."""
     data = mujoco.MjData(model)
-    apply_ctrl_and_step(model, data, 0.0, SETTLE_STEPS)
+    apply_ctrl_and_step(model, data, 0.0, settle_steps(model.opt.timestep))
     return data
+
+
+def settle_steps(timestep: float) -> int:
+    """The steps of timestep (s) in SETTLE_TIME, half a step rounding up,
+    as the JS package's settleSteps rounds."""
+    return math.floor(SETTLE_TIME / timestep + 0.5)
 
 
 def car_mass(model: mujoco.MjModel, car: Car) -> float:

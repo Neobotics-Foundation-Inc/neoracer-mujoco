@@ -127,8 +127,8 @@ class MujocoDrive:
 
     def set_max_speed(self, max_speed: float | None = None) -> None:
         """Set the share of full throttle that speed 1 drives. Without
-        max_speed, the car's start max speed, as its racecar_core has it:
-        1.0 on the NeoRacer, 0.25 on the V2."""
+        max_speed, the car's start max speed, as its racecar_core has it
+        (CarParams.start_max_speed)."""
         limit = self._start_max_speed if max_speed is None else max_speed
         self._max_speed = _clamp(limit, 0.0, 1.0)
 

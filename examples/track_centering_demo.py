@@ -298,7 +298,7 @@ def main() -> None:
     report = run(params)
     print(
         "NeoRacer track-centering demo — straight_corridor.xml, "
-        f"{params.steps} steps after {sim.SETTLE_STEPS}-step settle"
+        f"{params.steps} steps after a {sim.SETTLE_TIME} s settle"
     )
     print()
     print(f"  initial lateral offset        : {params.initial_y_offset_m:+.3f} m")
