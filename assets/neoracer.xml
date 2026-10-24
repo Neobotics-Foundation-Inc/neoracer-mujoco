@@ -139,7 +139,7 @@
 
             <!--
             LiDAR ray sites: 8 beams at 45° intervals in the horizontal plane.
-            neoracer_spec.mjcf.lidar gives each the zaxis (cos θ, sin θ, 0),
+            neoracer_spec.mjcf.lidar_beams gives each the zaxis (cos θ, sin θ, 0),
             which points the site's local Z (the rangefinder's sensing
             direction) at heading θ from +X (forward), θ measured toward +Y
             (left). euler="0 90 θ" would not: MuJoCo applies Rz(θ) first, about

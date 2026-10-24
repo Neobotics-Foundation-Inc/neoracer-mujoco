@@ -42,14 +42,16 @@
 
     <worldbody>
         <!-- Attaching grafts only neoracer.xml's "car" body, not its floor, so
-             the scene needs its own. Friction matches the wheels'. -->
+             the scene needs its own. A wheel's contact takes the wheel's
+             friction (its priority), so this friction acts on the car's
+             other geoms. -->
         <geom name="track_floor_plane" type="plane"
               size="$floor_size_x $floor_size_y 0.1"
               pos="$floor_pos_x $floor_pos_y 0"
               material="track_floor" friction="1.5 0.1 0.1"/>
         <!-- Every wall is a geom of this one body, so that the scene's wall
              contact sensor finds them all (see truth.py). -->
-        <body name="walls">
+        <body name="$walls_body">
 $walls
         </body>
     </worldbody>

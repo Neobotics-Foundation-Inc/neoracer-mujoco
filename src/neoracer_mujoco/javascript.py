@@ -39,7 +39,7 @@ SHARED: Mapping[str, object] = MappingProxyType(
         "IMU_GYRO_SENSOR": contract.IMU_GYRO_SENSOR,
         "WHEEL_GEOMS": contract.WHEEL_GEOMS,
         "NO_RETURN": sensors.NO_RETURN,
-        "SETTLE_STEPS": sim.SETTLE_STEPS,
+        "SETTLE_TIME": sim.SETTLE_TIME,
     }
 )
 

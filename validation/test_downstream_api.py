@@ -28,7 +28,6 @@ USED_BY_NEORACER_RL = (
     "sensors.lidar_ranges",
     "sensors.motor_encoder_rad_s",
     "sensors.read",
-    "sim.SETTLE_STEPS",
     "sim.apply_command",
     "sim.apply_ctrl_and_step",
     "sim.car_upright_cos",

@@ -10,7 +10,7 @@ import {
   DRIVE_ACTUATOR,
   DRIVE_POS_SENSOR,
   LIDAR_SITE,
-  SETTLE_STEPS,
+  SETTLE_TIME,
   STEER_ACTUATOR,
 } from './generated/shared.js';
 import { CAR_XML } from './generated/car.js';
@@ -113,9 +113,10 @@ export function compose(
   };
 }
 
-/** New data for model, stepped SETTLE_STEPS with zero control so the car rests. */
+/** New data for model, stepped for SETTLE_TIME with zero control so the car rests. */
 export function settle(mj: Mujoco, model: MjModel): MjData {
   const data = new mj.MjData(model);
-  for (let i = 0; i < SETTLE_STEPS; i++) mj.mj_step(model, data);
+  const steps = Math.round(SETTLE_TIME / model.opt.timestep);
+  for (let i = 0; i < steps; i++) mj.mj_step(model, data);
   return data;
 }

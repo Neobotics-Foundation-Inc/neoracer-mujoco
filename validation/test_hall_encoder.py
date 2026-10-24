@@ -13,10 +13,11 @@ import pytest
 from neoracer_mujoco import assets, hall_encoder, sim
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar, racecar_neo_v2_params
 from neoracer_spec import derive_v2
+from neoracer_spec.parts import SOLVER
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2 as V2
 
 PARAMS = derive_v2.encoder_params(V2)
-DT = 1 / 360  # s, the car's physics step
+DT = SOLVER.timestep  # s, the car's physics step
 
 
 def _readings(omega: float, seconds: float) -> list[hall_encoder.HallEncoderState]:
@@ -70,7 +71,7 @@ def test_a_drivetrain_that_turns_back_before_the_next_edge_passes_none():
     of the way to the next edge, as a car at rest may, crosses none, so for a
     second it reads 0 and its last edge ages."""
     state = hall_encoder.start(PARAMS, 0.0)
-    for i in range(360):
+    for i in range(round(1.0 / DT)):
         angle = (0.8 if i % 2 == 0 else 0.4) * PARAMS.edge_angle
         state = hall_encoder.step(PARAMS, state, angle, DT)
         assert state.speed == 0.0
@@ -82,7 +83,7 @@ def test_a_car_that_starts_again_reads_until_a_timeout_after_its_edge():
     last edge is the third of the step old, not a share of the second. The
     reading then holds until stop_timeout after that edge, and is 0 after."""
     state = hall_encoder.start(PARAMS, 0.0)
-    for _ in range(360):
+    for _ in range(round(1.0 / DT)):
         state = hall_encoder.step(PARAMS, state, 0.0, DT)
     state = hall_encoder.step(PARAMS, state, 1.5 * PARAMS.edge_angle, DT)
     assert state.since == pytest.approx(DT / 3)

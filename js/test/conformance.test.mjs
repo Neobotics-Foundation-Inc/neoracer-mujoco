@@ -96,7 +96,7 @@ test('a turn swept from 13 poses reads what Python reads', () => {
 test('the encoder reports the speeds that Python reports', () => {
   const { angles, speeds } = fixtures.encoder;
   let state = startEncoder(ENCODER, angles[0]);
-  const out = angles.slice(1).map((a) => (state = stepEncoder(ENCODER, state, a, 1 / 360)).speed);
+  const out = angles.slice(1).map((a) => (state = stepEncoder(ENCODER, state, a, fixtures.timestep)).speed);
   assert.deepEqual(out, speeds);
 });
 

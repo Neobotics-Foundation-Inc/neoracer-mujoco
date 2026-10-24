@@ -67,7 +67,7 @@ function measure(mj: Mujoco, params: LidarParams, scene: Scene, data: MjData, sl
 
 const range = (from: number, to: number) => Array.from({ length: Math.max(to - from, 0) }, (_, i) => from + i);
 
-/** Throw if params is not a scan, as LidarParams in lidar.py checks. */
+/** Throw if params is not a scan, as LidarParams in neoracer_spec.derive checks. */
 function checkParams(params: LidarParams): void {
   const problems = [
     Number.isInteger(params.slots) && params.slots >= 1 ? '' : `slots must be an integer >= 1, not ${params.slots}`,

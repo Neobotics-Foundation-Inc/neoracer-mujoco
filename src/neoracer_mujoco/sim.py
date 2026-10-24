@@ -13,7 +13,7 @@ from . import contract
 from .control.steering import ControlCommand
 from .scene import Car
 
-SETTLE_STEPS = 400  # zero-ctrl steps to reach static equilibrium
+SETTLE_TIME = 1.0  # s of zero ctrl, to reach static equilibrium
 
 
 def apply_ctrl_and_step(
@@ -38,10 +38,10 @@ def apply_command(car: Car, data: mujoco.MjData, command: ControlCommand) -> Non
 
 
 def settle(model: mujoco.MjModel) -> mujoco.MjData:
-    """New MjData, stepped SETTLE_STEPS with zero control so the car rests
-    on the ground."""
+    """New MjData, stepped for SETTLE_TIME with zero control so the car
+    rests on the ground."""
     data = mujoco.MjData(model)
-    apply_ctrl_and_step(model, data, 0.0, SETTLE_STEPS)
+    apply_ctrl_and_step(model, data, 0.0, round(SETTLE_TIME / model.opt.timestep))
     return data
 
 
