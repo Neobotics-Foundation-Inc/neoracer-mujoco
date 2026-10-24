@@ -1,12 +1,14 @@
 """
 Step and probe helpers for the NeoRacer model: step the physics with a fixed
-control, write a control command, and two physics probes (car_mass,
-car_upright_cos) that the conformance tests use.
+control, write a control command, settle the car and move it off its start
+at random, and two physics probes (car_mass, car_upright_cos) that the
+conformance tests use.
 
 Frame: +X forward, +Y left, +Z up.
 """
 
 import math
+from dataclasses import dataclass
 
 import mujoco
 import numpy as np
@@ -39,18 +41,62 @@ def apply_command(car: Car, data: mujoco.MjData, command: ControlCommand) -> Non
     data.bind_scalar(car.steer).ctrl = command.steer
 
 
-def settle(model: mujoco.MjModel) -> mujoco.MjData:
-    """New MjData, stepped for SETTLE_TIME with zero control so the car
-    rests on the ground."""
-    data = mujoco.MjData(model)
+def settle(model: mujoco.MjModel, data: mujoco.MjData | None = None) -> mujoco.MjData:
+    """data, reset, or new MjData if it is None, stepped for SETTLE_TIME with
+    zero control so the car rests on the ground."""
+    if data is None:
+        data = mujoco.MjData(model)
+    else:
+        mujoco.mj_resetData(model, data)
     apply_ctrl_and_step(model, data, 0.0, settle_steps(model.opt.timestep))
     return data
 
 
 def settle_steps(timestep: float) -> int:
-    """The steps of timestep (s) in SETTLE_TIME, half a step rounding up,
-    as the JS package's settleSteps rounds."""
-    return math.floor(SETTLE_TIME / timestep + 0.5)
+    """The steps of timestep (s) in SETTLE_TIME (steps_in)."""
+    return steps_in(SETTLE_TIME, timestep)
+
+
+def steps_in(seconds: float, timestep: float) -> int:
+    """The steps of timestep (s) in seconds, half a step rounding up, as the
+    JS package's settleSteps rounds."""
+    return math.floor(seconds / timestep + 0.5)
+
+
+@dataclass(frozen=True)
+class SpawnRange:
+    """How far perturb_spawn moves the car: each by an amount uniform in
+    [-bound, bound]."""
+
+    lateral: float = 0.15  # m, along the car's left
+    yaw: float = 0.15  # rad, about +Z
+    resettle: float = 0.14  # s of steps after the move, so the suspension settles
+
+
+def perturb_spawn(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    car: Car,
+    rng: np.random.Generator,
+    spawn: SpawnRange = SpawnRange(),
+) -> None:
+    """Move the car in data sideways, square to its heading, and turn it
+    about +Z, by amounts drawn from rng in that order, then step data for
+    spawn.resettle."""
+    lateral = float(rng.uniform(-spawn.lateral, spawn.lateral))
+    yaw = float(rng.uniform(-spawn.yaw, spawn.yaw))
+    qpos = data.bind_scalar(car.joint).qpos  # (x, y, z, qw, qx, qy, qz), a view
+    w, x, y, z = qpos[3:7]
+    heading = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+    qpos[0] -= lateral * math.sin(heading)
+    qpos[1] += lateral * math.cos(heading)
+    turn = np.array([math.cos(yaw / 2), 0.0, 0.0, math.sin(yaw / 2)])
+    quat = np.empty(4)
+    mujoco.mju_mulQuat(quat, qpos[3:7], turn)
+    qpos[3:7] = quat
+    mujoco.mj_forward(model, data)
+    for _ in range(steps_in(spawn.resettle, model.opt.timestep)):
+        mujoco.mj_step(model, data)
 
 
 def car_mass(model: mujoco.MjModel, car: Car) -> float:
