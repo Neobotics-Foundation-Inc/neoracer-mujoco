@@ -4,6 +4,7 @@
 // radius, filtered with weight alpha on the new window. A window closes at
 // the first step on or after each tick and is measured over its own length.
 
+import { WINDOW_EPS } from './generated/shared.js';
 import { type EncoderParams, NEORACER_PARAMS } from './generated/spec.js';
 
 export type { EncoderParams };
@@ -18,9 +19,6 @@ export interface EncoderState {
   readonly due: number; // s until the firmware's next tick
   readonly speed: number; // m/s, + = forward: the last speed the firmware reported
 }
-
-// A window closes when less than this is left of it (s).
-const EPS = 1e-9;
 
 /**
  * The encoder of a car at rest, its drivetrain at angle (rad). Throw if the
@@ -41,7 +39,7 @@ export function startEncoder(params: EncoderParams, angle: number): EncoderState
 export function stepEncoder(params: EncoderParams, state: EncoderState, angle: number, dt: number): EncoderState {
   const span = state.span + dt;
   const due = state.due - dt;
-  if (due >= EPS) return { angle: state.angle, span, due, speed: state.speed };
+  if (due >= WINDOW_EPS) return { angle: state.angle, span, due, speed: state.speed };
   const raw = ((angle - state.angle) * params.radius) / span; // m/s over the window
   return { angle, span: 0, due: due + params.window, speed: params.alpha * raw + (1 - params.alpha) * state.speed };
 }
