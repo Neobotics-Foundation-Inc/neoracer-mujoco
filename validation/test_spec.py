@@ -99,8 +99,8 @@ def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
     a new turn can show a step early or late."""
     bearings = range(0, 360, 45)
     cars = (
-        (assets.DEFAULT_CAR, MODEL.lidar.scan_rate),
-        (V2_XML, derive_v2.model(RACECAR_NEO_V2).lidar.scan_rate),
+        (assets.DEFAULT_CAR, MODEL.common.lidar.scan_rate),
+        (V2_XML, derive_v2.model(RACECAR_NEO_V2).common.lidar.scan_rate),
     )
     for path, scan_rate in cars:
         car = assets.from_file(path)
