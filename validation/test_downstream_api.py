@@ -94,11 +94,14 @@ def test_records_used_by_neoracer_rl_keep_their_fields():
     assert {"throttle", "steer"} <= fields(ControlCommand)
     assert {"steer_rad"} <= fields(ActuatorLimits)
     assert {"spec", "model", "car"} <= fields(Scene)
-    assert {"body", "joint", "drive", "steer", "wheels", "sensors", "truth"} <= fields(
-        Car
-    )
-    assert {"imu_accel", "imu_gyro", "imu_quat", "steer_cmd_pos"} <= fields(CarSensors)
-    assert {"pos", "wall_contact"} <= fields(TruthSensors)
+    assert {"joint", "drive", "wheels", "sensors", "truth"} <= fields(Car)
+    # The observation reads these of car.sensors, and the progress, the crash
+    # and the rollover these of car.truth.
+    beams = {f"lidar_{degrees:03d}" for degrees in range(0, 360, 45)}
+    wheels = {f"{corner}_wheel_vel" for corner in ("fl", "fr", "rl", "rr")}
+    imu = {"imu_accel", "imu_gyro", "imu_quat", "steer_cmd_pos"}
+    assert beams | wheels | imu <= fields(CarSensors)
+    assert {"pos", "wall_contact", "zaxis"} <= fields(TruthSensors)
     assert {"lateral", "yaw", "resettle"} <= fields(SpawnRange)
     assert {
         "wheel_friction",
