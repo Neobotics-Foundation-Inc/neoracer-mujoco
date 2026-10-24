@@ -14,6 +14,7 @@ from dataclasses import fields
 import mujoco
 import numpy as np
 import pytest
+from cases import case
 from scenes import corridor_scene, reversed_car
 
 from neoracer_mujoco import Scene, assets, batch, physics, sim, speed_loop
@@ -374,6 +375,30 @@ def test_the_warp_batch_follows_the_cpu_batch(warp):
     cpu_pos = batch.read(scene.model, cpu_data[:, -1], pos)
     warp_pos = np.asarray(batch.read(scene.model, warp_data[:, -1], pos))
     np.testing.assert_allclose(warp_pos, cpu_pos, atol=1e-3)
+
+
+def test_drive_steps_at_least_once():
+    """drive refuses fewer than one step, as step does."""
+    scene = _loop_scene()
+    params = derive(NEORACER).speed_loop
+    start = sim.settle(scene.model)
+    sim_batch = batch.CpuBatch(scene, 1, nthread=0)
+    state = sim_batch.initial([start], [scene], NOMINAL)
+    loop = speed_loop.start(params, np.zeros(1))
+    for nstep in (0, -1):
+        with case(nstep), pytest.raises(ValueError, match="nstep"):
+            batch.drive(
+                sim_batch,
+                scene.model,
+                scene.car,
+                params,
+                state,
+                loop,
+                np.ones(1),
+                np.zeros(1),
+                nstep,
+            )
+    sim_batch.close()
 
 
 def test_drive_on_warp_follows_drive_on_the_cpu(warp):

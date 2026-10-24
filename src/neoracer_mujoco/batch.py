@@ -33,15 +33,15 @@ each one. Each call starts the constraint solver cold (qacc_warmstart = 0),
 as mujoco.rollout does, so a CPU row is the same, bit for bit, as one MjData
 stepped the same way.
 
-A batch array has no bind, so command and read bind the element to the
-model and index the array with its address. They are the only code that
-uses an address. They work on numpy and JAX arrays alike.
+A batch array has no bind, so command, read and drive_angle bind the
+element to the model and index the array with its address. They are the
+only code that uses an address. They work on numpy and JAX arrays alike.
 """
 
 import copy
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import mujoco
 import numpy as np
@@ -238,13 +238,14 @@ def drive[S, A: Array, M](
 
     Only a piece's last step can close the firmware's window, and the encoder
     reads the drivetrain only then, so the loop reads it once a piece: at the
-    piece's end, from qpos (contract.drive_angle), as the sensors after a
+    piece's end, from qpos (drive_angle), as the sensors after a
     step hold its start.
 
     Limit: the loop runs on the host in numpy, so on Warp each piece sends
     the throttle to the GPU and brings the drivetrain's angles back."""
+    if nstep < 1:
+        raise ValueError(f"nstep must be at least 1, not {nstep}")
     dt = float(model.opt.timestep)
-    drivetrain = contract.drivetrain(model, car)
     xp = steer.__array_namespace__()  # numpy or jax.numpy
     pieces = []
     left = nstep
@@ -252,13 +253,36 @@ def drive[S, A: Array, M](
         k = min(left, speed_loop.steps_to_tick(loop, dt))
         throttle = xp.asarray(np.broadcast_to(loop.throttle, commanded.shape))
         state, sensordata = sim.step(state, command(model, car, throttle, steer), k)
-        angle = np.asarray(contract.drive_angle(drivetrain, sim.qpos(state)))
+        angle = np.asarray(drive_angle(model, car, sim.qpos(state)))
         for _ in range(k):
             loop = speed_loop.step(params, loop, commanded, angle, dt)
         pieces.append(sensordata)
         left -= k
     xs = pieces[0].__array_namespace__()  # the backend's: numpy or jax.numpy
     return state, xs.concatenate(pieces, axis=1), loop
+
+
+def drive_angle[A: Array](model: mujoco.MjModel, car: Car, qpos: A) -> A:
+    """The drivetrain's angle (rad) in each row of qpos (..., nq): the length
+    of the fixed tendon that the car's drive_pos sensor reads, summed as
+    MuJoCo sums it, so it is drive_pos's reading at that qpos. After mj_step,
+    and after each step of a rollout, the sensors still hold the state at the
+    step's start; this reads it at the step's end. Raise ValueError if
+    drive_pos reads anything else."""
+    sensor = model.bind_scalar(car.sensors.drive_pos)
+    refused = ValueError("the drive_pos sensor does not read a fixed tendon's length")
+    if sensor.type[0] != mujoco.mjtSensor.mjSENS_TENDONPOS:
+        raise refused
+    tendon = int(sensor.objid[0])
+    adr, num = int(model.tendon_adr[tendon]), int(model.tendon_num[tendon])
+    wraps = range(adr, adr + num)
+    if any(model.wrap_type[w] != mujoco.mjtWrap.mjWRAP_JOINT for w in wraps):
+        raise refused
+    angle: Any = 0.0
+    for w in wraps:
+        joint = int(model.wrap_objid[w])
+        angle = angle + float(model.wrap_prm[w]) * qpos[..., model.jnt_qposadr[joint]]
+    return angle
 
 
 def read[A: Array](model: mujoco.MjModel, sensordata: A, sensor: mujoco.MjsSensor) -> A:

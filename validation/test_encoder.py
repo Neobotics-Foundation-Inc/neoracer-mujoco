@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from cases import case
 
-from neoracer_mujoco import Scene, assets, contract, encoder, load, sim
+from neoracer_mujoco import Scene, assets, batch, encoder, load, sim
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar, neoracer_params
 from neoracer_spec.derive import EncoderParams, derive
@@ -139,31 +139,37 @@ def test_a_bounded_run_counts_its_last_step():
 
 def test_drive_angle_is_drive_pos_at_the_steps_end():
     """After mj_step the drive_pos sensor still holds the drivetrain's angle
-    at the step's start. contract.drive_angle gives it at the step's end, the
-    reading that mj_forward refreshes, on both cars and on a row of qpos."""
+    at the step's start. batch.drive_angle gives it at the step's end, the
+    reading that mj_forward refreshes, on both cars and on rows of qpos."""
     for path in (assets.DEFAULT_CAR, assets.ASSET_DIR + "/racecar_neo_v2.xml"):
         with case(path):
             scene = load(path)
-            drivetrain = contract.drivetrain(scene.model, scene.car)
-            data = sim.settle(scene.model)
-            sim.apply_command(scene.car, data, ControlCommand(0.5, 0.0))
+            model, car = scene.model, scene.car
+            data = sim.settle(model)
+            sim.apply_command(car, data, ControlCommand(0.5, 0.0))
             for _ in range(10):
-                mujoco.mj_step(scene.model, data)
-            sensor = data.bind_scalar(scene.car.sensors.drive_pos)
+                mujoco.mj_step(model, data)
+            sensor = data.bind_scalar(car.sensors.drive_pos)
             start = float(sensor.data[0])
-            end = contract.drive_angle(drivetrain, data.qpos)
-            rows = contract.drive_angle(drivetrain, np.stack([data.qpos] * 2))
-            mujoco.mj_forward(scene.model, data)
+            end = batch.drive_angle(model, car, data.qpos)
+            rows = batch.drive_angle(model, car, np.stack([data.qpos] * 2))
+            mujoco.mj_forward(model, data)
             assert end == rows[0] == rows[1] == float(sensor.data[0]) != start
 
 
-def test_a_drive_pos_that_reads_no_fixed_tendon_is_refused():
-    """drive_angle sums a fixed tendon, so drivetrain refuses a drive_pos
-    sensor that reads anything else, such as one wheel's joint."""
-    scene = load()
-    sensor = scene.spec.sensor(scene.car.sensors.drive_pos.name)
-    sensor.type = mujoco.mjtSensor.mjSENS_JOINTPOS
-    sensor.objtype = mujoco.mjtObj.mjOBJ_JOINT
-    sensor.objname = "rr_drive"
-    with pytest.raises(ValueError, match="fixed tendon"):
-        contract.drivetrain(scene.spec.compile(), scene.car)
+def test_a_drive_pos_that_reads_no_fixed_tendons_length_is_refused():
+    """drive_angle sums a fixed tendon's length, so it refuses a drive_pos
+    sensor that reads anything else: one wheel's joint, or the tendon's
+    speed."""
+    joint = (mujoco.mjtSensor.mjSENS_JOINTPOS, mujoco.mjtObj.mjOBJ_JOINT, "rr_drive")
+    nominal = load()
+    tendon = nominal.spec.sensor(nominal.car.sensors.drive_pos.name).objname
+    speed = (mujoco.mjtSensor.mjSENS_TENDONVEL, mujoco.mjtObj.mjOBJ_TENDON, tendon)
+    for kind, objtype, objname in (joint, speed):
+        with case(kind):
+            scene = load()
+            sensor = scene.spec.sensor(scene.car.sensors.drive_pos.name)
+            sensor.type, sensor.objtype, sensor.objname = kind, objtype, objname
+            qpos = np.zeros(scene.model.nq)
+            with pytest.raises(ValueError, match="fixed tendon's length"):
+                batch.drive_angle(scene.spec.compile(), scene.car, qpos)

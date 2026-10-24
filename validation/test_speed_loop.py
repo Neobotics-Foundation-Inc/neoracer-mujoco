@@ -154,13 +154,14 @@ def test_the_target_is_the_held_share_of_the_max_speed():
 
 def test_rows_that_start_over_start_at_rest_and_keep_the_ticks():
     """restart clears the loops of the rows it is given, at their new angles,
-    and leaves the others and the shared ticks as they were."""
-    angles = _turning(10.0, 0.5)
+    and leaves the others and the shared ticks as they were, a window open."""
+    angles = _turning(10.0, 0.51)
     loop = speed_loop.start(PARAMS, np.full(3, angles[0]))
     for a in angles[1:]:
         loop = speed_loop.step(
             PARAMS, loop, np.array([1.0, 2.0, -1.0]), np.full(3, a), DT
         )
+    assert loop.measure.span > 0.0
     rows = np.array([False, True, False])
     again = speed_loop.restart(loop, rows, np.full(3, 7.0))
     assert (again.measure.span, again.measure.due) == (
