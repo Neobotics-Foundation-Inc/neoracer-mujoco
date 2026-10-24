@@ -211,7 +211,7 @@ def test_write_mjz_refuses_an_xml_that_includes_another(tmp_path):
 
 
 def _png(path: Path) -> None:
-    """Write a 2x2 grey PNG at path."""
+    """Write a 2x2 gray PNG at path."""
 
     def chunk(kind: bytes, data: bytes) -> bytes:
         body = kind + data

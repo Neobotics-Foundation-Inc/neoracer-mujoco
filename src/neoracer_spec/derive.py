@@ -82,7 +82,7 @@ class EncoderParams:
     """How the firmware measures the speed from the motor encoder."""
 
     window: float  # s, the firmware's control period
-    radius: float  # m, the tyre's, that it measures the speed at
+    radius: float  # m, the tire's, that it measures the speed at
     alpha: float  # the weight of the new window in the filter
 
     def __post_init__(self) -> None:
@@ -95,7 +95,7 @@ class EncoderParams:
 
 
 def encoder_params(spec: Spec) -> EncoderParams:
-    """The firmware's encoder, which measures the speed at the car's tyre."""
+    """The firmware's encoder, which measures the speed at the car's tire."""
     return EncoderParams(
         window=spec.encoder.report_period.value,
         radius=spec.wheel.radius.value,
@@ -113,7 +113,7 @@ class ModelParams:
 
     common: parts.Model
     drive: DcMotorParams
-    wheel_mesh_scale: float  # of the cosmetic wheel meshes, to the tyre
+    wheel_mesh_scale: float  # of the cosmetic wheel meshes, to the tire
 
 
 @dataclass(frozen=True)

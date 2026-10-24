@@ -3,7 +3,7 @@ The speed that the car's firmware reports from its motor encoder.
 
 Every window (EncoderParams.window, the spec's MotorEncoder.report_period),
 the car's ESP32 (its firmware's task_control) reads the motor encoder's
-count over the window and turns it into the surface speed of a tyre of
+count over the window and turns it into the surface speed of a tire of
 EncoderParams.radius. It then low-pass filters it, with the weight
 EncoderParams.alpha on the new window's speed. It reports the result as /encoder/speed, which a program
 reads as rc.physics.get_encoder_speed().
@@ -15,7 +15,7 @@ it covered over its own length. Windows then run a whole number of steps or
 one more, and close as often as on the car.
 
 Limit: the speed is not quantized. One count of the encoder, a pulse
-through the drivetrain's reduction, is about a millimetre a second over a
+through the drivetrain's reduction, is about a millimeter a second over a
 window, small beside any speed a program acts on.
 """
 

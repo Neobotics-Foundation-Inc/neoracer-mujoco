@@ -18,7 +18,7 @@ within range. LidarParams holds the numbers.
 
 LidarParams (neoracer_spec.derive) defaults to the NeoRacer's LakiBeam L1. The model
 sees every geom out to its range on a bright target; its range on a dark
-one, its accuracy, a minimum range and missed returns are not modelled.
+one, its accuracy, a minimum range and missed returns are not modeled.
 """
 
 import functools

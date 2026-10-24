@@ -45,7 +45,7 @@ class SensorReadings:
     """One named field per sensor in neoracer.xml. A sensor with one value is a
     float. A sensor with several values is a numpy array."""
 
-    # IMU at the chassis centre. The imu site has no rotation relative to the
+    # IMU at the chassis center. The imu site has no rotation relative to the
     # car body, so the IMU frame is the body frame: +X forward, +Y left, +Z up.
     # These are MuJoCo's raw values, with no calibration.
     imu_accel: Vec3  # m/s², body frame; includes gravity: ~(0, 0, +9.81) at rest
@@ -153,7 +153,7 @@ def find_sensors(spec: mujoco.MjSpec, model: mujoco.MjModel) -> CarSensors:
 
 
 def beam_in_field(name: str, field: float) -> bool:
-    """Whether a LiDAR that sees field (rad), centred on its front, sees the
+    """Whether a LiDAR that sees field (rad), centered on its front, sees the
     beam of LIDAR_BEAM_ORDER called name (contract.in_field)."""
     return contract.in_field(math.radians(int(name.removeprefix("lidar_"))), field)
 

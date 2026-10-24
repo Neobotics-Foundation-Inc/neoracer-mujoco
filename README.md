@@ -277,16 +277,16 @@ Run these from a clone; the examples aren't in the wheel.
 ## How close the models are to the real cars
 
 Nobody has checked the NeoRacer's model against recordings of the real car yet (issue #4). Use it to develop and compare controllers, not to predict lap times. These are the known gaps:
-- **Speed.** At full throttle the car tops out at about 3.5 m/s, from the RS-545 motor at the docs' free speed. The wheel damping is a guess that stands in for every drivetrain loss. The firmware's speed controller isn't modelled, so the throttle is a fraction of the battery voltage (issue #118).
-- **Mass and inertia.** The total mass comes from the spec; nobody has weighed the car. The inertia and the height of the centre of mass come from an older car's URDF.
-- **Tyres and suspension.** The tyre friction and the springs are estimates.
+- **Speed.** At full throttle the car tops out at about 3.5 m/s, from the RS-545 motor at the docs' free speed. The wheel damping is a guess that stands in for every drivetrain loss. The firmware's speed controller isn't modeled, so the throttle is a fraction of the battery voltage (issue #118).
+- **Mass and inertia.** The total mass comes from the spec; nobody has weighed the car. The inertia and the height of the center of mass come from an older car's URDF.
+- **Tires and suspension.** The tire friction and the springs are estimates.
 - **Steering.** At full lock the inner front wheel turns to its measured angle. People who drive the real car find its steering slower than the model's (issue #115).
 - **Sensors.** They have no noise, bias or latency, and the IMU never saturates. The LiDAR has no minimum range and never misses a return. There is no camera (issue #3).
 
 The RACECAR Neo V2's model drives a reference car's calibration runs as the car did: its steady speeds within 1%, its stops, its arcs at every steering command, its full-lock radii and its yaw rate after a full-lock command. These are the known gaps:
 - **Speed.** After a start the car's speed peaks about 15% above its steady speed a second in, then sinks back over the next two; the model's rises straight to its steady speed. In a long full-lock circle the car slows to 0.56 m/s, the model to 0.59 to 0.61 m/s.
-- **Mass, springs and tyres.** The inertia, the springs and the wheels' mass are RacecarSim's estimates. The tyres' grip is fitted, and MuJoCo's contacts are not a tyre model: at full lock the model's yaw rate wobbles by 3% at about 20 Hz.
-- **Steering.** The servo's deadband and the linkage's play, which make the car drift at command 0 (`Steering.straight_drift_degrees_per_m`), are not modelled.
+- **Mass, springs and tires.** The inertia, the springs and the wheels' mass are RacecarSim's estimates. The tires' grip is fitted, and MuJoCo's contacts are not a tire model: at full lock the model's yaw rate wobbles by 3% at about 20 Hz.
+- **Steering.** The servo's deadband and the linkage's play, which make the car drift at command 0 (`Steering.straight_drift_degrees_per_m`), are not modeled.
 - **Shape.** The meshes and the collision boxes are RacecarSim's model of the car, with the payload lowered by `Shape.payload_drop` to put the LiDAR at its measured height. RacecarSim's payload is the payload's CAD, part by part, a little higher, so the model's payload floor sits a little below where the measured heights put the CAD's (`racecar_neo_v2.py` gives the numbers). `racecar_neo_v2.racecarsim_questions` lists where RacecarSim's model and the car disagree, for the model's designer.
 - **Sensors.** The encoder over-reads in a full-lock turn by 3.4 to 3.6%, about as much as the car's (`Odometry.turn_overread`). The sensors have no noise or bias, and there is no camera.
 

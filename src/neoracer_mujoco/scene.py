@@ -41,7 +41,7 @@ class Car:
     throttled: tuple[mujoco.MjsActuator, ...]
     # the fl, fr, rl, rr wheel geoms that touch the ground
     wheels: tuple[mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom, mujoco.MjsGeom]
-    lidar: mujoco.MjsSite  # the centre of the spinning LiDAR (lidar.py)
+    lidar: mujoco.MjsSite  # the center of the spinning LiDAR (lidar.py)
     sensors: sensors.CarSensors  # the sensors of the real car
     truth: truth.TruthSensors  # what only the simulator knows (truth.py)
 

@@ -57,9 +57,9 @@ class Spec:
 @dataclass(frozen=True)
 class Chassis:
     wheelbase: Sourced[float]  # m, between the front and rear axles
-    track: Sourced[float]  # m, between the left and right wheels' centres
+    track: Sourced[float]  # m, between the left and right wheels' centers
     mass: Sourced[float]  # kg, the whole car, wheels included
-    com_height: Sourced[float]  # m, the chassis' centre of mass above the axles
+    com_height: Sourced[float]  # m, the chassis' center of mass above the axles
     inertia: Sourced[InertiaReference]  # scaled to the chassis' mass
     collision_box: Sourced[Box]  # the body less the wheels
 
@@ -67,7 +67,7 @@ class Chassis:
 @dataclass(frozen=True)
 class InertiaReference:
     """A body whose inertia is known, to scale to another of the same shape:
-    its principal moments about its centre of mass, and its mass."""
+    its principal moments about its center of mass, and its mass."""
 
     inertia: Vec3  # kg·m^2
     mass: float  # kg
@@ -81,11 +81,11 @@ class Box:
 
 @dataclass(frozen=True)
 class Wheel:
-    radius: Sourced[float]  # m, the tyre's
-    width: Sourced[float]  # m, the tyre's
+    radius: Sourced[float]  # m, the tire's
+    width: Sourced[float]  # m, the tire's
     mass: Sourced[float]  # kg, each
-    friction: Sourced[float]  # the tyre's sliding friction on the floor
-    # Losses from the motor to the tyres, as damping on each wheel's spin.
+    friction: Sourced[float]  # the tire's sliding friction on the floor
+    # Losses from the motor to the tires, as damping on each wheel's spin.
     drive_damping: Sourced[float]  # N·m·s/rad
 
 
@@ -141,7 +141,7 @@ class SteeringServo:
     low: Sourced[ServoRating]
     high: Sourced[ServoRating]
     supply: Sourced[float]  # V
-    # How far the horn turns from the centre over the firmware's pulse range.
+    # How far the horn turns from the center over the firmware's pulse range.
     horn_half_range_degrees: Sourced[float]
     # The servo's own position loop, the model's.
     kp: Sourced[float]  # V/rad
@@ -155,14 +155,14 @@ class SteeringServo:
 
 @dataclass(frozen=True)
 class ServoSteps:
-    """Steps between the centre and the driver's full lock, the car at rest
+    """Steps between the center and the driver's full lock, the car at rest
     on the floor, each timed from the command written to the car's board:
     when the chassis first moves, and when each swing ends."""
 
     first_motion: float  # s
-    centre_to_lock: float  # s
+    center_to_lock: float  # s
     lock_to_lock: float  # s
-    lock_to_centre: float  # s
+    lock_to_center: float  # s
 
 
 @dataclass(frozen=True)
@@ -210,7 +210,7 @@ class MotorEncoder:
     pulses_per_turn: Sourced[int]  # a turn of the motor
     max_speed_rpm: Sourced[float]  # rpm, its rating
     # Every report_period the firmware turns the count over the period into
-    # the tyre's surface speed and low-pass filters it with filter_weight on
+    # the tire's surface speed and low-pass filters it with filter_weight on
     # the new period.
     report_period: Sourced[float]  # s
     filter_weight: Sourced[float]
@@ -227,7 +227,7 @@ class Imu:
 
 @dataclass(frozen=True)
 class Lidar:
-    position: Sourced[Vec3]  # m, the centre of the scan
+    position: Sourced[Vec3]  # m, the center of the scan
     scan_rate: Sourced[float]  # Hz, turns a second
     resolution_degrees: Sourced[float]  # between two samples
     field_degrees: Sourced[float]  # of bearings it sees, centered on the front
@@ -256,5 +256,5 @@ class Resolution:
 @dataclass(frozen=True)
 class Visuals:
     # The wheels' radius in the cosmetic wheel meshes, which are scaled to the
-    # tyre.
+    # tire.
     mesh_wheel_radius: Sourced[float]  # m

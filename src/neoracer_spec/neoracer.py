@@ -58,7 +58,7 @@ URDF = Source(
 SPEC = Source(
     "spec",
     "Koneshka's specification, 2026-09-29: about 3 kg, a custom RS545 brushed"
-    " motor, a 14T pinion on a 48T spur, 85 mm tyres",
+    " motor, a 14T pinion on a 48T spur, 85 mm tires",
 )
 TEAM = Source("team", "measured or stated by the team, 2026-10-16")
 TEAM_RATES = Source(
@@ -101,7 +101,7 @@ STEPS_AT_REST = Source(
     "steps at rest",
     "the team's steering steps on a NeoRacer at rest on the floor, 2026-10-22:"
     " the driver's full lock written to the OSCORE board at speed 0, three"
-    " cycles of centre, left, right, centre, timed from each command by the"
+    " cycles of center, left, right, center, timed from each command by the"
     " IMU at 200 Hz",
 )
 SERVO_FIT = Source(
@@ -113,7 +113,7 @@ SERVO_FIT = Source(
 # The RS-545 winding nearest to the docs' free speed.
 _RS545SH_4075 = DcMotorRating(voltage=12.0, stall_torque=0.0793, free_speed_rpm=9_300.0)
 
-# The chassis' centre of mass above the axles (m). The IMU is assumed there.
+# The chassis' center of mass above the axles (m). The IMU is assumed there.
 _COM_HEIGHT = 0.0189
 
 NEORACER = Spec(
@@ -155,7 +155,7 @@ NEORACER = Spec(
             0.0425,
             SPEC,
             note="the firmware's OSCORE_WHEEL_RADIUS_UM (42500) agrees, and Koneshka"
-            " confirmed the 85 mm tyre on 2026-08-22; the docs' 80 mm is out of date",
+            " confirmed the 85 mm tire on 2026-08-22; the docs' 80 mm is out of date",
             conflicts=(
                 Alternative(0.040, DOCS_DRIVETRAIN),
                 Alternative(0.040, DOCS_CHASSIS),
@@ -164,7 +164,7 @@ NEORACER = Spec(
         ),
         width=measured(0.04825, CAD),
         mass=estimated(0.0587, "the URDF's wheels"),
-        friction=estimated(1.5, "no tyre has been tested"),
+        friction=estimated(1.5, "no tire has been tested"),
         drive_damping=estimated(
             0.0005,
             "stands in for every drivetrain loss, and with the motor sets the"
@@ -195,7 +195,7 @@ NEORACER = Spec(
             " speed loop reaches 7.35 m/s at full pulse and limits at 6 m/s, both"
             " beyond this motor's 4.3 m/s free speed. The website claims up to 25"
             " km/h (6.9 m/s), which needs about 16,500 rpm at the motor through"
-            " the 10.55 reduction and the 42.5 mm tyre radius, and 6 m/s needs 14,200",
+            " the 10.55 reduction and the 42.5 mm tire radius, and 6 m/s needs 14,200",
             conflicts=(Alternative(DcMotorRating(12.0, 0.214, 24_000.0), RS545SH),),
         ),
         gear_ratio=documented(
@@ -254,16 +254,16 @@ NEORACER = Spec(
         steps_at_rest=measured(
             ServoSteps(
                 first_motion=0.059,
-                centre_to_lock=0.175,
+                center_to_lock=0.175,
                 lock_to_lock=0.229,
-                lock_to_centre=0.157,
+                lock_to_center=0.157,
             ),
             STEPS_AT_REST,
             note="first motion: the IMU's yaw rate or sideways acceleration leaves"
             " four times its noise; a swing ends where the yaw rate the scrubbing"
-            " tyres give the chassis falls under a quarter of its peak. With the"
+            " tires give the chassis falls under a quarter of its peak. With the"
             " front lifted off the floor the first motion is the same, so the"
-            " delay is not the tyres'",
+            " delay is not the tires'",
         ),
     ),
     steering=Steering(
@@ -322,7 +322,7 @@ NEORACER = Spec(
         position=assumed(
             (0.0, 0.0, _COM_HEIGHT),
             DOCS_IMU,
-            "at the centre of mass; the IMU is on the OSCORE board, whose place"
+            "at the center of mass; the IMU is on the OSCORE board, whose place"
             " on the car is not measured",
         ),
         rate=measured(

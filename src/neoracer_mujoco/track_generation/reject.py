@@ -61,7 +61,7 @@ def find_too_curvy_samples(
 def find_near_self_touches(
     line: Centerline, half_width: Samples, settings: TrackSettings
 ) -> Pairs:
-    """(i, j) sample pairs far apart travelling around the loop but close
+    """(i, j) sample pairs far apart traveling around the loop but close
     together in space -- the loop nearly touching itself, meaning two corridors
     overlap or the gap between them is too thin to fit walls into.
 

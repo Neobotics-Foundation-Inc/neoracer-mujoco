@@ -70,7 +70,7 @@ class ManualDriveParams:
 
 def print_sensors(s: sensors.SensorReadings, wheel_radius: float) -> None:
     """Print a one-line summary of the most useful sensor values; the speed
-    is the motor encoder's at the tyre of wheel_radius (m)."""
+    is the motor encoder's at the tire of wheel_radius (m)."""
     speed = sensors.motor_encoder_rad_s(s) * wheel_radius  # m/s
     print(
         f"spd={speed:+5.2f}m/s  "

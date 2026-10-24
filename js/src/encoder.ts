@@ -1,6 +1,6 @@
 // The speed that the car's firmware reports from its motor encoder, as
 // encoder.py computes it: every window (params.window) the drivetrain's
-// angle over the window becomes the surface speed of a tyre of the params'
+// angle over the window becomes the surface speed of a tire of the params'
 // radius, filtered with weight alpha on the new window. A window closes at
 // the first step on or after each tick and is measured over its own length.
 

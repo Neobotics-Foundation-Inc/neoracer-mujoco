@@ -102,7 +102,7 @@ def to_start_frame(track: Track, points: Points) -> Points:
 
 
 def _wall_boxes(edge: Points, name_prefix: str, walls: WallParams) -> list[str]:
-    """MJCF <geom> lines for one wall: one box per decimated segment, centred on
+    """MJCF <geom> lines for one wall: one box per decimated segment, centered on
     its midpoint and yawed to lie along it.
 
     Each box is over-long by `thickness` at both ends so consecutive boxes

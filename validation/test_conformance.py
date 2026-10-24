@@ -116,7 +116,7 @@ def test_actuator_contract(scene):
 
 def test_lidar_rays_start_at_the_lidar_inside_a_collision_box(scene):
     """The LiDAR mount and its 8 ray sites are at one point of the car body,
-    the LiDAR's centre, inside one of the car body's collision boxes, which
+    the LiDAR's center, inside one of the car body's collision boxes, which
     reaches the top of the LiDAR. A rangefinder ignores the geoms of its own
     body, so the rays leave the car. The ray tests use horizontal distances
     only, so they cannot see this height."""

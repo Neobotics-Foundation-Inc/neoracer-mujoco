@@ -48,7 +48,7 @@ THROTTLE_MAP_SIZE = 3
 WHEEL_GEOMS = ("fl_wheel", "fr_wheel", "rl_wheel", "rr_wheel")
 
 # --- sensors ----------------------------------------------------------------
-# The site at the centre of the spinning LiDAR (lidar.py). Its +X axis is the
+# The site at the center of the spinning LiDAR (lidar.py). Its +X axis is the
 # scan's bearing 0, and its XY plane is the plane the scan sweeps. Its user
 # number is the field that the LiDAR sees (lidar_field).
 LIDAR_SITE = "lidar_mount"
@@ -121,7 +121,7 @@ def wheel_radius(model: mujoco.MjModel, car: Car) -> float:
 
 
 def lidar_field(model: mujoco.MjModel, lidar: mujoco.MjsSite) -> float:
-    """The bearings (rad) that the LiDAR at the site lidar sees, centred on
+    """The bearings (rad) that the LiDAR at the site lidar sees, centered on
     its front: the car blocks the rest. 2 pi if it sees all around."""
     return float(model.bind_scalar(lidar).user[0])
 
@@ -132,7 +132,7 @@ FIELD_EPS = 1e-5
 
 
 def in_field(bearing: float, field: float) -> bool:
-    """Whether a LiDAR that sees field (rad), centred on its front, sees
+    """Whether a LiDAR that sees field (rad), centered on its front, sees
     bearing (rad in [0, 2 pi), from the front either way). The field is
     closed and symmetric: a bearing on either edge is in it."""
     return min(bearing, 2 * math.pi - bearing) <= field / 2 + FIELD_EPS

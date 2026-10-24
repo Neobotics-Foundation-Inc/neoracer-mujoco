@@ -35,7 +35,7 @@
              rear axle, and its front wheels are behind the car's. Its payload,
              everything on the chassis' body posts, is lowered by the spec's
              Shape.payload_drop, so that its LiDAR is at the measured height.
-             Each wheel's meshes are centred on the wheel. None of these affect
+             Each wheel's meshes are centered on the wheel. None of these affect
              physics. -->
         <mesh name="vis_body_1f1f1f" file="meshes/racecar_neo_v2/body_1f1f1f.STL"/>
         <mesh name="vis_body_424242" file="meshes/racecar_neo_v2/body_424242.STL"/>
@@ -79,7 +79,7 @@
         <!--
         Wheel drive joint: hinge about the Y-axis (the axle). Its damping is
         the drag that grows with the speed, as the coasting car shows it.
-        geom: cylinder of the tyre's radius and half its width. condim=3 and
+        geom: cylinder of the tire's radius and half its width. condim=3 and
         priority=1 as on the NeoRacer: in a contact the wheel's friction and
         softness alone count. The friction is set per axle.
         -->
@@ -112,13 +112,13 @@
         <geom type="plane" size="5 5 .01" material="grid" friction="1 .1 .1"/>
 
         <!-- Car body. It spawns just above its resting height, the axles at
-             the tyre radius (neoracer_spec.derive_v2.ModelParams). -->
+             the tire radius (neoracer_spec.derive_v2.ModelParams). -->
         <body name="car">
             <freejoint/>
             <light name="top_light" pos="0 0 2" mode="trackcom" diffuse=".4 .4 .4"/>
 
             <!-- The chassis' mass is the car's less its wheels and the steering
-                 input's body; its centre of mass and inertia are the car's less
+                 input's body; its center of mass and inertia are the car's less
                  theirs (neoracer_spec.derive_v2). -->
             <inertial/>
 
@@ -167,7 +167,7 @@
                  the firmware reports them. -->
             <site name="imu" size=".01" rgba="1 1 0 1"/>
 
-            <!-- LiDAR mount site: the centre of the scan, as measured. Its +X is
+            <!-- LiDAR mount site: the center of the scan, as measured. Its +X is
                  the scan's bearing 0, the car's front less the calibrated
                  mounting error: the LiDAR faces the rear (the spec's
                  Lidar.yaw_degrees), and racecar_core turns its scan around. -->
@@ -263,7 +263,7 @@
     <!--
     Drivetrain: one motor turns a center shaft, which turns an open
     differential on each axle. The shaft is locked: the front and rear axles
-    turn at the same mean speed, and in a turn the tyres slip, the front
+    turn at the same mean speed, and in a turn the tires slip, the front
     ones dragged and the rear ones pushed. "drivetrain" is the mean of the
     four wheels' angles, as on the NeoRacer: the actuators push on it, and
     its friction is the drag brake. "center_shaft" is the front axle's mean
@@ -287,7 +287,7 @@
     <actuator>
         <!--
         The speed controller, as two actuators on the drivetrain. Their gear
-        is the tyre's radius, so they push at the tyres (N) and move at the
+        is the tire's radius, so they push at the tires (N) and move at the
         wheels' mean surface speed (m/s).
           motor:        gain * ctrl
           motor_engage: -gain * speed * ctrl
@@ -344,7 +344,7 @@
         <jointpos name="fl_steer_pos"  joint="fl_steer"/>
         <jointpos name="fr_steer_pos"  joint="fr_steer"/>
 
-        <!-- Wheel angular velocity (rad/s); times the tyre radius, the surface
+        <!-- Wheel angular velocity (rad/s); times the tire radius, the surface
              speed. -->
         <jointvel name="fl_wheel_vel" joint="fl_drive"/>
         <jointvel name="fr_wheel_vel" joint="fr_drive"/>

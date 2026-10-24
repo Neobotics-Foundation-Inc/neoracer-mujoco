@@ -72,9 +72,9 @@ def measure_distance_along_spline(
     """Walk the spline in `sample_count` equal parameter steps, adding up the
     straight-line hops between them.
 
-    Returns (parameter, distance_travelled), the lookup table converting a
+    Returns (parameter, distance_traveled), the lookup table converting a
     distance in meters into the spline parameter sitting at it.
-    distance_travelled has one extra entry, for the whole closed loop.
+    distance_traveled has one extra entry, for the whole closed loop.
     """
     parameter = np.linspace(0.0, 1.0, sample_count, endpoint=False)
     points = spline(parameter)
@@ -91,7 +91,7 @@ class Centerline:
     tangent: Points  # unit vector pointing forward along the loop
     left_normal: Points  # unit vector 90 degrees left of the tangent
     curvature: Samples  # 1/m, positive where the loop turns left
-    distance_along: Samples  # m from sample 0, travelling forward
+    distance_along: Samples  # m from sample 0, traveling forward
     total_length: float  # m around the whole loop
 
 
@@ -121,7 +121,7 @@ def sample_evenly_by_distance(
     tangent /= np.linalg.norm(tangent, axis=1, keepdims=True)
     left_normal = np.stack([-tangent[:, 1], tangent[:, 0]], axis=1)
 
-    # Curvature is how fast the tangent rotates per meter travelled, signed by
+    # Curvature is how fast the tangent rotates per meter traveled, signed by
     # which way it rotates. This central difference assumes the samples are
     # evenly spaced, which is why that had to happen first.
     spacing = total_length / samples
