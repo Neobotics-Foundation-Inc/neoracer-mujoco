@@ -156,14 +156,14 @@ def drivetrain(model: mujoco.MjModel, car: Car) -> Drivetrain:
     """The tendon of the car's drive_pos sensor in model. Raise ValueError if
     it is not a fixed tendon."""
     sensor = model.bind_scalar(car.sensors.drive_pos)
+    refused = ValueError("the drive_pos sensor does not read a fixed tendon")
+    if sensor.objtype[0] != mujoco.mjtObj.mjOBJ_TENDON:
+        raise refused
     tendon = int(sensor.objid[0])
     adr, num = int(model.tendon_adr[tendon]), int(model.tendon_num[tendon])
     wraps = range(adr, adr + num)
-    joint = mujoco.mjtWrap.mjWRAP_JOINT
-    if sensor.objtype[0] != mujoco.mjtObj.mjOBJ_TENDON or any(
-        model.wrap_type[w] != joint for w in wraps
-    ):
-        raise ValueError("the drive_pos sensor does not read a fixed tendon")
+    if any(model.wrap_type[w] != mujoco.mjtWrap.mjWRAP_JOINT for w in wraps):
+        raise refused
     return Drivetrain(
         tuple(int(model.jnt_qposadr[model.wrap_objid[w]]) for w in wraps),
         tuple(float(model.wrap_prm[w]) for w in wraps),

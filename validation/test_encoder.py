@@ -155,3 +155,15 @@ def test_drive_angle_is_drive_pos_at_the_steps_end():
             rows = contract.drive_angle(drivetrain, np.stack([data.qpos] * 2))
             mujoco.mj_forward(scene.model, data)
             assert end == rows[0] == rows[1] == float(sensor.data[0]) != start
+
+
+def test_a_drive_pos_that_reads_no_fixed_tendon_is_refused():
+    """drive_angle sums a fixed tendon, so drivetrain refuses a drive_pos
+    sensor that reads anything else, such as one wheel's joint."""
+    scene = load()
+    sensor = scene.spec.sensor(scene.car.sensors.drive_pos.name)
+    sensor.type = mujoco.mjtSensor.mjSENS_JOINTPOS
+    sensor.objtype = mujoco.mjtObj.mjOBJ_JOINT
+    sensor.objname = "rr_drive"
+    with pytest.raises(ValueError, match="fixed tendon"):
+        contract.drivetrain(scene.spec.compile(), scene.car)
