@@ -122,7 +122,12 @@ test('the speed loop sets the throttles that Python sets', () => {
 });
 
 test('a speed loop that the firmware cannot be is refused at the start', () => {
-  for (const bad of [{ stop_speed: 0 }, { pulse_limit: 0 }, { full_throttle_pulse: -1 }, { max_speed: 0 }, { deadband: 600 }]) {
+  const bads = [
+    ...['stop_speed', 'pulse_limit', 'full_throttle_pulse', 'max_speed'].map((name) => ({ [name]: 0 })),
+    ...['kp', 'ki', 'kd', 'integral_limit', 'error_deadband', 'feed_forward'].map((name) => ({ [name]: -1 })),
+    { deadband: 600 },
+  ];
+  for (const bad of bads) {
     assert.throws(() => startSpeedLoop({ ...SPEED_LOOP, ...bad }, 0), Error, JSON.stringify(bad));
   }
 });

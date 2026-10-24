@@ -6,13 +6,19 @@ a program commands, and for the racecar_core adapter's drive, which runs it.
 import copy
 import itertools
 import math
+from typing import Any
 
 import pytest
 from cases import case
 
 from neoracer_mujoco import contract, load, sim, speed_loop
 from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
-from neoracer_spec.derive import SpeedLoopParams, derive
+from neoracer_spec.derive import (
+    SPEED_LOOP_NONNEGATIVE,
+    SPEED_LOOP_POSITIVE,
+    SpeedLoopParams,
+    derive,
+)
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.parts import SOLVER
 
@@ -83,12 +89,24 @@ def test_an_esc_at_full_voltage_before_the_pulse_limit_holds_full_throttle():
             assert first.throttle == math.copysign(1.0, v)
 
 
-def test_a_loop_without_a_stop_speed_is_refused():
-    """A loop must send neutral for a commanded speed of 0, so its stop
-    speed must be positive."""
-    for stop in (0.0, -0.05):
-        with case(stop), pytest.raises(ValueError, match="stop_speed"):
-            copy.replace(PARAMS, stop_speed=stop)
+def test_a_loop_that_the_firmware_cannot_be_is_refused():
+    """A loop must send neutral for a commanded speed of 0, so its stop speed
+    must be positive, as must its pulse limits and its max speed. A negative
+    gain, bound or feed-forward would turn its part of the loop around; 0
+    turns it off."""
+
+    def loop(name: str, value: float) -> SpeedLoopParams:
+        fields: dict[str, Any] = {**vars(PARAMS), name: value}
+        return SpeedLoopParams(**fields)
+
+    for name in SPEED_LOOP_POSITIVE:
+        for bad in (0.0, -1.0):
+            with case((name, bad)), pytest.raises(ValueError, match=name):
+                loop(name, bad)
+    for name in SPEED_LOOP_NONNEGATIVE:
+        with case(name), pytest.raises(ValueError, match=name):
+            loop(name, -1.0)
+        loop(name, 0.0)
 
 
 def test_the_feed_forward_rounds_and_holds_within_its_range():

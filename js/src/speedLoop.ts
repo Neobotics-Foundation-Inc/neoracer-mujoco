@@ -9,6 +9,7 @@
  */
 
 import { type EncoderState, startEncoder, stepEncoder } from './encoder.js';
+import { SPEED_LOOP_NONNEGATIVE, SPEED_LOOP_POSITIVE } from './generated/shared.js';
 import { NEORACER_PARAMS, type SpeedLoopParams } from './generated/spec.js';
 
 export type { SpeedLoopParams };
@@ -32,14 +33,15 @@ const clamp = (x: number, low: number, high: number) => Math.min(Math.max(x, low
 
 /**
  * The loop of a car at rest, its drivetrain at angle (rad): neutral. Throw
- * if stop_speed, pulse_limit, full_throttle_pulse or max_speed is not
- * positive, or deadband is not in [0, feed_forward_limit], as
- * SpeedLoopParams does, or if its measure is not an encoder's (startEncoder).
+ * if a field of SPEED_LOOP_POSITIVE is not positive, a field of
+ * SPEED_LOOP_NONNEGATIVE is negative, or deadband is not in
+ * [0, feed_forward_limit], as SpeedLoopParams does, or if its measure is not
+ * an encoder's (startEncoder).
  */
 export function startSpeedLoop(params: SpeedLoopParams, angle: number): SpeedLoopState {
-  const positive = ['stop_speed', 'pulse_limit', 'full_throttle_pulse', 'max_speed'] as const;
   const problems = [
-    ...positive.map((name) => (params[name] > 0 ? '' : `${name} must be > 0, not ${params[name]}`)),
+    ...SPEED_LOOP_POSITIVE.map((name) => (params[name] > 0 ? '' : `${name} must be > 0, not ${params[name]}`)),
+    ...SPEED_LOOP_NONNEGATIVE.map((name) => (params[name] >= 0 ? '' : `${name} must be >= 0, not ${params[name]}`)),
     params.deadband >= 0 && params.deadband <= params.feed_forward_limit
       ? ''
       : `deadband must be in [0, feed_forward_limit], not ${params.deadband}`,

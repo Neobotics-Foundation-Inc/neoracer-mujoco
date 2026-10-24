@@ -149,13 +149,30 @@ class SpeedLoopParams:
     """The speed that a program's full speed commands."""
 
     def __post_init__(self) -> None:
-        for name in ("stop_speed", "pulse_limit", "full_throttle_pulse", "max_speed"):
+        for name in SPEED_LOOP_POSITIVE:
             if not getattr(self, name) > 0.0:
                 raise ValueError(f"{name} must be > 0, not {getattr(self, name)}")
+        for name in SPEED_LOOP_NONNEGATIVE:
+            if not getattr(self, name) >= 0.0:
+                raise ValueError(f"{name} must be >= 0, not {getattr(self, name)}")
         if not 0.0 <= self.deadband <= self.feed_forward_limit:
             raise ValueError(
                 f"deadband must be in [0, feed_forward_limit], not {self.deadband}"
             )
+
+
+SPEED_LOOP_POSITIVE = ("stop_speed", "pulse_limit", "full_throttle_pulse", "max_speed")
+"""The fields of SpeedLoopParams that must be positive."""
+SPEED_LOOP_NONNEGATIVE = (
+    "kp",
+    "ki",
+    "kd",
+    "integral_limit",
+    "error_deadband",
+    "feed_forward",
+)
+"""The fields of SpeedLoopParams that must not be negative: a gain or a bound
+of 0 turns its part of the loop off."""
 
 
 def speed_loop_params(spec: Spec) -> SpeedLoopParams:
