@@ -13,44 +13,29 @@ own:
 """
 
 import os
-import shutil
 
 import mujoco
 
-from neoracer_spec import mjcf
-from neoracer_spec.derive import derive
 from neoracer_spec.spec import Spec
 
 from . import assets
 
-XML_NAME = "neoracer.xml"
+XML_NAME = os.path.basename(assets.DEFAULT_CAR)
 MJZ_NAME = "neoracer.mjz"
 
 
 def write(car: Spec, folder: str | os.PathLike[str]) -> None:
-    """Write to folder the car's XML (XML_NAME), the mesh files it names, an
+    """Write to folder the car's XML (XML_NAME), the files it names, and an
     archive of them (MJZ_NAME, assets.write_mjz) that MjSpec.from_zip and
-    MuJoCo's WebAssembly build load. folder must not be assets/, whose XML
-    the car's is made from."""
-    if os.path.realpath(folder) == os.path.realpath(assets.ASSET_DIR):
-        raise ValueError(f"{folder} is assets/, the NeoRacer's own folder")
-    text = car_xml(car)
-    xml = os.path.join(folder, XML_NAME)
-    os.makedirs(folder, exist_ok=True)
-    with open(xml, "w", encoding="utf-8") as f:
-        f.write(text)
-    for mesh in spec(car).meshes:
-        source = os.path.join(assets.ASSET_DIR, mesh.file)
-        target = os.path.join(folder, mesh.file)
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        shutil.copyfile(source, target)
+    MuJoCo's WebAssembly build load. folder must not be assets/, whose
+    template the car's XML is made from."""
+    xml = assets.write_car(car_xml(car), XML_NAME, folder)
     assets.write_mjz(xml, os.path.join(folder, MJZ_NAME))
 
 
 def car_xml(car: Spec) -> str:
     """The car's MJCF: the NeoRacer's XML with car's numbers."""
-    with open(assets.DEFAULT_CAR, encoding="utf-8") as f:
-        return mjcf.car_xml(derive(car).model, f.read())
+    return assets.neoracer_xml(car)
 
 
 def spec(car: Spec) -> mujoco.MjSpec:

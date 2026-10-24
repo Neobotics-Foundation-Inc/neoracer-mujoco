@@ -16,6 +16,7 @@ neoracer_mujoco.write_car writes the complete XMLs, for other MuJoCo tools.
 import glob
 import os
 import re
+import shutil
 import zipfile
 from importlib import resources
 
@@ -26,6 +27,7 @@ from neoracer_spec import derive_v2, mjcf
 from neoracer_spec.derive import derive
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
+from neoracer_spec.spec import Spec
 
 from .scene import Scene, compile_scene
 
@@ -83,12 +85,17 @@ def _completed(path: str | os.PathLike[str]) -> str | None:
         return None
     match os.path.basename(path):
         case "neoracer.xml":
-            return mjcf.car_xml(derive(NEORACER).model, _read(path))
+            return neoracer_xml(NEORACER)
         case "racecar_neo_v2.xml":
             p = derive_v2.model(RACECAR_NEO_V2)
             return mjcf.racecar_neo_v2_xml(p, _read(path))
         case _:
             return None
+
+
+def neoracer_xml(car: Spec) -> str:
+    """The MJCF of a NeoRacer: assets/neoracer.xml with the numbers of car."""
+    return mjcf.car_xml(derive(car).model, _read(DEFAULT_CAR))
 
 
 def _read(path: str | os.PathLike[str]) -> str:
@@ -183,6 +190,23 @@ def named_files(xml_path: str | os.PathLike[str]) -> list[str]:
         if os.path.isabs(name) or name.startswith(".."):
             raise ValueError(f"{xml_path} names {name}, outside its folder")
     return files
+
+
+def write_car(xml: str, name: str, folder: str | os.PathLike[str]) -> str:
+    """Write the MJCF xml to folder as name, with every file that it names
+    (named_files) copied from assets/, and return the XML's path. folder
+    must not be assets/, which holds the cars' templates."""
+    if os.path.realpath(folder) == os.path.realpath(ASSET_DIR):
+        raise ValueError(f"{folder} is assets/, which holds the templates")
+    path = os.path.join(folder, name)
+    os.makedirs(folder, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(xml)
+    for file in named_files(path):
+        target = os.path.join(folder, file)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(os.path.join(ASSET_DIR, file), target)
+    return path
 
 
 def write_mjz(xml_path: str | os.PathLike[str], out: str | os.PathLike[str]) -> None:
