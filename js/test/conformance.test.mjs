@@ -1,5 +1,7 @@
-// The JS package against the Python package: the same cases, from
-// test/fixtures.json, which test/fixtures.py writes.
+/**
+ * The JS package against the Python package: the same cases, from
+ * test/fixtures.json, which test/fixtures.py writes.
+ */
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

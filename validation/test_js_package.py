@@ -10,7 +10,10 @@ import re
 import tomllib
 from pathlib import Path
 
+from cases import case
+
 from neoracer_mujoco import javascript
+from neoracer_spec import typescript
 
 _REPO = Path(__file__).resolve().parent.parent
 _JS = _REPO / "js"
@@ -18,15 +21,22 @@ _JS = _REPO / "js"
 
 def test_the_shared_constants_read_back_as_the_python_packages():
     """shared.ts gives each name and number that both packages use its value
-    here, so the JS package holds no copy of them."""
+    here, under its docstring, so the JS package holds no copy of them."""
     text = javascript.shared()
     written = dict(
         re.findall(r"^export const (\w+) = (.+?)(?: as const)?;$", text, re.MULTILINE)
     )
     assert written.keys() == javascript.SHARED.keys()
-    for name, value in javascript.SHARED.items():
+    documented = 0
+    for name, module in javascript.SHARED.items():
+        value = getattr(module, name)
         expected = list(value) if isinstance(value, tuple) else value
-        assert json.loads(written[name]) == expected, name
+        with case(name):
+            assert json.loads(written[name]) == expected
+            for line in typescript.doc_comment(module, name):
+                assert f"{line}\nexport const {name} =" in text
+                documented += 1
+    assert documented > 0
 
 
 def test_it_needs_the_mujoco_of_the_python_package():

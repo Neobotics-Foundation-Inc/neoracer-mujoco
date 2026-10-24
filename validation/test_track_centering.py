@@ -21,7 +21,8 @@ from neoracer_mujoco.control.track_centering import (
 )
 from neoracer_mujoco.sensors import LIDAR_BEAM_ORDER
 
-DT = 0.02  # s, one 50 Hz control step
+DT = 0.02
+"""One 50 Hz control step (s)."""
 CFG = TrackCenteringConfig()
 
 

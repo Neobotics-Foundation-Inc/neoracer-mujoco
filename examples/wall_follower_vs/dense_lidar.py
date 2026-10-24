@@ -16,7 +16,8 @@ import numpy.typing as npt
 
 from neoracer_mujoco.scene import Scene
 
-type Scan = tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]  # rad, m
+type Scan = tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]
+"""The beam angles (rad) and their ranges (m)."""
 
 
 @dataclass(frozen=True)
@@ -25,8 +26,10 @@ class DenseLidarParams:
     L1 values."""
 
     n_beams: int = 1080
-    fov_deg: float = 270.0  # deg; centered on +X
-    max_range_m: float = 12.0  # m; a beam with no hit in this range has no return
+    fov_deg: float = 270.0
+    """The field of view, centered on +X."""
+    max_range_m: float = 12.0
+    """A beam with no hit in this range has no return."""
 
     def __post_init__(self) -> None:
         if self.n_beams < 1:
@@ -47,8 +50,10 @@ def scan_angles(params: DenseLidarParams) -> npt.NDArray[np.float64]:
 class LidarMount:
     """The spec elements that cast_dense_lidar() reads at each tick."""
 
-    site: mujoco.MjsSite  # the lidar_mount site: the ray origin
-    body: mujoco.MjsBody  # the car body: its axes orient the rays; rays ignore it
+    site: mujoco.MjsSite
+    """The lidar_mount site, the rays' origin."""
+    body: mujoco.MjsBody
+    """The car body. Its axes orient the rays, and the rays ignore it."""
 
 
 def lidar_mount(scene: Scene) -> LidarMount:

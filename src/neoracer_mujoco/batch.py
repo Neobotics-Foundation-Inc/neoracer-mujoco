@@ -53,10 +53,14 @@ from .contract import Array
 from .physics import Physics, apply_physics
 from .scene import Car, Scene
 
-type States = npt.NDArray[np.float64]  # shape (nbatch, nstate), mjSTATE_FULLPHYSICS
-type Rows = npt.NDArray[np.float64]  # shape (nbatch, n)
-type SensorData = npt.NDArray[np.float64]  # shape (nbatch, nstep, nsensordata)
-type Done = npt.NDArray[np.bool_]  # shape (nbatch,)
+type States = npt.NDArray[np.float64]
+"""Shape (nbatch, nstate), each row an mjSTATE_FULLPHYSICS state."""
+type Rows = npt.NDArray[np.float64]
+"""Shape (nbatch, n)."""
+type SensorData = npt.NDArray[np.float64]
+"""Shape (nbatch, nstep, nsensordata)."""
+type Done = npt.NDArray[np.bool_]
+"""Shape (nbatch,)."""
 
 FULL_PHYSICS = mujoco.mjtState.mjSTATE_FULLPHYSICS
 
@@ -84,8 +88,8 @@ class CpuState:
     """The state of a CpuBatch: row i steps from rows[i] with models[i]."""
 
     rows: States
-    # One model per row; rows with the same scene and Physics share one.
     models: tuple[mujoco.MjModel, ...]
+    """One model per row. Rows with the same scene and Physics share one."""
 
 
 class CpuBatch:

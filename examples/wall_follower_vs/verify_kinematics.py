@@ -23,9 +23,12 @@ from neoracer_mujoco.control.steering import ControlCommand
 
 @dataclass(frozen=True)
 class DriveParams:
-    throttle: float = 0.16  # in [-1, 1]
-    duration_s: float = 12.0  # s of sim time
-    sample_period_s: float = 0.04  # s between two path samples
+    throttle: float = 0.16
+    """The constant throttle, in [-1, 1]."""
+    duration_s: float = 12.0
+    """The sim time of the drive."""
+    sample_period_s: float = 0.04
+    """The time between two path samples."""
 
 
 def main() -> None:

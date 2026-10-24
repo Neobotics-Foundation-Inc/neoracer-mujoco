@@ -18,7 +18,6 @@ from neoracer_mujoco.control.steering import ControlCommand, ShapingConfig
 
 
 def _steps(model: mujoco.MjModel, seconds: float) -> int:
-    """The number of physics steps in `seconds` of simulated time."""
     return round(seconds / model.opt.timestep)
 
 
@@ -36,9 +35,6 @@ def _drive(
 
 def _read(scene: Scene, data: mujoco.MjData) -> sensors.SensorReadings:
     return sensors.read(scene.car.sensors, data)
-
-
-# --- the model has the actuators and sensors of contract.py -------------------
 
 
 def test_actuator_limits_reject_ranges_that_one_limit_cannot_scale(scene):
@@ -143,9 +139,6 @@ def test_total_mass_plausible(scene):
     )
 
 
-# --- the car rests without errors ---------------------------------------------
-
-
 def test_the_car_rests_without_input(scene):
     """With zero control the settled car is finite, sits on the floor (it
     does not sink through it, and a bad initial penetration does not launch
@@ -174,9 +167,6 @@ def test_the_car_rests_without_input(scene):
     assert abs(accel_mag - g) < 0.5, (
         f"stationary |accel|={accel_mag:.2f} m/s^2, expected ~{g:.2f}"
     )
-
-
-# --- the car responds to control with the contract.py signs -------------------
 
 
 def test_the_wheel_radius_turns_the_wheel_speed_into_the_car_speed(scene):
@@ -223,10 +213,9 @@ def test_the_servo_turns_at_a_servos_speed_and_holds_steady(scene):
 
     From rest, a 0.4 rad step reaches 90% in 0.03 to 0.15 s after the
     car's latency: a position actuator that snaps there in a few ms fails.
-    Driving at full lock, the
-    steering angle wobbles by less than 0.006 rad (standard deviation): a
-    servo loop that chatters, as kd = 1 does under explicit Euler at
-    360 Hz (0.01 rad), fails."""
+    Driving at full lock, the steering angle wobbles by less than 0.006 rad
+    (standard deviation): a servo loop that chatters, as kd = 1 does under
+    explicit Euler at 360 Hz (0.01 rad), fails."""
     model = scene.model
     data = sim.settle(model)
     sim.apply_command(scene.car, data, ControlCommand(throttle=0.0, steer=0.4))
@@ -272,9 +261,6 @@ def test_ackermann_inner_exceeds_outer(scene):
     steer = contract.actuator_limits(scene.model, scene.car).steer_rad
     s = _read(scene, _drive(scene, throttle=0.0, steer=steer, seconds=0.8))
     assert s.fl_steer_pos > s.fr_steer_pos, "Ackermann differential wrong/absent"
-
-
-# --- an RL agent cannot exploit the physics -----------------------------------
 
 
 def test_top_speed_bounded(scene):

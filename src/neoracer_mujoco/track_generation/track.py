@@ -28,13 +28,20 @@ class Track:
     evenly spaced so sample i and sample i+1 are always the same distance
     apart. Index N-1 wraps around to index 0."""
 
-    center: Points  # centerline positions, meters
-    tangent: Points  # unit vector pointing forward along the loop
-    left_normal: Points  # unit vector 90 deg left of the tangent
-    curvature: Samples  # 1/meters, positive where the loop turns left
-    half_width: Samples  # corridor half-width, meters
-    distance_along: Samples  # distance from sample 0 traveling forward
-    total_length: float  # meters around the whole loop
+    center: Points
+    """The centerline's positions (m)."""
+    tangent: Points
+    """The unit vector pointing forward along the loop."""
+    left_normal: Points
+    """The unit vector 90 degrees left of the tangent."""
+    curvature: Samples
+    """The curvature (1/m), positive where the loop turns left."""
+    half_width: Samples
+    """The corridor's half-width (m)."""
+    distance_along: Samples
+    """The distance (m) from sample 0, traveling forward."""
+    total_length: float
+    """The length (m) around the whole loop."""
     seed: int
 
 
@@ -68,30 +75,17 @@ def generate_track(seed: int, settings: TrackSettings) -> Generated:
     """
     random = np.random.default_rng(seed)
 
-    # Each attempt is a whole track drawn from scratch. Many are thrown away.
     for _ in range(settings.max_attempts):
-        # Walk a random closed loop of points for the track to be drawn through.
-        # This is the only place a track's shape is decided at random.
         points = draw_control_points(random, settings)
 
-        # Pick how wide the corridor is at every point around the loop. Drawn
-        # once per attempt, not once per repair pass below, so a track that
-        # gets repaired keeps the width it was checked against.
+        # Drawn once per attempt, not once per repair pass below, so a track
+        # that gets repaired keeps the width it was checked against.
         half_width = half_width_from_waves(draw_width_waves(random), settings)
 
-        # Now try to make those points into a valid track, nudging them a few
-        # times before giving up and drawing a whole new set.
         for _ in range(settings.max_repairs_per_attempt):
-            # Draw a smooth closed curve through the points, then walk it in
-            # even steps of distance, noting where each step lands, which way
-            # it faces, and how hard it is turning.
             line = sample_evenly_by_distance(
                 fit_closed_spline(points), settings.samples, settings.oversample_factor
             )
-
-            # Is it drivable? Corners not too tight, the loop not doubling
-            # back onto itself, total length in range, counterclockwise. See
-            # reject.py.
             problems = find_problems(line, half_width, settings)
 
             # There is no repair for the total length or the direction, so a
@@ -99,7 +93,6 @@ def generate_track(seed: int, settings: TrackSettings) -> Generated:
             if not problems.length_ok or not problems.counterclockwise:
                 break
 
-            # Nothing wrong with it -- this is the track.
             if len(problems.too_curvy) == 0 and len(problems.too_close) == 0:
                 return Track(
                     center=line.center,
@@ -112,12 +105,8 @@ def generate_track(seed: int, settings: TrackSettings) -> Generated:
                     seed=seed,
                 )
 
-            # Something was wrong. Shift the handful of control points behind
-            # each complaint and go round again -- the rest of the loop keeps
-            # its shape, so a single bad corner does not cost the whole track.
             points = repair(points, problems, line.center, half_width, settings)
 
-    # Every attempt was rejected, each after its repairs failed to save it.
     return NoValidTrack(seed=seed, attempts=settings.max_attempts)
 
 

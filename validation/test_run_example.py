@@ -19,8 +19,8 @@ def test_command_coasts_at_the_speed_limit_and_steers_in_bounds():
     at or above it the throttle is 0. The steer never leaves
     [-steer_amp_rad, steer_amp_rad]."""
     for mode, params in MODES.items():
-        for t in [0.0, 0.4, 1.3, 2.9, 7.7]:  # s
-            for speed in [0.0, 0.5, 1.5, 3.0]:  # m/s
+        for t in [0.0, 0.4, 1.3, 2.9, 7.7]:
+            for speed in [0.0, 0.5, 1.5, 3.0]:
                 command = _command(params, t, speed)
                 limit = params.speed_limit_ms
                 coasting = limit is not None and speed >= limit

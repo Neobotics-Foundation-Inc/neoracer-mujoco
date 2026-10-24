@@ -141,8 +141,8 @@ class MujocoLidar:
     straight ahead, and 0.0 for no return, as in the blocked rear.
 
     MujocoRacecar.go() calls advance() once a step, when the poses are up to
-    date, as the LiDAR spins whatever the program does. Before the first step, the scan is a
-    whole turn from where the car stands.
+    date, as the LiDAR spins whatever the program does. Before the first step,
+    the scan is a whole turn from where the car stands.
     """
 
     def __init__(
@@ -170,10 +170,10 @@ class MujocoLidar:
         return np.where(valid, cm, 0.0).astype(np.float32)
 
     def get_samples_async(self) -> np.ndarray:
-        # The name comes from racecar_core, where this method reads the LiDAR
-        # when the car is not in "go" mode (Jupyter only on the real car).
-        # This backend has no such mode, so the method is not asynchronous
-        # and returns the same as get_samples().
+        """The name comes from racecar_core, where this method reads the LiDAR
+        when the car is not in "go" mode (Jupyter only on the real car). This
+        backend has no such mode, so the method is not asynchronous and returns
+        the same as get_samples()."""
         return self.get_samples()
 
     def get_num_samples(self) -> int:
@@ -258,9 +258,10 @@ class MujocoController:
     To simulate RB released, pass held=().
     """
 
-    # racecar_core code reads Button.RB, so this class copies the IntEnum of
-    # racecar_core.
     class Button(IntEnum):
+        """The gamepad's buttons. racecar_core code reads Button.RB, so this
+        class copies the IntEnum of racecar_core."""
+
         A = 0
         B = 1
         X = 2
@@ -294,7 +295,8 @@ class Program:
 
     start: Callable[[], None]
     update: Callable[[], None]
-    update_slow: Callable[[], None] | None  # None: the script has no slow update
+    update_slow: Callable[[], None] | None
+    """None if the script has no slow update."""
 
 
 class MujocoRacecar:

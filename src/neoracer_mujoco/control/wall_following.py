@@ -57,32 +57,46 @@ type Side = Literal["left", "right"]
 class WallFollowingConfig:
     """Tuning parameters for step()."""
 
-    follow_side: Side = "right"  # which wall to track
-    target_distance: float = 0.3  # m; desired standoff from the followed wall
-    kp_distance: float = 1.5  # rad steer per m of distance_error
-    kp_heading: float = 3.0  # rad steer per m of wall_skew
-    kd: float = 0.05  # rad steer per (m/s) of distance_error rate
-    max_beam_range: float = 3.0  # m; substituted for no-hit(-1) or corrupt beams
-    max_corrupt_beams: int = 2  # of the 4 beams used here; more triggers fallback
-    shaping: ShapingConfig = ShapingConfig()  # steer and throttle limits
+    follow_side: Side = "right"
+    target_distance: float = 0.3
+    """The desired standoff from the followed wall (m)."""
+    kp_distance: float = 1.5
+    """Radians of steer per meter of distance_error."""
+    kp_heading: float = 3.0
+    """Radians of steer per meter of wall_skew."""
+    kd: float = 0.05
+    """Radians of steer per m/s of distance_error's rate."""
+    max_beam_range: float = 3.0
+    """The distance (m) substituted for a beam with no hit (-1) or a corrupt one."""
+    max_corrupt_beams: int = 2
+    """How many of the 4 beams used here may be corrupt. More triggers the
+    fallback."""
+    shaping: ShapingConfig = ShapingConfig()
 
 
 @dataclass(frozen=True)
 class WallFollowingSignals:
-    distance_error: float  # m; + = farther from the wall than target_distance
-    wall_skew: float  # m; + = nose angled toward the wall
-    front_distance: float  # m; clearance straight ahead (FRONT_BEAM)
-    n_corrupt: int  # of the 4 beams used here that were NaN/Inf
+    distance_error: float
+    """The side beam's distance less target_distance (m), + = farther from the wall."""
+    wall_skew: float
+    """The rear side beam's distance less the front one's (m), + = nose angled
+    toward the wall."""
+    front_distance: float
+    """The clearance straight ahead (m), FRONT_BEAM's reading."""
+    n_corrupt: int
+    """How many of the 4 beams used here were NaN or infinite."""
 
 
 @dataclass(frozen=True)
 class SideBeams:
     """The beams that watch one wall, as indices into lidar_ranges()."""
 
-    side: int  # points perpendicular to the wall
+    side: int
+    """The beam that points perpendicular to the wall."""
     front: int
     rear: int
-    toward_wall: Literal[1, -1]  # sign of a steer toward the wall
+    toward_wall: Literal[1, -1]
+    """The sign of a steer toward the wall."""
 
 
 def _side_beams(side: Side) -> SideBeams:

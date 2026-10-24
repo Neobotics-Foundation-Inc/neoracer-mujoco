@@ -43,7 +43,8 @@ def _applied(scene: Scene, p: Physics) -> mujoco.MjModel:
 
 
 def _drive(model: mujoco.MjModel, scene: Scene) -> np.ndarray:
-    """The sensordata of 1 s of driving and steering, (500, nsensordata)."""
+    """The sensordata of 500 steps (about 1.4 s) of driving and steering,
+    (500, nsensordata)."""
     data = sim.settle(model)
     out = []
     for t in range(500):

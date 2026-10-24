@@ -12,9 +12,11 @@ from neoracer_mujoco import assets, sim
 from neoracer_mujoco.control import steering
 from neoracer_mujoco.control.steering import ControlCommand, PDState, ShapingConfig
 
-DT = 0.02  # s, one 50 Hz control step
+DT = 0.02
+"""One 50 Hz control step (s)."""
 P = ShapingConfig()
-LIMIT = P.steer_limit  # rad
+LIMIT = P.steer_limit
+"""The steer limit (rad)."""
 
 
 def test_command_keeps_the_steer_within_its_limit_and_its_rate():

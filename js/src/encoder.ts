@@ -1,8 +1,10 @@
-// The speed that the car's firmware reports from its motor encoder, as
-// encoder.py computes it: every window (params.window) the drivetrain's
-// angle over the window becomes the surface speed of a tire of the params'
-// radius, filtered with weight alpha on the new window. A window closes at
-// the first step on or after each tick and is measured over its own length.
+/**
+ * The speed that the car's firmware reports from its motor encoder, as
+ * encoder.py computes it: every window (params.window) the drivetrain's
+ * angle over the window becomes the surface speed of a tire of the params'
+ * radius, filtered with weight alpha on the new window. A window closes at
+ * the first step on or after each tick and is measured over its own length.
+ */
 
 import { WINDOW_EPS } from './generated/shared.js';
 import { type EncoderParams, NEORACER_PARAMS } from './generated/spec.js';
@@ -14,10 +16,14 @@ export const ENCODER: EncoderParams = NEORACER_PARAMS.encoder;
 
 /** The encoder between two physics steps. */
 export interface EncoderState {
-  readonly angle: number; // rad, the drivetrain's angle when the window opened
-  readonly span: number; // s since the window opened
-  readonly due: number; // s until the firmware's next tick
-  readonly speed: number; // m/s, + = forward: the last speed the firmware reported
+  /** The drivetrain's angle (rad) when the window opened. */
+  readonly angle: number;
+  /** The time (s) since the window opened. */
+  readonly span: number;
+  /** The time (s) until the firmware's next tick. */
+  readonly due: number;
+  /** The last speed (m/s) the firmware reported, + = forward. */
+  readonly speed: number;
 }
 
 /**

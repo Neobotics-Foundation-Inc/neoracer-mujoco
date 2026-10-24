@@ -32,38 +32,41 @@ import mujoco
 if TYPE_CHECKING:  # scene.py imports this module
     from .scene import Car
 
-CAR_BODY = "car"  # the car's root body, with the free joint
+CAR_BODY = "car"
+"""The car's root body, with the free joint."""
 
-# --- actuators ---------------------------------------------------------------
 DRIVE_ACTUATOR = "motor"
 STEER_ACTUATOR = "steer_servo"
 REQUIRED_ACTUATORS = (DRIVE_ACTUATOR, STEER_ACTUATOR)
-# An actuator's user numbers (a, b, c), if it has any, give its ctrl for a
-# throttle t in [-1, 1]: a t + b sign(t) + c |sign(t)|. Every actuator but
-# the steer servo has them, except a motor that takes a share of its limit.
 THROTTLE_MAP_SIZE = 3
+"""The count of an actuator's user numbers (a, b, c), if it has any. They give
+its ctrl for a throttle t in [-1, 1]: a t + b sign(t) + c |sign(t)|. Every
+actuator but the steer servo has them, except a motor that takes a share of
+its limit."""
 
-# --- wheels -----------------------------------------------------------------
-# The geoms that touch the ground, in the order fl, fr, rl, rr.
 WHEEL_GEOMS = ("fl_wheel", "fr_wheel", "rl_wheel", "rr_wheel")
+"""The geoms that touch the ground, in the order fl, fr, rl, rr."""
 
-# --- sensors ----------------------------------------------------------------
-# The site at the center of the spinning LiDAR (lidar.py). Its +X axis is the
-# scan's bearing 0, and its XY plane is the plane the scan sweeps. Its user
-# number is the field that the LiDAR sees (lidar_field).
 LIDAR_SITE = "lidar_mount"
-IMU_ACCEL_SENSOR = "imu_accel"  # specific force at the IMU (m/s^2), car frame
-IMU_GYRO_SENSOR = "imu_gyro"  # angular velocity at the IMU (rad/s), car frame
-DRIVE_POS_SENSOR = "drive_pos"  # the drivetrain's angle (rad), the encoder's
+"""The site at the center of the spinning LiDAR (lidar.py). Its +X axis is the
+scan's bearing 0, and its XY plane is the plane the scan sweeps. Its user
+number is the field that the LiDAR sees (lidar_field)."""
+IMU_ACCEL_SENSOR = "imu_accel"
+"""The specific force at the IMU (m/s²), in the car frame."""
+IMU_GYRO_SENSOR = "imu_gyro"
+"""The angular velocity at the IMU (rad/s), in the car frame."""
+DRIVE_POS_SENSOR = "drive_pos"
+"""The drivetrain's angle (rad), which the encoder counts."""
 
-# --- physical sanity --------------------------------------------------------
-# The real NeoRacer's mass is its spec's Chassis.mass. The test checks the total
-# mass, not the mass of each geom, so a mesh can carry mass (a dense battery
-# or motor). If a mesh uses MuJoCo's default density of 1000 kg/m³, the total
-# mass is above MASS_MAX: the chassis box as solid water is 21.3 kg.
-# Limit: if a new car is really heavier, widen this band for its car family.
-# For an exact check, compare with the documented mass of that car instead.
-MASS_MIN, MASS_MAX = 1.0, 8.0  # kg
+MASS_MIN, MASS_MAX = 1.0, 8.0
+"""The band (kg) that a car's total mass must be in. The real NeoRacer's mass
+is its spec's Chassis.mass. The test checks the total mass, not the mass of
+each geom, so a mesh can carry mass (a dense battery or motor). If a mesh uses
+MuJoCo's default density of 1000 kg/m³, the total mass is above MASS_MAX: the
+chassis box as solid water is 21.3 kg.
+
+Limit: if a new car is really heavier, widen this band for its car family. For
+an exact check, compare with the documented mass of that car instead."""
 
 
 type ThrottleMap = tuple[float, float, float]
@@ -107,10 +110,12 @@ class ActuatorLimits:
     """The ctrlrange limits of the drive and steer actuators. Each range is
     symmetric, so a command in [-1, 1] scales by one limit."""
 
-    # The motor's ctrlrange is [-voltage, voltage]: V, the NeoRacer's battery;
-    # m/s for the RACECAR Neo V2, the speed it holds at full throttle.
     voltage: float
-    steer_rad: float  # rad; ctrlrange is [-steer_rad, steer_rad]
+    """The limit of the motor's ctrlrange, [-voltage, voltage]: the NeoRacer's
+    battery voltage (V), or for the RACECAR Neo V2 the speed that it holds at
+    full throttle (m/s)."""
+    steer_rad: float
+    """The limit of the steer servo's ctrlrange, [-steer_rad, steer_rad]."""
 
 
 def wheel_radius(model: mujoco.MjModel, car: Car) -> float:
@@ -126,9 +131,9 @@ def lidar_field(model: mujoco.MjModel, lidar: mujoco.MjsSite) -> float:
     return float(model.bind_scalar(lidar).user[0])
 
 
-# A field at the model's precision, 6 significant digits, is off by less
-# than this (rad), so a bearing that close outside its edge is on it.
 FIELD_EPS = 1e-5
+"""A field at the model's precision, 6 significant digits, is off by less than
+this (rad), so a bearing that close outside its edge is on it."""
 
 
 def in_field(bearing: float, field: float) -> bool:

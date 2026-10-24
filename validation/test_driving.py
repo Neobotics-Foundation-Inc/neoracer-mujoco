@@ -18,11 +18,12 @@ from neoracer_mujoco.control.steering import ControlCommand
 
 LOOP = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
 
-# Rates of their own toward an input and back to 0, so the laws tell them apart.
 SHAPING = Shaping(
     throttle=Rates(toward=2.0, back=1.0), steer=Rates(toward=3.0, back=5.0)
 )
-DT = 0.02  # s, one 50 Hz frame
+"""Rates of their own toward an input and back to 0, so the laws tell them apart."""
+DT = 0.02
+"""One 50 Hz frame (s)."""
 
 
 def _hold(drive: Drive, inputs: Drive, frames: int) -> list[Drive]:

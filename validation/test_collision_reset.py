@@ -39,9 +39,6 @@ def test_the_walls_body_holds_exactly_the_walls_of_each_track():
     assert _wall_names(assets.load().spec) == set()
 
 
-# --- car_touches_wall / reset_car --------------------------------------------
-
-
 def test_reset_after_wall_penetration_restores_the_spawn_state():
     scene = corridor_scene()
     model = scene.model
@@ -70,6 +67,6 @@ def test_no_contact_when_driving_down_the_center():
     model = scene.model
     data = sim.settle(model)
     sim.apply_command(scene.car, data, ControlCommand(throttle=0.5, steer=0.0))
-    for _ in range(round(1.0 / model.opt.timestep)):  # 1 s
+    for _ in range(round(1.0 / model.opt.timestep)):
         mujoco.mj_step(model, data)
         assert not car_touches_wall(data, scene.car)

@@ -4,8 +4,10 @@ The scene around the walls -- assets, materials, floor, compiler settings --
 lives in scene_template.xml next door, not in this file. This module computes
 the wall boxes and fills the template's placeholders in.
 
-Frame: +X forward from the start, +Y left, +Z up. Output follows the convention in assets/tracks/*.xml -- scenery that never
-names the car -- so `assets.compose` can attach the car to it at runtime:
+Frame: +X forward from the start, +Y left, +Z up. Quantities are in SI units
+unless a name says otherwise. Output follows the convention in
+assets/tracks/*.xml -- scenery that never names the car -- so `assets.compose`
+can attach the car to it at runtime:
 
     assets.compose(to_spec(track))  # track: a Track from generate_track
 """
@@ -28,17 +30,21 @@ from .track import Track, left_edge, right_edge
 class WallParams:
     """Sizes of the generated walls and floor."""
 
-    height: float = 0.30  # m; the height of the walls in assets/tracks/*.xml
-    thickness: float = 0.05  # m
-    # m; the longest wall box. A lower value follows the edges more closely,
-    # with proportionally more geoms.
+    height: float = 0.30
+    """The height of the walls, as in assets/tracks/*.xml."""
+    thickness: float = 0.05
     segment_length: float = 0.5
-    max_deviation: float = 0.01  # m; how far an edge may bow away from a wall box
-    floor_margin: float = 1.0  # m of floor beyond the outermost wall
-    # None: as few boxes as the two caps above allow. A number: exactly that
-    # many boxes in each wall, so that every track compiles to a model of the
-    # same size, as a batch with one track per row needs (see split_to).
+    """The length of the longest wall box. A lower value follows the edges more
+    closely, with proportionally more geoms."""
+    max_deviation: float = 0.01
+    """How far an edge may bow away from a wall box."""
+    floor_margin: float = 1.0
+    """How much floor lies beyond the outermost wall."""
     boxes_per_wall: int | None = None
+    """None for as few boxes as segment_length and max_deviation allow, or a
+    number for exactly that many boxes in each wall, so that every track
+    compiles to a model of the same size, as a batch with one track per row
+    needs (see split_to)."""
 
 
 def to_spec(track: Track, walls: WallParams = WallParams()) -> mujoco.MjSpec:

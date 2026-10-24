@@ -28,20 +28,21 @@ from . import physics as physics_module
 from .physics import Physics
 from .scene import Scene
 
-# Where MJX's model for MuJoCo Warp holds each field of physics.FIELDS that
-# its Model does not: MuJoCo Warp's own model, _impl, holds the sensors'
-# timing.
 WARP_PATHS: Mapping[str, str] = MappingProxyType(
     {
         "sensor_interval": "_impl.sensor_interval",
         "sensor_delay": "_impl.sensor_delay",
     }
 )
+"""Where MJX's model for MuJoCo Warp holds each field of physics.FIELDS that its
+Model does not: MuJoCo Warp's own model, _impl, holds the sensors' timing."""
 
-# The most contacts and constraints that one environment holds at once. The
-# car on a track has about 10 contacts and 40 constraints.
 CONTACTS_PER_ENV = 64
+"""The most contacts that one environment holds at once. The car on a track has
+about 10."""
 CONSTRAINTS_PER_ENV = 256
+"""The most constraints that one environment holds at once. The car on a track
+has about 40."""
 
 
 @jax.tree_util.register_dataclass

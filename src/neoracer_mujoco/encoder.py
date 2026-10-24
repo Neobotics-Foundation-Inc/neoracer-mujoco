@@ -5,8 +5,8 @@ Every window (EncoderParams.window, the spec's MotorEncoder.report_period),
 the car's ESP32 (its firmware's task_control) reads the motor encoder's
 count over the window and turns it into the surface speed of a tire of
 EncoderParams.radius. It then low-pass filters it, with the weight
-EncoderParams.alpha on the new window's speed. It reports the result as /encoder/speed, which a program
-reads as rc.physics.get_encoder_speed().
+EncoderParams.alpha on the new window's speed. It reports the result as
+/encoder/speed, which a program reads as rc.physics.get_encoder_speed().
 
 This module computes the same speed from the drivetrain's angle, the
 drive_pos sensor. The physics step does not divide the window. So a window
@@ -28,10 +28,14 @@ from neoracer_spec.derive import EncoderParams
 class EncoderState:
     """The encoder between two physics steps. Start it with start()."""
 
-    angle: float  # rad, the drivetrain's angle when the window opened
-    span: float  # s since the window opened
-    due: float  # s until the firmware's next tick
-    speed: float  # m/s, + = forward: the last speed the firmware reported
+    angle: float
+    """The drivetrain's angle (rad) when the window opened."""
+    span: float
+    """The time (s) since the window opened."""
+    due: float
+    """The time (s) until the firmware's next tick."""
+    speed: float
+    """The last speed (m/s, + = forward) that the firmware reported."""
 
 
 def start(params: EncoderParams, angle: float) -> EncoderState:
@@ -39,9 +43,9 @@ def start(params: EncoderParams, angle: float) -> EncoderState:
     return EncoderState(angle=angle, span=0.0, due=params.window, speed=0.0)
 
 
-# A window closes when less than this is left of it (s), so that a step that
-# lands on a tick, up to rounding, closes the window.
 WINDOW_EPS = 1e-9
+"""A window closes when less than this is left of it (s), so that a step that
+lands on a tick, up to rounding, closes the window."""
 
 
 def step(

@@ -18,8 +18,10 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Source:
-    name: str  # short: "CAD", "docs", "firmware"
-    where: str  # enough to find it: a file, a page, a person and a date
+    name: str
+    """A short name: "CAD", "docs", "firmware"."""
+    where: str
+    """Enough to find it: a file, a page, a person and a date."""
 
 
 @dataclass(frozen=True)
@@ -36,7 +38,8 @@ class Calibrated:
     sensor, the angle a steering command gives."""
 
     source: Source
-    reference: str  # what it was fitted against: "the LiDAR", "a tape"
+    reference: str
+    """What it was fitted against: "the LiDAR", "a tape"."""
 
 
 @dataclass(frozen=True)
@@ -83,10 +86,10 @@ class Alternative[T]:
 class Sourced[T]:
     value: T
     status: Status
-    # Why this value, when it needs saying.
     note: str = ""
-    # The values that other sources give. The spec is INCONSISTENT there.
+    """Why this value, when it needs saying."""
     conflicts: tuple[Alternative[T], ...] = ()
+    """The values that other sources give. The spec is INCONSISTENT there."""
 
 
 def measured[T](

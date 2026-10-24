@@ -21,7 +21,8 @@ from neoracer_spec.parts import SOLVER
 
 PARAMS = derive(NEORACER).encoder
 
-DT = SOLVER.timestep  # s, the car's physics step
+DT = SOLVER.timestep
+"""The car's physics step (s)."""
 
 
 def _spin(

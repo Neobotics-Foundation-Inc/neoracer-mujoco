@@ -49,7 +49,9 @@ class Shaping:
 
     throttle: Rates
     steer: Rates
-    max_dt: float = 0.1  # s; a longer frame is cut, so physics never has to catch up
+    max_dt: float = 0.1
+    """The longest frame (s). A longer frame is cut, so physics never has to
+    catch up."""
 
 
 def frame_dt(s: Shaping, dt: float) -> float:
@@ -101,11 +103,15 @@ def load_scene(track: str | None) -> Scene:
 
 @dataclass(frozen=True)
 class ChaseCam:
-    distance: float = 1.6  # m from the car
-    elevation: float = -35.0  # deg; a more negative value looks more from the top
-    # deg, added to the car's yaw. 0 puts the camera behind the car (at -X,
-    # looking at +X), 180 in front of it, and ±90 at its side.
+    distance: float = 1.6
+    """The camera's distance from the car (m)."""
+    elevation: float = -35.0
+    """The camera's elevation (deg). A more negative value looks more from the
+    top."""
     azimuth: float = 0.0
+    """The camera's azimuth (deg), added to the car's yaw. 0 puts the camera
+    behind the car (at -X, looking at +X), 180 in front of it, and ±90 at its
+    side."""
 
 
 def chase_camera(p: ChaseCam, model: mujoco.MjModel, car: Car) -> mujoco.MjvCamera:

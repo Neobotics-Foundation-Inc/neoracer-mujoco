@@ -43,12 +43,12 @@ DIFFICULTIES: Mapping[str, Difficulty] = MappingProxyType(
     {"0": 0, "1": 1, "2": 2, "3": 3}
 )
 
-# Follow the right-hand wall at roughly a quarter of the corridor width, so the
-# car has room on both sides even on the narrowest stretches (half_width_min is
-# 0.35 m at the hardest difficulty).
 DRIVE_CONFIG = wall_following.WallFollowingConfig(
     follow_side="right", target_distance=0.25
 )
+"""The controller follows the right-hand wall at roughly a quarter of the
+corridor width, so the car has room on both sides even on the narrowest
+stretches (half_width_min is 0.35 m at the hardest difficulty)."""
 
 
 def make_track(seed: int, difficulty: Difficulty) -> Track:

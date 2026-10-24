@@ -55,17 +55,21 @@ from neoracer_mujoco.scene import Scene
 
 @dataclass(frozen=True)
 class ManualDriveParams:
-    # Change these values to change how the car responds to the keys. The
-    # rates are per second, so the response does not depend on the frame
-    # rate: a held throttle key builds the throttle, and a held steer key
-    # turns the wheels toward full lock.
+    """Change these values to change how the car responds to the keys. The
+    rates are per second, so the response does not depend on the frame rate:
+    a held throttle key builds the throttle, and a held steer key turns the
+    wheels toward full lock."""
+
     shaping: Shaping = Shaping(
         throttle=Rates(toward=2.3, back=1.7), steer=Rates(toward=3.4, back=5.7)
     )
     cam: ChaseCam = ChaseCam()
-    window_px: tuple[int, int] = (900, 600)  # px; width, height of the window
-    max_scene_geoms: int = 10000  # the maximum number of geoms in one rendered frame
-    hud_period_s: float = 0.1  # s between two sensor print lines
+    window_px: tuple[int, int] = (900, 600)
+    """The width and height of the window."""
+    max_scene_geoms: int = 10000
+    """The maximum number of geoms in one rendered frame."""
+    hud_period_s: float = 0.1
+    """The time between two sensor print lines."""
 
 
 def print_sensors(s: sensors.SensorReadings, wheel_radius: float) -> None:
@@ -82,7 +86,6 @@ def print_sensors(s: sensors.SensorReadings, wheel_radius: float) -> None:
     )
 
 
-# The glfw keys that the script reads in each frame.
 _KEYS = (
     glfw.KEY_UP,
     glfw.KEY_W,
@@ -96,6 +99,7 @@ _KEYS = (
     glfw.KEY_BACKSPACE,
     glfw.KEY_ESCAPE,
 )
+"""The glfw keys that the script reads in each frame."""
 
 
 def keyboard_inputs(held: frozenset[int]) -> Drive:

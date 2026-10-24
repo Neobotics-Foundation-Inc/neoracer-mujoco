@@ -15,8 +15,10 @@ from scipy.spatial import KDTree
 from .config import TrackSettings
 from .shape import Centerline, Points, Samples, shortest_loop_distance
 
-type Indices = npt.NDArray[np.intp]  # shape (K,), sample indices
-type Pairs = npt.NDArray[np.intp]  # shape (K, 2), (i, j) sample index pairs
+type Indices = npt.NDArray[np.intp]
+"""Sample indices, shape (K,)."""
+type Pairs = npt.NDArray[np.intp]
+"""Pairs (i, j) of sample indices, shape (K, 2)."""
 
 
 @dataclass(frozen=True)
@@ -27,17 +29,14 @@ class Problems:
     control points behind a failure instead of redrawing the whole track.
     """
 
-    too_curvy: Indices  # samples that are too tight to drive
-    too_close: Pairs  # sample pairs that nearly touch in space
+    too_curvy: Indices
+    """The samples that are too tight to drive."""
+    too_close: Pairs
+    """The sample pairs that nearly touch in space."""
     length_ok: bool
-    # The loop turns left overall. A clockwise loop runs the other way around
-    # every track, so it is redrawn.
     counterclockwise: bool
-
-
-# --- finding the problems --------------------------------------------------
-# Checked on the sampled geometry, not on the control points: the spline
-# between well-spaced control points can still bend too sharply.
+    """Whether the loop turns left overall. A clockwise loop runs the other way
+    around every track, so it is redrawn."""
 
 
 def find_too_curvy_samples(
@@ -87,7 +86,10 @@ def find_problems(
     line: Centerline, half_width: Samples, settings: TrackSettings
 ) -> Problems:
     """Run every rejection rule over a candidate track: curvature, near
-    self-touch, total length inside the requested range, and direction."""
+    self-touch, total length inside the requested range, and direction.
+
+    The rules check the sampled geometry, not the control points: the spline
+    between well-spaced control points can still bend too sharply."""
     return Problems(
         too_curvy=find_too_curvy_samples(line.curvature, half_width, settings),
         too_close=find_near_self_touches(line, half_width, settings),
@@ -97,12 +99,6 @@ def find_problems(
         # A loop's curvature adds up to +2 pi counterclockwise, -2 pi clockwise.
         counterclockwise=bool(line.curvature.sum() > 0),
     )
-
-
-# --- nudging the control points behind them --------------------------------
-# Nudge rather than redraw: most rejected tracks are one bad corner away from
-# valid, and a redraw throws away the other fifteen good ones. No randomness
-# here at all, so a seed that needed three repair passes reproduces exactly.
 
 
 def nearest_control_points(points: Points, positions: Points) -> Indices:
@@ -184,6 +180,11 @@ def repair(
     settings: TrackSettings,
 ) -> Points:
     """Return a new set of control points with each reported problem nudged at.
+
+    Nudge rather than redraw: most rejected tracks are one bad corner away from
+    valid, and a redraw throws away the other fifteen good ones. The repair uses
+    no randomness at all, so a seed that needed three repair passes reproduces
+    exactly.
 
     Corners first, then near-touches: smoothing a corner also drags the track
     sideways, so doing it after the push-apart would partly undo the push.

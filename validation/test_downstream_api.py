@@ -65,8 +65,8 @@ USED_BY_NEORACER_RL = (
 )
 
 
-# Names that need the jax extra, which neoracer-rl installs.
 USED_BY_NEORACER_RL_WITH_JAX = ("neoracer_mujoco.batch_warp.WarpBatch",)
+"""Names that need the jax extra, which neoracer-rl installs."""
 
 
 def _missing(names: tuple[str, ...]) -> list[str]:

@@ -44,11 +44,13 @@ WALL_CONTACT: Name = "truth_wall_contact"
 class TruthSensors:
     """The truth sensors, as elements of the scene's MjSpec."""
 
-    pos: mujoco.MjsSensor  # framepos of the car body: x, y, z (m), world frame
-    zaxis: mujoco.MjsSensor  # framezaxis of the car body, world frame
-    # The number of contacts between a geom of the car's body tree and a geom
-    # of the walls body. Zero when the car touches no wall.
+    pos: mujoco.MjsSensor
+    """The framepos of the car body: x, y, z (m), in the world frame."""
+    zaxis: mujoco.MjsSensor
+    """The framezaxis of the car body, in the world frame."""
     wall_contact: mujoco.MjsSensor
+    """The number of contacts between a geom of the car's body tree and a geom of
+    the walls body. Zero when the car touches no wall."""
 
 
 def add_sensors(spec: mujoco.MjSpec) -> None:
@@ -106,9 +108,6 @@ def _add_sensor(spec: mujoco.MjSpec, name: Name) -> mujoco.MjsSensor:
     )
 
 
-# The fields that decide what a sensor measures and how it reports it. A
-# reused sensor must match the truth sensor in each one, or a noise, cutoff
-# or delay setting would change what code reads as ground truth.
 _SETTINGS = (
     "type",
     "objtype",
@@ -127,6 +126,9 @@ _SETTINGS = (
     "interp",
     "userdata",
 )
+"""The fields that decide what a sensor measures and how it reports it. A
+reused sensor must match the truth sensor in each one, or a noise, cutoff or
+delay setting would change what code reads as ground truth."""
 
 
 def _same_sensor(a: mujoco.MjsSensor, b: mujoco.MjsSensor) -> bool:

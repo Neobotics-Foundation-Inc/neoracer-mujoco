@@ -7,7 +7,8 @@ of the values, without their provenance; no MuJoCo.
 Numbers that the model holds are kept to its precision, 6 significant
 digits (parts.precise), so the code and the XML hold the same floats.
 
-Frame: +X forward, +Y left, +Z up; angles in rad.
+Frame: +X forward, +Y left, +Z up. Quantities are in SI units unless a name
+says otherwise.
 """
 
 from __future__ import annotations
@@ -41,18 +42,19 @@ def derive(spec: Spec) -> DerivedParams:
     )
 
 
-# --- the settings beside the model --------------------------------------------
-
-
 @dataclass(frozen=True)
 class LidarParams:
     """The LiDAR's scan: lidar_params(car) for a NeoRacer,
     derive_v2.lidar_params(car) for a RACECAR Neo V2."""
 
-    slots: int  # slots a turn
-    scan_rate: float  # Hz, turns a second
-    max_range: float  # m, its range on a bright target
-    field: float  # rad of bearings it sees, centered on the front
+    slots: int
+    """The slots in a turn."""
+    scan_rate: float
+    """Turns a second."""
+    max_range: float
+    """Its range on a bright target."""
+    field: float
+    """The bearings it sees, centered on the front."""
 
     def __post_init__(self) -> None:
         if self.slots < 1:
@@ -81,9 +83,12 @@ def lidar_params(spec: Spec) -> LidarParams:
 class EncoderParams:
     """How the firmware measures the speed from the motor encoder."""
 
-    window: float  # s, the firmware's control period
-    radius: float  # m, the tire's, that it measures the speed at
-    alpha: float  # the weight of the new window in the filter
+    window: float
+    """The firmware's control period."""
+    radius: float
+    """The tire's radius, which it measures the speed at."""
+    alpha: float
+    """The weight of the new window in the filter."""
 
     def __post_init__(self) -> None:
         if not self.window > 0.0:
@@ -103,9 +108,6 @@ def encoder_params(spec: Spec) -> EncoderParams:
     )
 
 
-# --- the model's numbers ------------------------------------------------------
-
-
 @dataclass(frozen=True)
 class ModelParams:
     """The NeoRacer's model: the parts that both cars' models have, and its
@@ -113,14 +115,18 @@ class ModelParams:
 
     common: parts.Model
     drive: DcMotorParams
-    wheel_mesh_scale: float  # of the cosmetic wheel meshes, to the tire
+    wheel_mesh_scale: float
+    """The scale of the cosmetic wheel meshes, to the tire."""
 
 
 @dataclass(frozen=True)
 class DcMotorParams:
-    nominal: Nominal  # at the shaft
-    gear: float  # shaft turns per turn of what it drives
-    ctrl_limit: float  # V, |ctrl| at most
+    nominal: Nominal
+    """The motor's nominal at the shaft."""
+    gear: float
+    """Shaft turns per turn of what it drives."""
+    ctrl_limit: float
+    """The voltage that |ctrl| reaches at most."""
 
 
 def model(spec: Spec) -> ModelParams:
@@ -204,7 +210,8 @@ def rad_s(rpm: float) -> float:
     return rpm * 2.0 * math.pi / 60.0
 
 
-KGF_CM = 9.80665 / 100  # N·m in a kgf·cm, at standard gravity, as servos are rated
+KGF_CM = 9.80665 / 100
+"""A kgf·cm in N·m, at standard gravity, as servos are rated."""
 
 
 def servo_nominal(spec: Spec) -> Nominal:

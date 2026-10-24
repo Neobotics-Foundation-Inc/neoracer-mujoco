@@ -40,15 +40,22 @@ type Mode = Literal["safe", "full"]
 
 @dataclass(frozen=True)
 class DriveParams:
-    """Inputs of the demo controller and the log settings. The defaults are safe mode."""
+    """Inputs of the demo controller and the log settings. The defaults are
+    safe mode."""
 
-    throttle: float = 0.42  # in [-1, 1]
-    steer_amp_rad: float = 0.15  # rad; amplitude of the steer sine
-    steer_freq_hz: float = 0.30  # Hz; frequency of the steer sine
-    # m/s; above this speed the throttle is 0 and the car coasts. None = no limit.
+    throttle: float = 0.42
+    """The constant throttle, in [-1, 1]."""
+    steer_amp_rad: float = 0.15
+    """The amplitude of the steer sine."""
+    steer_freq_hz: float = 0.30
+    """The frequency of the steer sine."""
     speed_limit_ms: float | None = 1.5
-    print_every_steps: int = 20  # physics steps between two log lines
-    roll_warn_deg: float = 25.0  # deg; the log line shows a warning above this roll
+    """The speed (m/s) above which the throttle is 0 and the car coasts, or None
+    for no limit."""
+    print_every_steps: int = 20
+    """The physics steps between two log lines."""
+    roll_warn_deg: float = 25.0
+    """The roll above which the log line shows a warning."""
 
     def __post_init__(self) -> None:
         # main() logs at every print_every_steps-th step, so it must be >= 1.
@@ -87,7 +94,8 @@ def _roll_pitch_deg(q: sensors.Quat) -> tuple[float, float]:
 
 def _command(params: DriveParams, t: float, speed_ms: float) -> ControlCommand:
     """The command at time t (s): a constant throttle and a sinusoidal
-    steer (rad). If the speed (m/s) is at or above the speed limit, the throttle is 0."""
+    steer (rad). If the speed (m/s) is at or above the speed limit, the
+    throttle is 0."""
     steer = params.steer_amp_rad * math.sin(2 * math.pi * params.steer_freq_hz * t)
     limit = params.speed_limit_ms
     throttle = 0.0 if limit is not None and speed_ms >= limit else params.throttle
@@ -141,7 +149,7 @@ def main() -> None:
     scene = assets.load()
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
-    wheel_radius = contract.wheel_radius(model, car)  # m
+    wheel_radius = contract.wheel_radius(model, car)
 
     print(f"NeoRacer viewer — mode={args.mode}")
     print(

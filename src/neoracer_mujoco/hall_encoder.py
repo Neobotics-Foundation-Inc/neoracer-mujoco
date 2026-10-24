@@ -35,10 +35,14 @@ from neoracer_spec.derive_v2 import HallEncoderParams
 class HallEncoderState:
     """The encoder between two physics steps. Start it with start()."""
 
-    origin: float  # rad, the drivetrain's angle at an edge
-    angle: float  # rad, the drivetrain's angle at the last step
-    since: float  # s since the last edge
-    speed: float  # m/s, + = forward: the last speed the board reported
+    origin: float
+    """The drivetrain's angle (rad) at an edge."""
+    angle: float
+    """The drivetrain's angle (rad) at the last step."""
+    since: float
+    """The time (s) since the last edge."""
+    speed: float
+    """The last speed (m/s, + = forward) that the board reported."""
 
 
 def start(params: HallEncoderParams, angle: float) -> HallEncoderState:

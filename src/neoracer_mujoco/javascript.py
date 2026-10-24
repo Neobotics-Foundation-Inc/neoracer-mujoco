@@ -17,7 +17,7 @@ import json
 import os
 import sys
 from collections.abc import Mapping
-from types import MappingProxyType
+from types import MappingProxyType, ModuleType
 
 from neoracer_spec import typescript
 from neoracer_spec.neoracer import NEORACER
@@ -26,32 +26,36 @@ from . import assets, contract, encoder, export, lidar, sensors, sim
 
 HEADER = "// Written by python -m neoracer_mujoco.javascript. Do not edit.\n"
 
-# The constants of shared.ts: the parts of the car that code finds by name,
-# and the numbers that both packages need to agree on.
-SHARED: Mapping[str, object] = MappingProxyType(
+SHARED: Mapping[str, ModuleType] = MappingProxyType(
     {
-        "CAR_BODY": contract.CAR_BODY,
-        "START_SITE": assets.START_SITE,
-        "DRIVE_ACTUATOR": contract.DRIVE_ACTUATOR,
-        "STEER_ACTUATOR": contract.STEER_ACTUATOR,
-        "LIDAR_SITE": contract.LIDAR_SITE,
-        "DRIVE_POS_SENSOR": contract.DRIVE_POS_SENSOR,
-        "IMU_ACCEL_SENSOR": contract.IMU_ACCEL_SENSOR,
-        "IMU_GYRO_SENSOR": contract.IMU_GYRO_SENSOR,
-        "WHEEL_GEOMS": contract.WHEEL_GEOMS,
-        "NO_RETURN": sensors.NO_RETURN,
-        "SLOT_EPS": lidar.SLOT_EPS,
-        "FIELD_EPS": contract.FIELD_EPS,
-        "WINDOW_EPS": encoder.WINDOW_EPS,
-        "SETTLE_TIME": sim.SETTLE_TIME,
+        "CAR_BODY": contract,
+        "START_SITE": assets,
+        "DRIVE_ACTUATOR": contract,
+        "STEER_ACTUATOR": contract,
+        "LIDAR_SITE": contract,
+        "DRIVE_POS_SENSOR": contract,
+        "IMU_ACCEL_SENSOR": contract,
+        "IMU_GYRO_SENSOR": contract,
+        "WHEEL_GEOMS": contract,
+        "NO_RETURN": sensors,
+        "SLOT_EPS": lidar,
+        "FIELD_EPS": contract,
+        "WINDOW_EPS": encoder,
+        "SETTLE_TIME": sim,
     }
 )
+"""The constants of shared.ts, each by the module that defines it: the parts
+of the car that code finds by name, and the numbers that both packages need
+to agree on."""
 
 
 def shared() -> str:
-    """shared.ts: each constant of SHARED as a TypeScript constant."""
+    """shared.ts: each constant of SHARED as a TypeScript constant, under the
+    TSDoc of its docstring."""
     lines = []
-    for name, value in SHARED.items():
+    for name, module in SHARED.items():
+        value = getattr(module, name)
+        lines += typescript.doc_comment(module, name)
         if isinstance(value, tuple):
             lines.append(f"export const {name} = {json.dumps(list(value))} as const;")
         else:

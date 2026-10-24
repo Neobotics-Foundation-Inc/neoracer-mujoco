@@ -477,7 +477,7 @@ def _type_params(params: list[ast.type_param]) -> set[str]:
 def _named_before_defined(tree: ast.Module) -> list[str]:
     """The names that the module's annotations use before it defines them,
     when Python 3.12 evaluates them: a class's when it defines the class, a
-    function's when it defines the function. None when the module postpones
+    function's when it defines the function. No names when the module postpones
     its annotations."""
     if any(
         isinstance(node, ast.ImportFrom)

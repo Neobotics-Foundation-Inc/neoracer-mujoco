@@ -22,7 +22,7 @@ from neoracer_spec.neoracer import NEORACER
 
 TRACK = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
 DRIVE = ControlCommand(throttle=0.5, steer=0.2)
-DRIVE_SECONDS = 1.0  # s
+DRIVE_SECONDS = 1.0
 
 
 def main(out: str) -> None:
