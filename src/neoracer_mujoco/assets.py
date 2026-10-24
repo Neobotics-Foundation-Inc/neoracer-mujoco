@@ -29,6 +29,7 @@ from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
 from neoracer_spec.spec import Spec
 
+from . import contract
 from .scene import Scene, compile_scene
 
 PACKAGED_DIR = "data"  # the name of assets/ inside an installed wheel
@@ -114,10 +115,10 @@ def compose(
     pos: Position = (0.0, 0.0, 0.0),
     visuals: bool = True,
 ) -> Scene:
-    """Compile the track with the car's "car" body attached at pos (m),
-    facing +X. The car is a car XML's path or a car's MjSpec, such as
-    export.spec(car) for a variant. Neither track nor a car's MjSpec is
-    changed: the car is attached from copies.
+    """Compile the track with the car's root body (contract.CAR_BODY)
+    attached at pos (m), facing +X. The car is a car XML's path or a car's
+    MjSpec, such as export.spec(car) for a variant. Neither track nor a
+    car's MjSpec is changed: the car is attached from copies.
 
     Only the car body is attached, so the track keeps its own floor, and
     the track XML never names the car file. The scene takes the car's
@@ -143,7 +144,7 @@ def compose(
     # <default> with no class, which the XML parser rejects. A name of its
     # own makes the scene's XML load again.
     car.default.name = "car"
-    frame.attach_body(car.body("car"), "", "")
+    frame.attach_body(car.body(contract.CAR_BODY), "", "")
     return compile_scene(scene)
 
 
