@@ -14,9 +14,13 @@ of the wheelbase, on the axle line.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
+import numpy as np
+
+from . import ackermann
 from .spec import Vec3
 
 type Axles = tuple[float, float]  # front, rear
@@ -47,6 +51,8 @@ class Solver:
 SOLVER = Solver(
     timestep=1 / 360, integrator="implicitfast", cone="elliptic", impratio=10
 )
+
+G = 9.81  # m/s², MuJoCo's gravity
 
 
 @dataclass(frozen=True)
@@ -114,6 +120,7 @@ class SteeringInput:
     ackermann_left: Polynomial  # the left wheel's angle from the input
     ackermann_right: Polynomial
     input_body_mass: float  # kg, the input's light virtual body
+    armature: float  # kg·m², at the input and each front wheel's steer joint
 
 
 @dataclass(frozen=True)
@@ -151,6 +158,62 @@ class Model:
     springs: Springs
     steering: SteeringInput
     servo: Servo
+
+
+# The model's own choices for the steering input, not a car's: its virtual
+# body is light beside the chassis, and the front wheels' steer joints reach
+# past the widest angle that the Ackermann constraints ask of them, so that
+# their limits never oppose the constraints.
+INPUT_BODY_MASS = 0.01  # kg
+WHEEL_RANGE_MARGIN = 0.015  # rad
+
+
+def steering_input(
+    wheelbase: float,
+    track: float,
+    stops: tuple[float, float],
+    virtual: Callable[[float], float],
+    armature: float,
+) -> SteeringInput:
+    """The steering input from stops[0] to stops[1] (rad), which turns the
+    virtual wheel at the middle of the front axle to virtual(x) (rad) at x.
+    Each front wheel's polynomial is a least-squares fit to ideal Ackermann
+    steering from the virtual wheel over that range, and the steer joints
+    reach WHEEL_RANGE_MARGIN past the widest angle of either wheel."""
+    x = np.linspace(*stops, 401)
+    angles = [virtual(float(s)) for s in x]
+    left = np.array([ackermann.left_wheel(wheelbase, track, a) for a in angles])
+    right = np.array([ackermann.right_wheel(wheelbase, track, a) for a in angles])
+    widest = float(max(np.abs(left).max(), np.abs(right).max()))
+    return SteeringInput(
+        stops=(precise(stops[0]), precise(stops[1])),
+        wheel_range=precise(widest + WHEEL_RANGE_MARGIN),
+        ackermann_left=quartic(x, left),
+        ackermann_right=quartic(x, right),
+        input_body_mass=INPUT_BODY_MASS,
+        armature=precise(armature),
+    )
+
+
+def quartic(x: np.ndarray, y: np.ndarray) -> Polynomial:
+    """The least-squares 4th-order polynomial through (x, y), to the model's
+    precision."""
+    a0, a1, a2, a3, a4 = (
+        precise(float(a)) for a in np.polynomial.polynomial.polyfit(x, y, 4)
+    )
+    return (a0, a1, a2, a3, a4)
+
+
+def chassis_mass(car: float, wheel: float) -> float:
+    """The chassis body's mass (kg): the car's, less its four wheels and the
+    steering input's body."""
+    return car - 4 * wheel - INPUT_BODY_MASS
+
+
+def spring_ref(load: float, stiffness: float) -> float:
+    """The rest position (m) of a spring of stiffness (N/m) that holds load
+    (kg) with its joint at 0."""
+    return -load * G / stiffness
 
 
 def delay(latency: float) -> Delay:

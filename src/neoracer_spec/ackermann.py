@@ -9,10 +9,16 @@ import math
 
 
 def left_wheel(wheelbase: float, track: float, steer: float) -> float:
-    """The left front wheel's angle (rad) for a steering input of steer != 0
+    """The left front wheel's angle (rad) for a steering input of steer
     (rad). The left wheel is the inner one in a left turn, so it turns more
-    than steer."""
-    return math.atan(wheelbase / (wheelbase / math.tan(steer) - track / 2))
+    than steer, and the outer one in a right turn."""
+    t = math.tan(steer)
+    return math.atan2(wheelbase * t, wheelbase - t * track / 2)
+
+
+def right_wheel(wheelbase: float, track: float, steer: float) -> float:
+    """The right front wheel's angle (rad): the left's mirror image."""
+    return -left_wheel(wheelbase, track, -steer)
 
 
 def steer_for_inner(wheelbase: float, track: float, inner: float) -> float:

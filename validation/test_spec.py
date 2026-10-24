@@ -39,6 +39,7 @@ from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
 from neoracer_spec.tree import at
 
 CAR = NEORACER
+V2 = RACECAR_NEO_V2
 MODEL = derive.model(CAR)
 V2_XML = os.path.join(assets.ASSET_DIR, "racecar_neo_v2.xml")
 
@@ -325,20 +326,46 @@ def test_full_lock_turns_the_inner_wheel_to_its_lock():
     )
 
 
-def test_the_ackermann_polynomials_follow_ideal_ackermann_steering():
-    """Each front wheel's polynomial is within 0.5 mrad of ideal Ackermann
-    steering over the steering input's range, the right wheel mirroring the
-    left."""
+def test_ideal_ackermann_steering_is_straight_at_0_and_mirrored():
+    """A steering input of 0 turns neither front wheel, and the right wheel's
+    angle at an input is the left's at its negation, negated."""
     l, w = CAR.chassis.wheelbase.value, CAR.chassis.track.value
-    r = CAR.steering.fit_range.value
-    poly = np.array(derive.ackermann_left(CAR))
-    x = np.linspace(-r, r, 101)
-    x = x[x != 0]
-    left = np.polynomial.polynomial.polyval(x, poly)
-    ideal = np.array([ackermann.left_wheel(l, w, s) for s in x])
-    assert np.max(np.abs(left - ideal)) < 5e-4
-    right = np.polynomial.polynomial.polyval(x, poly * [-1, 1, -1, 1, -1])
-    np.testing.assert_allclose(right, -left[::-1])
+    assert ackermann.left_wheel(l, w, 0.0) == 0.0
+    assert ackermann.right_wheel(l, w, 0.0) == 0.0
+    for steer in (-0.4, -0.1, 0.2, 0.45):
+        with case(steer):
+            right = ackermann.right_wheel(l, w, steer)
+            assert right == -ackermann.left_wheel(l, w, -steer)
+
+
+def test_the_ackermann_polynomials_follow_ideal_ackermann_steering():
+    """Over each car's steering input range, each front wheel's polynomial
+    is near ideal Ackermann steering from the virtual wheel: within 0.5 mrad
+    on the NeoRacer, and within 5 mrad on the V2, whose linkage turns the
+    virtual wheel at another slope each side, a bend at 0 that a polynomial
+    rounds off."""
+    cars = [
+        ("neoracer", CAR.chassis, derive.model(CAR).common, lambda x: x, 5e-4),
+        (
+            "v2",
+            V2.chassis,
+            derive_v2.model(V2).common,
+            lambda x: derive_v2.virtual_wheel(V2, x),
+            5e-3,
+        ),
+    ]
+    for name, chassis, common, virtual, bound in cars:
+        with case(name):
+            l, w = chassis.wheelbase.value, chassis.track.value
+            st = common.steering
+            x = np.linspace(*st.stops, 101)
+            for poly, wheel in [
+                (st.ackermann_left, ackermann.left_wheel),
+                (st.ackermann_right, ackermann.right_wheel),
+            ]:
+                fit = np.polynomial.polynomial.polyval(x, poly)
+                ideal = np.array([wheel(l, w, virtual(s)) for s in x])
+                assert np.max(np.abs(fit - ideal)) < bound
 
 
 def test_the_front_wheels_turn_as_far_as_the_ackermann_constraints_ask(scene):
@@ -357,9 +384,17 @@ def test_the_front_wheels_turn_as_far_as_the_ackermann_constraints_ask(scene):
 
 
 def test_the_springs_hold_the_sprung_weight_at_rest():
-    weight = derive.sprung_mass(CAR) * derive.G
-    stiffness = CAR.suspension.stiffness.value
-    assert -4 * stiffness * derive.spring_ref(CAR) == pytest.approx(weight)
+    """At their rest positions the four springs hold the car less its
+    wheels."""
+    for name, car, common in [
+        ("neoracer", CAR, derive.model(CAR).common),
+        ("v2", V2, derive_v2.model(V2).common),
+    ]:
+        with case(name):
+            s = common.springs
+            held = -2 * sum(k * ref for k, ref in zip(s.stiffness, s.springref))
+            sprung = car.chassis.mass.value - 4 * car.wheel.mass.value
+            assert held == pytest.approx(sprung * parts.G, rel=1e-5)
 
 
 def test_the_car_weighs_its_mass(scene):

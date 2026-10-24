@@ -237,8 +237,6 @@ NEORACER = Spec(
         ),
         driver_lock=documented(0.625, DRIVER_THROTTLE, note="max_steering"),
         fit_range=chosen(0.45, "wider than full lock"),
-        wheel_range_margin=chosen(0.015, "so the joint limits never bind"),
-        input_body_mass=chosen(0.01, "a light virtual body"),
         armature=estimated(
             0.002,
             "tuned in simulation, not measured: the servo's rotor inertia and"

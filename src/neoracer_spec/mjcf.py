@@ -210,6 +210,7 @@ def steering_input(st: parts.SteeringInput, w: parts.Wheels) -> list[Edit]:
         *put(
             default("steer", "joint"),
             range=numbers(-st.wheel_range, st.wheel_range),
+            armature=number(st.armature),
         ),
         *put(named("joint", "ackermann_left"), polycoef=numbers(*st.ackermann_left)),
         *put(named("joint", "ackermann_right"), polycoef=numbers(*st.ackermann_right)),
@@ -257,8 +258,8 @@ def car_edits(p: ModelParams) -> list[Edit]:
     scale = numbers(*[p.wheel_mesh_scale] * 3)
     return [
         *model(p.common),
-        # The NeoRacer's own: its floor, the meshes of its LiDAR and wheels,
-        # its steering's armature and its DC drive motor.
+        # The NeoRacer's own: its floor, the meshes of its LiDAR and wheels
+        # and its DC drive motor.
         *put(
             ".//geom[@type='plane']",
             friction=numbers(p.common.wheels.friction[0], 0.1, 0.1),
@@ -269,7 +270,6 @@ def car_edits(p: ModelParams) -> list[Edit]:
             for corner in CORNERS
             for e in put(named("mesh", f"vis_{corner}_wheel"), scale=scale)
         ],
-        *put(default("steer", "joint"), armature=number(p.steer_armature)),
         *put(
             named("dcmotor", "motor"),
             nominal=numbers(*m.nominal),

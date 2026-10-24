@@ -166,13 +166,6 @@ class Steering:
     # The steering input's range (rad): the model's Ackermann constraints fit
     # over it, so it must be wider than full lock.
     fit_range: Sourced[float]
-    # How far (rad) past the inner wheel's angle at fit_range the front
-    # wheels' steer joints reach, so their limits never oppose the
-    # constraints.
-    wheel_range_margin: Sourced[float]
-    # The model's virtual body that the steering input turns, between the
-    # servo and the Ackermann constraints. Its mass comes off the chassis'.
-    input_body_mass: Sourced[float]  # kg
     # Inertia added at the steering input and at each front wheel's steer
     # joint: the servo's rotor, seen through its gears, turns with them.
     armature: Sourced[float]  # kg·m²

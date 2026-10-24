@@ -33,8 +33,8 @@ from dataclasses import dataclass, replace
 import numpy as np
 
 from . import parts
-from .derive import G, LidarParams
-from .parts import Axles, Polynomial, precise, precise3
+from .derive import LidarParams
+from .parts import INPUT_BODY_MASS, Axles, precise, precise3
 from .racecar_neo_v2 import RacecarNeoV2
 from .spec import Vec3
 
@@ -122,9 +122,6 @@ class ModelParams:
     antenna_half_length: float  # m
 
 
-INPUT_BODY_MASS = 0.01  # kg, the steering input's light virtual body
-
-
 def model(spec: RacecarNeoV2) -> ModelParams:
     c, sh, w, s = spec.chassis, spec.shape, spec.wheel, spec.suspension
     drop = sh.payload_drop.value
@@ -202,9 +199,7 @@ def body(spec: RacecarNeoV2, p: Vec3) -> Vec3:
 
 
 def chassis_mass(spec: RacecarNeoV2) -> float:
-    """The chassis body's mass (kg): the car's less its wheels and the
-    steering input's body."""
-    return spec.chassis.mass.value - 4 * spec.wheel.mass.value - INPUT_BODY_MASS
+    return parts.chassis_mass(spec.chassis.mass.value, spec.wheel.mass.value)
 
 
 def chassis_com(spec: RacecarNeoV2) -> Vec3:
@@ -277,13 +272,13 @@ def effective_mass(spec: RacecarNeoV2) -> float:
 
 
 def spring_refs(spec: RacecarNeoV2) -> Axles:
-    """Each axle's springs' rest position (m): each spring holds its share of
-    the weight on its axle, less the wheels, with its joint at 0."""
+    """Each axle's springs' rest position (m): each spring holds half the
+    mass on its axle, less the axle's wheels."""
     c, k = spec.chassis, spec.suspension.stiffness.value
     m, share, mw = c.mass.value, c.front_weight_share.value, spec.wheel.mass.value
-    front = (m * share - 2 * mw) * G / 2
-    rear = (m * (1 - share) - 2 * mw) * G / 2
-    return (-front / k.front, -rear / k.rear)
+    front = parts.spring_ref((m * share - 2 * mw) / 2, k.front)
+    rear = parts.spring_ref((m * (1 - share) - 2 * mw) / 2, k.rear)
+    return (front, rear)
 
 
 # --- drive --------------------------------------------------------------------
@@ -353,47 +348,37 @@ def coast_drag(spec: RacecarNeoV2) -> tuple[float, float]:
 # --- steering -----------------------------------------------------------------
 
 
-WHEEL_STEER_MARGIN = 0.015  # rad, so the wheels' steer joint limits never bind
-
-
 def steer_lock(spec: RacecarNeoV2) -> float:
     """The steering input at a command of 1 (rad), the servo's ctrlrange:
     the mean of the linkage's two slopes, so that the input is about the
     virtual wheel's angle."""
+    return precise(_lock(spec))
+
+
+def _lock(spec: RacecarNeoV2) -> float:
     k = spec.steering.linkage.value
-    return precise((k.slope.left + k.slope.right) / 2)
+    return (k.slope.left + k.slope.right) / 2
 
 
 def steering(spec: RacecarNeoV2) -> parts.SteeringInput:
     """The steering input is the command times steer_lock. It stops where
-    the virtual wheel reaches the linkage's stops. Each front wheel's
-    polynomial is a least-squares fit to Ackermann geometry from the virtual
-    wheel's angle over that range."""
+    the virtual wheel reaches the linkage's stops."""
+    k, lock = spec.steering.linkage.value, _lock(spec)
+    return parts.steering_input(
+        spec.chassis.wheelbase.value,
+        spec.chassis.track.value,
+        stops=(-k.stop.right / k.slope.right * lock, k.stop.left / k.slope.left * lock),
+        virtual=lambda x: virtual_wheel(spec, x),
+        armature=spec.steering.armature.value,
+    )
+
+
+def virtual_wheel(spec: RacecarNeoV2, steer: float) -> float:
+    """The virtual wheel's angle (rad) at a steering input of steer (rad):
+    the command, steer over steer_lock, times the linkage's slope on its
+    side."""
     k = spec.steering.linkage.value
-    lock = (k.slope.left + k.slope.right) / 2
-    left = k.stop.left / k.slope.left * lock
-    right = k.stop.right / k.slope.right * lock
-    l, w = spec.chassis.wheelbase.value, spec.chassis.track.value
-    x = np.linspace(-right, left, 401)
-    virtual = np.where(x >= 0, x * k.slope.left, x * k.slope.right) / lock
-    curvature = np.tan(virtual) / l
-    fl = np.arctan(l * curvature / (1 - curvature * w / 2))
-    fr = np.arctan(l * curvature / (1 + curvature * w / 2))
-    widest = max(float(np.abs(fl).max()), float(np.abs(fr).max()))
-    return parts.SteeringInput(
-        stops=(precise(-right), precise(left)),
-        wheel_range=precise(widest + WHEEL_STEER_MARGIN),
-        ackermann_left=_quartic(x, fl),
-        ackermann_right=_quartic(x, fr),
-        input_body_mass=precise(INPUT_BODY_MASS),
-    )
-
-
-def _quartic(x: np.ndarray, y: np.ndarray) -> Polynomial:
-    a0, a1, a2, a3, a4 = (
-        precise(float(a)) for a in np.polynomial.polynomial.polyfit(x, y, 4)
-    )
-    return (a0, a1, a2, a3, a4)
+    return steer / _lock(spec) * (k.slope.left if steer >= 0 else k.slope.right)
 
 
 def servo(spec: RacecarNeoV2) -> parts.Servo:
