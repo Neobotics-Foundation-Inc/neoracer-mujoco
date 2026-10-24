@@ -1,14 +1,14 @@
 # neoracer-mujoco for JavaScript
 
-This package runs the NeoRacer car in MuJoCo's WebAssembly build (`@mujoco/mujoco`, the same MuJoCo version as the Python package) in a browser or in Node. It carries the car's MJCF, puts the car on a track that you give as MJCF, and drives it and reads its encoder and LiDAR the way the Python package does. Its tests run the same cases in both and compare the results.
+This package runs the NeoRacer car in MuJoCo's WebAssembly build (`@mujoco/mujoco`, the same MuJoCo version as the Python package) in a browser or in Node. It carries the car's MJCF, puts the car on a track that you give as MJCF, and drives it, holds its speed with the firmware's speed loop, and reads its encoder and LiDAR the way the Python package does. Its tests run the same cases in both and compare the results.
 
 Install it with the `npm install` command at the top of the notes of the [latest release](https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases/latest). npm installs the `@mujoco/mujoco` that it names with it.
 
 ```js
 import loadMujoco from '@mujoco/mujoco';
 import {
-  ENCODER, LIDAR, actuatorLimits, applyCommand, compose, settle, speedAngle,
-  startEncoder, startLidar, stepEncoder, sweepLidar,
+  ENCODER, LIDAR, SPEED_LOOP, actuatorLimits, applyCommand, compose, settle, speedAngle,
+  startEncoder, startLidar, startSpeedLoop, stepEncoder, stepSpeedLoop, sweepLidar,
 } from 'neoracer-mujoco';
 
 const mj = await loadMujoco();
@@ -20,18 +20,23 @@ const angle = () => data.sensordata[scene.car.drivePos];
 
 // After mj_step, the sensors and poses are those before its integration.
 // So run each step in two halves, as the Python adapter does: mj_step1
-// brings them up to data.time, the encoder and LiDAR count the step that led
-// there, the program sets its command, and mj_step2 integrates.
+// brings them up to data.time, the encoder, the LiDAR and the speed loop
+// count the step that led there, the program sets its command, and mj_step2
+// integrates.
 mj.mj_step1(model, data);
 let encoder = startEncoder(ENCODER, angle());
 let lidar = startLidar(mj, LIDAR, scene, data);
+let loop = startSpeedLoop(SPEED_LOOP, angle());
+// racecar_core's rc.drive.set_speed_angle(0.25, -0.2): a quarter of full
+// speed, 1.5 m/s, a little left.
+const { target, steer } = speedAngle(actuatorLimits(model, scene.car), SPEED_LOOP, 0.25, -0.2);
 for (let i = 0; i < Math.round(1 / dt); i++) { // 1 s
-  // racecar_core's rc.drive.set_speed_angle(0.5, -0.2): half throttle, a little left.
-  applyCommand(scene, data, speedAngle(actuatorLimits(model, scene.car), 0.5, -0.2));
+  applyCommand(scene, data, { throttle: loop.throttle, steer });
   mj.mj_step2(model, data);
   mj.mj_step1(model, data);
   encoder = stepEncoder(ENCODER, encoder, angle(), dt);
   lidar = sweepLidar(mj, LIDAR, scene, data, lidar, dt);
+  loop = stepSpeedLoop(SPEED_LOOP, loop, target, angle(), dt);
 }
 // encoder.speed is rc.physics.get_encoder_speed() in m/s; lidar.scan holds a
 // distance in m a slot, clockwise from the front, -1 for no return.

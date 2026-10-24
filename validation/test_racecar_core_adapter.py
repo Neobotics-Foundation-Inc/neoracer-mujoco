@@ -24,8 +24,11 @@ from neoracer_mujoco.racecar_core_adapter import (
     MujocoRacecar,
     neoracer_params,
 )
+from neoracer_spec.derive import derive
+from neoracer_spec.neoracer import NEORACER
 
 LIDAR = neoracer_params().lidar
+LOOP = derive(NEORACER).speed_loop
 
 
 @pytest.fixture(scope="module")
@@ -46,16 +49,17 @@ def _steer_ctrl(scene: Scene, data: mujoco.MjData) -> float:
 
 
 def test_drive_writes_clipped_and_scaled_commands(scene):
-    """For each speed, angle and max_speed, set_speed_angle drives the
-    motor with the throttle clip(speed, -1, 1) * clip(max_speed, 0, 1),
-    through its throttle map (on the NeoRacer, that share of the battery's
-    voltage), and writes -clip(angle, -1, 1) * steer_rad to the steer servo.
-    The minus sign changes the racecar_core steer sign to the contract.py
-    sign. A new drive has max_speed 1, and stop() writes 0 to both."""
+    """Without a speed loop, as on the V2, for each speed, angle and
+    max_speed, set_speed_angle drives the motor with the throttle
+    clip(speed, -1, 1) * clip(max_speed, 0, 1), through its throttle map
+    (here the NeoRacer's, that share of the battery's voltage), and writes
+    -clip(angle, -1, 1) * steer_rad to the steer servo. The minus sign
+    changes the racecar_core steer sign to the contract.py sign. A new drive
+    has max_speed 1, and stop() writes 0 to both."""
     limits = contract.actuator_limits(scene.model, scene.car)
     a, b, c = contract.throttle_map(scene.model, scene.car.drive)
     data = mujoco.MjData(scene.model)
-    drive = MujocoDrive(scene, data)
+    drive = MujocoDrive(scene, data, speed_loop_params=None)
     drive.set_speed_angle(1.0, 0.0)  # a new drive has max_speed 1
     assert _drive_ctrl(scene, data) == pytest.approx(limits.voltage)
     grid = np.linspace(-2.0, 2.0, 17)  # values inside and outside [-1, 1]
@@ -75,23 +79,47 @@ def test_drive_writes_clipped_and_scaled_commands(scene):
     assert _steer_ctrl(scene, data) == 0.0
 
 
+def test_with_a_speed_loop_set_speed_angle_asks_for_a_speed(scene):
+    """With the NeoRacer's speed loop, for each speed, angle and max_speed,
+    set_speed_angle asks the loop for the speed clip(speed, -1, 1) *
+    clip(max_speed, 0, 1) * max_speed and writes the steer at once. The
+    throttle stays where the loop last set it, neutral on a new drive, until
+    the loop's next tick. stop() asks for 0 and centers the steering."""
+    limits = contract.actuator_limits(scene.model, scene.car)
+    data = mujoco.MjData(scene.model)
+    drive = MujocoDrive(scene, data)
+    grid = np.linspace(-2.0, 2.0, 17)
+    for max_speed in grid:
+        drive.set_max_speed(max_speed)
+        scale = np.clip(max_speed, 0.0, 1.0)
+        for speed in grid:
+            for angle in grid:
+                drive.set_speed_angle(speed, angle)
+                target = np.clip(speed, -1.0, 1.0) * scale * LOOP.max_speed
+                steer = -np.clip(angle, -1.0, 1.0) * limits.steer_rad
+                assert drive.target == pytest.approx(target, abs=1e-12)
+                assert _drive_ctrl(scene, data) == 0.0
+                assert _steer_ctrl(scene, data) == pytest.approx(steer, abs=1e-12)
+    drive.stop()
+    assert drive.target == 0.0
+    assert _steer_ctrl(scene, data) == 0.0
+
+
 def test_set_max_speed_without_an_argument_restores_the_start(scene):
     """set_max_speed() without an argument goes back to the max speed the
     drive started with, as racecar_core's default does: 1.0 on the NeoRacer,
-    0.25 on the V2. Speed 1 drives that share of full throttle at the start
+    0.25 on the V2. Speed 1 asks for that share of full speed at the start
     and after. A drive clamps its start into [0, 1], as set_max_speed clamps
     its argument, and CarParams refuses a start outside it."""
-    a, b, c = contract.throttle_map(scene.model, scene.car.drive)
     data = mujoco.MjData(scene.model)
     for start, share in ((1.0, 1.0), (0.25, 0.25), (2.0, 1.0), (-0.25, 0.0)):
-        expected = a * share + (b + c if share > 0 else 0.0)
         drive = MujocoDrive(scene, data, start)
         drive.set_speed_angle(1.0, 0.0)
-        assert _drive_ctrl(scene, data) == pytest.approx(expected), start
+        assert drive.target == pytest.approx(share * LOOP.max_speed), start
         drive.set_max_speed(0.5)
         drive.set_max_speed()
         drive.set_speed_angle(1.0, 0.0)
-        assert _drive_ctrl(scene, data) == pytest.approx(expected), start
+        assert drive.target == pytest.approx(share * LOOP.max_speed), start
     for start in (2.0, -0.25):
         with pytest.raises(ValueError, match="start_max_speed"):
             copy.replace(neoracer_params(), start_max_speed=start)

@@ -14,7 +14,7 @@ from cases import case
 
 from neoracer_mujoco import Scene, encoder, load, sim
 from neoracer_mujoco.control.steering import ControlCommand
-from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
+from neoracer_mujoco.racecar_core_adapter import MujocoRacecar, neoracer_params
 from neoracer_spec.derive import EncoderParams, derive
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.parts import SOLVER
@@ -23,6 +23,10 @@ PARAMS = derive(NEORACER).encoder
 
 DT = SOLVER.timestep
 """The car's physics step (s)."""
+
+HELD_THROTTLE = copy.replace(neoracer_params(), speed_loop=None)
+"""A NeoRacer without its firmware's speed loop, so that a test can hold the
+throttle at a value of its own."""
 
 
 def _spin(
@@ -72,8 +76,7 @@ def test_the_adapter_reads_the_car_speed():
     model, car = scene.model, scene.car
     data = sim.settle(model)
     rc = MujocoRacecar(scene, data, max_steps=round(1.5 / model.opt.timestep))
-    command = ControlCommand(throttle=0.5, steer=0.0)
-    rc.set_start_update(lambda: sim.apply_command(car, data, command), lambda: None)
+    rc.set_start_update(lambda: rc.drive.set_speed_angle(0.5, 0.0), lambda: None)
     rc.go()
     ground = float(data.bind_scalar(car.sensors.imu_linvel).data[0])  # m/s
     assert ground > 1.0
@@ -102,7 +105,9 @@ def test_the_first_window_measures_the_turn_of_the_wheels_in_it():
     model, car = scene.model, scene.car
     data = sim.settle(model)
     mujoco.mj_forward(model, data)
-    rc = MujocoRacecar(scene, data, max_steps=round(0.1 / model.opt.timestep))
+    rc = MujocoRacecar(
+        scene, data, max_steps=round(0.1 / model.opt.timestep), car=HELD_THROTTLE
+    )
     seen = []  # (s, rad, m/s) at each update()
     command = ControlCommand(throttle=1.0, steer=0.0)
     rc.set_start_update(
@@ -124,7 +129,7 @@ def test_a_bounded_run_counts_its_last_step():
     scene = load()
     model, car = scene.model, scene.car
     data = sim.settle(model)
-    rc = MujocoRacecar(scene, data, max_steps=8)
+    rc = MujocoRacecar(scene, data, max_steps=8, car=HELD_THROTTLE)
     command = ControlCommand(throttle=1.0, steer=0.0)
     rc.set_start_update(lambda: sim.apply_command(car, data, command), lambda: None)
     rc.go()

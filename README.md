@@ -103,7 +103,7 @@ for _ in range(round(1 / scene.model.opt.timestep)):  # 1 s
 read(scene.car.sensors, data)  # IMU, steering angles, wheel speeds, ...
 ```
 
-The throttle runs from -1 to 1, as a fraction of the battery's voltage. The steer is the steering angle in radians, positive to the left, up to full lock, `derive.steer_lock(NEORACER)`.
+The throttle runs from -1 to 1, as a fraction of the battery's voltage. The steer is the steering angle in radians, positive to the left, up to full lock, `derive.steer_lock(NEORACER)`. A program on the car asks for a speed instead, and the firmware's speed loop sets the throttle (`speed_loop.py`, below).
 
 ## The car on a track
 
@@ -175,7 +175,9 @@ state.scan  # the last full turn: a distance (m) a slot, clockwise from the fron
 
 The model's eight rangefinders, `lidar_000` to `lidar_315`, have the same timing in MuJoCo's own sensors, so `mj_step`, `mujoco.rollout` and the Warp batch see it with no loop of their own. Each beam samples the range once a turn, when the head passes it (its `interval`), and shows the sample when the turn ends (its `delay`), as the scan of the last complete turn does. So a beam reads a range up to two turns old. `mjcf.beam_timing` derives both settings from the spec's scan rate. A beam that the car blocks reads -1, no return, as the real scan does: the NeoRacer's LiDAR sees only its field (`Lidar.field_degrees`), so its beam straight back never returns. The LiDAR site's user number holds the field, and `contract.lidar_field` reads it. `sensors.read` gives the blocked beams -1, but the rangefinders themselves still measure, so code that reads `sensordata` arrays, as a batch does, sets the beams in `scene.car.sensors.blocked` to -1 itself.
 
-`encoder.py` models the speed that the firmware reports from the motor encoder in the same way. `racecar_core_adapter.py` puts the actuators, the LiDAR and the encoder behind the `racecar_core` API that programs for the real car use. Those programs run in the simulator unchanged:
+`encoder.py` models the speed that the firmware reports from the motor encoder in the same way. `speed_loop.py` models how the firmware holds the speed that a program asks for: every 20 ms it measures the speed as the encoder does, with a filter of its own, and sets the ESC's pulse from a feed-forward on the commanded speed and a PID on the error, with the firmware's gains, limits and rounding (`spec.SpeedController`). The throttle is that pulse's share of the ESC's full pulse.
+
+`racecar_core_adapter.py` puts the actuators, the LiDAR, the encoder and the speed loop behind the `racecar_core` API that programs for the real car use. On the NeoRacer, `rc.drive.set_speed_angle(speed, angle)` asks for `speed` times the max speed, 6 m/s at full speed, and the loop holds it. Those programs run in the simulator unchanged:
 
 ```sh
 python examples/run_racecar_core.py my_controller.py
@@ -280,7 +282,7 @@ Run these from a clone; the examples aren't in the wheel.
 ## How close the models are to the real cars
 
 The NeoRacer's model is checked against one set of recordings of the real car, its steering steps at rest; nothing else is checked yet (issue #4). Use it to develop and compare controllers, not to predict lap times. These are the known gaps:
-- **Speed.** At full throttle the car tops out at about 3.5 m/s, from the RS-545 motor at the docs' free speed. The wheel damping is a guess that stands in for every drivetrain loss. The firmware's speed controller isn't modeled, so the throttle is a fraction of the battery voltage (issue #118).
+- **Speed.** At full throttle the car tops out at about 3.5 m/s, from the RS-545 motor at the docs' free speed. On the flat the firmware's speed loop holds 0.5 to 2 m/s within 0.15 m/s, falls further short of faster speeds, since its integral gain is small, and sends full throttle for a speed that the motor cannot reach. The wheel damping is a guess that stands in for every drivetrain loss, and the ESC's output is taken as proportional to its pulse (`Esc.full_throttle_pulse`); nobody has measured either.
 - **Mass and inertia.** The total mass comes from the spec; nobody has weighed the car. The inertia and the height of the center of mass come from an older car's URDF.
 - **Tires and suspension.** The tire friction and the springs are estimates.
 - **Steering.** At full lock the inner front wheel turns to its measured angle. The servo is the car's at its datasheet rating, and its command delay is fitted to the car's steering steps at rest (`SteeringServo.steps_at_rest`), which `validation/test_spec.py` holds the model to. Nobody has timed the steering while the car moves.

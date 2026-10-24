@@ -3,5 +3,6 @@ export * from './drive.js';
 export * from './encoder.js';
 export * from './lidar.js';
 export * from './scene.js';
+export * from './speedLoop.js';
 export { CAR_XML } from './generated/car.js';
 export * as spec from './generated/spec.js';

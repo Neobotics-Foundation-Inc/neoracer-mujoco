@@ -18,6 +18,7 @@ import {
   IMU_GYRO_SENSOR,
   LIDAR,
   LIDAR_SITE,
+  SPEED_LOOP,
   WHEEL_GEOMS,
   actuatorLimits,
   applyCommand,
@@ -29,7 +30,9 @@ import {
   speedAngle,
   startEncoder,
   startLidar,
+  startSpeedLoop,
   stepEncoder,
+  stepSpeedLoop,
   spec,
   sweepLidar,
 } from '../dist/index.js';
@@ -109,12 +112,22 @@ test('the encoder reports the speeds that Python reports', () => {
   assert.deepEqual(out, speeds);
 });
 
-test('set_speed_angle writes the controls that the Python adapter writes', () => {
+test('the speed loop sets the throttles that Python sets', () => {
+  const { angles } = fixtures.encoder;
+  let state = startSpeedLoop(SPEED_LOOP, angles[0]);
+  const out = fixtures.speed_loop.commanded.map(
+    (v, i) => (state = stepSpeedLoop(SPEED_LOOP, state, v, angles[i + 1], fixtures.timestep)).throttle,
+  );
+  assert.deepEqual(out, fixtures.speed_loop.throttles);
+});
+
+test('set_speed_angle asks for the speed and the steer that the Python adapter asks for', () => {
   const limits = actuatorLimits(model, car);
   for (const c of fixtures.commands) {
+    const { target, steer } = speedAngle(limits, SPEED_LOOP, c.speed, c.angle, c.max_speed);
+    assert.equal(target, c.target);
     const data = new mj.MjData(model);
-    applyCommand(scene, data, speedAngle(limits, c.speed, c.angle, c.max_speed));
-    assert.equal(data.ctrl[car.drive], c.drive);
+    applyCommand(scene, data, { throttle: 0, steer });
     assert.equal(data.ctrl[car.steer], c.steer);
   }
 });

@@ -1,8 +1,9 @@
 """
 From a car's specification (spec.Spec) to what the simulators run
 (DerivedParams): the MuJoCo model's numbers (ModelParams) and the settings
-beside the model, the LiDAR's scan and the encoder's filter. Pure functions
-of the values, without their provenance; no MuJoCo.
+beside the model, the LiDAR's scan, the encoder's filter and the firmware's
+speed loop. Pure functions of the values, without their provenance; no
+MuJoCo.
 
 Numbers that the model holds are kept to its precision, 6 significant
 digits (parts.precise), so the code and the XML hold the same floats.
@@ -34,11 +35,15 @@ class DerivedParams:
     model: ModelParams
     lidar: LidarParams
     encoder: EncoderParams
+    speed_loop: SpeedLoopParams
 
 
 def derive(spec: Spec) -> DerivedParams:
     return DerivedParams(
-        model=model(spec), lidar=lidar_params(spec), encoder=encoder_params(spec)
+        model=model(spec),
+        lidar=lidar_params(spec),
+        encoder=encoder_params(spec),
+        speed_loop=speed_loop_params(spec),
     )
 
 
@@ -105,6 +110,82 @@ def encoder_params(spec: Spec) -> EncoderParams:
         window=spec.encoder.report_period.value,
         radius=spec.wheel.radius.value,
         alpha=spec.encoder.filter_weight.value,
+    )
+
+
+@dataclass(frozen=True)
+class SpeedLoopParams:
+    """The firmware's speed loop: every period it measures the speed as the
+    encoder does, with a filter of its own, and sets the ESC's pulse from a
+    feed-forward on the commanded speed and a PID on the error. A pulse is in
+    microseconds past neutral."""
+
+    measure: EncoderParams
+    """How it measures the speed: its window is the loop's period."""
+    kp: float
+    """Microseconds of pulse per m/s of error."""
+    ki: float
+    """Microseconds of pulse per meter of the error's integral."""
+    kd: float
+    """Microseconds of pulse per m/s² of the error's change."""
+    integral_limit: float
+    """The bound on the error's integral (m)."""
+    error_deadband: float
+    """The error under which the loop reads none (m/s)."""
+    stop_speed: float
+    """The commanded speed under which the loop sends neutral and starts over."""
+    feed_forward: float
+    """Microseconds of pulse per m/s commanded."""
+    deadband: float
+    """The feed-forward's pulse at a commanded speed of 0 (us)."""
+    feed_forward_limit: float
+    """The most pulse that the feed-forward sends (us)."""
+    pulse_limit: float
+    """The most pulse that the loop sends either way (us)."""
+    full_throttle_pulse: float
+    """The pulse at which the ESC gives the motor the battery's whole voltage
+    (us)."""
+    max_speed: float
+    """The speed that a program's full speed commands."""
+
+    def __post_init__(self) -> None:
+        for name in ("pulse_limit", "full_throttle_pulse", "max_speed"):
+            if not getattr(self, name) > 0.0:
+                raise ValueError(f"{name} must be > 0, not {getattr(self, name)}")
+        if not 0.0 <= self.deadband <= self.feed_forward_limit:
+            raise ValueError(
+                f"deadband must be in [0, feed_forward_limit], not {self.deadband}"
+            )
+
+
+def speed_loop_params(spec: Spec) -> SpeedLoopParams:
+    """The firmware's speed loop. The firmware measures the speed for it in
+    the task that reports the encoder's speed, so the loop's period must be
+    the encoder's report period."""
+    s = spec.speed_controller
+    if s.period.value != spec.encoder.report_period.value:
+        raise ValueError(
+            f"the speed loop's period, {s.period.value} s, is not the encoder's"
+            f" report period, {spec.encoder.report_period.value} s"
+        )
+    return SpeedLoopParams(
+        measure=EncoderParams(
+            window=s.period.value,
+            radius=spec.wheel.radius.value,
+            alpha=s.speed_filter_weight.value,
+        ),
+        kp=s.kp.value,
+        ki=s.ki.value,
+        kd=s.kd.value,
+        integral_limit=s.integral_limit.value,
+        error_deadband=s.error_deadband.value,
+        stop_speed=s.stop_speed.value,
+        feed_forward=s.feed_forward.value,
+        deadband=s.deadband.value,
+        feed_forward_limit=s.feed_forward_limit.value,
+        pulse_limit=s.pulse_limit.value,
+        full_throttle_pulse=spec.esc.full_throttle_pulse.value,
+        max_speed=s.max_speed.value,
     )
 
 

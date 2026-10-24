@@ -211,7 +211,15 @@ NEORACER = Spec(
             "brake",
             "the model's motor brakes at 0 V; nobody has said whether the ESC"
             " brakes or coasts",
-        )
+        ),
+        full_throttle_pulse=assumed(
+            500.0,
+            FIRMWARE,
+            "the firmware's pulses run 500 us either way of neutral (THROTTLE_MIN,"
+            " THROTTLE_MAX); nobody has said how the ESC's output follows the"
+            " pulse, so the model takes it as proportional, full at the end of"
+            " that range",
+        ),
     ),
     servo=SteeringServo(
         low=documented(
@@ -290,10 +298,19 @@ NEORACER = Spec(
         kp=documented(447.0, FIRMWARE, note="PID_KP_DEFAULT"),
         ki=documented(4.7, FIRMWARE, note="PID_KI_DEFAULT"),
         kd=documented(4.7, FIRMWARE, note="PID_KD_DEFAULT"),
+        integral_limit=documented(1000.0, FIRMWARE, note="PID_MAX_INTEGRAL"),
+        error_deadband=documented(0.05, FIRMWARE, note="PID_DEADBAND"),
+        stop_speed=documented(0.05, FIRMWARE, note="SPEED_STOP_THRESHOLD"),
         speed_filter_weight=documented(0.15, FIRMWARE, note="SPEED_LPF_ALPHA"),
         feed_forward=documented(68.0, FIRMWARE, note="THROTTLE_FF_GAIN_US_PER_MPS"),
         deadband=documented(90.0, FIRMWARE, note="THROTTLE_FF_DEADBAND_DEFAULT_US"),
-        full_pulse=documented(500.0, FIRMWARE, note="THROTTLE_FF_MAX_US"),
+        feed_forward_limit=documented(500.0, FIRMWARE, note="THROTTLE_FF_MAX_US"),
+        pulse_limit=documented(
+            500.0,
+            FIRMWARE,
+            note="THROTTLE_MIN and THROTTLE_MAX, 1000 and 2000 us, about"
+            " THROTTLE_NEUTRAL, 1500 us",
+        ),
         max_speed=documented(
             6.0,
             FIRMWARE,
