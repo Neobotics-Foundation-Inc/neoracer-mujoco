@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 from scenes import corridor_scene, reversed_car
 
-from neoracer_mujoco import Scene, assets, batch, physics, sim
+from neoracer_mujoco import Scene, assets, batch, physics, sim, speed_loop
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import Physics
 from neoracer_mujoco.scene import compile_scene
@@ -28,6 +28,8 @@ from neoracer_mujoco.track_generation import (
     settings_for_difficulty,
     to_spec,
 )
+from neoracer_spec.derive import derive
+from neoracer_spec.neoracer import NEORACER
 
 NBATCH, NSTEP, CALLS = 6, 17, 8
 NOMINAL = [Physics()]
@@ -231,6 +233,56 @@ def test_reset_gives_the_done_rows_the_state_and_physics_of_initial():
     for i, row_done in enumerate(done):
         assert reset.models[i] is (initial if row_done else state).models[i], i
     sim_batch.close()
+
+
+def test_drive_runs_every_rows_speed_loop_as_one_car_runs_its_own():
+    """batch.drive gives each row what one MjData gives that steps with its
+    own speed loop (speed_loop.step after each step, on the drivetrain's
+    angle that the step's sensors read) holding its own commanded speed and
+    steer: the throttle changes at the loop's ticks, and the solver starts
+    cold at each tick and each call, where the batch's pieces start. The two
+    rows ask for speeds of opposite signs, so a batch that ran one loop for
+    both fails."""
+    scene = _loop_scene()
+    model, car = scene.model, scene.car
+    params = derive(NEORACER).speed_loop
+    dt = float(model.opt.timestep)
+    commanded, steer = np.array([1.5, -0.8]), np.array([0.1, -0.2])
+    start = sim.settle(model)
+    angle = float(start.bind_scalar(car.sensors.drive_pos).data[0])
+    sim_batch = batch.CpuBatch(scene, 2, nthread=0)
+    state = sim_batch.initial([start] * 2, [scene] * 2, NOMINAL * 2)
+    loop = speed_loop.start(params, np.full(2, angle))
+    got = []
+    for _ in range(CALLS):
+        state, sensordata, loop = batch.drive(
+            sim_batch, model, car, params, state, loop, commanded, steer, NSTEP
+        )
+        got.append(sensordata)
+    sim_batch.close()
+    got = np.array(got)  # (CALLS, 2, NSTEP, n)
+    for i in range(2):
+        data = copy.deepcopy(start)
+        row = speed_loop.start(params, angle)
+        expected = []
+        for _ in range(CALLS):
+            fresh = True
+            for _ in range(NSTEP):
+                if fresh:
+                    data.qacc_warmstart[:] = 0
+                    sim.apply_command(
+                        car, data, ControlCommand(float(row.throttle), steer[i])
+                    )
+                mujoco.mj_step(model, data)
+                expected.append(data.sensordata.copy())
+                drive_pos = float(data.bind_scalar(car.sensors.drive_pos).data[0])
+                row = speed_loop.step(params, row, commanded[i], drive_pos, dt)
+                fresh = row.measure.span == 0.0
+        np.testing.assert_array_equal(
+            got[:, i].reshape(CALLS * NSTEP, -1), np.array(expected), err_msg=f"row {i}"
+        )
+    throttle = np.asarray(loop.throttle)
+    assert throttle[0] > 0.0 > throttle[1]
 
 
 def test_command_rejects_a_model_with_other_actuators():

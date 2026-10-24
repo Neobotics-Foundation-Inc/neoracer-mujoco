@@ -48,7 +48,9 @@ import numpy as np
 import numpy.typing as npt
 from mujoco import rollout
 
-from . import contract
+from neoracer_spec.derive import SpeedLoopParams
+
+from . import contract, speed_loop
 from .contract import Array
 from .physics import Physics, apply_physics
 from .scene import Car, Scene
@@ -204,6 +206,41 @@ def command[A: Array](model: mujoco.MjModel, car: Car, throttle: A, steer: A) ->
         int(model.bind_scalar(a).id): v for a, v in zip(elements, values, strict=True)
     }
     return xp.stack([column[i] for i in range(model.nu)], axis=-1)
+
+
+def drive[S](
+    sim: Batch[S, SensorData, Done],
+    model: mujoco.MjModel,
+    car: Car,
+    params: SpeedLoopParams,
+    state: S,
+    loop: speed_loop.SpeedLoopState,
+    commanded: npt.NDArray[np.float64],
+    steer: npt.NDArray[np.float64],
+    nstep: int,
+) -> tuple[S, SensorData, speed_loop.SpeedLoopState]:
+    """Step nstep physics steps with the firmware's speed loop of every row
+    (speed_loop.py) holding the speed commanded (m/s) and the steer servo
+    holding steer (rad), both (nbatch,). The rows' loops tick together, so
+    the steps run in pieces from one tick to the next, the throttle held
+    over each. Returns the state, the sensor values after each step
+    (nbatch, nstep, nsensordata) and the loop.
+
+    Limit: the loop runs on the host in numpy, so on Warp each piece brings
+    the drivetrain's angles back from the GPU."""
+    dt = float(model.opt.timestep)
+    pieces = []
+    left = nstep
+    while left > 0:
+        k = min(left, speed_loop.steps_to_tick(loop, dt))
+        throttle = np.broadcast_to(loop.throttle, commanded.shape)
+        state, sensordata = sim.step(state, command(model, car, throttle, steer), k)
+        angles = np.asarray(read(model, sensordata, car.sensors.drive_pos)[..., 0])
+        for j in range(k):
+            loop = speed_loop.step(params, loop, commanded, angles[:, j], dt)
+        pieces.append(np.asarray(sensordata))
+        left -= k
+    return state, np.concatenate(pieces, axis=1), loop
 
 
 def read[A: Array](model: mujoco.MjModel, sensordata: A, sensor: mujoco.MjsSensor) -> A:

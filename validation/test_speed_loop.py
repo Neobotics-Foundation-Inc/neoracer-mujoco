@@ -8,6 +8,7 @@ import itertools
 import math
 from typing import Any
 
+import numpy as np
 import pytest
 from cases import case
 
@@ -44,6 +45,17 @@ def _turning(omega: float, seconds: float) -> list[float]:
     """The angles (rad) of a drivetrain that turns at omega (rad/s) from 0,
     a step apart."""
     return [omega * i * DT for i in range(round(seconds / DT) + 1)]
+
+
+ROW_VALUES = ("angle", "speed", "integral", "error", "throttle")
+"""What a loop holds for each row."""
+
+
+def _rows(state: speed_loop.SpeedLoopState) -> dict[str, np.ndarray]:
+    """state's row values, by name."""
+    m = state.measure
+    values = (m.angle, m.speed, state.integral, state.error, state.throttle)
+    return {n: np.asarray(v) for n, v in zip(ROW_VALUES, values, strict=True)}
 
 
 def test_the_throttle_changes_only_at_the_firmwares_ticks():
@@ -107,6 +119,45 @@ def test_a_loop_that_the_firmware_cannot_be_is_refused():
         with case(name), pytest.raises(ValueError, match=name):
             loop(name, -1.0)
         loop(name, 0.0)
+
+
+def test_a_batchs_rows_tick_as_cars_of_their_own():
+    """tick on a batch's rows, each with its own commanded and measured
+    speeds, integral and last error, gives each row what tick gives that row
+    alone, stopped rows and saturated ones among them."""
+    commanded = np.array([0.0, 0.3, -1.2, 6.0, 0.04, 2.0])
+    measured = np.array([0.5, 0.0, -0.4, 3.4, 0.2, 2.03])
+    integral = np.array([0.1, 0.0, -0.3, 900.0, 0.2, 0.0])
+    error = np.array([0.2, 0.0, 0.1, 2.6, -0.1, 0.0])
+    rows = speed_loop.tick(PARAMS, commanded, measured, integral, error)
+    for k in range(len(commanded)):
+        with case(k):
+            alone = speed_loop.tick(
+                PARAMS, commanded[k], measured[k], integral[k], error[k]
+            )
+            assert tuple(float(np.asarray(v)[k]) for v in rows) == alone
+
+
+def test_rows_that_start_over_start_at_rest_and_keep_the_ticks():
+    """restart clears the loops of the rows it is given, at their new angles,
+    and leaves the others and the shared ticks as they were."""
+    angles = _turning(10.0, 0.5)
+    loop = speed_loop.start(PARAMS, np.full(3, angles[0]))
+    for a in angles[1:]:
+        loop = speed_loop.step(
+            PARAMS, loop, np.array([1.0, 2.0, -1.0]), np.full(3, a), DT
+        )
+    rows = np.array([False, True, False])
+    again = speed_loop.restart(loop, rows, np.full(3, 7.0))
+    assert (again.measure.span, again.measure.due) == (
+        loop.measure.span,
+        loop.measure.due,
+    )
+    after, before = _rows(again), _rows(loop)
+    assert after["angle"][1] == 7.0
+    assert all(after[name][1] == 0.0 for name in ROW_VALUES if name != "angle")
+    for k in (0, 2):
+        assert all(after[name][k] == before[name][k] for name in ROW_VALUES)
 
 
 def test_the_feed_forward_rounds_and_holds_within_its_range():
