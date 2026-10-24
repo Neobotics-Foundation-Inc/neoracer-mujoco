@@ -25,7 +25,6 @@ USED_BY_NEORACER_RL = (
     "scene.Car",
     "scene.Scene",
     "sensors.SensorReadings",
-    "sensors.estimated_linear_speed_ms",
     "sensors.lidar_ranges",
     "sensors.motor_encoder_rad_s",
     "sensors.read",

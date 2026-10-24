@@ -14,8 +14,10 @@ import numpy as np
 import pytest
 
 from neoracer_mujoco import Scene, assets, lidar, sim
+from neoracer_spec.derive import derive
+from neoracer_spec.neoracer import NEORACER
 
-LIDAR = lidar.LidarParams()
+LIDAR = derive(NEORACER).lidar
 
 
 @pytest.fixture(scope="module")

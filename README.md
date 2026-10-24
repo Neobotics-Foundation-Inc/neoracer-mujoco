@@ -100,7 +100,7 @@ for _ in range(round(1 / scene.model.opt.timestep)):  # 1 s
 read(scene.car.sensors, data)  # IMU, steering angles, wheel speeds, ...
 ```
 
-The throttle runs from -1 to 1, as a fraction of the battery's voltage. The steer is the steering angle in radians, positive to the left, up to full lock, `derive(NEORACER).steer_lock`.
+The throttle runs from -1 to 1, as a fraction of the battery's voltage. The steer is the steering angle in radians, positive to the left, up to full lock, `derive.steer_lock(NEORACER)`.
 
 ## The car on a track
 
@@ -156,8 +156,9 @@ The real LiDAR's head turns at its scan rate and measures its slots one after an
 
 ```python
 from neoracer_mujoco import lidar
+from neoracer_spec.derive import derive
 
-params = lidar.LidarParams()  # the NeoRacer's LakiBeam L1
+params = derive(NEORACER).lidar  # the NeoRacer's LakiBeam L1
 dt = scene.model.opt.timestep  # s
 data = sim.settle(scene.model)
 mujoco.mj_step1(scene.model, data)

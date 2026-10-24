@@ -18,12 +18,9 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import ackermann, parts
-from .neoracer import NEORACER
 from .parts import Nominal, Polynomial, precise, precise3
 from .spec import (
     DcMotorRating,
-    Lidar,
-    MotorEncoder,
     ServoRating,
     Spec,
     SteeringServo,
@@ -40,34 +37,26 @@ class DerivedParams:
     model: ModelParams
     lidar: LidarParams
     encoder: EncoderParams
-    wheel_radius: float  # m, that the encoder's speed is measured at
-    steer_lock: float  # rad of steering input, full lock
 
 
 def derive(spec: Spec) -> DerivedParams:
     return DerivedParams(
-        model=model(spec),
-        lidar=lidar_params(spec.lidar),
-        encoder=encoder_params(spec.encoder),
-        wheel_radius=precise(spec.wheel.radius.value),
-        steer_lock=steer_lock(spec),
+        model=model(spec), lidar=lidar_params(spec), encoder=encoder_params(spec)
     )
 
 
 # --- the settings beside the model --------------------------------------------
 
-_LIDAR = NEORACER.lidar
-
 
 @dataclass(frozen=True)
 class LidarParams:
-    """The LiDAR's scan. The defaults are the NeoRacer's: lidar_params(NEORACER.lidar)."""
+    """The LiDAR's scan: lidar_params(car) for a NeoRacer,
+    derive_v2.lidar_params(car) for a RACECAR Neo V2."""
 
-    slots: int = round(360 / _LIDAR.resolution_degrees.value)  # slots a turn
-    scan_rate: float = _LIDAR.scan_rate.value  # Hz, turns a second
-    max_range: float = _LIDAR.range_bright.value  # m, its range on a bright target
-    # rad of bearings it sees, centered on the front
-    field: float = math.radians(_LIDAR.field_degrees.value)
+    slots: int  # slots a turn
+    scan_rate: float  # Hz, turns a second
+    max_range: float  # m, its range on a bright target
+    field: float  # rad of bearings it sees, centered on the front
 
     def __post_init__(self) -> None:
         if self.slots < 1:
@@ -80,9 +69,10 @@ class LidarParams:
             raise ValueError(f"field must be in (0, 2 pi] rad, not {self.field}")
 
 
-def lidar_params(lidar: Lidar) -> LidarParams:
+def lidar_params(spec: Spec) -> LidarParams:
     """The scan of the LiDAR: a slot every sample, out to its range on a bright
     target."""
+    lidar = spec.lidar
     return LidarParams(
         slots=round(360 / lidar.resolution_degrees.value),
         scan_rate=lidar.scan_rate.value,
@@ -91,29 +81,29 @@ def lidar_params(lidar: Lidar) -> LidarParams:
     )
 
 
-_ENCODER = NEORACER.encoder
-
-
 @dataclass(frozen=True)
 class EncoderParams:
-    """How the firmware measures the speed from the motor encoder. The
-    defaults are the NeoRacer's: encoder_params(NEORACER.encoder)."""
+    """How the firmware measures the speed from the motor encoder."""
 
-    window: float = _ENCODER.report_period.value  # s, the firmware's control period
-    alpha: float = (
-        _ENCODER.filter_weight.value
-    )  # the weight of the new window in the filter
+    window: float  # s, the firmware's control period
+    radius: float  # m, the tyre's, that it measures the speed at
+    alpha: float  # the weight of the new window in the filter
 
     def __post_init__(self) -> None:
         if not self.window > 0.0:
             raise ValueError(f"window must be > 0 s, not {self.window}")
+        if not self.radius > 0.0:
+            raise ValueError(f"radius must be > 0 m, not {self.radius}")
         if not 0.0 < self.alpha <= 1.0:
             raise ValueError(f"alpha must be in (0, 1], not {self.alpha}")
 
 
-def encoder_params(encoder: MotorEncoder) -> EncoderParams:
+def encoder_params(spec: Spec) -> EncoderParams:
+    """The firmware's encoder, which measures the speed at the car's tyre."""
     return EncoderParams(
-        window=encoder.report_period.value, alpha=encoder.filter_weight.value
+        window=spec.encoder.report_period.value,
+        radius=spec.wheel.radius.value,
+        alpha=spec.encoder.filter_weight.value,
     )
 
 
@@ -170,7 +160,7 @@ def model(spec: Spec) -> ModelParams:
             position=precise3(spec.lidar.position.value),
             yaw=0.0,
             scan_rate=precise(spec.lidar.scan_rate.value),
-            field=precise(lidar_params(spec.lidar).field),
+            field=precise(lidar_params(spec).field),
         ),
         wheels=parts.Wheels(
             half_wheelbase=precise(c.wheelbase.value / 2),
