@@ -374,6 +374,56 @@ def test_the_warp_batch_follows_the_cpu_batch(warp):
     np.testing.assert_allclose(warp_pos, cpu_pos, atol=1e-3)
 
 
+def test_drive_on_warp_follows_drive_on_the_cpu(warp):
+    """batch.drive on MuJoCo Warp, with rows that ask for speeds either way,
+    one of them standing, ends within 1 mm of the CPU batch's drive, and its
+    loops' measured speeds (m/s) and throttles end within 0.01 of the CPU's:
+    Warp's physics is close to the CPU's, not equal, and the loop reads it.
+    The steer may be a JAX array, as Warp's ctrl is."""
+    jnp, scene, warp_batch = warp
+    params = derive(NEORACER).speed_loop
+    datas = [sim.settle(scene.model)] * 4
+    angle = float(datas[0].bind_scalar(scene.car.sensors.drive_pos).data[0])
+    commanded = np.array([1.5, -0.8, 0.0, 3.0])
+    steer = np.array([0.1, -0.2, 0.3, 0.0])
+    cpu = batch.CpuBatch(scene, 4, 2)
+    cpu_state = cpu.initial(datas, [scene] * 4, NOMINAL * 4)
+    warp_state = warp_batch.initial(datas, [scene] * 4, NOMINAL * 4)
+    cpu_loop = warp_loop = speed_loop.start(params, np.full(4, angle))
+    for _ in range(CALLS):
+        cpu_state, cpu_data, cpu_loop = batch.drive(
+            cpu,
+            scene.model,
+            scene.car,
+            params,
+            cpu_state,
+            cpu_loop,
+            commanded,
+            steer,
+            NSTEP,
+        )
+        warp_state, warp_data, warp_loop = batch.drive(
+            warp_batch,
+            scene.model,
+            scene.car,
+            params,
+            warp_state,
+            warp_loop,
+            commanded,
+            jnp.asarray(steer),
+            NSTEP,
+        )
+    cpu.close()
+    pos = scene.car.truth.pos
+    cpu_pos = batch.read(scene.model, cpu_data[:, -1], pos)
+    warp_pos = batch.read(scene.model, warp_data[:, -1], pos)
+    np.testing.assert_allclose(warp_pos, cpu_pos, atol=1e-3)
+    np.testing.assert_allclose(
+        warp_loop.measure.speed, cpu_loop.measure.speed, atol=1e-2
+    )
+    np.testing.assert_allclose(warp_loop.throttle, cpu_loop.throttle, atol=1e-2)
+
+
 @pytest.fixture(scope="module")
 def warp_v2():
     """jax.numpy, the V2 on the loop scene and a WarpBatch of 2 rows on it."""
