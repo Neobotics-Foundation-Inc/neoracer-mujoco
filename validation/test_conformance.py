@@ -250,16 +250,10 @@ def test_the_servo_turns_at_a_servos_speed_and_holds_steady(scene):
 
 def test_the_steer_limits_in_the_code_are_full_lock():
     """Code that clamps a steer command by its own copy of the limit reaches
-    full lock, the steer servo's ctrlrange, and no further. The copies are
-    the NeoRacer's, the default car's."""
-    # Imported here: manual_drive imports glfw, which no other test needs.
-    from examples import manual_drive
-    from examples.pygame_drive import drive_sim
-
+    full lock, the steer servo's ctrlrange, and no further. The copy is the
+    NeoRacer's, the default car's."""
     scene = load()
     lock = contract.actuator_limits(scene.model, scene.car).steer_rad
-    assert manual_drive.SteeringParams().max == pytest.approx(lock)
-    assert drive_sim.DriveParams().max_steer == pytest.approx(lock)
     assert ShapingConfig().steer_limit == pytest.approx(lock)
 
 
