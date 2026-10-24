@@ -81,11 +81,12 @@ def steps_to_tick(state: SpeedLoopState, dt: float) -> int:
             return steps
 
 
-def target(params: SpeedLoopParams, speed: float, max_speed: float = 1.0) -> float:
+def target(params: SpeedLoopParams, speed: Value, max_speed: float = 1.0) -> Value:
     """The speed (m/s) that racecar_core's set_speed_angle(speed, angle)
     commands, speed in [-1, 1] and max_speed (set_max_speed) in [0, 1], each
     clamped there."""
-    return _clamp(speed, -1.0, 1.0) * _clamp(max_speed, 0.0, 1.0) * params.max_speed
+    share = np.clip(speed, -1.0, 1.0) * np.clip(max_speed, 0.0, 1.0)
+    return (share * params.max_speed)[()]
 
 
 def step(
@@ -150,7 +151,3 @@ def feed_forward(params: SpeedLoopParams, commanded: Value) -> Value:
         params.feed_forward_limit,
     )
     return np.where(commanded > 0.0, pulse, -pulse)[()]
-
-
-def _clamp(x: float, low: float, high: float) -> float:
-    return min(max(x, low), high)

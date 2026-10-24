@@ -138,6 +138,20 @@ def test_a_batchs_rows_tick_as_cars_of_their_own():
             assert tuple(float(np.asarray(v)[k]) for v in rows) == alone
 
 
+def test_the_target_is_the_held_share_of_the_max_speed():
+    """target is speed, held within [-1, 1], times max_speed, held within
+    [0, 1], times the loop's max speed, for one car and for each row of a
+    batch."""
+    speeds = np.array([-2.0, -0.5, 0.0, 0.3, 1.5])
+    for max_speed in (-0.5, 0.0, 0.4, 1.0, 2.0):
+        with case(max_speed):
+            rows = np.asarray(speed_loop.target(PARAMS, speeds, max_speed))
+            for k, speed in enumerate(speeds):
+                held = min(max(speed, -1.0), 1.0) * min(max(max_speed, 0.0), 1.0)
+                one = speed_loop.target(PARAMS, float(speed), max_speed)
+                assert rows[k] == one == held * PARAMS.max_speed
+
+
 def test_rows_that_start_over_start_at_rest_and_keep_the_ticks():
     """restart clears the loops of the rows it is given, at their new angles,
     and leaves the others and the shared ticks as they were."""

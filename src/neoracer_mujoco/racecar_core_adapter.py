@@ -147,7 +147,7 @@ class MujocoDrive:
             throttle = speed * self._max_speed
         else:
             params, state = self._loop
-            self._target = speed_loop.target(params, speed, self._max_speed)
+            self._target = float(speed_loop.target(params, speed, self._max_speed))
             throttle = float(state.throttle)
         self._command = ControlCommand(throttle=throttle, steer=steer)
         sim.apply_command(self._car, self._data, self._command)
