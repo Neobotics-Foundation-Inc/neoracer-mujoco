@@ -130,7 +130,8 @@ def rewound(rating: DcMotorRating, free_speed_rpm: float) -> DcMotorRating:
 @dataclass(frozen=True)
 class Esc:
     # What the motor does at neutral throttle: short its windings (brake) or
-    # leave them open (coast).
+    # leave them open (coast). The model only brakes, so derive refuses
+    # coast.
     neutral: Sourced[Literal["brake", "coast"]]
 
 

@@ -124,6 +124,12 @@ class DcMotorParams:
 
 
 def model(spec: Spec) -> ModelParams:
+    if spec.esc.neutral.value != "brake":
+        # MuJoCo's DC motor at 0 V shorts its windings, so the model cannot
+        # coast.
+        raise ValueError(
+            f"the model's drive brakes at neutral, not {spec.esc.neutral.value!r}"
+        )
     c, w, s = spec.chassis, spec.wheel, spec.suspension
     box = c.collision_box.value
     fit = spec.steering.fit_range.value
