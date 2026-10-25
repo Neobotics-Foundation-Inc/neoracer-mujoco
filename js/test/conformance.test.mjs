@@ -124,15 +124,21 @@ test('a turn swept from 13 poses reads what Python reads', () => {
 });
 
 test('lidarPose reads from qpos the pose that mj_forward puts in site_xpos and site_xmat', () => {
-  const data = settle(mj, model);
-  const q = data.qpos, a = car.free;
-  // tilted, and its quaternion not of unit length, as MuJoCo normalizes it
-  q.set([0.3, -0.2, 0.4], a);
-  q.set([0.9, 0.2, -0.3, 0.1].map((x) => 1.5 * x), a + 3);
-  mj.mj_forward(model, data);
-  const { pos, mat } = lidarPose(car, data.qpos);
-  assert.ok(maxDiff(pos, data.site_xpos.subarray(3 * car.lidar, 3 * car.lidar + 3)) < 1e-15);
-  assert.ok(maxDiff(mat, data.site_xmat.subarray(9 * car.lidar, 9 * car.lidar + 9)) < 1e-15);
+  // the car tilted with a quaternion that is not of unit length, which
+  // MuJoCo normalizes, and with one of zero length, which it takes as the
+  // identity
+  for (const [name, quat] of [
+    ['tilted', [0.9, 0.2, -0.3, 0.1].map((x) => 1.5 * x)],
+    ['zero', [0, 0, 0, 0]],
+  ]) {
+    const data = settle(mj, model);
+    data.qpos.set([0.3, -0.2, 0.4], car.free);
+    data.qpos.set(quat, car.free + 3);
+    mj.mj_forward(model, data);
+    const { pos, mat } = lidarPose(car, data.qpos);
+    assert.ok(maxDiff(pos, data.site_xpos.subarray(3 * car.lidar, 3 * car.lidar + 3)) < 1e-15, name);
+    assert.ok(maxDiff(mat, data.site_xmat.subarray(9 * car.lidar, 9 * car.lidar + 9)) < 1e-15, name);
+  }
 });
 
 test('a second of beforeStep, mj_step and afterStep ends where the Python racecar ends', () => {

@@ -13,7 +13,7 @@
 import type { MjData } from '@mujoco/mujoco';
 
 import { RayScene } from './rays.js';
-import { type Car, type Mujoco, type Scene, multiply, rotation } from './scene.js';
+import { type Car, type Mujoco, type Scene, multiply, normalize, rotation } from './scene.js';
 import { FIELD_EPS, NO_RETURN, SLOT_EPS } from './generated/shared.js';
 import { type LidarParams, NEORACER_PARAMS } from './generated/spec.js';
 
@@ -47,9 +47,7 @@ export interface LidarState {
  */
 export function lidarPose(car: Car, qpos: ArrayLike<number>): { pos: number[]; mat: number[] } {
   const a = car.free;
-  const q = [qpos[a + 3], qpos[a + 4], qpos[a + 5], qpos[a + 6]];
-  const norm = Math.hypot(q[0], q[1], q[2], q[3]);
-  const body = q.map((x) => x / norm);
+  const body = normalize([qpos[a + 3], qpos[a + 4], qpos[a + 5], qpos[a + 6]]);
   const R = rotation(body), m = car.lidarMount.pos;
   return {
     pos: [0, 1, 2].map((r) => qpos[a + r] + R[3 * r] * m[0] + R[3 * r + 1] * m[1] + R[3 * r + 2] * m[2]),

@@ -150,6 +150,21 @@ function mount(model: MjModel, body: number, site: number): Car['lidarMount'] {
   return { pos, quat };
 }
 
+/** MuJoCo's mjMINVAL: a length below it is taken as zero. */
+export const MINVAL = 1e-15;
+
+/**
+ * The quaternion q (w, x, y, z) at unit length, as mju_normalize4 puts it:
+ * the identity if q's length is below MINVAL, and q as it is if its length
+ * is within MINVAL of 1.
+ */
+export function normalize(q: ArrayLike<number>): number[] {
+  const norm = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+  if (norm < MINVAL) return [1, 0, 0, 0];
+  const scale = Math.abs(norm - 1) > MINVAL ? 1 / norm : 1;
+  return [q[0] * scale, q[1] * scale, q[2] * scale, q[3] * scale];
+}
+
 /** The product of the quaternions a and b (w, x, y, z), as mju_mulQuat. */
 export function multiply(a: ArrayLike<number>, b: ArrayLike<number>): number[] {
   return [

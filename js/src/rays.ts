@@ -22,16 +22,13 @@
 
 import type { MjData, MjModel } from '@mujoco/mujoco';
 
-import type { Mujoco } from './scene.js';
+import { MINVAL, type Mujoco } from './scene.js';
 
 /** The least side (m) of the grid's cells on the ground plane. */
 const CELL = 1;
 
 /** About the most cells of a grid: over a wider scene, the cells are wider. */
 const MAX_CELLS = 1 << 16;
-
-/** Below this, a ray's component along an axis is taken as zero, as MuJoCo's mjMINVAL. */
-const MINVAL = 1e-15;
 
 /**
  * A geom's margin (m) around its bounds: one whose bound lies on a cell's
