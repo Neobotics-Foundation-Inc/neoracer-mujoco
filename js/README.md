@@ -31,7 +31,7 @@ for (let i = 0; i < Math.round(1 / dt); i++) { // 1 s
 
 The scene has no meshes that only show the car: render the car with your own model of it.
 
-The LiDAR's rays are a `RayScene`'s, which finds the distances that MuJoCo's `mj_multiRay` finds without testing every geom: on a track of thousands of geoms, a physics step's rays cost a small fraction of `mj_multiRay`'s. It meets plane, sphere, cylinder, box and mesh geoms, and throws for a scene with another type; it tests every triangle of a mesh, so a mesh of thousands of faces is slow. `startCar` and `startLidar` build one for the scene, which costs a pass over every geom; to start the car again on the same scene, pass the last state's: `startCar(mj, NEORACER_CAR, scene, data, car.lidar.rays)`.
+The LiDAR's rays are a `RayScene`'s, which finds the distances that MuJoCo's `mj_multiRay` finds without testing every geom: on a track of thousands of geoms, a physics step's rays cost a small fraction of `mj_multiRay`'s. It meets plane, sphere, cylinder, box and mesh geoms, and throws for a scene with another type; it tests every triangle of a mesh, so a mesh of thousands of faces is slow. Like `mj_multiRay`, it takes a `geomgroup`, the geom groups that rays see; a moving geom's group is read at each `update`, so a program can hide a car from the LiDARs by moving its geoms into a group they leave out. `startCar` and `startLidar` build one for the scene, which costs a pass over every geom; to start the car again on the same scene, pass the last state's: `startCar(mj, NEORACER_CAR, scene, data, car.lidar.rays)`.
 
 For several cars in one scene, attach each behind a prefix of its own, compile once, and find each car's parts by its prefix:
 

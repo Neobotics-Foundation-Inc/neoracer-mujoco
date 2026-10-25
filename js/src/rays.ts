@@ -9,13 +9,14 @@
  * mj_multiRay takes 70, and about 50 us on a scene of 7300 boxes, where it
  * takes 3500.
  *
- * Like mj_multiRay with every geom group and static geoms included, a ray
- * does not see the geoms of the excluded body or an invisible geom (alpha 0),
- * and it meets a plane only from its front, within its size when that is not
- * zero. It tests every triangle of a mesh, where MuJoCo walks the mesh's BVH:
- * fast for the few faces of a track's cones and decks, slow for a mesh of
- * thousands. The geoms welded to the world, and not to a mocap body, stay
- * where the scene was built; the others are read from data at each update.
+ * Like mj_multiRay with static geoms included, a ray does not see the geoms
+ * of the excluded body, an invisible geom (alpha 0) or a geom of a group that
+ * geomgroup leaves out, and it meets a plane only from its front, within its
+ * size when that is not zero. It tests every triangle of a mesh, where MuJoCo
+ * walks the mesh's BVH: fast for the few faces of a track's cones and decks,
+ * slow for a mesh of thousands. The geoms welded to the world, and not to a
+ * mocap body, stay where the scene was built, in the groups they had then;
+ * the others' poses and groups are read at each update.
  *
  * Frame: +X forward, +Y left, +Z up.
  */
@@ -53,6 +54,9 @@ interface Shape {
   readonly box: readonly [number, number, number, number];
 }
 
+/** MuJoCo's mjNGROUP: the geom groups that geomgroup flags. */
+const GROUPS = 6;
+
 /** The geom types a RayScene meets, by their mjtGeom names and values. */
 const PLANE = 0, SPHERE = 2, CYLINDER = 5, BOX = 6, MESH = 7;
 const SUPPORTED = { mjGEOM_PLANE: PLANE, mjGEOM_SPHERE: SPHERE, mjGEOM_CYLINDER: CYLINDER, mjGEOM_BOX: BOX, mjGEOM_MESH: MESH };
@@ -64,6 +68,11 @@ export class RayScene {
   private readonly planes: Shape[] = [];
   /** The geoms that move, posed by update. */
   private readonly moving: Shape[] = [];
+  /** Whether each moving geom's group is one that rays see, as of the last update. */
+  private readonly seen: Uint8Array;
+  private readonly model: MjModel;
+  /** The geom groups that rays see (constructor). */
+  private readonly geomgroup: ArrayLike<number> | null;
   /** A side (m) of the grid's cells. */
   private readonly cell: number;
   private readonly x0: number;
@@ -77,10 +86,14 @@ export class RayScene {
 
   /**
    * The geoms of model at the poses of data (after mj_forward or mj_step),
-   * but those of body exclude and the invisible ones. Throw for a geom of a
-   * type it does not meet: an ellipsoid, capsule, height field or SDF.
+   * but those of body exclude and the invisible ones. geomgroup is
+   * mj_multiRay's: a flag for each of MuJoCo's six geom groups, the groups
+   * that rays see, or null for all. Throw for a geom of a type it does not
+   * meet: an ellipsoid, capsule, height field or SDF.
    */
-  constructor(mj: Mujoco, model: MjModel, data: MjData, exclude: number) {
+  constructor(mj: Mujoco, model: MjModel, data: MjData, exclude: number, geomgroup: ArrayLike<number> | null = null) {
+    this.model = model;
+    this.geomgroup = geomgroup;
     for (const [name, value] of Object.entries(SUPPORTED)) {
       const actual = mj.mjtGeom[name as keyof typeof SUPPORTED].value;
       if (actual !== value) throw new Error(`this MuJoCo's ${name} is ${actual}, not ${value}`);
@@ -99,11 +112,14 @@ export class RayScene {
         throw new Error(`RayScene meets ${Object.keys(SUPPORTED).join(', ')} geoms; ${name} is of type ${type}`);
       }
       // a mocap body is its own weld root, as a body with a joint is
+      const moves = weld[body] !== 0;
+      if (!moves && !this.inGroups(g)) continue;
       const shape = this.shape(model, data, g);
-      if (weld[body] !== 0) this.moving.push(shape);
+      if (moves) this.moving.push(shape);
       else if (type === PLANE) this.planes.push(shape);
       else this.fixed.push(shape);
     }
+    this.seen = Uint8Array.from(this.moving, (s) => Number(this.inGroups(s.geom)));
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const { box: [x, y, hx, hy] } of this.fixed) {
       minX = Math.min(minX, x - hx - EDGE);
@@ -158,12 +174,20 @@ export class RayScene {
     };
   }
 
-  /** The moving geoms at the poses of data. */
+  /** Whether geom g is in a group that rays see: as mj_multiRay reads it, a group past the last is the last. */
+  private inGroups(g: number): boolean {
+    if (this.geomgroup === null) return true;
+    const group = Math.min(GROUPS - 1, Math.max(0, this.model.geom_group[g]));
+    return this.geomgroup[group] !== 0;
+  }
+
+  /** The moving geoms at the poses of data, in the groups that the model gives them now. */
   update(data: MjData): void {
-    for (const s of this.moving) {
+    this.moving.forEach((s, k) => {
       s.pos.set(data.geom_xpos.subarray(3 * s.geom, 3 * s.geom + 3));
       s.mat.set(data.geom_xmat.subarray(9 * s.geom, 9 * s.geom + 9));
-    }
+      this.seen[k] = Number(this.inGroups(s.geom));
+    });
   }
 
   /**
@@ -173,7 +197,9 @@ export class RayScene {
   cast(origin: ArrayLike<number>, dir: ArrayLike<number>, maxRange: number): number {
     let best = this.castFixed(origin, dir, maxRange);
     for (const s of this.planes) best = this.hit(s, origin, dir, best, maxRange);
-    for (const s of this.moving) best = this.hit(s, origin, dir, best, maxRange);
+    this.moving.forEach((s, k) => {
+      if (this.seen[k]) best = this.hit(s, origin, dir, best, maxRange);
+    });
     return best;
   }
 
