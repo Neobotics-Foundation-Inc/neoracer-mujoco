@@ -1,18 +1,21 @@
 /**
  * Rays against a compiled scene's geoms, cast in JavaScript: the distances
  * that mj_multiRay finds, without a call into WebAssembly for each ray or a
- * test of every geom. A ray tests only the geoms over the cells of a 1 m grid
- * on the ground plane that it passes, nearest first, and stops at the first
- * cell beyond its nearest hit. The NeoRacer's LiDAR casts 120 rays a physics
- * step: in Node, about 50 us on loop_corridor's 23 geoms, where mj_multiRay
- * takes 70, and about 50 us on a scene of 7300 boxes, where it takes 3500.
+ * test of every geom. A ray tests only the geoms over the cells of a grid on
+ * the ground plane that it passes, nearest first, and stops at the first cell
+ * beyond its nearest hit. The cells are 1 m wide, or wider where that would
+ * make more than about 65,000 of them. The NeoRacer's LiDAR casts 120 rays a
+ * physics step: in Node, about 50 us on loop_corridor's 23 geoms, where
+ * mj_multiRay takes 70, and about 50 us on a scene of 7300 boxes, where it
+ * takes 3500.
  *
  * Like mj_multiRay with every geom group and static geoms included, a ray
  * does not see the geoms of the excluded body or an invisible geom (alpha 0),
  * and it meets a plane only from its front, within its size when that is not
- * zero. It meets a mesh's triangles. The geoms welded to the world, and not
- * to a mocap body, stay where the scene was built; the others are read from
- * data at each update.
+ * zero. It tests every triangle of a mesh, where MuJoCo walks the mesh's BVH:
+ * fast for the few faces of a track's cones and decks, slow for a mesh of
+ * thousands. The geoms welded to the world, and not to a mocap body, stay
+ * where the scene was built; the others are read from data at each update.
  *
  * Frame: +X forward, +Y left, +Z up.
  */
@@ -21,13 +24,20 @@ import type { MjData, MjModel } from '@mujoco/mujoco';
 
 import type { Mujoco } from './scene.js';
 
-/** A side (m) of the grid's cells on the ground plane. */
+/** The least side (m) of the grid's cells on the ground plane. */
 const CELL = 1;
+
+/** About the most cells of a grid: over a wider scene, the cells are wider. */
+const MAX_CELLS = 1 << 16;
 
 /** Below this, a ray's component along an axis is taken as zero, as MuJoCo's mjMINVAL. */
 const MINVAL = 1e-15;
 
-/** A geom's margin (m) on the grid: one whose bound lies on a cell's edge is in the cells on both sides. */
+/**
+ * A geom's margin (m) around its bounds: one whose bound lies on a cell's
+ * edge is in the cells on both sides, and a ray that grazes its bounding
+ * sphere tests the geom.
+ */
 const EDGE = 1e-9;
 
 /** One geom, as a ray meets it in the geom's own frame. */
@@ -57,6 +67,8 @@ export class RayScene {
   private readonly planes: Shape[] = [];
   /** The geoms that move, posed by update. */
   private readonly moving: Shape[] = [];
+  /** A side (m) of the grid's cells. */
+  private readonly cell: number;
   private readonly x0: number;
   private readonly y0: number;
   private readonly w: number;
@@ -103,16 +115,18 @@ export class RayScene {
       maxY = Math.max(maxY, y + hy + EDGE);
     }
     const none = this.fixed.length === 0;
+    const width = none ? 0 : maxX - minX, depth = none ? 0 : maxY - minY;
+    this.cell = Math.max(CELL, Math.sqrt((width * depth) / MAX_CELLS), (width + depth) / MAX_CELLS);
     this.x0 = none ? 0 : Math.floor(minX);
     this.y0 = none ? 0 : Math.floor(minY);
-    this.w = none ? 0 : Math.max(1, Math.ceil((maxX - this.x0) / CELL));
-    this.h = none ? 0 : Math.max(1, Math.ceil((maxY - this.y0) / CELL));
+    this.w = none ? 0 : Math.max(1, Math.ceil((maxX - this.x0) / this.cell));
+    this.h = none ? 0 : Math.max(1, Math.ceil((maxY - this.y0) / this.cell));
     this.cells = Array.from({ length: this.w * this.h }, () => []);
     this.fixed.forEach(({ box: [x, y, hx, hy] }, k) => {
-      const i0 = Math.max(0, Math.floor((x - hx - EDGE - this.x0) / CELL));
-      const i1 = Math.min(this.w - 1, Math.floor((x + hx + EDGE - this.x0) / CELL));
-      const j0 = Math.max(0, Math.floor((y - hy - EDGE - this.y0) / CELL));
-      const j1 = Math.min(this.h - 1, Math.floor((y + hy + EDGE - this.y0) / CELL));
+      const i0 = Math.max(0, Math.floor((x - hx - EDGE - this.x0) / this.cell));
+      const i1 = Math.min(this.w - 1, Math.floor((x + hx + EDGE - this.x0) / this.cell));
+      const j0 = Math.max(0, Math.floor((y - hy - EDGE - this.y0) / this.cell));
+      const j1 = Math.min(this.h - 1, Math.floor((y + hy + EDGE - this.y0) / this.cell));
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) this.cells[j * this.w + i].push(k);
     });
     this.tested = new Uint32Array(this.fixed.length);
@@ -174,7 +188,8 @@ export class RayScene {
     let best = Infinity;
     if (this.w === 0) return best;
     let tIn = 0, tOut = limit;
-    const lo = [this.x0, this.y0], hi = [this.x0 + this.w * CELL, this.y0 + this.h * CELL];
+    const c = this.cell;
+    const lo = [this.x0, this.y0], hi = [this.x0 + this.w * c, this.y0 + this.h * c];
     for (let a = 0; a < 2; a++) {
       if (Math.abs(d[a]) < MINVAL) {
         if (o[a] < lo[a] || o[a] > hi[a]) return best;
@@ -190,14 +205,14 @@ export class RayScene {
       this.ray = 1;
     }
     const clamp = (v: number, n: number) => Math.min(n - 1, Math.max(0, v));
-    let i = clamp(Math.floor((o[0] + d[0] * tIn - this.x0) / CELL), this.w);
-    let j = clamp(Math.floor((o[1] + d[1] * tIn - this.y0) / CELL), this.h);
+    let i = clamp(Math.floor((o[0] + d[0] * tIn - this.x0) / c), this.w);
+    let j = clamp(Math.floor((o[1] + d[1] * tIn - this.y0) / c), this.h);
     const si = d[0] > 0 ? 1 : -1, sj = d[1] > 0 ? 1 : -1;
     // the ray's t at the next cell edge across x and across y, and from one edge to the next
-    let tx = Math.abs(d[0]) < MINVAL ? Infinity : (this.x0 + (i + (si > 0 ? 1 : 0)) * CELL - o[0]) / d[0];
-    let ty = Math.abs(d[1]) < MINVAL ? Infinity : (this.y0 + (j + (sj > 0 ? 1 : 0)) * CELL - o[1]) / d[1];
-    const dx = Math.abs(d[0]) < MINVAL ? Infinity : CELL / Math.abs(d[0]);
-    const dy = Math.abs(d[1]) < MINVAL ? Infinity : CELL / Math.abs(d[1]);
+    let tx = Math.abs(d[0]) < MINVAL ? Infinity : (this.x0 + (i + (si > 0 ? 1 : 0)) * c - o[0]) / d[0];
+    let ty = Math.abs(d[1]) < MINVAL ? Infinity : (this.y0 + (j + (sj > 0 ? 1 : 0)) * c - o[1]) / d[1];
+    const dx = Math.abs(d[0]) < MINVAL ? Infinity : c / Math.abs(d[0]);
+    const dy = Math.abs(d[1]) < MINVAL ? Infinity : c / Math.abs(d[1]);
     for (;;) {
       for (const k of this.cells[j * this.w + i]) {
         if (this.tested[k] === this.ray) continue;
@@ -223,9 +238,9 @@ export class RayScene {
     const px = o[0] - s.pos[0], py = o[1] - s.pos[1], pz = o[2] - s.pos[2];
     if (s.type !== PLANE) {
       // the bounding sphere: missed, or beyond best or limit
-      const tc = -(px * d[0] + py * d[1] + pz * d[2]);
+      const r = s.rbound + EDGE, tc = -(px * d[0] + py * d[1] + pz * d[2]);
       const miss2 = px * px + py * py + pz * pz - tc * tc;
-      if (miss2 > s.rbound * s.rbound || tc + s.rbound < 0 || tc - s.rbound > Math.min(best, limit)) return best;
+      if (miss2 > r * r || tc + r < 0 || tc - r > Math.min(best, limit)) return best;
     }
     // the ray in the geom's frame: mat transposed
     const m = s.mat;

@@ -102,6 +102,60 @@ test('a RayScene sees a moving geom where data has it after update', () => {
   });
 });
 
+test('a ray that grazes a sphere meets it where mj_multiRay does', () => {
+  const { model, car } = compose(mj, xml);
+  const data = new mj.MjData(model);
+  mj.mj_forward(model, data);
+  const exclude = model.site_bodyid[car.lidar];
+  const scene = new RayScene(mj, model, data, exclude);
+  const ball = mj.mj_name2id(model, mj.mjtObj.mjOBJ_GEOM.value, 'ball');
+  const c = data.geom_xpos.subarray(3 * ball, 3 * ball + 3), r = model.geom_size[3 * ball];
+  const dirs = rays(4000, 13).map(({ d }) => d);
+  // each ray across the sphere's normal at a point of it, from 1 m back
+  const all = Array.from({ length: dirs.length / 2 }, (_, k) => {
+    const [n, u] = [dirs[2 * k], dirs[2 * k + 1]];
+    const x = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
+    const d = x.map((v) => v / Math.hypot(...x));
+    return { o: [0, 1, 2].map((i) => c[i] + r * n[i] - d[i]), d };
+  });
+  const want = mujocoRays(model, data, all, exclude, 10);
+  all.forEach(({ o, d }, i) => {
+    const t = scene.cast(o, d, 10);
+    assert.ok(sameDistance(t, want[i].t), `ray ${i}: ${t} against ${want[i].t}`);
+  });
+  assert.ok(want.filter((w) => w.geom === ball).length > all.length / 2);
+});
+
+test('a RayScene over a scene kilometers wide finds the distances that mj_multiRay finds', () => {
+  const far = loop.replace(
+    /<\/mujoco>\s*$/,
+    `<worldbody>
+      <geom name="east" type="box" size=".5 .5 .5" pos="100000 100000 .5"/>
+      <geom name="west" type="box" size=".5 .5 .5" pos="-100000 -100000 .5"/>
+    </worldbody></mujoco>`,
+  );
+  const { model, car } = compose(mj, far);
+  const data = new mj.MjData(model);
+  mj.mj_forward(model, data);
+  const exclude = model.site_bodyid[car.lidar];
+  const scene = new RayScene(mj, model, data, exclude);
+  // rays over the track, and rays at each far box from a few meters off
+  const away = [1, -1].flatMap((s) =>
+    rays(200, 19).map(({ o }) => {
+      const p = [s * 99995 + o[0], s * 99995 + o[1], o[2]];
+      const v = [s * 100000 - p[0], s * 100000 - p[1], 0.5 - p[2]];
+      return { o: p, d: v.map((x) => x / Math.hypot(...v)) };
+    }),
+  );
+  const all = [...rays(1000, 17), ...away];
+  const want = mujocoRays(model, data, all, exclude, 20);
+  all.forEach(({ o, d }, i) => {
+    const t = scene.cast(o, d, 20);
+    assert.ok(sameDistance(t, want[i].t), `ray ${i}: ${t} against ${want[i].t}`);
+  });
+  assert.ok(want.slice(-away.length).every((w) => w.geom >= 0));
+});
+
 test('a RayScene refuses a geom of a type it does not meet', () => {
   const capsule = loop.replace(/<\/mujoco>\s*$/, '<worldbody><geom type="capsule" size=".1 .2"/></worldbody></mujoco>');
   const { model, car } = compose(mj, capsule);

@@ -44,7 +44,7 @@ for (let i = 0; i < Math.round(1 / dt); i++) { // 1 s
 
 The scene has no meshes that only show the car: render the car with your own model of it.
 
-The LiDAR's rays are a `RayScene`'s, which finds the distances that MuJoCo's `mj_multiRay` finds without testing every geom: on a track of thousands of geoms, a physics step's rays cost a small fraction of `mj_multiRay`'s. It meets plane, sphere, cylinder, box and mesh geoms, and throws for a scene with another type. `startLidar` builds one for the scene, which costs a pass over every geom; to start the LiDAR again on the same scene, pass it the last state's: `startLidar(mj, LIDAR, scene, data, lidar.rays)`.
+The LiDAR's rays are a `RayScene`'s, which finds the distances that MuJoCo's `mj_multiRay` finds without testing every geom: on a track of thousands of geoms, a physics step's rays cost a small fraction of `mj_multiRay`'s. It meets plane, sphere, cylinder, box and mesh geoms, and throws for a scene with another type; it tests every triangle of a mesh, so a mesh of thousands of faces is slow. `startLidar` builds one for the scene, which costs a pass over every geom; to start the LiDAR again on the same scene, pass it the last state's: `startLidar(mj, LIDAR, scene, data, lidar.rays)`.
 
 For several cars in one scene, attach each behind a prefix of its own, compile once, and find each car's parts by its prefix:
 
