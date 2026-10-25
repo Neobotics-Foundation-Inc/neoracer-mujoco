@@ -18,17 +18,22 @@ import {
   IMU_GYRO_SENSOR,
   LIDAR,
   LIDAR_SITE,
+  NEORACER_CAR,
   SPEED_LOOP,
   WHEEL_GEOMS,
   actuatorLimits,
+  afterStep,
   applyCommand,
   attachCar,
+  beforeStep,
   compose,
   driveAngle,
   findCar,
+  lidarPose,
   settle,
   settleSteps,
   speedAngle,
+  startCar,
   startEncoder,
   startLidar,
   startSpeedLoop,
@@ -116,6 +121,35 @@ test('a turn swept from 13 poses reads what Python reads', () => {
   }
   assert.ok(maxDiff(state.scan, fixtures.sweep.scan) < 1e-12);
   assert.equal(state.head, fixtures.sweep.head);
+});
+
+test('lidarPose reads from qpos the pose that mj_forward puts in site_xpos and site_xmat', () => {
+  const data = settle(mj, model);
+  const q = data.qpos, a = car.free;
+  // tilted, and its quaternion not of unit length, as MuJoCo normalizes it
+  q.set([0.3, -0.2, 0.4], a);
+  q.set([0.9, 0.2, -0.3, 0.1].map((x) => 1.5 * x), a + 3);
+  mj.mj_forward(model, data);
+  const { pos, mat } = lidarPose(car, data.qpos);
+  assert.ok(maxDiff(pos, data.site_xpos.subarray(3 * car.lidar, 3 * car.lidar + 3)) < 1e-15);
+  assert.ok(maxDiff(mat, data.site_xmat.subarray(9 * car.lidar, 9 * car.lidar + 9)) < 1e-15);
+});
+
+test('a second of beforeStep, mj_step and afterStep ends where the Python racecar ends', () => {
+  const { speed, angle, steps, qpos, encoder_speed, throttle, scan, head } = fixtures.racecar;
+  const data = settle(mj, model);
+  let state = startCar(mj, NEORACER_CAR, scene, data);
+  state = { ...state, command: speedAngle(actuatorLimits(model, car), NEORACER_CAR.speedLoop, speed, angle) };
+  for (let i = 0; i < steps; i++) {
+    beforeStep(scene, data, state);
+    mj.mj_step(model, data);
+    state = afterStep(NEORACER_CAR, scene, data, state, model.opt.timestep);
+  }
+  assert.ok(maxDiff(data.qpos, qpos) < 1e-12);
+  assert.ok(Math.abs(state.encoder.speed - encoder_speed) < 1e-12);
+  assert.ok(Math.abs(state.loop.throttle - throttle) < 1e-12);
+  assert.ok(maxDiff(state.lidar.scan, scan) < 1e-9);
+  assert.equal(state.lidar.head, head);
 });
 
 test('the encoder reports the speeds that Python reports', () => {

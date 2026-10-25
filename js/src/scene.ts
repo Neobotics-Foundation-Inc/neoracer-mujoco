@@ -32,6 +32,10 @@ export interface Car {
   readonly lidar: number;
   /** The drivetrain's angle as a sum over qpos: drive_pos's fixed tendon, coef[k] times qpos[qpos[k]] (driveAngle). */
   readonly drivetrain: { readonly qpos: readonly number[]; readonly coef: readonly number[] };
+  /** The address in qpos of the root body's free joint: its position, then its quaternion. */
+  readonly free: number;
+  /** The LiDAR site's place on the root body: its position and its quaternion there. */
+  readonly lidarMount: { readonly pos: readonly number[]; readonly quat: readonly number[] };
 }
 
 /** A compiled scene: spec is what model was compiled from. */
@@ -114,13 +118,62 @@ export function attachCar(mj: Mujoco, spec: MjSpec, car: MjSpec, prefix = ''): v
 export function findCar(mj: Mujoco, spec: MjSpec, model: MjModel, prefix = ''): Car {
   const O = mj.mjtObj;
   const id = (type: mjtObj, name: string) => mj.mjs_getId(find(mj, spec, type, prefix + name));
+  const body = id(O.mjOBJ_BODY, CAR_BODY);
+  const lidar = id(O.mjOBJ_SITE, LIDAR_SITE);
+  const joint = model.body_jntadr[body];
+  if (model.body_jntnum[body] < 1 || model.jnt_type[joint] !== mj.mjtJoint.mjJNT_FREE.value) {
+    throw new Error(`the car's ${CAR_BODY} body has no free joint`);
+  }
   return {
-    body: id(O.mjOBJ_BODY, CAR_BODY),
+    body,
     drive: id(O.mjOBJ_ACTUATOR, DRIVE_ACTUATOR),
     steer: id(O.mjOBJ_ACTUATOR, STEER_ACTUATOR),
-    lidar: id(O.mjOBJ_SITE, LIDAR_SITE),
+    lidar,
     drivetrain: drivetrain(mj, model, id(O.mjOBJ_SENSOR, DRIVE_POS_SENSOR)),
+    free: model.jnt_qposadr[joint],
+    lidarMount: mount(model, body, lidar),
   };
+}
+
+/** Site's place on body, composed through the bodies between them: refused if one has a joint. */
+function mount(model: MjModel, body: number, site: number): Car['lidarMount'] {
+  let pos: number[] = Array.from(model.site_pos.subarray(3 * site, 3 * site + 3) as Float64Array);
+  let quat: number[] = Array.from(model.site_quat.subarray(4 * site, 4 * site + 4) as Float64Array);
+  for (let b = model.site_bodyid[site]; b !== body; b = model.body_parentid[b]) {
+    if (b === 0) throw new Error('the LiDAR site is not on the car');
+    if (model.body_jntnum[b] > 0) throw new Error("a joint lies between the LiDAR site and the car's root body");
+    const bq: number[] = Array.from(model.body_quat.subarray(4 * b, 4 * b + 4) as Float64Array);
+    const r = rotate(bq, pos);
+    pos = r.map((x, k) => x + model.body_pos[3 * b + k]);
+    quat = multiply(bq, quat);
+  }
+  return { pos, quat };
+}
+
+/** The product of the quaternions a and b (w, x, y, z), as mju_mulQuat. */
+export function multiply(a: ArrayLike<number>, b: ArrayLike<number>): number[] {
+  return [
+    a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],
+    a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],
+    a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],
+    a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0],
+  ];
+}
+
+/** v rotated by the unit quaternion q (w, x, y, z), as mju_rotVecQuat. */
+export function rotate(q: ArrayLike<number>, v: ArrayLike<number>): number[] {
+  const m = rotation(q);
+  return [0, 1, 2].map((r) => m[3 * r] * v[0] + m[3 * r + 1] * v[1] + m[3 * r + 2] * v[2]);
+}
+
+/** The rotation of the unit quaternion q (w, x, y, z), row-major, as mju_quat2Mat. */
+export function rotation(q: ArrayLike<number>): number[] {
+  const [w, x, y, z] = [q[0], q[1], q[2], q[3]];
+  return [
+    1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y),
+    2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x),
+    2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y),
+  ];
 }
 
 /** The fixed tendon whose length the drive_pos sensor reads, as batch.drive_angle reads it: refused if it reads anything
