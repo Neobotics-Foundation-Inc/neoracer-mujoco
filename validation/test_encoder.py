@@ -96,6 +96,11 @@ def _wheel_angle(scene: Scene, data: mujoco.MjData) -> float:
     return float(np.mean([data.bind_scalar(j).qpos[0] for j in spins]))
 
 
+MOVING = 0.01
+"""A speed (m/s) above what the encoder reads of a car at rest, which creeps
+at a few um/s as it settles."""
+
+
 def test_the_first_window_measures_the_turn_of_the_wheels_in_it():
     """The car speeds up from rest, on data that mj_forward last updated.
     The first speed the encoder reports is alpha times the wheels' turn
@@ -103,16 +108,15 @@ def test_the_first_window_measures_the_turn_of_the_wheels_in_it():
     over that time: the encoder reads the angle the car has at each
     update(), not the one of a step before."""
     scene = load()
-    model, car = scene.model, scene.car
+    model = scene.model
     data = sim.settle(model)
     mujoco.mj_forward(model, data)
     rc = MujocoRacecar(
         scene, data, max_steps=round(0.1 / model.opt.timestep), car=HELD_THROTTLE
     )
     seen = []  # (s, rad, m/s) at each update()
-    command = ControlCommand(throttle=1.0, steer=0.0)
     rc.set_start_update(
-        lambda: sim.apply_command(car, data, command),
+        lambda: rc.drive.set_speed_angle(1.0, 0.0),
         lambda: seen.append(
             (data.time, _wheel_angle(scene, data), rc.physics.get_encoder_speed())
         ),
@@ -120,6 +124,7 @@ def test_the_first_window_measures_the_turn_of_the_wheels_in_it():
     rc.go()
     t0, a0, _ = seen[0]
     t1, a1, first = next(x for x in seen if x[2] != 0.0)
+    assert first > MOVING
     assert first == pytest.approx(PARAMS.alpha * (a1 - a0) * PARAMS.radius / (t1 - t0))
 
 
@@ -128,14 +133,13 @@ def test_a_bounded_run_counts_its_last_step():
     full throttle, 8 steps at 360 Hz (22 ms) pass the first 20 ms tick, so
     the encoder reports a speed."""
     scene = load()
-    model, car = scene.model, scene.car
+    model = scene.model
     data = sim.settle(model)
     rc = MujocoRacecar(scene, data, max_steps=8, car=HELD_THROTTLE)
-    command = ControlCommand(throttle=1.0, steer=0.0)
-    rc.set_start_update(lambda: sim.apply_command(car, data, command), lambda: None)
+    rc.set_start_update(lambda: rc.drive.set_speed_angle(1.0, 0.0), lambda: None)
     rc.go()
     assert model.opt.timestep == pytest.approx(1 / 360)
-    assert rc.physics.get_encoder_speed() > 0.0
+    assert rc.physics.get_encoder_speed() > MOVING
 
 
 def test_drive_angle_is_drive_pos_at_the_steps_end():

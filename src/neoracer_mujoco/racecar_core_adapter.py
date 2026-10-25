@@ -45,7 +45,6 @@ import mujoco
 import numpy as np
 
 from . import contract, racecar, speed_loop
-from .racecar import CarParams, neoracer_params
 from .scene import Scene
 
 
@@ -111,7 +110,7 @@ class MujocoDrive:
     def set_max_speed(self, max_speed: float | None = None) -> None:
         """Set the share of full speed that speed 1 drives. Without
         max_speed, the car's start max speed, as its racecar_core has it
-        (CarParams.start_max_speed)."""
+        (racecar.CarParams.start_max_speed)."""
         limit = self._start_max_speed if max_speed is None else max_speed
         self._max_speed = _clamp(limit, 0.0, 1.0)
 
@@ -231,7 +230,7 @@ class Program:
     """None if the script has no slow update."""
 
 
-_NEORACER = neoracer_params()
+_NEORACER = racecar.neoracer_params()
 
 
 class MujocoRacecar:
@@ -267,7 +266,7 @@ class MujocoRacecar:
         data: mujoco.MjData,
         max_steps: int | None = None,
         held_buttons: Iterable[MujocoController.Button] = (MujocoController.Button.RB,),
-        car: CarParams = _NEORACER,
+        car: racecar.CarParams = _NEORACER,
     ):
         self._car = _Car(scene, data, racecar.start(car, scene, data))
         self.drive = MujocoDrive(self._car, car.start_max_speed)
