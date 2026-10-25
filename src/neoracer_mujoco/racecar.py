@@ -7,22 +7,24 @@ program does. The racecar_core adapter (racecar_core_adapter.py) runs a
 program on them, and the JS package's racecar.ts does the same in the
 browser.
 
-start() readies a car at rest, and step() runs one physics step with the
-car's command. step() runs the step in MuJoCo's two halves: mj_step2
-integrates it with the command, and mj_step1 brings the positions,
-velocities and sensors up to data.time, so the encoder, the LiDAR and the
-speed loop count the step from where it left the car. Between two steps,
-data's sensors read the car at data.time, where after a whole mj_step they
-read it a step earlier.
+start() readies a car at rest, ask() gives it the speed and the steering
+angle that a program asks for (SpeedAngle), and step() runs one physics
+step with the car's command. step() runs the step in MuJoCo's two halves:
+mj_step2 integrates it with the command, and mj_step1 brings the
+positions, velocities and sensors up to data.time, so the encoder, the
+LiDAR and the speed loop count the step from where it left the car.
+Between two steps, data's sensors read the car at data.time, where after a
+whole mj_step they read it a step earlier.
 
     car = racecar.start(racecar.neoracer_params(), scene, data)
-    car = copy.replace(car, drive=copy.replace(car.drive, target=1.5))
+    car = racecar.ask(car, SpeedAngle(target=1.5, steer=0.1))
     for _ in range(steps):
         car = racecar.step(scene, data, car)
 
 Frame: +X forward, +Y left, +Z up.
 """
 
+from copy import replace
 from dataclasses import dataclass
 from typing import assert_never
 
@@ -36,7 +38,7 @@ from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2, RacecarNeoV2
 from neoracer_spec.spec import Spec
 
 from . import encoder, hall_encoder, lidar, sim, speed_loop
-from .control.steering import ControlCommand
+from .control.steering import ControlCommand, SpeedAngle
 from .scene import Scene
 
 
@@ -153,6 +155,20 @@ def start(params: CarParams, scene: Scene, data: mujoco.MjData) -> CarState:
             assert_never(params.encoder)
     scan = lidar.start(params.lidar, scene.model, data, scene.car)
     return CarState(drive, 0.0, measure, Lidar(params.lidar, scan))
+
+
+def ask(car: CarState, command: SpeedAngle) -> CarState:
+    """car asked for command: its speed loop holds command.target, and its
+    steering servo takes command.steer. Raise ValueError for a car without a
+    speed loop, as the V2, whose program sets a throttle instead."""
+    match car.drive:
+        case SpeedLoop():
+            drive = replace(car.drive, target=command.target)
+            return replace(car, drive=drive, steer=command.steer)
+        case Throttle():
+            raise ValueError("this car has no speed loop to hold a speed")
+        case _:
+            assert_never(car.drive)
 
 
 def apply(scene: Scene, data: mujoco.MjData, car: CarState) -> None:

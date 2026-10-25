@@ -8,7 +8,7 @@ two walls. This controller uses only one wall, so it also works where there
 is no second wall, for example in a bend or on an open course.
 
 Frame: +X forward, +Y left, +Z up.
-Throttle in [-1, 1], + = forward. Steer angle (rad), + = left.
+Speed (m/s), + = forward. Steer angle (rad), + = left.
 
 Signals (see compute_signals()). They have the same meaning for the left and
 the right wall:
@@ -23,7 +23,7 @@ Bad sensor data is handled as in track_centering.py (see sensors.parse_beam):
 NaN or Inf is corrupt, and -1 (no hit) is valid. Both read as max_beam_range.
 Only the 4 beams that this controller reads count in n_corrupt. If more than
 max_corrupt_beams are corrupt, step() returns steering.fallback(): the steer
-moves toward 0 and the throttle drops.
+moves toward 0 and the speed drops.
 
 Usage: call step in a loop, and pass each new state to the next call.
     state = PDState()
@@ -48,7 +48,7 @@ from ..sensors import (
     parse_beam,
 )
 from . import steering
-from .steering import ControlCommand, PDState, ShapingConfig
+from .steering import PDState, ShapingConfig, SpeedAngle
 
 type Side = Literal["left", "right"]
 
@@ -131,7 +131,7 @@ def compute_signals(
 
 def step(
     cfg: WallFollowingConfig, state: PDState, sensors: SensorReadings, dt: float
-) -> tuple[PDState, ControlCommand]:
+) -> tuple[PDState, SpeedAngle]:
     """Compute one control command and the next controller state."""
     signals = compute_signals(sensors, cfg)
     if signals.n_corrupt > cfg.max_corrupt_beams:

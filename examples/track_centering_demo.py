@@ -35,9 +35,8 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from neoracer_mujoco import assets, sensors, sim
-from neoracer_mujoco.control import PDState, track_centering
-from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco import assets, racecar, sensors, sim
+from neoracer_mujoco.control import PDState, SpeedAngle, track_centering
 from neoracer_mujoco.control.track_centering import (
     CenteringSignals,
     TrackCenteringConfig,
@@ -82,8 +81,8 @@ class DemoParams:
 
 @dataclass(frozen=True)
 class CenteringReport:
-    """The result of the headless run. Distances in m, steer in rad, throttle
-    in [-1, 1]."""
+    """The result of the headless run. Distances in m, steer in rad, speed
+    in m/s."""
 
     distance_traveled_x: float
     mean_abs_lateral_error: float
@@ -93,7 +92,7 @@ class CenteringReport:
     mean_abs_steer: float
     max_abs_steer: float
     steer_within_limits: bool
-    mean_throttle: float
+    mean_target_speed: float
     min_front_distance: float
     upright_throughout: bool
     finite_throughout: bool
@@ -136,24 +135,23 @@ def run(params: DemoParams) -> CenteringReport:
     model, car = scene.model, scene.car
     data = _spawn(scene, params)
     dt = model.opt.timestep
+    racer = racecar.start(racecar.neoracer_params(), scene, data)
 
     cfg = TrackCenteringConfig()
     state = PDState()
 
-    lateral_errors, steers, throttles, front_dists = [], [], [], []
+    lateral_errors, steers, targets, front_dists = [], [], [], []
     upright_all, finite_all = True, True
 
     for _ in range(params.steps):
         readings = sensors.read(car.sensors, data)
         signals = compute_signals(readings, cfg)
         state, control = track_centering.step(cfg, state, readings, dt)
-
-        sim.apply_command(car, data, control)
-        mujoco.mj_step(model, data)
+        racer = racecar.step(scene, data, racecar.ask(racer, control))
 
         lateral_errors.append(signals.lateral_error)
         steers.append(control.steer)
-        throttles.append(control.throttle)
+        targets.append(control.target)
         front_dists.append(signals.front_distance)
 
         if sim.car_upright_cos(data, car) < params.min_upright_cos:
@@ -163,7 +161,7 @@ def run(params: DemoParams) -> CenteringReport:
 
     lateral_errors = np.array(lateral_errors)
     steers = np.array(steers)
-    throttles = np.array(throttles)
+    targets = np.array(targets)
     front_dists = np.array(front_dists)
     quarter = len(lateral_errors) // 4
 
@@ -182,7 +180,7 @@ def run(params: DemoParams) -> CenteringReport:
         steer_within_limits=bool(
             np.all(np.abs(steers) <= cfg.shaping.steer_limit + 1e-9)
         ),
-        mean_throttle=float(np.mean(throttles)),
+        mean_target_speed=float(np.mean(targets)),
         min_front_distance=float(np.min(front_dists)),
         upright_throughout=upright_all,
         finite_throughout=finite_all,
@@ -191,7 +189,7 @@ def run(params: DemoParams) -> CenteringReport:
 
 def _print_status(
     data: mujoco.MjData,
-    control: ControlCommand,
+    control: SpeedAngle,
     signals: CenteringSignals,
     left: float,
     right: float,
@@ -199,7 +197,7 @@ def _print_status(
     """Print one status line in viewer mode."""
     print(
         f"t={data.time:6.2f}s "
-        f"steer={control.steer:+.3f} thr={control.throttle:+.3f} "
+        f"steer={control.steer:+.3f} speed={control.target:+.3f} "
         f"lat_err={signals.lateral_error:+.3f} "
         f"L={left:.3f} R={right:.3f} fwd={signals.front_distance:.3f}"
     )
@@ -217,6 +215,7 @@ def run_viewer(params: DemoParams, duration_s: float | None) -> None:
     data = _spawn(scene, params)
     dt = model.opt.timestep
     max_steps = None if duration_s is None else int(duration_s / dt)
+    racer = racecar.start(racecar.neoracer_params(), scene, data)
 
     cfg = TrackCenteringConfig()
     state = PDState()
@@ -249,9 +248,7 @@ def run_viewer(params: DemoParams, duration_s: float | None) -> None:
             readings = sensors.read(car.sensors, data)
             signals = compute_signals(readings, cfg)
             state, control = track_centering.step(cfg, state, readings, dt)
-
-            sim.apply_command(car, data, control)
-            mujoco.mj_step(model, data)
+            racer = racecar.step(scene, data, racecar.ask(racer, control))
             viewer.sync()
 
             step += 1
@@ -318,7 +315,7 @@ def main() -> None:
     print(f"  mean |steer|                  : {report.mean_abs_steer:.3f} rad")
     print(f"  max  |steer|                  : {report.max_abs_steer:.3f} rad")
     print(f"  steer stayed within ±limits   : {report.steer_within_limits}")
-    print(f"  mean throttle                 : {report.mean_throttle:+.3f}")
+    print(f"  mean target speed             : {report.mean_target_speed:+.3f} m/s")
     print(f"  min front clearance seen      : {report.min_front_distance:.3f} m")
     print(f"  upright for entire run        : {report.upright_throughout}")
     print(f"  all qpos/qvel finite          : {report.finite_throughout}")

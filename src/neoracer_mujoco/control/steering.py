@@ -1,14 +1,15 @@
 """
-Steering and throttle shaping shared by the LiDAR controllers
-(track_centering.py, wall_following.py).
+Steering and speed shaping shared by the LiDAR controllers
+(track_centering.py, wall_following.py), and the two commands a car takes.
 
 Frame: +X forward, +Y left, +Z up.
-Throttle in [-1, 1], + = forward. Steer angle (rad), + = left.
+Speed (m/s) and throttle in [-1, 1], + = forward. Steer angle (rad), + = left.
 
 Each controller computes one error signal (m) and a raw steer command (rad).
-command() then clamps the steer, limits its rate of change, and reduces the
-throttle for a large steer or a close obstacle ahead. fallback() is the
-command for a step with too many corrupt beams.
+command() then clamps the steer, limits its rate of change, and lowers the
+speed for a large steer or a close obstacle ahead. fallback() is the command
+for a step with too many corrupt beams. A controller asks for a speed, as a
+program on the car does, and the car's speed loop holds it (racecar.ask).
 
 Every dt in this package is the control step (s), and it must be positive.
 The caller makes it once, from the model timestep or the env config.
@@ -21,9 +22,21 @@ from neoracer_spec.neoracer import NEORACER
 
 
 @dataclass(frozen=True)
+class SpeedAngle:
+    """What a program on the car asks for: target, the speed (m/s, + =
+    forward) for the firmware's speed loop to hold, and steer, the steering
+    servo's angle (rad, + = left). racecar.ask gives it to a car."""
+
+    target: float
+    steer: float
+
+
+@dataclass(frozen=True)
 class ControlCommand:
     """throttle goes to the drive motor (in [-1, 1], + = forward); steer goes
-    to the steering servo (rad, + = left). sim.apply_command writes both."""
+    to the steering servo (rad, + = left). sim.apply_command writes both. It
+    is the motor's own input, under the speed loop, which a program on the
+    car does not set."""
 
     throttle: float
     steer: float
@@ -42,23 +55,22 @@ class PDState:
 
 @dataclass(frozen=True)
 class ShapingConfig:
-    """Steer and throttle limits that command() and fallback() apply."""
+    """Steer and speed limits that command() and fallback() apply."""
 
-    target_throttle: float = 0.5
-    """The base forward drive command, in [-1, 1]. From rest it pushes as 0.1 N·m
-    on each wheel did before the motor model, and cruises at about 2 m/s."""
+    target_speed: float = 1.75
+    """The speed (m/s) on a straight with the way ahead clear."""
     steer_limit: float = derive.steer_lock(NEORACER)
     """Full lock (rad): the steer_servo's ctrlrange."""
     steer_slew_limit: float = 3.0
     """The steer's largest rate of change (rad/s)."""
     steer_slowdown_gain: float = 0.6
-    """The fraction of the throttle cut at full steer deflection."""
+    """The fraction of the speed cut at full steer deflection."""
     min_safe_forward_distance: float = 0.25
-    """The front clearance (m) at or below which the throttle is 0."""
+    """The front clearance (m) at or below which the speed is 0."""
     slowdown_threshold: float = 0.8
-    """The front clearance (m) below which the throttle ramps down."""
-    safe_fallback_throttle_fraction: float = 0.3
-    """The throttle during fallback, as a fraction of target_throttle."""
+    """The front clearance (m) below which the speed ramps down."""
+    safe_fallback_speed_fraction: float = 0.3
+    """The speed during fallback, as a fraction of target_speed."""
 
     def __post_init__(self) -> None:
         # command() divides by steer_limit and by the slowdown span, so these
@@ -95,14 +107,14 @@ def command(
     steer_raw: float,
     front_distance: float,
     dt: float,
-) -> tuple[PDState, ControlCommand]:
+) -> tuple[PDState, SpeedAngle]:
     """Shape a raw steer command (rad) into the next state and command.
     error (m) is kept for the next D term. front_distance (m) is the
     clearance straight ahead."""
     steer = _slew(p, state.prev_steer, steer_raw, dt)
 
     steer_severity = abs(steer) / p.steer_limit
-    throttle = p.target_throttle * (1.0 - p.steer_slowdown_gain * steer_severity)
+    speed = p.target_speed * (1.0 - p.steer_slowdown_gain * steer_severity)
 
     if front_distance <= p.min_safe_forward_distance:
         obstacle_scale = 0.0
@@ -111,20 +123,18 @@ def command(
     else:
         span = p.slowdown_threshold - p.min_safe_forward_distance
         obstacle_scale = (front_distance - p.min_safe_forward_distance) / span
-    throttle = max(0.0, throttle * obstacle_scale)
+    speed = max(0.0, speed * obstacle_scale)
 
-    return PDState(prev_error=error, prev_steer=steer), ControlCommand(
-        throttle=throttle, steer=steer
+    return PDState(prev_error=error, prev_steer=steer), SpeedAngle(
+        target=speed, steer=steer
     )
 
 
-def fallback(
-    p: ShapingConfig, state: PDState, dt: float
-) -> tuple[PDState, ControlCommand]:
+def fallback(p: ShapingConfig, state: PDState, dt: float) -> tuple[PDState, SpeedAngle]:
     """Command for a step with bad LiDAR data: slew the steer toward 0 and
-    drive at a reduced throttle. The error history is cleared, so that the
-    bad step does not cause a D-term spike in the next step."""
+    drive at a reduced speed. The error history is cleared, so that the bad
+    step does not cause a D-term spike in the next step."""
     steer = _slew(p, state.prev_steer, 0.0, dt)
-    return PDState(prev_error=0.0, prev_steer=steer), ControlCommand(
-        throttle=p.target_throttle * p.safe_fallback_throttle_fraction, steer=steer
+    return PDState(prev_error=0.0, prev_steer=steer), SpeedAngle(
+        target=p.target_speed * p.safe_fallback_speed_fraction, steer=steer
     )
