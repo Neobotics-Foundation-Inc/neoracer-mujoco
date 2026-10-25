@@ -72,8 +72,9 @@ class Chassis:
     """The height of the chassis' center of mass above the axles."""
     inertia: Sourced[InertiaReference]
     """Scaled to the chassis' mass."""
-    collision_box: Sourced[Box]
-    """The body, without the wheels."""
+    outline: Sourced[Prism]
+    """The body, without the wheels: what it collides with, and what the
+    other cars' LiDARs see of it."""
 
 
 @dataclass(frozen=True)
@@ -86,9 +87,38 @@ class InertiaReference:
 
 
 @dataclass(frozen=True)
-class Box:
-    center: Vec3
-    half_size: Vec3
+class Prism:
+    """An upright prism: a convex polygon seen from above, its corners (x, y)
+    counterclockwise, from the height bottom up to top."""
+
+    corners: tuple[tuple[float, float], ...]
+    bottom: float
+    top: float
+
+    def __post_init__(self) -> None:
+        n = len(self.corners)
+        if n < 3:
+            raise ValueError(f"a polygon has at least 3 corners, not {n}")
+        values = [v for corner in self.corners for v in corner] + [
+            self.bottom,
+            self.top,
+        ]
+        if not all(math.isfinite(v) for v in values):
+            raise ValueError("a prism's corners and heights must be finite")
+        # Convex and counterclockwise: every other corner strictly left of
+        # each edge, which a polygon whose edges cross fails.
+        for i in range(n):
+            (ax, ay), (bx, by) = self.corners[i], self.corners[(i + 1) % n]
+            for k, (px, py) in enumerate(self.corners):
+                if k in (i, (i + 1) % n):
+                    continue
+                if (bx - ax) * (py - ay) - (by - ay) * (px - ax) <= 0:
+                    raise ValueError(
+                        f"corner {k} is not left of the edge from corner {i}: the"
+                        " corners must run counterclockwise round a convex polygon"
+                    )
+        if not self.bottom < self.top:
+            raise ValueError(f"bottom {self.bottom} is not below top {self.top}")
 
 
 @dataclass(frozen=True)

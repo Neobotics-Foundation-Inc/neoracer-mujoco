@@ -252,17 +252,12 @@ def test_a_change_to_the_chassis_changes_the_xml():
     xml = mjcf.car_xml(MODEL, template)
     for name, car in [
         (
-            "collision box center",
-            at(CAR, lambda c: c.chassis.collision_box.value.center).set(
-                (0.02, 0.0, 0.07)
+            "outline corner",
+            at(CAR, lambda c: c.chassis.outline.value.corners).set(
+                ((-0.2, -0.1), (0.2, -0.1), (0.2, 0.1), (-0.2, 0.1))
             ),
         ),
-        (
-            "collision box size",
-            at(CAR, lambda c: c.chassis.collision_box.value.half_size).set(
-                (0.2, 0.1, 0.09)
-            ),
-        ),
+        ("outline top", at(CAR, lambda c: c.chassis.outline.value.top).set(0.15)),
         ("wheelbase", at(CAR, lambda c: c.chassis.wheelbase.value).set(0.29)),
         ("com_height", at(CAR, lambda c: c.chassis.com_height.value).set(0.02)),
     ]:
@@ -428,6 +423,29 @@ def test_the_springs_hold_the_sprung_weight_at_rest():
 def test_the_car_weighs_its_mass(scene):
     car = scene.model.bind_scalar(scene.car.body)
     assert car.subtreemass[0] == pytest.approx(CAR.chassis.mass.value)
+
+
+def test_a_prism_is_convex_counterclockwise_and_upright():
+    """A prism's corners run counterclockwise round a convex polygon, and its
+    bottom is below its top: the outline is refused otherwise, since MuJoCo
+    would collide with the convex hull of corners given clockwise, round a
+    dent or with crossing edges, with nothing for fewer than three, and not
+    at all for a corner or a height that is not finite."""
+    square = ((-0.1, -0.1), (0.1, -0.1), (0.1, 0.1), (-0.1, 0.1))
+    star = ((0.0, 0.3), (-0.2, -0.3), (0.3, 0.1), (-0.3, 0.1), (0.2, -0.3))
+    spec.Prism(square, 0.0, 0.1)
+    for name, corners, bottom, top in [
+        ("clockwise", square[::-1], 0.0, 0.1),
+        ("dented", (*square[:2], (0.0, 0.0), *square[2:]), 0.0, 0.1),
+        ("crossing", star, 0.0, 0.1),
+        ("empty", (), 0.0, 0.1),
+        ("a segment", square[:2], 0.0, 0.1),
+        ("a corner not a number", ((math.nan, -0.1), *square[1:]), 0.0, 0.1),
+        ("endless", square, 0.0, math.inf),
+        ("flat", square, 0.1, 0.1),
+    ]:
+        with case(name), pytest.raises(ValueError):
+            spec.Prism(corners, bottom, top)
 
 
 def test_a_car_whose_esc_coasts_at_neutral_is_refused():

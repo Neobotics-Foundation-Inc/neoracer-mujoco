@@ -142,7 +142,7 @@ def model(spec: RacecarNeoV2) -> ModelParams:
                 pos=precise3(chassis_com(spec)),
                 diaginertia=precise3(chassis_inertia(spec)),
             ),
-            boxes=tuple(
+            shapes=tuple(
                 parts.CollisionBox(
                     b.name, precise3(body(spec, b.center)), precise3(b.half_size)
                 )

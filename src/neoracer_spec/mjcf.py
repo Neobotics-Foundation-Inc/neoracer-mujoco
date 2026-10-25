@@ -20,6 +20,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import assert_never
 
 from . import derive_v2, parts
 from .derive import ModelParams
@@ -109,14 +110,18 @@ def inertial(i: parts.Inertial) -> list[Edit]:
     )
 
 
-def collision_boxes(bs: tuple[parts.CollisionBox, ...]) -> list[Edit]:
-    return [
-        e
-        for b in bs
-        for e in put(
-            named("geom", b.name), pos=numbers(*b.center), size=numbers(*b.half_size)
-        )
-    ]
+def collision_shape(s: parts.CollisionBox | parts.CollisionMesh) -> list[Edit]:
+    match s:
+        case parts.CollisionBox(name, center, half_size):
+            return put(
+                named("geom", name), pos=numbers(*center), size=numbers(*half_size)
+            )
+        case parts.CollisionMesh(name, vertices):
+            return put(
+                named("mesh", name), vertex=numbers(*(x for v in vertices for x in v))
+            )
+        case _:
+            assert_never(s)
 
 
 def lidar_beams(lid: parts.LidarBeams) -> list[Edit]:
@@ -242,7 +247,7 @@ def model(p: parts.Model) -> list[Edit]:
         *solver(SOLVER),
         *put(named("body", "car"), pos=numbers(0, 0, p.spawn_height)),
         *inertial(p.inertial),
-        *collision_boxes(p.boxes),
+        *[e for s in p.shapes for e in collision_shape(s)],
         *put(named("site", "imu"), pos=numbers(*p.imu_position)),
         *lidar_beams(p.lidar),
         *wheels(p.wheels),
