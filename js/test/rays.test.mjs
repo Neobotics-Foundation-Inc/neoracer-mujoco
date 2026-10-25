@@ -48,13 +48,14 @@ function rays(n, seed) {
 
 /**
  * mj_multiRay's first geom and distance for each ray, or -1 and Infinity, as
- * the LiDAR casts: every group, static geoms, one body excluded.
+ * the LiDAR casts: the groups of geomgroup (every group if it is null),
+ * static geoms, one body excluded.
  */
-function mujocoRays(model, data, all, exclude, maxRange) {
+function mujocoRays(model, data, all, exclude, maxRange, geomgroup = null) {
   return all.map(({ o, d }) => {
     const geom = new mj.IntBuffer(1), dist = new mj.DoubleBuffer(1);
     try {
-      mj.mj_multiRay(model, data, o, d, null, true, exclude, geom, dist, null, 1, maxRange);
+      mj.mj_multiRay(model, data, o, d, geomgroup, true, exclude, geom, dist, null, 1, maxRange);
       const g = geom.GetView()[0], t = dist.GetView()[0];
       return g >= 0 && t <= maxRange ? { geom: g, t } : { geom: -1, t: Infinity };
     } finally {
@@ -154,6 +155,33 @@ test('a RayScene over a scene kilometers wide finds the distances that mj_multiR
     assert.ok(sameDistance(t, want[i].t), `ray ${i}: ${t} against ${want[i].t}`);
   });
   assert.ok(want.slice(-away.length).every((w) => w.geom >= 0));
+});
+
+test('a RayScene sees the geom groups that geomgroup names, a moving geom in its group at update, as mj_multiRay does', () => {
+  const { model, car } = compose(mj, xml.replace('name="post"', 'name="post" group="2"'));
+  const data = new mj.MjData(model);
+  mj.mj_forward(model, data);
+  const exclude = model.site_bodyid[car.lidar];
+  const id = (name) => mj.mj_name2id(model, mj.mjtObj.mjOBJ_GEOM.value, name);
+  // groups 2 and 5 left out; the ball's group, past the last, reads as 5
+  const geomgroup = [1, 1, 0, 1, 1, 0];
+  model.geom_group[id('ball')] = 9;
+  const scene = new RayScene(mj, model, data, exclude, geomgroup);
+  const all = rays(3000, 23);
+  const hits = () => {
+    const want = mujocoRays(model, data, all, exclude, 10, geomgroup);
+    all.forEach(({ o, d }, i) => {
+      const t = scene.cast(o, d, 10);
+      assert.ok(sameDistance(t, want[i].t), `ray ${i}: ${t} against ${want[i].t}`);
+    });
+    return new Set(want.map((w) => w.geom));
+  };
+  const before = hits();
+  assert.ok(!before.has(id('post')) && !before.has(id('ball')) && before.has(id('other')));
+  // the mocap box into a group that the rays leave out
+  model.geom_group[id('other')] = 2;
+  scene.update(data);
+  assert.ok(!hits().has(id('other')));
 });
 
 test('a RayScene refuses a geom of a type it does not meet', () => {
