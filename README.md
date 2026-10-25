@@ -179,7 +179,7 @@ The model's eight rangefinders, `lidar_000` to `lidar_315`, have the same timing
 
 The spec records what the car's computer commands (`spec.Command`). On the NeoRacer it is a speed in both of the firmware's control modes: over serial from the car's computer, and from the radio in RC mode. Nothing sends the ESC a throttle, so `derive` refuses a NeoRacer spec whose computer commands one. The V2's drive board holds a speed too (`racecar_neo_v2.Drive.command`).
 
-`racecar.py` runs the speed loop, the encoder and the LiDAR around each physics step, as the car's firmware runs them whatever its program does: `racecar.start` readies a car at rest, and `racecar.step` runs a physics step with the car's command and counts it on each part. `racecar_core_adapter.py` puts them behind the `racecar_core` API that programs for the real car use. On the NeoRacer, `rc.drive.set_speed_angle(speed, angle)` asks for `speed` times the max speed, 6 m/s at full speed, and the loop holds it. Those programs run in the simulator unchanged:
+`racecar.py` runs the speed loop, the encoder and the LiDAR around each physics step, as the car's firmware runs them whatever its program does: `racecar.start` readies a car at rest, `racecar.ask` gives it the speed and the steering angle that a program asks for (a `SpeedAngle`, which the LiDAR controllers return), and `racecar.step` runs a physics step with the car's command and counts it on each part. `racecar_core_adapter.py` puts them behind the `racecar_core` API that programs for the real car use. On the NeoRacer, `rc.drive.set_speed_angle(speed, angle)` asks for `speed` times the max speed, 6 m/s at full speed, and the loop holds it. Those programs run in the simulator unchanged:
 
 ```sh
 python examples/run_racecar_core.py my_controller.py
@@ -242,7 +242,7 @@ cpu.close()
   - track generation, in `track_generation/`;
   - controllers, in `control/`;
   - the `racecar_core` adapter.
-- Code that two modules share goes in a module both of them import. For example, the steering limits and throttle shaping that both controllers use are in `control/steering.py`.
+- Code that two modules share goes in a module both of them import. For example, the steering limits and speed shaping that both controllers use are in `control/steering.py`.
 - `assets/` holds `neoracer.xml` and `racecar_neo_v2.xml` (templates, to which `assets.read_xml` adds the numbers of each car's spec), the meshes (Git LFS objects) and the tracks.
 - `js/` is the same car in MuJoCo's WebAssembly build. See [js/README.md](js/README.md).
 - `examples/` holds runnable programs, `validation/` the tests, and `users/<github-name>/` personal experiments.
