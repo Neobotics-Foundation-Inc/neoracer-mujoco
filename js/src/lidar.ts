@@ -1,15 +1,17 @@
 /**
  * The spinning LiDAR, as lidar.py models it: slots measured when the head
- * passes them, from the pose of that physics step, with one mj_multiRay
- * call. Slot i points i * 360 / slots degrees clockwise from the front and
- * reads the distance (m), or NO_RETURN where the car blocks the rear or
- * nothing lies within range.
+ * passes them, from the pose of that physics step. Its rays are a
+ * RayScene's, which finds the distances that lidar.py's mj_multiRay finds.
+ * Slot i points i * 360 / slots degrees clockwise from the front and reads
+ * the distance (m), or NO_RETURN where the car blocks the rear or nothing
+ * lies within range.
  *
  * Frame: +X forward, +Y left, +Z up.
  */
 
 import type { MjData } from '@mujoco/mujoco';
 
+import { RayScene } from './rays.js';
 import type { Mujoco, Scene } from './scene.js';
 import { FIELD_EPS, NO_RETURN, SLOT_EPS } from './generated/shared.js';
 import { type LidarParams, NEORACER_PARAMS } from './generated/spec.js';
@@ -33,37 +35,28 @@ export interface LidarState {
   readonly sweeping: Float64Array;
   /** The last complete turn: what the LiDAR reports. */
   readonly scan: Float64Array;
+  /** The scene's geoms, as its rays meet them. */
+  readonly rays: RayScene;
 }
 
 /** The distance (m) of each of slots from the LiDAR at the pose of data, or NO_RETURN. */
-function measure(mj: Mujoco, params: LidarParams, scene: Scene, data: MjData, slots: readonly number[]): Float64Array {
+function measure(params: LidarParams, scene: Scene, data: MjData, rays: RayScene, slots: readonly number[]): Float64Array {
   const out = new Float64Array(slots.length).fill(NO_RETURN);
-  const seen = slots.flatMap((slot, k) => (isVisible(params, slot) ? [k] : []));
-  if (seen.length === 0) return out;
-  const { model, car } = scene;
-  const xpos = Array.from(data.site_xpos.subarray(3 * car.lidar, 3 * car.lidar + 3) as Float64Array);
-  const R = data.site_xmat.subarray(9 * car.lidar, 9 * car.lidar + 9) as Float64Array;
-  const rays = new Array<number>(3 * seen.length);
-  seen.forEach((k, j) => {
-    const bearing = slots[k] * ((2 * Math.PI) / params.slots);
+  if (!slots.some((slot) => isVisible(params, slot))) return out;
+  rays.update(data);
+  const site = scene.car.lidar;
+  const o = data.site_xpos.subarray(3 * site, 3 * site + 3) as Float64Array;
+  const R = data.site_xmat.subarray(9 * site, 9 * site + 9) as Float64Array;
+  const d = new Float64Array(3);
+  slots.forEach((slot, k) => {
+    if (!isVisible(params, slot)) return;
+    const bearing = slot * ((2 * Math.PI) / params.slots);
     const x = Math.cos(bearing);
     const y = -Math.sin(bearing); // clockwise from +X is toward -Y
-    for (let r = 0; r < 3; r++) rays[3 * j + r] = R[3 * r] * x + R[3 * r + 1] * y;
+    for (let r = 0; r < 3; r++) d[r] = R[3 * r] * x + R[3 * r + 1] * y;
+    const t = rays.cast(o, d, params.max_range);
+    if (t !== Infinity) out[k] = t;
   });
-  const geom = new mj.IntBuffer(seen.length);
-  const dist = new mj.DoubleBuffer(seen.length);
-  try {
-    const body = model.site_bodyid[car.lidar];
-    mj.mj_multiRay(model, data, xpos, rays, null as never, true, body, geom, dist, null, seen.length, params.max_range);
-    const g = geom.GetView() as Int32Array;
-    const d = dist.GetView() as Float64Array;
-    seen.forEach((k, j) => {
-      out[k] = g[j] >= 0 && d[j] <= params.max_range ? d[j] : NO_RETURN;
-    });
-  } finally {
-    geom.delete();
-    dist.delete();
-  }
   return out;
 }
 
@@ -81,13 +74,22 @@ function checkParams(params: LidarParams): void {
 }
 
 /**
- * The LiDAR of a car that has stood still at the pose of data for a turn.
- * Throw if params is not a scan.
+ * The LiDAR of a car that has stood still at the pose of data for a turn,
+ * its rays met by rays: by default, the scene's geoms but its own body's.
+ * Building them costs a pass over every geom, so a caller that starts the
+ * LiDAR again on the same scene passes its last state's rays. Throw if
+ * params is not a scan.
  */
-export function startLidar(mj: Mujoco, params: LidarParams, scene: Scene, data: MjData): LidarState {
+export function startLidar(
+  mj: Mujoco,
+  params: LidarParams,
+  scene: Scene,
+  data: MjData,
+  rays: RayScene = new RayScene(mj, scene.model, data, scene.model.site_bodyid[scene.car.lidar]),
+): LidarState {
   checkParams(params);
-  const scan = measure(mj, params, scene, data, range(0, params.slots));
-  return { head: 0, sweeping: scan, scan };
+  const scan = measure(params, scene, data, rays, range(0, params.slots));
+  return { head: 0, sweeping: scan, scan, rays };
 }
 
 /**
@@ -95,7 +97,6 @@ export function startLidar(mj: Mujoco, params: LidarParams, scene: Scene, data: 
  * car at the pose of data: it measures the slots that its head passed.
  */
 export function sweepLidar(
-  mj: Mujoco,
   params: LidarParams,
   scene: Scene,
   data: MjData,
@@ -106,7 +107,7 @@ export function sweepLidar(
   let end = state.head + n * params.scan_rate * dt;
   if (!(end - state.head > 0 && end - state.head < n)) throw new Error(`a step of ${dt} s is not between 0 and a turn`);
   const slots = range(Math.ceil(state.head - SLOT_EPS), Math.ceil(end - SLOT_EPS));
-  const values = measure(mj, params, scene, data, slots.map((s) => s % n));
+  const values = measure(params, scene, data, state.rays, slots.map((s) => s % n));
   let sweeping = state.sweeping.slice();
   let scan = state.scan;
   slots.forEach((s, k) => {
@@ -120,5 +121,5 @@ export function sweepLidar(
     });
     end -= n;
   }
-  return { head: Math.max(end, 0), sweeping, scan };
+  return { head: Math.max(end, 0), sweeping, scan, rays: state.rays };
 }

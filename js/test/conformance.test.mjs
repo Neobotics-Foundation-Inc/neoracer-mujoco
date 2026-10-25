@@ -112,7 +112,7 @@ test('a turn swept from 13 poses reads what Python reads', () => {
   let state = startLidar(mj, LIDAR, scene, data);
   for (const qpos of fixtures.sweep.poses.slice(1)) {
     pose(qpos);
-    state = sweepLidar(mj, LIDAR, scene, data, state, model.opt.timestep);
+    state = sweepLidar(LIDAR, scene, data, state, model.opt.timestep);
   }
   assert.ok(maxDiff(state.scan, fixtures.sweep.scan) < 1e-12);
   assert.equal(state.head, fixtures.sweep.head);

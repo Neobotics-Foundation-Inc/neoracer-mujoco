@@ -1,0 +1,111 @@
+/**
+ * RayScene against MuJoCo's own rays: on a scene with every geom type it
+ * meets, it finds the distances that mj_multiRay finds.
+ */
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+
+import loadMujoco from '@mujoco/mujoco';
+
+import { RayScene, compose } from '../dist/index.js';
+
+const mj = await loadMujoco();
+const loop = readFileSync(new URL('../../assets/tracks/loop_corridor.xml', import.meta.url), 'utf8');
+
+/** loop_corridor with one geom of each type a RayScene meets, an invisible box, and a mocap box. */
+const SHAPES = `
+  <asset>
+    <mesh name="cone" vertex="0 0 .5  .2 0 0  .1 .17 0  -.1 .17 0  -.2 0 0  -.1 -.17 0  .1 -.17 0"/>
+    <mesh name="deck" vertex="0 0 .1  .8 0 .2  .8 .5 .2  0 .5 .1  0 0 0  .8 0 0  .8 .5 0  0 .5 0"/>
+  </asset>
+  <worldbody>
+    <geom name="cone" type="mesh" mesh="cone" pos="3.5 .5 0"/>
+    <geom name="deck" type="mesh" mesh="deck" pos="-3.8 -.5 0" euler="0 0 20"/>
+    <geom name="tilted" type="box" size=".2 .1 .15" pos="0 2.5 .2" euler="10 20 30"/>
+    <geom name="post" type="cylinder" size=".1 .3" pos="-1 -2.5 .3" euler="0 30 0"/>
+    <geom name="ball" type="sphere" size=".15" pos="1 -2.5 .2"/>
+    <geom name="ramp" type="plane" size=".5 .4 .05" pos="-3.5 2.5 .1" euler="15 0 0"/>
+    <geom name="ghost" type="box" size=".3 .3 .3" pos="0 -2.5 .3" rgba="1 1 1 0"/>
+    <body name="other" mocap="true" pos="2 2.5 .1">
+      <geom name="other" type="box" size=".24 .14 .1"/>
+    </body>
+  </worldbody>`;
+
+const xml = loop.replace(/<\/mujoco>\s*$/, `${SHAPES}</mujoco>`);
+
+/** n rays from random points over the track, in random directions, most near the horizontal. */
+function rays(n, seed) {
+  let s = seed;
+  const rand = () => ((s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+  return Array.from({ length: n }, () => {
+    const o = [8 * rand() - 4, 6 * rand() - 3, 0.02 + 0.5 * rand()];
+    const yaw = 2 * Math.PI * rand(), pitch = rand() < 0.8 ? 0.2 * (rand() - 0.5) : Math.PI * (rand() - 0.5);
+    return { o, d: [Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch)] };
+  });
+}
+
+/**
+ * mj_multiRay's first geom and distance for each ray, or -1 and Infinity, as
+ * the LiDAR casts: every group, static geoms, one body excluded.
+ */
+function mujocoRays(model, data, all, exclude, maxRange) {
+  return all.map(({ o, d }) => {
+    const geom = new mj.IntBuffer(1), dist = new mj.DoubleBuffer(1);
+    try {
+      mj.mj_multiRay(model, data, o, d, null, true, exclude, geom, dist, null, 1, maxRange);
+      const g = geom.GetView()[0], t = dist.GetView()[0];
+      return g >= 0 && t <= maxRange ? { geom: g, t } : { geom: -1, t: Infinity };
+    } finally {
+      geom.delete();
+      dist.delete();
+    }
+  });
+}
+
+const sameDistance = (t, want) => t === want || Math.abs(t - want) < 1e-9;
+
+test('a RayScene finds the distances that mj_multiRay finds', () => {
+  const { model, car } = compose(mj, xml);
+  const data = new mj.MjData(model);
+  mj.mj_forward(model, data);
+  const exclude = model.site_bodyid[car.lidar];
+  const scene = new RayScene(mj, model, data, exclude);
+  const all = rays(5000, 7);
+  const want = mujocoRays(model, data, all, exclude, 10);
+  all.forEach(({ o, d }, i) => {
+    const t = scene.cast(o, d, 10);
+    assert.ok(sameDistance(t, want[i].t), `ray ${i}: ${t} against ${want[i].t}`);
+  });
+  const hit = new Set(want.map((w) => mj.mj_id2name(model, mj.mjtObj.mjOBJ_GEOM.value, w.geom)));
+  for (const name of ['cone', 'deck', 'tilted', 'post', 'ball', 'ramp', 'other', 'floor', 'outer_top']) {
+    assert.ok(hit.has(name), `no ray met ${name}`);
+  }
+});
+
+test('a RayScene sees a moving geom where data has it after update', () => {
+  const { model, car } = compose(mj, xml);
+  const data = new mj.MjData(model);
+  mj.mj_forward(model, data);
+  const exclude = model.site_bodyid[car.lidar];
+  const scene = new RayScene(mj, model, data, exclude);
+  const mocap = model.body_mocapid[mj.mj_name2id(model, mj.mjtObj.mjOBJ_BODY.value, 'other')];
+  data.mocap_pos.set([-2, 2.5, 0.1], 3 * mocap);
+  mj.mj_forward(model, data);
+  scene.update(data);
+  const all = rays(2000, 11);
+  const want = mujocoRays(model, data, all, exclude, 10);
+  all.forEach(({ o, d }, i) => {
+    const t = scene.cast(o, d, 10);
+    assert.ok(sameDistance(t, want[i].t), `ray ${i}: ${t} against ${want[i].t}`);
+  });
+});
+
+test('a RayScene refuses a geom of a type it does not meet', () => {
+  const capsule = loop.replace(/<\/mujoco>\s*$/, '<worldbody><geom type="capsule" size=".1 .2"/></worldbody></mujoco>');
+  const { model, car } = compose(mj, capsule);
+  const data = new mj.MjData(model);
+  mj.mj_forward(model, data);
+  assert.throws(() => new RayScene(mj, model, data, model.site_bodyid[car.lidar]), /capsule|type/);
+});
