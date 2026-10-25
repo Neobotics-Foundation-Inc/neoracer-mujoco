@@ -110,8 +110,8 @@ def main(out: str) -> None:
         "encoder_speed": rc.physics.get_encoder_speed(),
         "throttle": float(rc_data.bind_scalar(car.drive).ctrl[0])
         / float(model.bind_scalar(car.drive).ctrlrange[1]),
-        "scan": rc.lidar._state.scan.tolist(),
-        "head": rc.lidar._state.head,
+        "scan": rc._car.state.lidar.state.scan.tolist(),
+        "head": rc._car.state.lidar.state.head,
     }
 
     fixtures = {
