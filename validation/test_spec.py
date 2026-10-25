@@ -426,14 +426,19 @@ def test_the_car_weighs_its_mass(scene):
 
 
 def test_a_prism_is_convex_counterclockwise_and_upright():
-    """A prism's corners turn left all the way round, and its bottom is below
-    its top: the outline is refused otherwise, since MuJoCo would collide with
-    the convex hull of corners given clockwise or round a dent."""
+    """A prism's corners run counterclockwise round a convex polygon, and its
+    bottom is below its top: the outline is refused otherwise, since MuJoCo
+    would collide with the convex hull of corners given clockwise, round a
+    dent or with crossing edges, and with nothing for fewer than three."""
     square = ((-0.1, -0.1), (0.1, -0.1), (0.1, 0.1), (-0.1, 0.1))
+    star = ((0.0, 0.3), (-0.2, -0.3), (0.3, 0.1), (-0.3, 0.1), (0.2, -0.3))
     spec.Prism(square, 0.0, 0.1)
     for name, corners, bottom, top in [
         ("clockwise", square[::-1], 0.0, 0.1),
         ("dented", (*square[:2], (0.0, 0.0), *square[2:]), 0.0, 0.1),
+        ("crossing", star, 0.0, 0.1),
+        ("empty", (), 0.0, 0.1),
+        ("a segment", square[:2], 0.0, 0.1),
         ("flat", square, 0.1, 0.1),
     ]:
         with case(name), pytest.raises(ValueError):

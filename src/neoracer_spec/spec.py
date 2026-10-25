@@ -97,13 +97,20 @@ class Prism:
 
     def __post_init__(self) -> None:
         n = len(self.corners)
+        if n < 3:
+            raise ValueError(f"a polygon has at least 3 corners, not {n}")
+        # Convex and counterclockwise: every other corner strictly left of
+        # each edge, which a polygon whose edges cross fails.
         for i in range(n):
-            (ax, ay), (bx, by), (cx, cy) = (self.corners[(i + k) % n] for k in range(3))
-            if (bx - ax) * (cy - by) - (by - ay) * (cx - bx) <= 0:
-                raise ValueError(
-                    f"corner {(i + 1) % n} does not turn left: the corners must"
-                    " run counterclockwise round a convex polygon"
-                )
+            (ax, ay), (bx, by) = self.corners[i], self.corners[(i + 1) % n]
+            for k, (px, py) in enumerate(self.corners):
+                if k in (i, (i + 1) % n):
+                    continue
+                if (bx - ax) * (py - ay) - (by - ay) * (px - ax) <= 0:
+                    raise ValueError(
+                        f"corner {k} is not left of the edge from corner {i}: the"
+                        " corners must run counterclockwise round a convex polygon"
+                    )
         if not self.bottom < self.top:
             raise ValueError(f"bottom {self.bottom} is not below top {self.top}")
 
