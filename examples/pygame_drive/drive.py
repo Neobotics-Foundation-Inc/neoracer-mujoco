@@ -10,7 +10,7 @@ Usage (plain python3, NOT mjpython: pygame owns the window):
     python3 -m examples.pygame_drive.drive --bare                   # car on its own plane
 
 Keyboard:                          Gamepad (found at start, overrides keys):
-    W / S      throttle / reverse      right trigger   throttle
+    W / S      forward / reverse       right trigger   forward
     A / D      steer left / right      left trigger    reverse
     Space      hard stop               left stick X    steer
     Backspace  reset car (un-flip)     Start           reset car
@@ -44,11 +44,9 @@ from examples.driving import (
     load_scene,
     next_drive,
 )
-from neoracer_mujoco import assets, sensors
+from neoracer_mujoco import assets, racecar, sensors
 
-SHAPING = Shaping(
-    throttle=Rates(toward=2.5, back=2.5), steer=Rates(toward=4.0, back=4.0)
-)
+SHAPING = Shaping(speed=Rates(toward=2.5, back=2.5), steer=Rates(toward=4.0, back=4.0))
 """The command follows the input both ways at one rate. The steer's is fast, to
 smooth the keys' all-or-nothing input, which a stick barely notices."""
 
@@ -127,17 +125,15 @@ def event_action(gamepad: GamepadParams, event: pygame.event.Event) -> Action:
 
 def keyboard_inputs(keys: pygame.key.ScancodeWrapper) -> Drive:
     return Drive(
-        throttle=float(keys[pygame.K_w] - keys[pygame.K_s]),
+        speed=float(keys[pygame.K_w] - keys[pygame.K_s]),
         steer=float(keys[pygame.K_a] - keys[pygame.K_d]),
     )
 
 
 def gamepad_inputs(p: GamepadParams, pad: pygame.joystick.JoystickType) -> Drive:
-    throttle = (pad.get_axis(p.accel_axis) + 1) / 2 - (
-        pad.get_axis(p.brake_axis) + 1
-    ) / 2
+    speed = (pad.get_axis(p.accel_axis) + 1) / 2 - (pad.get_axis(p.brake_axis) + 1) / 2
     steer = -pad.get_axis(p.steer_axis)  # stick right = steer right = negative
-    return Drive(throttle=throttle, steer=0.0 if abs(steer) < p.deadzone else steer)
+    return Drive(speed=speed, steer=0.0 if abs(steer) < p.deadzone else steer)
 
 
 def draw_lidar(hud: HudParams, screen: pygame.Surface, ranges: sensors.Vec8) -> None:
@@ -195,6 +191,8 @@ def main(track: str | None) -> None:
     scene = load_scene(track)
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
+    car_params = racecar.neoracer_params()
+    racer = racecar.start(car_params, scene, data)
     state = Drive()
 
     # The offscreen buffer must be at least the window size before the
@@ -225,6 +223,7 @@ def main(track: str | None) -> None:
                     running = False
                 case "reset_car":
                     mujoco.mj_resetData(model, data)
+                    racer = racecar.start(car_params, scene, data)
                     state = Drive()
                 case "toggle_timer":
                     timing = not timing
@@ -244,7 +243,7 @@ def main(track: str | None) -> None:
         state = next_drive(SHAPING, state, inputs, dt)
         # The car may touch the walls here: Backspace or Start resets it.
         start = data.time
-        apply_and_step(scene, data, state, frame_dt(SHAPING, dt))
+        racer, _ = apply_and_step(scene, data, racer, state, frame_dt(SHAPING, dt))
 
         follow_car(view.cam, cam, data, car)
         renderer.update_scene(data, camera=cam)
