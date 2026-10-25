@@ -2,35 +2,40 @@
 What the two driving demos share: manual_drive.py, with glfw and the
 keyboard, and pygame_drive/, with pygame and the keyboard or a gamepad.
 Both put a car on a track, follow it with a chase camera, and move its
-command toward the driver's input at a rate of their own.
+command toward the driver's input at a rate of their own. The command asks
+the car's speed loop for a speed, as racecar_core's set_speed_angle does on
+the real car.
 
 Frame: +X forward, +Y left, +Z up. An input and a Drive are in [-1, 1]:
-+ throttle = forward, + steer = left, and 1 is full throttle or full lock,
-the car's steer limit (contract.actuator_limits).
++ speed = forward, + steer = left, and 1 is the speed loop's full speed
+(speed_loop.target) or full lock, the car's steer limit
+(contract.actuator_limits).
 
     shaping, drive = Shaping(...), Drive()
+    car = racecar.start(racecar.neoracer_params(), scene, data)
     drive = next_drive(shaping, drive, inputs, dt)
-    touched = apply_and_step(scene, data, drive, frame_dt(shaping, dt))
+    car, touched = apply_and_step(scene, data, car, drive, frame_dt(shaping, dt))
 """
 
 import math
 from dataclasses import dataclass
+from typing import assert_never
 
 import mujoco
 import numpy as np
 import numpy.typing as npt
 
-from neoracer_mujoco import assets, collision, contract, sim
-from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco import assets, collision, contract, racecar, speed_loop
+from neoracer_mujoco.control import SpeedAngle
 from neoracer_mujoco.scene import Car, Scene
 
 
 @dataclass(frozen=True)
 class Drive:
-    """A throttle and a steer, each in [-1, 1]: the driver's input, or the
+    """A speed and a steer, each in [-1, 1]: the driver's input, or the
     command that follows it."""
 
-    throttle: float = 0.0
+    speed: float = 0.0
     steer: float = 0.0
 
 
@@ -47,7 +52,7 @@ class Rates:
 class Shaping:
     """How a demo's command follows the driver's input."""
 
-    throttle: Rates
+    speed: Rates
     steer: Rates
     max_dt: float = 0.1
     """The longest frame (s). A longer frame is cut, so physics never has to
@@ -72,25 +77,32 @@ def next_drive(s: Shaping, drive: Drive, inputs: Drive, dt: float) -> Drive:
     """The command after a frame of dt (s) with inputs held."""
     dt = frame_dt(s, dt)
     return Drive(
-        throttle=follow(s.throttle, drive.throttle, inputs.throttle, dt),
+        speed=follow(s.speed, drive.speed, inputs.speed, dt),
         steer=follow(s.steer, drive.steer, inputs.steer, dt),
     )
 
 
-def apply_and_step(scene: Scene, data: mujoco.MjData, drive: Drive, dt: float) -> bool:
-    """Send drive to the car, a steer of 1 at its steer limit, and step the
-    physics for dt (s). Return whether the car touched a wall in a step."""
+def apply_and_step(
+    scene: Scene, data: mujoco.MjData, car: racecar.CarState, drive: Drive, dt: float
+) -> tuple[racecar.CarState, bool]:
+    """Ask car for drive, a speed of 1 the speed loop's full speed and a
+    steer of 1 the car's steer limit, and step the physics for dt (s).
+    Return the car after the steps and whether it touched a wall in one."""
+    match car.drive:
+        case racecar.SpeedLoop(params=params):
+            target = float(speed_loop.target(params, drive.speed))
+        case racecar.Throttle():
+            raise ValueError("the driving demos drive a car with a speed loop")
+        case _:
+            assert_never(car.drive)
     limits = contract.actuator_limits(scene.model, scene.car)
-    command = ControlCommand(
-        throttle=drive.throttle, steer=drive.steer * limits.steer_rad
-    )
-    sim.apply_command(scene.car, data, command)
+    car = racecar.ask(car, SpeedAngle(target, drive.steer * limits.steer_rad))
     touched = False
     end = data.time + dt
     while data.time < end:
-        mujoco.mj_step(scene.model, data)
+        car = racecar.step(scene, data, car)
         touched |= collision.car_touches_wall(data, scene.car)
-    return touched
+    return car, touched
 
 
 def load_scene(track: str | None) -> Scene:

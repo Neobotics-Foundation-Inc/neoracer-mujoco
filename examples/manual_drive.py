@@ -11,12 +11,13 @@ mjpython runs the script on a second thread, but glfw must create its window on 
 With mjpython, the script stops with "NSWindow should only be instantiated on the main thread".
 
 The script opens a glfw window and reads the held keys in each frame.
-If you hold a throttle key, the throttle increases. If you release it, the throttle decreases to 0.
+If you hold a speed key, the speed that the car asks its speed loop for increases.
+If you release it, that speed decreases to 0, and the loop brakes the car to a stop.
 If you release the steer keys, the steer returns to the center.
 
-    Up / W   throttle (hold to build speed)     Left  / A   steer left
+    Up / W   forward (hold to build speed)      Left  / A   steer left
     Down / S reverse                            Right / D   steer right
-    Space    stop (throttle and steer to 0)     Backspace   reset the car
+    Space    stop (speed and steer to 0)        Backspace   reset the car
     Esc      quit
 
 If the car touches a wall (see neoracer_mujoco.collision), the script resets the car.
@@ -24,8 +25,8 @@ A reset puts the car back at its start position, the same as Backspace.
 
 Frame: +X forward, +Y left, +Z up.
 Actuators (see neoracer_mujoco.contract):
-  motor             = terminal voltage (V), + = forward; sim.apply_command
-                      sends a throttle in [-1, 1] as that fraction of the battery
+  motor             = terminal voltage (V), + = forward; the firmware's speed
+                      loop (racecar.py) sets it to hold the speed asked for
   steer_servo       = target angle (rad), + = left, up to the car's full lock
                       (contract.actuator_limits)
 """
@@ -49,7 +50,7 @@ from examples.driving import (
     load_scene,
     next_drive,
 )
-from neoracer_mujoco import assets, collision, contract, sensors
+from neoracer_mujoco import assets, collision, contract, racecar, sensors
 from neoracer_mujoco.scene import Scene
 
 
@@ -57,11 +58,11 @@ from neoracer_mujoco.scene import Scene
 class ManualDriveParams:
     """Change these values to change how the car responds to the keys. The
     rates are per second, so the response does not depend on the frame rate:
-    a held throttle key builds the throttle, and a held steer key turns the
-    wheels toward full lock."""
+    a held speed key builds the speed asked for, and a held steer key turns
+    the wheels toward full lock."""
 
     shaping: Shaping = Shaping(
-        throttle=Rates(toward=2.3, back=1.7), steer=Rates(toward=3.4, back=5.7)
+        speed=Rates(toward=2.3, back=1.7), steer=Rates(toward=3.4, back=5.7)
     )
     cam: ChaseCam = ChaseCam()
     window_px: tuple[int, int] = (900, 600)
@@ -110,7 +111,7 @@ def keyboard_inputs(held: frozenset[int]) -> Drive:
     left = glfw.KEY_LEFT in held or glfw.KEY_A in held
     right = glfw.KEY_RIGHT in held or glfw.KEY_D in held
     return Drive(
-        throttle=1.0 if forward else -1.0 if reverse else 0.0,
+        speed=1.0 if forward else -1.0 if reverse else 0.0,
         steer=1.0 if left else -1.0 if right else 0.0,
     )
 
@@ -120,6 +121,8 @@ def drive(scene: Scene, params: ManualDriveParams) -> None:
     window closes or Esc is pressed."""
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
+    car_params = racecar.neoracer_params()
+    racer = racecar.start(car_params, scene, data)
 
     if not glfw.init():
         raise RuntimeError("glfw.init() failed")
@@ -145,6 +148,7 @@ def drive(scene: Scene, params: ManualDriveParams) -> None:
             break
         if glfw.KEY_BACKSPACE in held:
             mujoco.mj_resetData(model, data)
+            racer = racecar.start(car_params, scene, data)
             command = Drive()
 
         now = glfw.get_time()
@@ -158,8 +162,10 @@ def drive(scene: Scene, params: ManualDriveParams) -> None:
 
         # Step the physics as far as the frame took in real time, at most
         # the shaping's max_dt.
-        if apply_and_step(scene, data, command, dt):
+        racer, touched = apply_and_step(scene, data, racer, command, dt)
+        if touched:
             collision.reset_car(model, data)
+            racer = racecar.start(car_params, scene, data)
             command = Drive()
 
         follow_car(params.cam, cam, data, car)

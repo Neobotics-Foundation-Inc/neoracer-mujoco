@@ -1,21 +1,23 @@
 """
 Run the NeoRacer car in the MuJoCo viewer with a demo controller.
 
-The controller applies a constant throttle and a sinusoidal steer.
-The script prints one diagnostic line every print_every_steps physics steps.
+The controller asks the car's speed loop for a constant speed, and steers
+along a sine. The script prints one diagnostic line every print_every_steps
+physics steps.
 
 Usage:
     mjpython -m examples.run               # safe mode
     mjpython -m examples.run --mode full   # full mode
 
-Safe mode uses a low throttle and a speed limit.
-Full mode uses a high throttle and no speed limit. At high speed, the car rolls over.
+Safe mode asks for a low speed and steers gently.
+Full mode asks for the loop's full speed, more than the motor reaches, so the
+loop sends full throttle, and it steers harder.
 In both modes, the script prints a warning when the roll angle is more than roll_warn_deg.
 
 Frame: +X forward, +Y left, +Z up.
 Actuators (see neoracer_mujoco.contract):
-  motor             = terminal voltage (V), + = forward; sim.apply_command
-                      sends a throttle in [-1, 1] as that fraction of the battery
+  motor             = terminal voltage (V), + = forward; the firmware's speed
+                      loop (racecar.py) sets it to hold the speed asked for
   steer_servo       = target angle (rad), + = left.
                       Two Ackermann equality constraints set the fl and fr steer angles from it.
 """
@@ -31,9 +33,11 @@ from typing import Literal
 import mujoco
 import mujoco.viewer
 
-from neoracer_mujoco import assets, contract, sensors, sim
-from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco import assets, contract, racecar, sensors
+from neoracer_mujoco.control import SpeedAngle
 from neoracer_mujoco.scene import Car
+from neoracer_spec import derive
+from neoracer_spec.neoracer import NEORACER
 
 type Mode = Literal["safe", "full"]
 
@@ -43,15 +47,12 @@ class DriveParams:
     """Inputs of the demo controller and the log settings. The defaults are
     safe mode."""
 
-    throttle: float = 0.42
-    """The constant throttle, in [-1, 1]."""
+    speed: float = 1.5
+    """The speed (m/s) that the controller asks for."""
     steer_amp_rad: float = 0.15
     """The amplitude of the steer sine."""
     steer_freq_hz: float = 0.30
     """The frequency of the steer sine."""
-    speed_limit_ms: float | None = 1.5
-    """The speed (m/s) above which the throttle is 0 and the car coasts, or None
-    for no limit."""
     print_every_steps: int = 20
     """The physics steps between two log lines."""
     roll_warn_deg: float = 25.0
@@ -63,20 +64,15 @@ class DriveParams:
             raise ValueError(
                 f"print_every_steps must be >= 1, got {self.print_every_steps}"
             )
-        if self.speed_limit_ms is not None and not self.speed_limit_ms > 0:
-            raise ValueError(
-                f"speed_limit_ms must be > 0 or None, got {self.speed_limit_ms}"
-            )
 
 
 MODES: Mapping[Mode, DriveParams] = MappingProxyType(
     {
         "safe": DriveParams(),
         "full": DriveParams(
-            throttle=1.0,
+            speed=derive.derive(NEORACER).speed_loop.max_speed,
             steer_amp_rad=0.35,
             steer_freq_hz=0.40,
-            speed_limit_ms=None,
         ),
     }
 )
@@ -92,21 +88,18 @@ def _roll_pitch_deg(q: sensors.Quat) -> tuple[float, float]:
     return roll, pitch
 
 
-def _command(params: DriveParams, t: float, speed_ms: float) -> ControlCommand:
-    """The command at time t (s): a constant throttle and a sinusoidal
-    steer (rad). If the speed (m/s) is at or above the speed limit, the
-    throttle is 0."""
+def _command(params: DriveParams, t: float) -> SpeedAngle:
+    """The command at time t (s): a constant speed (m/s) and a sinusoidal
+    steer (rad)."""
     steer = params.steer_amp_rad * math.sin(2 * math.pi * params.steer_freq_hz * t)
-    limit = params.speed_limit_ms
-    throttle = 0.0 if limit is not None and speed_ms >= limit else params.throttle
-    return ControlCommand(throttle=throttle, steer=steer)
+    return SpeedAngle(target=params.speed, steer=steer)
 
 
 def _log(
     params: DriveParams,
     data: mujoco.MjData,
     car: Car,
-    command: ControlCommand,
+    command: SpeedAngle,
     readings: sensors.SensorReadings,
     speed_ms: float,
 ) -> None:
@@ -128,7 +121,7 @@ def _log(
 
     print(
         f"t={data.time:6.2f}s "
-        f"thr={command.throttle:+.2f} steer={command.steer:+.3f}"
+        f"ask={command.target:+.2f}m/s steer={command.steer:+.3f}"
         f"(fl={readings.fl_steer_pos:+.3f}/fr={readings.fr_steer_pos:+.3f}) "
         f"spd={speed_ms:+5.2f}m/s "
         f"z={car_z:.3f}m "
@@ -150,12 +143,10 @@ def main() -> None:
     model, car = scene.model, scene.car
     data = mujoco.MjData(model)
     wheel_radius = contract.wheel_radius(model, car)
+    racer = racecar.start(racecar.neoracer_params(), scene, data)
 
     print(f"NeoRacer viewer — mode={args.mode}")
-    print(
-        f"  throttle={params.throttle}  steer_amp={params.steer_amp_rad} rad  "
-        f"speed_limit={params.speed_limit_ms} m/s"
-    )
+    print(f"  speed={params.speed} m/s  steer_amp={params.steer_amp_rad} rad")
     print()
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
@@ -172,9 +163,8 @@ def main() -> None:
             readings = sensors.read(car.sensors, data)
             speed = sensors.motor_encoder_rad_s(readings) * wheel_radius  # m/s
 
-            command = _command(params, data.time, speed)
-            sim.apply_command(car, data, command)
-            mujoco.mj_step(model, data)
+            command = _command(params, data.time)
+            racer = racecar.step(scene, data, racecar.ask(racer, command))
             viewer.sync()
 
             step += 1
