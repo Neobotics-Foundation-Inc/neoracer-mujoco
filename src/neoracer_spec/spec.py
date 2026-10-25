@@ -99,7 +99,10 @@ class Prism:
         n = len(self.corners)
         if n < 3:
             raise ValueError(f"a polygon has at least 3 corners, not {n}")
-        values = [v for corner in self.corners for v in corner] + [self.bottom, self.top]
+        values = [v for corner in self.corners for v in corner] + [
+            self.bottom,
+            self.top,
+        ]
         if not all(math.isfinite(v) for v in values):
             raise ValueError("a prism's corners and heights must be finite")
         # Convex and counterclockwise: every other corner strictly left of
