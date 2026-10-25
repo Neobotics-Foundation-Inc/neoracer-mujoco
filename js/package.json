@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test test/conformance.test.mjs",
+    "test": "npm run build && node --test test/conformance.test.mjs test/rays.test.mjs",
     "prepack": "npm run build"
   },
   "peerDependencies": {
