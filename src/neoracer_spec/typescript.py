@@ -217,7 +217,9 @@ def _type(t: object) -> str:
     if origin is tuple:
         if len(args) == 2 and args[1] is Ellipsis:
             inner = _type(args[0])
-            return f"readonly ({inner})[]" if " | " in inner else f"readonly {inner}[]"
+            # [] binds tighter than | and than readonly.
+            bare = " | " not in inner and not inner.startswith("readonly ")
+            return f"readonly {inner}[]" if bare else f"readonly ({inner})[]"
         return f"readonly [{', '.join(_type(a) for a in args)}]"
     if dataclasses.is_dataclass(origin) and isinstance(origin, type):
         return f"{origin.__name__}<{', '.join(_type(a) for a in args)}>"

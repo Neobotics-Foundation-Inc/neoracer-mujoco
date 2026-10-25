@@ -83,6 +83,15 @@ class CollisionBox:
 
 
 @dataclass(frozen=True)
+class CollisionMesh:
+    """A convex mesh that the car's body collides with: the geom and the
+    mesh of that name, the convex hull of vertices, which MuJoCo makes."""
+
+    name: str
+    vertices: tuple[Vec3, ...]
+
+
+@dataclass(frozen=True)
 class LidarBeams:
     """The LiDAR's eight beams, one every 45 degrees counterclockwise from
     the scan's bearing 0: where they start, where they point, and when they
@@ -186,7 +195,8 @@ class Model:
     spawn_height: float
     """The body frame's height above the floor at spawn."""
     inertial: Inertial
-    boxes: tuple[CollisionBox, ...]
+    shapes: tuple[CollisionBox | CollisionMesh, ...]
+    """What the car's body collides with."""
     imu_position: Vec3
     lidar: LidarBeams
     wheels: Wheels

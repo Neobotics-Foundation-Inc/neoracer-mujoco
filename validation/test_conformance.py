@@ -110,20 +110,42 @@ def test_actuator_contract(scene):
     assert driven == names, f"got {sorted(names)}"
 
 
-def test_lidar_rays_start_at_the_lidar_inside_a_collision_box(scene):
+def _inside(model: mujoco.MjModel, geom: int, point: np.ndarray) -> bool:
+    """Whether point, in the frame of geom's body, is inside geom, a box or a
+    convex mesh."""
+    rot = np.zeros(9)
+    mujoco.mju_quat2Mat(rot, model.geom_quat[geom])
+    local = rot.reshape(3, 3).T @ (point - model.geom_pos[geom])
+    match mujoco.mjtGeom(model.geom_type[geom]):
+        case mujoco.mjtGeom.mjGEOM_BOX:
+            return bool(np.all(np.abs(local) < model.geom_size[geom]))
+        case mujoco.mjtGeom.mjGEOM_MESH:
+            mesh = model.geom_dataid[geom]
+            first, count = model.mesh_vertadr[mesh], model.mesh_vertnum[mesh]
+            verts = model.mesh_vert[first : first + count]
+            start, faces = model.mesh_faceadr[mesh], model.mesh_facenum[mesh]
+            tri = verts[model.mesh_face[start : start + faces]]
+            # Each face's outward normal, by its vertices' counterclockwise order.
+            normal = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+            return bool(np.all(np.einsum("ij,ij->i", normal, local - tri[:, 0]) < 0))
+        case other:
+            raise ValueError(f"no inside test for a {other.name}")
+
+
+def test_lidar_rays_start_at_the_lidar_inside_the_body(scene):
     """The LiDAR mount and its 8 ray sites are at one point of the car body,
-    the LiDAR's center, inside one of the car body's collision boxes, which
+    the LiDAR's center, inside one of the car body's collision geoms, which
     reaches the top of the LiDAR. A rangefinder ignores the geoms of its own
     body, so the rays leave the car. The ray tests use horizontal distances
     only, so they cannot see this height."""
     model, spec = scene.model, scene.spec
     mount = model.bind_scalar(spec.site("lidar_mount"))
-    boxes = [
-        model.bind_scalar(g)
+    solid = [
+        model.bind_scalar(g).id
         for g in scene.car.body.geoms
-        if g.type == mujoco.mjtGeom.mjGEOM_BOX and (g.contype or g.conaffinity)
+        if g.contype or g.conaffinity
     ]
-    assert any(np.all(np.abs(mount.pos - b.pos) < b.size) for b in boxes)
+    assert any(_inside(model, g, mount.pos) for g in solid)
     for name in sensors.LIDAR_BEAM_ORDER:
         site = model.bind_scalar(spec.site(name))
         assert int(site.bodyid[0]) == model.bind_scalar(scene.car.body).id, name

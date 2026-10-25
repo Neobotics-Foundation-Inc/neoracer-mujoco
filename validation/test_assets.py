@@ -160,7 +160,7 @@ def test_a_scene_without_visuals_keeps_the_track_meshes():
     _mesh_geom(track, track.worldbody, "track_sign", mass=0.0)
     scene = assets.compose(track, visuals=False)
     assert scene.spec.geom("track_sign") is not None
-    assert scene.model.nmesh == 1
+    assert scene.spec.mesh("track_sign") is not None
 
 
 def test_an_mjz_compiles_to_the_model_of_its_xml(tmp_path):

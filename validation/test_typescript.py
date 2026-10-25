@@ -93,6 +93,18 @@ def test_the_values_are_checked_against_their_types():
     assert f"slots: {derive.derive(NEORACER).lidar.slots}," in TEXT
 
 
+def test_a_tuple_of_any_length_wraps_an_element_type_that_needs_it():
+    """[] binds tighter than | and than readonly, so an element type with
+    either is in parentheses."""
+    for t, ts in [
+        (tuple[float, ...], "readonly number[]"),
+        (tuple[float | str, ...], "readonly (number | string)[]"),
+        (tuple[tuple[float, float], ...], "readonly (readonly [number, number])[]"),
+    ]:
+        with case(ts):
+            assert typescript._type(t) == ts
+
+
 def test_a_type_with_no_typescript_is_refused():
     with pytest.raises(TypeError, match="no TypeScript type"):
         typescript._type(dict[str, float])

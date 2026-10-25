@@ -40,6 +40,10 @@
         <mesh name="vis_rl_wheel" file="meshes/rl_wheel.STL"/>
         <mesh name="vis_rr_wheel" file="meshes/rr_wheel.STL"/>
         <mesh name="vis_lidar"    file="meshes/lidar.STL"/>
+
+        <!-- The chassis' collision mesh: the convex hull of its vertices, which
+             the spec's outline gives (neoracer_spec.derive). -->
+        <mesh name="chassis"/>
     </asset>
 
     <default>
@@ -117,13 +121,14 @@
             -->
             <inertial/>
 
-            <!-- Chassis collision box: the measured body, from the bottom of the
-                 chassis tub to the top of the LiDAR. Collision only; mass set
-                 via <inertial> above. -->
-            <geom name="chassis" type="box" rgba=".3 .6 .3 0.1" mass="0"/>
+            <!-- Chassis collision mesh: the measured body's outline seen from
+                 above, from the bottom of the chassis tub to the top of the LiDAR.
+                 What the car collides with and what other cars' LiDARs see; mass
+                 set via <inertial> above. -->
+            <geom name="chassis" type="mesh" mesh="chassis" rgba=".3 .6 .3 0.1" mass="0"/>
             <!-- Cosmetic chassis mesh (contype/conaffinity=0 → no physics). It is the
                  older osracer CAD model, not the production car, so it only roughly
-                 fills the box; it keeps its old place relative to the wheels. -->
+                 fills the outline; it keeps its old place relative to the wheels. -->
             <geom name="vis_chassis" type="mesh" mass="0" mesh="vis_chassis"
                   pos="0.033 0 0.1026"
                   contype="0" conaffinity="0"

@@ -63,7 +63,7 @@ MASS_MIN, MASS_MAX = 1.0, 8.0
 is its spec's Chassis.mass. The test checks the total mass, not the mass of
 each geom, so a mesh can carry mass (a dense battery or motor). If a mesh uses
 MuJoCo's default density of 1000 kg/m³, the total mass is above MASS_MAX: the
-chassis box as solid water is 21.3 kg.
+chassis' outline as solid water is 19.8 kg.
 
 Limit: if a new car is really heavier, widen this band for its car family. For
 an exact check, compare with the documented mass of that car instead."""

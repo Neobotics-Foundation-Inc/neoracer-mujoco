@@ -21,7 +21,6 @@ from .provenance import (
 )
 from .spec import (
     Battery,
-    Box,
     Camera,
     Chassis,
     Command,
@@ -32,6 +31,7 @@ from .spec import (
     InertiaReference,
     Lidar,
     MotorEncoder,
+    Prism,
     Resolution,
     ServoRating,
     ServoSteps,
@@ -143,15 +143,27 @@ NEORACER = Spec(
             "the URDF's base_link, scaled to the chassis' mass; the URDF is an"
             " older, lighter car",
         ),
-        collision_box=measured(
-            Box(
-                center=(0.016865, -0.00287, 0.069),
-                half_size=(0.240635, 0.12042, 0.09198),
+        outline=measured(
+            Prism(
+                corners=(
+                    (-0.22377, -0.08490),
+                    (-0.15100, -0.11798),
+                    (0.15154, -0.12352),
+                    (0.25531, -0.08040),
+                    (0.25967, 0.07540),
+                    (0.15223, 0.11751),
+                    (-0.15198, 0.11755),
+                    (-0.22377, 0.08489),
+                ),
+                bottom=-0.02298,
+                top=0.16098,
             ),
             CAD,
-            note="the body, 481 x 241 x 184 mm, from the bottom of the chassis tub"
-            " to the top of the LiDAR; the docs' 380 x 300 x 220 mm do not say"
-            " what they measure",
+            note="every part but the wheels, seen from above: the convex hull of"
+            " their points (54 corners), in eight sides that enclose it with 0.6%"
+            " more area; from the bottom of the chassis tub to the top of the"
+            " LiDAR, 184 mm. The body is 481 x 241 mm; the docs' 380 x 300 x 220"
+            " mm do not say what they measure",
         ),
     ),
     wheel=Wheel(

@@ -72,8 +72,9 @@ class Chassis:
     """The height of the chassis' center of mass above the axles."""
     inertia: Sourced[InertiaReference]
     """Scaled to the chassis' mass."""
-    collision_box: Sourced[Box]
-    """The body, without the wheels."""
+    outline: Sourced[Prism]
+    """The body, without the wheels: what it collides with, and what the
+    other cars' LiDARs see of it."""
 
 
 @dataclass(frozen=True)
@@ -86,9 +87,25 @@ class InertiaReference:
 
 
 @dataclass(frozen=True)
-class Box:
-    center: Vec3
-    half_size: Vec3
+class Prism:
+    """An upright prism: a convex polygon seen from above, its corners (x, y)
+    counterclockwise, from the height bottom up to top."""
+
+    corners: tuple[tuple[float, float], ...]
+    bottom: float
+    top: float
+
+    def __post_init__(self) -> None:
+        n = len(self.corners)
+        for i in range(n):
+            (ax, ay), (bx, by), (cx, cy) = (self.corners[(i + k) % n] for k in range(3))
+            if (bx - ax) * (cy - by) - (by - ay) * (cx - bx) <= 0:
+                raise ValueError(
+                    f"corner {(i + 1) % n} does not turn left: the corners must"
+                    " run counterclockwise round a convex polygon"
+                )
+        if not self.bottom < self.top:
+            raise ValueError(f"bottom {self.bottom} is not below top {self.top}")
 
 
 @dataclass(frozen=True)

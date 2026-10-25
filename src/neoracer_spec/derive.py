@@ -242,7 +242,7 @@ def model(spec: Spec) -> ModelParams:
             f"the model's drive brakes at neutral, not {spec.esc.neutral.value!r}"
         )
     c, w, s = spec.chassis, spec.wheel, spec.suspension
-    box = c.collision_box.value
+    outline = c.outline.value
     fit = spec.steering.fit_range.value
     friction = precise(w.friction.value)
     k, d, ref = precise(s.stiffness.value), precise(s.damping.value), spring_ref(spec)
@@ -254,9 +254,14 @@ def model(spec: Spec) -> ModelParams:
                 pos=(0.0, 0.0, precise(c.com_height.value)),
                 diaginertia=precise3(chassis_inertia(spec)),
             ),
-            boxes=(
-                parts.CollisionBox(
-                    "chassis", precise3(box.center), precise3(box.half_size)
+            shapes=(
+                parts.CollisionMesh(
+                    "chassis",
+                    tuple(
+                        precise3((x, y, z))
+                        for z in (outline.bottom, outline.top)
+                        for x, y in outline.corners
+                    ),
                 ),
             ),
             imu_position=precise3(spec.imu.position.value),
