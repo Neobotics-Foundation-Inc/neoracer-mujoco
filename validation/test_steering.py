@@ -37,26 +37,26 @@ def test_command_keeps_the_steer_within_its_limit_and_its_rate():
 
 
 def test_command_slows_for_a_large_steer_and_a_close_obstacle():
-    """The throttle never rises as the steer grows or as the clearance ahead
-    shrinks, and it is 0 at min_safe_forward_distance or closer."""
+    """The speed asked for never rises as the steer grows or as the clearance
+    ahead shrinks, and it is 0 at min_safe_forward_distance or closer."""
 
-    def throttle(steer: float, front: float) -> float:
+    def speed(steer: float, front: float) -> float:
         # prev_steer = steer, so the slew limit leaves the steer as it is.
         _, out = steering.command(P, PDState(prev_steer=steer), 0.0, steer, front, DT)
-        return out.throttle
+        return out.target
 
-    by_steer = [throttle(s, 10.0) for s in np.linspace(0.0, LIMIT, 50)]
+    by_steer = [speed(s, 10.0) for s in np.linspace(0.0, LIMIT, 50)]
     assert np.all(np.diff(by_steer) <= 0.0) and by_steer[-1] < by_steer[0]
     fronts = np.linspace(2.0, 0.0, 100)  # m, closing in
-    by_front = [throttle(0.0, f) for f in fronts]
+    by_front = [speed(0.0, f) for f in fronts]
     assert np.all(np.diff(by_front) <= 0.0)
-    for front, t in zip(fronts, by_front, strict=True):
+    for front, v in zip(fronts, by_front, strict=True):
         if front <= P.min_safe_forward_distance:
-            assert t == 0.0, front
+            assert v == 0.0, front
 
 
-def test_fallback_slews_the_steer_to_center_at_a_reduced_throttle():
-    """fallback drives at target_throttle * safe_fallback_throttle_fraction,
+def test_fallback_slews_the_steer_to_center_at_a_reduced_speed():
+    """fallback asks for target_speed * safe_fallback_speed_fraction,
     moves the steer toward 0 at the slew rate, and clears the error history,
     so the bad step gives the next D term no spike."""
     rng = np.random.default_rng(1)
@@ -70,7 +70,7 @@ def test_fallback_slews_the_steer_to_center_at_a_reduced_throttle():
             state.prev_steer, -P.steer_slew_limit * DT, P.steer_slew_limit * DT
         )
         assert out.steer == pytest.approx(expected, abs=1e-12)
-        assert out.throttle == P.target_throttle * P.safe_fallback_throttle_fraction
+        assert out.target == P.target_speed * P.safe_fallback_speed_fraction
         assert after == PDState(prev_error=0.0, prev_steer=out.steer)
 
 

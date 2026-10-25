@@ -5,12 +5,13 @@ pure step(config, state, readings, dt) -> (state, command).
 """
 
 from . import track_centering, wall_following
-from .steering import ControlCommand, PDState, ShapingConfig
+from .steering import ControlCommand, PDState, ShapingConfig, SpeedAngle
 
 __all__ = [
     "ControlCommand",
     "PDState",
     "ShapingConfig",
+    "SpeedAngle",
     "track_centering",
     "wall_following",
 ]

@@ -3,7 +3,7 @@ Laws for neoracer_mujoco.control.track_centering.
 
 The tests call step() and compute_signals() with fake SensorReadings and
 do not use the simulator. test_steering.py has the laws of the steer and
-throttle shaping, and test_track_centering_demo.py runs the controller on
+speed shaping, and test_track_centering_demo.py runs the controller on
 the car.
 
 Steer sign: + = left (contract.py).
@@ -36,7 +36,7 @@ def _random_state(rng: np.random.Generator) -> PDState:
 
 def test_mirrored_scene_gives_mirrored_command():
     """If the scene and the state are mirrored left to right, the steer
-    changes sign and the throttle stays the same. lateral_error changes sign
+    changes sign and the speed stays the same. lateral_error changes sign
     in the mirror, so the mirrored state negates prev_error too."""
     rng = np.random.default_rng(0)
     for _ in range(500):
@@ -45,7 +45,7 @@ def test_mirrored_scene_gives_mirrored_command():
         next_state, control = step(CFG, state, readings, DT)
         next_mirrored, mirrored = step(CFG, mirrored_state, mirror(readings), DT)
         assert mirrored.steer == pytest.approx(-control.steer, abs=1e-12)
-        assert mirrored.throttle == pytest.approx(control.throttle, abs=1e-12)
+        assert mirrored.target == pytest.approx(control.target, abs=1e-12)
         assert next_mirrored.prev_steer == pytest.approx(-next_state.prev_steer)
         assert next_mirrored.prev_error == pytest.approx(-next_state.prev_error)
 

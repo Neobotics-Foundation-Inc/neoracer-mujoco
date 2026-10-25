@@ -3,12 +3,12 @@ Classical lateral track-centering controller for NeoRacer.
 
 The controller keeps the car near the middle of a corridor with two walls. It
 reads the 8-beam LiDAR ring from SensorReadings (see neoracer_mujoco.sensors)
-and computes a PD steer command and a throttle. This module is pure control
+and computes a PD steer command and a speed. This module is pure control
 logic: it does not load a model, step the simulator or read MjData. See
 examples/track_centering_demo.py for a demo that does.
 
 Frame: +X forward, +Y left, +Z up.
-Throttle in [-1, 1], + = forward.
+Speed (m/s), + = forward.
 steer_servo target angle (rad), + = left, up to full lock either way
 (neoracer_spec.derive.steer_lock).
 
@@ -60,13 +60,13 @@ Bad sensor data (see sensors.parse_beam): a beam is corrupt if its value is
 NaN or infinite. A -1 (no hit) is valid data and means "clear". Both read as
 max_beam_range. If more than max_corrupt_beams of the 8 beams are corrupt,
 step() does not use the control law. It returns steering.fallback(): the
-steer moves toward 0 and the throttle drops to
-safe_fallback_throttle_fraction of target_throttle.
+steer moves toward 0 and the speed drops to
+safe_fallback_speed_fraction of target_speed.
 
 Usage: call step in a loop, and pass each new state to the next call.
     state = PDState()
     state, command = step(TrackCenteringConfig(), state, sensor_readings, dt)
-    sim.apply_command(scene.car, data, command)
+    car = racecar.step(scene, data, racecar.ask(car, command))
 """
 
 from dataclasses import dataclass
@@ -88,7 +88,7 @@ from ..sensors import (
     parse_beam,
 )
 from . import steering
-from .steering import ControlCommand, PDState, ShapingConfig
+from .steering import PDState, ShapingConfig, SpeedAngle
 
 
 @dataclass(frozen=True)
@@ -148,7 +148,7 @@ def compute_signals(
 
 def step(
     cfg: TrackCenteringConfig, state: PDState, sensors: SensorReadings, dt: float
-) -> tuple[PDState, ControlCommand]:
+) -> tuple[PDState, SpeedAngle]:
     """Compute one control command and the next controller state."""
     signals = compute_signals(sensors, cfg)
     if signals.n_corrupt > cfg.max_corrupt_beams:

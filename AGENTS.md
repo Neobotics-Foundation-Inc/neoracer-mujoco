@@ -177,7 +177,7 @@ def reward(term: RewardTerm, step: StepInfo) -> float:
   ```python
   def step(
       params: Params, state: State, readings: SensorReadings, dt: float
-  ) -> tuple[State, ControlCommand]: ...
+  ) -> tuple[State, SpeedAngle]: ...
   ```
 
   Do not hide it in `self._prev_*` fields.

@@ -3,20 +3,19 @@ Laws for neoracer_mujoco.control.wall_following.
 
 The pure-logic tests call step() and compute_signals() with fake
 SensorReadings and do not use the simulator; test_steering.py has the laws
-of the steer and throttle shaping. The last test runs the controller on the
+of the steer and speed shaping. The last test runs the controller on the
 car in straight_corridor.xml.
 
 Steer sign: + = left (contract.py). With follow_side="right", a steer toward
 the wall is negative.
 """
 
-import mujoco
 import numpy as np
 import pytest
 from fake_sensors import beams, mirror, random_beams
 from scenes import corridor_scene
 
-from neoracer_mujoco import sensors, sim
+from neoracer_mujoco import racecar, sensors, sim
 from neoracer_mujoco.control import PDState, steering
 from neoracer_mujoco.control.wall_following import (
     WallFollowingConfig,
@@ -45,7 +44,7 @@ def _random_state(rng: np.random.Generator) -> PDState:
 
 def test_left_and_right_are_mirror_images():
     """Follow the left wall in the mirrored scene, and the steer changes sign
-    and the throttle stays the same. distance_error is measured from the
+    and the speed stays the same. distance_error is measured from the
     followed wall, so it is the same in the mirror: only prev_steer changes
     sign in the mirrored state."""
     left = WallFollowingConfig(follow_side="left")
@@ -57,7 +56,7 @@ def test_left_and_right_are_mirror_images():
         next_right, right_control = step(right, state, readings, DT)
         next_left, left_control = step(left, mirrored_state, mirror(readings), DT)
         assert left_control.steer == pytest.approx(-right_control.steer, abs=1e-12)
-        assert left_control.throttle == pytest.approx(right_control.throttle)
+        assert left_control.target == pytest.approx(right_control.target)
         assert next_left.prev_steer == pytest.approx(-next_right.prev_steer)
         assert next_left.prev_error == pytest.approx(next_right.prev_error)
 
@@ -104,10 +103,10 @@ def test_no_hit_reading_is_not_treated_as_corrupt():
 
 
 def test_controller_converges_to_target_distance_on_corridor():
-    """Run the controller on the car in the corridor for 3 s. In the last
-    quarter of the run, the mean right beam distance is near target_distance.
-    The car does not flip, the values stay finite and the steer stays in the
-    actuator range."""
+    """Run the controller on the car in the corridor for 3 s, its speed held
+    by the car's speed loop (racecar.py). In the last quarter of the run, the
+    mean right beam distance is near target_distance. The car does not flip,
+    the values stay finite and the steer stays in the actuator range."""
     scene = corridor_scene()
     model, car = scene.model, scene.car
     data = sim.settle(model)
@@ -115,13 +114,13 @@ def test_controller_converges_to_target_distance_on_corridor():
     steer_low, steer_high = model.bind_scalar(car.steer).ctrlrange
     cfg = WallFollowingConfig(follow_side="right")
     state = PDState()
+    racer = racecar.start(racecar.neoracer_params(), scene, data)
 
     side_distances = []
     for _ in range(round(3.0 / dt)):
         readings = sensors.read(car.sensors, data)
         state, control = step(cfg, state, readings, dt)
-        sim.apply_command(car, data, control)
-        mujoco.mj_step(model, data)
+        racer = racecar.step(scene, data, racecar.ask(racer, control))
 
         assert steer_low <= control.steer <= steer_high
         assert np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel))
