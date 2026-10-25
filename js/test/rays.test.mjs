@@ -109,3 +109,30 @@ test('a RayScene refuses a geom of a type it does not meet', () => {
   mj.mj_forward(model, data);
   assert.throws(() => new RayScene(mj, model, data, model.site_bodyid[car.lidar]), /capsule|type/);
 });
+
+/** loop_corridor with a box whose bounds lie on the grid's cell edges, x and y in [1, 2]. */
+const edged = loop.replace(/<\/mujoco>\s*$/, '<worldbody><geom name="cell" type="box" size=".5 .5 .5" pos="1.5 1.5 .5"/></worldbody></mujoco>');
+
+test("a ray through a cell's corner meets a geom whose bound lies on the corner", () => {
+  const { model, car } = compose(mj, edged);
+  const data = new mj.MjData(model);
+  mj.mj_forward(model, data);
+  const exclude = model.site_bodyid[car.lidar];
+  const scene = new RayScene(mj, model, data, exclude);
+  const ray = { o: [0, 2, 0.5], d: [Math.SQRT1_2, -Math.SQRT1_2, 0] };
+  const [want] = mujocoRays(model, data, [ray], exclude, 10);
+  assert.equal(mj.mj_id2name(model, mj.mjtObj.mjOBJ_GEOM.value, want.geom), 'cell');
+  assert.ok(sameDistance(scene.cast(ray.o, ray.d, 10), want.t));
+});
+
+test('a hit at exactly maxRange counts, as for mj_multiRay, and a nearer limit misses it', () => {
+  const { model, car } = compose(mj, edged);
+  const data = new mj.MjData(model);
+  mj.mj_forward(model, data);
+  const scene = new RayScene(mj, model, data, model.site_bodyid[car.lidar]);
+  // the floor plane 1 m below, and the box's face 1 m ahead
+  for (const { o, d } of [{ o: [0, 0, 1], d: [0, 0, -1] }, { o: [0, 1.5, 0.5], d: [1, 0, 0] }]) {
+    assert.equal(scene.cast(o, d, 1), 1, JSON.stringify(o));
+    assert.equal(scene.cast(o, d, 0.999), Infinity, JSON.stringify(o));
+  }
+});

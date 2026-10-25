@@ -27,6 +27,9 @@ const CELL = 1;
 /** Below this, a ray's component along an axis is taken as zero, as MuJoCo's mjMINVAL. */
 const MINVAL = 1e-15;
 
+/** A geom's margin (m) on the grid: one whose bound lies on a cell's edge is in the cells on both sides. */
+const EDGE = 1e-9;
+
 /** One geom, as a ray meets it in the geom's own frame. */
 interface Shape {
   readonly geom: number;
@@ -94,10 +97,10 @@ export class RayScene {
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const { box: [x, y, hx, hy] } of this.fixed) {
-      minX = Math.min(minX, x - hx);
-      maxX = Math.max(maxX, x + hx);
-      minY = Math.min(minY, y - hy);
-      maxY = Math.max(maxY, y + hy);
+      minX = Math.min(minX, x - hx - EDGE);
+      maxX = Math.max(maxX, x + hx + EDGE);
+      minY = Math.min(minY, y - hy - EDGE);
+      maxY = Math.max(maxY, y + hy + EDGE);
     }
     const none = this.fixed.length === 0;
     this.x0 = none ? 0 : Math.floor(minX);
@@ -106,10 +109,10 @@ export class RayScene {
     this.h = none ? 0 : Math.max(1, Math.ceil((maxY - this.y0) / CELL));
     this.cells = Array.from({ length: this.w * this.h }, () => []);
     this.fixed.forEach(({ box: [x, y, hx, hy] }, k) => {
-      const i0 = Math.max(0, Math.floor((x - hx - this.x0) / CELL));
-      const i1 = Math.min(this.w - 1, Math.floor((x + hx - this.x0) / CELL));
-      const j0 = Math.max(0, Math.floor((y - hy - this.y0) / CELL));
-      const j1 = Math.min(this.h - 1, Math.floor((y + hy - this.y0) / CELL));
+      const i0 = Math.max(0, Math.floor((x - hx - EDGE - this.x0) / CELL));
+      const i1 = Math.min(this.w - 1, Math.floor((x + hx + EDGE - this.x0) / CELL));
+      const j0 = Math.max(0, Math.floor((y - hy - EDGE - this.y0) / CELL));
+      const j1 = Math.min(this.h - 1, Math.floor((y + hy + EDGE - this.y0) / CELL));
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) this.cells[j * this.w + i].push(k);
     });
     this.tested = new Uint32Array(this.fixed.length);
@@ -154,19 +157,23 @@ export class RayScene {
 
   /**
    * The distance (m) along the unit ray from origin to its first geom, or
-   * Infinity if none lies within maxRange.
+   * Infinity if none lies within maxRange, which a hit at maxRange does.
    */
   cast(origin: ArrayLike<number>, dir: ArrayLike<number>, maxRange: number): number {
     let best = this.castFixed(origin, dir, maxRange);
-    for (const s of this.planes) best = this.hit(s, origin, dir, best);
-    for (const s of this.moving) best = this.hit(s, origin, dir, best);
-    return best < maxRange ? best : Infinity;
+    for (const s of this.planes) best = this.hit(s, origin, dir, best, maxRange);
+    for (const s of this.moving) best = this.hit(s, origin, dir, best, maxRange);
+    return best;
   }
 
-  /** The nearest fixed geom's distance, or best: the cells under the ray in order (Amanatides and Woo's walk). */
-  private castFixed(o: ArrayLike<number>, d: ArrayLike<number>, best: number): number {
+  /**
+   * The nearest fixed geom's distance within limit, or Infinity: the cells
+   * under the ray in order (Amanatides and Woo's walk).
+   */
+  private castFixed(o: ArrayLike<number>, d: ArrayLike<number>, limit: number): number {
+    let best = Infinity;
     if (this.w === 0) return best;
-    let tIn = 0, tOut = best;
+    let tIn = 0, tOut = limit;
     const lo = [this.x0, this.y0], hi = [this.x0 + this.w * CELL, this.y0 + this.h * CELL];
     for (let a = 0; a < 2; a++) {
       if (Math.abs(d[a]) < MINVAL) {
@@ -195,9 +202,10 @@ export class RayScene {
       for (const k of this.cells[j * this.w + i]) {
         if (this.tested[k] === this.ray) continue;
         this.tested[k] = this.ray;
-        best = this.hit(this.fixed[k], o, d, best);
+        best = this.hit(this.fixed[k], o, d, best, limit);
       }
-      if (Math.min(tx, ty) >= best) return best;
+      const next = Math.min(tx, ty);
+      if (next >= best || next > limit) return best;
       if (tx < ty) {
         i += si;
         tx += dx;
@@ -210,14 +218,14 @@ export class RayScene {
     }
   }
 
-  /** min(best, the ray's distance to shape s). */
-  private hit(s: Shape, o: ArrayLike<number>, d: ArrayLike<number>, best: number): number {
+  /** The ray's distance to shape s if it is nearer than best and no farther than limit, else best. */
+  private hit(s: Shape, o: ArrayLike<number>, d: ArrayLike<number>, best: number, limit: number): number {
     const px = o[0] - s.pos[0], py = o[1] - s.pos[1], pz = o[2] - s.pos[2];
     if (s.type !== PLANE) {
-      // the bounding sphere: missed, or no nearer than best
+      // the bounding sphere: missed, or beyond best or limit
       const tc = -(px * d[0] + py * d[1] + pz * d[2]);
       const miss2 = px * px + py * py + pz * pz - tc * tc;
-      if (miss2 > s.rbound * s.rbound || tc + s.rbound < 0 || tc - s.rbound > best) return best;
+      if (miss2 > s.rbound * s.rbound || tc + s.rbound < 0 || tc - s.rbound > Math.min(best, limit)) return best;
     }
     // the ray in the geom's frame: mat transposed
     const m = s.mat;
@@ -233,10 +241,11 @@ export class RayScene {
       let t = best;
       t = boxFaces(t, p0, v0, z[0], p1, v1, z[1], p2, v2, z[2]);
       t = boxFaces(t, p1, v1, z[1], p2, v2, z[2], p0, v0, z[0]);
-      return boxFaces(t, p2, v2, z[2], p0, v0, z[0], p1, v1, z[1]);
+      t = boxFaces(t, p2, v2, z[2], p0, v0, z[0], p1, v1, z[1]);
+      return t < best && t <= limit ? t : best;
     }
     const t = this.local(s, p0, p1, p2, v0, v1, v2);
-    return t >= 0 && t < best ? t : best;
+    return t >= 0 && t < best && t <= limit ? t : best;
   }
 
   /** The ray's first distance to s in s's frame, or -1. */
