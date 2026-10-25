@@ -19,7 +19,7 @@ import numpy as np
 
 from examples import run_racecar_core
 from neoracer_mujoco import contract
-from neoracer_mujoco.racecar_core_adapter import neoracer_params
+from neoracer_mujoco.racecar import neoracer_params
 
 _FIXTURE_DIR = Path(__file__).resolve().parent / "testdata" / "ultimate_wall_follower"
 

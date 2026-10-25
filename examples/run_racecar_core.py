@@ -44,12 +44,8 @@ from typing import Literal, assert_never, get_args
 import mujoco
 
 from neoracer_mujoco import assets, sim
-from neoracer_mujoco.racecar_core_adapter import (
-    CarParams,
-    MujocoRacecar,
-    neoracer_params,
-    racecar_neo_v2_params,
-)
+from neoracer_mujoco.racecar import CarParams, neoracer_params, racecar_neo_v2_params
+from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
 from neoracer_mujoco.scene import Scene
 from neoracer_spec.parts import SOLVER
 

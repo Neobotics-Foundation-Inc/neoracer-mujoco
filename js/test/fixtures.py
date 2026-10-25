@@ -16,7 +16,7 @@ import mujoco
 
 from neoracer_mujoco import assets, batch, encoder, lidar, sim, speed_loop
 from neoracer_mujoco.control.steering import ControlCommand
-from neoracer_mujoco.racecar_core_adapter import MujocoDrive, MujocoRacecar
+from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
 from neoracer_spec.derive import derive
 from neoracer_spec.neoracer import NEORACER
 
@@ -81,7 +81,7 @@ def main(out: str) -> None:
         (2.0, 3.0, 0.25),
     ]:
         d = mujoco.MjData(model)
-        drive = MujocoDrive(scene, d)
+        drive = MujocoRacecar(scene, d).drive
         drive.set_max_speed(max_speed)
         drive.set_speed_angle(speed, angle_cmd)
         commands.append(

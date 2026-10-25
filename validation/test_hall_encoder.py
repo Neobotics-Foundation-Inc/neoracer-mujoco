@@ -11,7 +11,8 @@ from copy import replace
 import pytest
 
 from neoracer_mujoco import assets, hall_encoder, sim
-from neoracer_mujoco.racecar_core_adapter import MujocoRacecar, racecar_neo_v2_params
+from neoracer_mujoco.racecar import racecar_neo_v2_params
+from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
 from neoracer_spec import derive_v2
 from neoracer_spec.parts import SOLVER
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2 as V2

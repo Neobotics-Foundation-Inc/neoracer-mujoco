@@ -14,7 +14,8 @@ from cases import case
 
 from neoracer_mujoco import Scene, assets, batch, encoder, load, sim
 from neoracer_mujoco.control.steering import ControlCommand
-from neoracer_mujoco.racecar_core_adapter import MujocoRacecar, neoracer_params
+from neoracer_mujoco.racecar import neoracer_params
+from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
 from neoracer_spec.derive import EncoderParams, derive
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.parts import SOLVER
