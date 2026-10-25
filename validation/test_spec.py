@@ -429,7 +429,8 @@ def test_a_prism_is_convex_counterclockwise_and_upright():
     """A prism's corners run counterclockwise round a convex polygon, and its
     bottom is below its top: the outline is refused otherwise, since MuJoCo
     would collide with the convex hull of corners given clockwise, round a
-    dent or with crossing edges, and with nothing for fewer than three."""
+    dent or with crossing edges, with nothing for fewer than three, and not
+    at all for a corner or a height that is not finite."""
     square = ((-0.1, -0.1), (0.1, -0.1), (0.1, 0.1), (-0.1, 0.1))
     star = ((0.0, 0.3), (-0.2, -0.3), (0.3, 0.1), (-0.3, 0.1), (0.2, -0.3))
     spec.Prism(square, 0.0, 0.1)
@@ -439,6 +440,8 @@ def test_a_prism_is_convex_counterclockwise_and_upright():
         ("crossing", star, 0.0, 0.1),
         ("empty", (), 0.0, 0.1),
         ("a segment", square[:2], 0.0, 0.1),
+        ("a corner not a number", ((math.nan, -0.1), *square[1:]), 0.0, 0.1),
+        ("endless", square, 0.0, math.inf),
         ("flat", square, 0.1, 0.1),
     ]:
         with case(name), pytest.raises(ValueError):
