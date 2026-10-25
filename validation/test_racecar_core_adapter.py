@@ -18,12 +18,8 @@ import numpy as np
 import pytest
 
 from neoracer_mujoco import Scene, assets, contract, lidar, sim
-from neoracer_mujoco.racecar_core_adapter import (
-    MujocoDrive,
-    MujocoLidar,
-    MujocoRacecar,
-    neoracer_params,
-)
+from neoracer_mujoco.racecar import neoracer_params
+from neoracer_mujoco.racecar_core_adapter import MujocoRacecar
 from neoracer_spec.derive import derive
 from neoracer_spec.neoracer import NEORACER
 
@@ -59,7 +55,8 @@ def test_drive_writes_clipped_and_scaled_commands(scene):
     limits = contract.actuator_limits(scene.model, scene.car)
     a, b, c = contract.throttle_map(scene.model, scene.car.drive)
     data = mujoco.MjData(scene.model)
-    drive = MujocoDrive(scene, data, speed_loop_params=None)
+    no_loop = copy.replace(neoracer_params(), speed_loop=None)
+    drive = MujocoRacecar(scene, data, car=no_loop).drive
     drive.set_speed_angle(1.0, 0.0)  # a new drive has max_speed 1
     assert _drive_ctrl(scene, data) == pytest.approx(limits.voltage)
     grid = np.linspace(-2.0, 2.0, 17)  # values inside and outside [-1, 1]
@@ -87,7 +84,7 @@ def test_with_a_speed_loop_set_speed_angle_asks_for_a_speed(scene):
     the loop's next tick. stop() asks for 0 and centers the steering."""
     limits = contract.actuator_limits(scene.model, scene.car)
     data = mujoco.MjData(scene.model)
-    drive = MujocoDrive(scene, data)
+    drive = MujocoRacecar(scene, data).drive
     grid = np.linspace(-2.0, 2.0, 17)
     for max_speed in grid:
         drive.set_max_speed(max_speed)
@@ -109,17 +106,17 @@ def test_set_max_speed_without_an_argument_restores_the_start(scene):
     """set_max_speed() without an argument goes back to the max speed the
     drive started with, as racecar_core's default does: 1.0 on the NeoRacer,
     0.25 on the V2. Speed 1 asks for that share of full speed at the start
-    and after. A drive clamps its start into [0, 1], as set_max_speed clamps
-    its argument, and CarParams refuses a start outside it."""
+    and after. CarParams refuses a start outside [0, 1]."""
     data = mujoco.MjData(scene.model)
-    for start, share in ((1.0, 1.0), (0.25, 0.25), (2.0, 1.0), (-0.25, 0.0)):
-        drive = MujocoDrive(scene, data, start)
+    for start in (1.0, 0.25):
+        car = copy.replace(neoracer_params(), start_max_speed=start)
+        drive = MujocoRacecar(scene, data, car=car).drive
         drive.set_speed_angle(1.0, 0.0)
-        assert drive.target == pytest.approx(share * LOOP.max_speed), start
+        assert drive.target == pytest.approx(start * LOOP.max_speed), start
         drive.set_max_speed(0.5)
         drive.set_max_speed()
         drive.set_speed_angle(1.0, 0.0)
-        assert drive.target == pytest.approx(share * LOOP.max_speed), start
+        assert drive.target == pytest.approx(start * LOOP.max_speed), start
     for start in (2.0, -0.25):
         with pytest.raises(ValueError, match="start_max_speed"):
             copy.replace(neoracer_params(), start_max_speed=start)
@@ -130,7 +127,7 @@ def test_a_scan_is_clockwise_from_the_front_in_cm(corridor):
     front: it reads, in cm, what the rangefinder at that bearing reads in m.
     A lidar_NNN beam points NNN degrees counterclockwise."""
     data = sim.settle(corridor.model)
-    scan = MujocoLidar(corridor, data).get_samples()
+    scan = MujocoRacecar(corridor, data).lidar.get_samples()
     for bearing, beam in [
         (0, "lidar_000"),
         (45, "lidar_315"),
@@ -147,10 +144,10 @@ def test_no_return_and_the_blocked_rear_read_zero(scene, corridor):
     """racecar_core uses 0.0 for "no return". The car alone on its floor sees
     nothing, and in the corridor the rear quarter, which the car blocks,
     reads 0.0 too."""
-    alone = MujocoLidar(scene, sim.settle(scene.model))
+    alone = MujocoRacecar(scene, sim.settle(scene.model)).lidar
     assert len(alone.get_samples()) == alone.get_num_samples() == LIDAR.slots
     assert np.all(alone.get_samples() == 0.0)
-    scan = MujocoLidar(corridor, sim.settle(corridor.model)).get_samples()
+    scan = MujocoRacecar(corridor, sim.settle(corridor.model)).lidar.get_samples()
     assert np.all(scan[~lidar.visible(LIDAR)] == 0.0)
     assert np.all(scan[lidar.visible(LIDAR)] > 0.0)
 

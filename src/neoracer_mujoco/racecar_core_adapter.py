@@ -11,9 +11,10 @@ runs in this simulator without changes.
 This module has Drive, Lidar, Physics, Controller, Display and
 MujocoRacecar. MujocoRacecar is the equivalent of create_racecar(): it
 connects the other parts and runs the start/update/update_slow loop in go().
-CarParams says which car's LiDAR, encoder and speed loop it has:
-neoracer_params() gives a NeoRacer's, the default, and
-racecar_neo_v2_params() a V2's.
+The car's firmware and sensors run in racecar.py, and the parts read and
+command the car there. racecar.CarParams says which car's LiDAR, encoder and
+speed loop it has: racecar.neoracer_params() gives a NeoRacer's, the
+default, and racecar.racecar_neo_v2_params() a V2's.
 Physics has only the encoder's speed. This module has no camera, led, nav,
 slam, telemetry or vision, because MuJoCo has no backend for them yet.
 
@@ -30,12 +31,12 @@ converts between them, so the controllers do not convert them:
 
 Some parts of this module do not follow AGENTS.md, because racecar_core
 code needs them as they are: the Button IntEnum, get_samples_async, the
-one-method MujocoDisplay, the mutable state of MujocoDrive and
-MujocoRacecar, and set_max_speed(), whose default is the car's start max
-speed.
+one-method MujocoDisplay, the mutable car that MujocoRacecar's parts
+share, and set_max_speed(), whose default is the car's start max speed.
 """
 
 from collections.abc import Callable, Iterable
+from copy import replace
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import assert_never
@@ -43,62 +44,27 @@ from typing import assert_never
 import mujoco
 import numpy as np
 
-from neoracer_spec import derive, derive_v2
-from neoracer_spec.derive import EncoderParams, LidarParams, SpeedLoopParams
-from neoracer_spec.derive_v2 import HallEncoderParams
-from neoracer_spec.neoracer import NEORACER
-from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2, RacecarNeoV2
-from neoracer_spec.spec import Spec
-
-from . import contract, encoder, hall_encoder, lidar, sim, speed_loop
-from .control.steering import ControlCommand
+from . import contract, racecar, speed_loop
 from .scene import Scene
-
-
-@dataclass(frozen=True)
-class CarParams:
-    """What a car's racecar_core gives a program beside its model: the
-    LiDAR's scan, the encoder's speed, the share of full speed that speed 1
-    drives until the program calls set_max_speed, and the firmware's speed
-    loop (speed_loop.py), if the car's model does not hold its speed itself,
-    as the V2's does."""
-
-    lidar: LidarParams
-    encoder: EncoderParams | HallEncoderParams
-    start_max_speed: float = 1.0
-    speed_loop: SpeedLoopParams | None = None
-
-    def __post_init__(self) -> None:
-        if not 0.0 <= self.start_max_speed <= 1.0:
-            raise ValueError(
-                f"start_max_speed must be in [0, 1], not {self.start_max_speed}"
-            )
-
-
-def neoracer_params(car: Spec = NEORACER) -> CarParams:
-    """A NeoRacer's LiDAR and its firmware's encoder and speed loop."""
-    p = derive.derive(car)
-    return CarParams(lidar=p.lidar, encoder=p.encoder, speed_loop=p.speed_loop)
-
-
-def racecar_neo_v2_params(car: RacecarNeoV2 = RACECAR_NEO_V2) -> CarParams:
-    """A RACECAR Neo V2's LiDAR, its drive board's encoder and its
-    racecar_core's start max speed."""
-    p = derive_v2.derive(car)
-    return CarParams(
-        lidar=p.lidar, encoder=p.encoder, start_max_speed=p.start_max_speed
-    )
-
-
-_NEORACER = neoracer_params()
 
 
 def _clamp(value: float, low: float, high: float) -> float:
     return min(max(value, low), high)
 
 
+class _Car:
+    """The car that the parts of a MujocoRacecar share: its scene, its data
+    and its state between two physics steps (racecar.CarState), which
+    set_speed_angle and go() replace."""
+
+    def __init__(self, scene: Scene, data: mujoco.MjData, state: racecar.CarState):
+        self.scene = scene
+        self.data = data
+        self.state = state
+
+
 class MujocoDrive:
-    """racecar_core.Drive backend over a car's Scene and its MjData.
+    """racecar_core.Drive backend over a MujocoRacecar's car.
 
     set_speed_angle(speed, angle): both unitless ratios in [-1.0, 1.0].
     speed: -1.0 full backward .. +1.0 full forward (racecar_core convention).
@@ -109,48 +75,34 @@ class MujocoDrive:
     a step.
 
     With a speed loop (speed_loop.py), as on the NeoRacer, speed asks for a
-    speed (speed_loop.target), and the loop sets the throttle at its ticks,
-    which MujocoRacecar.go() counts with advance(). Without one, as on the
-    V2, whose model holds its speed itself, speed drives the throttle at
-    once: speed times the max speed.
+    speed (speed_loop.target), and the loop sets the throttle at its ticks.
+    Without one, as on the V2, whose model holds its speed itself, speed
+    drives the throttle at once: speed times the max speed.
     """
 
-    def __init__(
-        self,
-        scene: Scene,
-        data: mujoco.MjData,
-        start_max_speed: float = 1.0,
-        speed_loop_params: SpeedLoopParams | None = _NEORACER.speed_loop,
-    ):
-        self._car = scene.car
-        self._data = data
-        self._dt = float(scene.model.opt.timestep)  # s
-        self._start_max_speed = _clamp(start_max_speed, 0.0, 1.0)
-        self._max_speed = self._start_max_speed  # share of the full speed
-        self._limits = contract.actuator_limits(scene.model, scene.car)
-        self._command = ControlCommand(throttle=0.0, steer=0.0)
-        self._target = 0.0  # m/s
-        self._loop: tuple[SpeedLoopParams, speed_loop.SpeedLoopState] | None = None
-        if speed_loop_params is not None:
-            angle = self._angle()
-            self._loop = (speed_loop_params, speed_loop.start(speed_loop_params, angle))
-
-    def _angle(self) -> float:
-        return float(self._data.bind_scalar(self._car.sensors.drive_pos).data[0])
+    def __init__(self, car: _Car, start_max_speed: float):
+        self._car = car
+        self._start_max_speed = start_max_speed
+        self._max_speed = start_max_speed  # share of the full speed
+        self._limits = contract.actuator_limits(car.scene.model, car.scene.car)
 
     def set_speed_angle(self, speed: float, angle: float) -> None:
         speed = _clamp(speed, -1.0, 1.0)
         angle = _clamp(angle, -1.0, 1.0)
+        state = self._car.state
+        drive: racecar.SpeedLoop | racecar.Throttle
+        match state.drive:
+            case racecar.SpeedLoop(params=params):
+                target = float(speed_loop.target(params, speed, self._max_speed))
+                drive = replace(state.drive, target=target)
+            case racecar.Throttle():
+                drive = racecar.Throttle(speed * self._max_speed)
+            case _:
+                assert_never(state.drive)
         # Negate: in racecar_core + angle = right; for steer_servo + = left.
         steer = -angle * self._limits.steer_rad
-        if self._loop is None:
-            throttle = speed * self._max_speed
-        else:
-            params, state = self._loop
-            self._target = float(speed_loop.target(params, speed, self._max_speed))
-            throttle = float(state.throttle)
-        self._command = ControlCommand(throttle=throttle, steer=steer)
-        sim.apply_command(self._car, self._data, self._command)
+        self._car.state = replace(state, drive=drive, steer=steer)
+        racecar.apply(self._car.scene, self._car.data, self._car.state)
 
     def stop(self) -> None:
         self.set_speed_angle(0.0, 0.0)
@@ -158,27 +110,20 @@ class MujocoDrive:
     def set_max_speed(self, max_speed: float | None = None) -> None:
         """Set the share of full speed that speed 1 drives. Without
         max_speed, the car's start max speed, as its racecar_core has it
-        (CarParams.start_max_speed)."""
+        (racecar.CarParams.start_max_speed)."""
         limit = self._start_max_speed if max_speed is None else max_speed
         self._max_speed = _clamp(limit, 0.0, 1.0)
 
     @property
     def target(self) -> float:
         """The speed (m/s) that the speed loop holds: 0 without one."""
-        return self._target
-
-    def advance(self) -> None:
-        """Count one physics step on the speed loop, if the car has one, and
-        write the throttle that it sets."""
-        if self._loop is None:
-            return
-        params, state = self._loop
-        state = speed_loop.step(params, state, self._target, self._angle(), self._dt)
-        self._loop = (params, state)
-        self._command = ControlCommand(
-            throttle=float(state.throttle), steer=self._command.steer
-        )
-        sim.apply_command(self._car, self._data, self._command)
+        match self._car.state.drive:
+            case racecar.SpeedLoop(target=target):
+                return target
+            case racecar.Throttle():
+                return 0.0
+            case _:
+                assert_never(self._car.state.drive)
 
 
 class MujocoLidar:
@@ -188,30 +133,16 @@ class MujocoLidar:
     racecar-neo-library does: LidarParams.slots samples in cm, clockwise, index 0
     straight ahead, and 0.0 for no return, as in the blocked rear.
 
-    MujocoRacecar.go() calls advance() once a step, when the poses are up to
-    date, as the LiDAR spins whatever the program does. Before the first step,
-    the scan is a whole turn from where the car stands.
+    The LiDAR spins whatever the program does, and MujocoRacecar.go() counts
+    each physics step on it. Before the first step, the scan is a whole turn
+    from where the car stands.
     """
 
-    def __init__(
-        self,
-        scene: Scene,
-        data: mujoco.MjData,
-        params: LidarParams = _NEORACER.lidar,
-    ):
-        self._model, self._car, self._data = scene.model, scene.car, data
-        self._dt = float(scene.model.opt.timestep)  # s
-        self._params = params
-        self._state = lidar.start(self._params, self._model, data, self._car)
-
-    def advance(self) -> None:
-        """Sweep the slots that the head passes in one physics step."""
-        self._state = lidar.sweep(
-            self._params, self._model, self._data, self._car, self._state, self._dt
-        )
+    def __init__(self, car: _Car):
+        self._car = car
 
     def get_samples(self) -> np.ndarray:
-        cm = self._state.scan * 100.0
+        cm = self._car.state.lidar.state.scan * 100.0
         # In racecar_core, 0.0 means "no return". No real distance is
         # negative, and lidar.NO_RETURN is -1.
         valid = np.isfinite(cm) & (cm > 0.0)
@@ -225,71 +156,23 @@ class MujocoLidar:
         return self.get_samples()
 
     def get_num_samples(self) -> int:
-        return self._params.slots
-
-
-@dataclass(frozen=True)
-class _Windowed:
-    """The NeoRacer's encoder (encoder.py)."""
-
-    params: EncoderParams
-    state: encoder.EncoderState
-
-
-@dataclass(frozen=True)
-class _Hall:
-    """The V2's encoder (hall_encoder.py)."""
-
-    params: HallEncoderParams
-    state: hall_encoder.HallEncoderState
+        return self._car.state.lidar.params.slots
 
 
 class MujocoPhysics:
     """The part of racecar_core.Physics that the simulator has: the speed
     that the car's firmware reports from its motor encoder, the NeoRacer's
-    (encoder.py) or the V2's (hall_encoder.py), as params says.
-
-    MujocoRacecar.go() calls advance() once a step, when the sensors are up
-    to date, as the firmware samples the encoder whatever the program does.
+    (encoder.py) or the V2's (hall_encoder.py). The firmware samples the
+    encoder whatever the program does, and MujocoRacecar.go() counts each
+    physics step on it.
     """
 
-    def __init__(
-        self,
-        scene: Scene,
-        data: mujoco.MjData,
-        params: EncoderParams | HallEncoderParams = _NEORACER.encoder,
-    ):
-        self._drive_pos = scene.car.sensors.drive_pos
-        self._data = data
-        self._dt = float(scene.model.opt.timestep)  # s
-        angle = self._angle()
-        match params:
-            case EncoderParams():
-                self._encoder = _Windowed(params, encoder.start(params, angle))
-            case HallEncoderParams():
-                self._encoder = _Hall(params, hall_encoder.start(params, angle))
-            case _:
-                assert_never(params)
-
-    def _angle(self) -> float:
-        return float(self._data.bind_scalar(self._drive_pos).data[0])  # rad
-
-    def advance(self) -> None:
-        """Count one physics step on the encoder."""
-        angle = self._angle()
-        match self._encoder:
-            case _Windowed(params, state):
-                state = encoder.step(params, state, angle, self._dt)
-                self._encoder = _Windowed(params, state)
-            case _Hall(params, state):
-                state = hall_encoder.step(params, state, angle, self._dt)
-                self._encoder = _Hall(params, state)
-            case _:
-                assert_never(self._encoder)
+    def __init__(self, car: _Car):
+        self._car = car
 
     def get_encoder_speed(self) -> float:
         """The car's speed (m/s) from its motor encoder, + = forward."""
-        return float(self._encoder.state.speed)
+        return float(self._car.state.encoder.state.speed)
 
 
 class MujocoController:
@@ -347,6 +230,9 @@ class Program:
     """None if the script has no slow update."""
 
 
+_NEORACER = racecar.neoracer_params()
+
+
 class MujocoRacecar:
     """racecar_core.Racecar backend over MuJoCo.
 
@@ -356,13 +242,10 @@ class MujocoRacecar:
     neoracer-labs/ultimate-wall-follower/wall_follower.py, runs without
     changes. Only its `import racecar_core` must give this class.
 
-    go() runs each physics step in two halves. mj_step1 brings the
-    positions, velocities and sensors up to data.time, and the encoder, the
-    LiDAR and the speed loop count the step that led there; update() reads
-    the car as it is at that time and sets its command, and mj_step2
-    integrates the next step with that command. go() returns after the
-    first half of a step, with every step counted and the sensors up to
-    date. So update() reads the sensors after the physics step that its last
+    go() calls update(), then runs a physics step with racecar.step, and
+    again. racecar.step leaves the positions, velocities and sensors at
+    data.time, with the encoder, the LiDAR and the speed loop counting the
+    step. So update() reads the sensors after the physics step that its last
     command caused, as in RacecarSim (Unity steps a frame, then calls
     Python), and no reading lags the car by a step, as it does after a whole
     mj_step.
@@ -383,19 +266,14 @@ class MujocoRacecar:
         data: mujoco.MjData,
         max_steps: int | None = None,
         held_buttons: Iterable[MujocoController.Button] = (MujocoController.Button.RB,),
-        car: CarParams = _NEORACER,
+        car: racecar.CarParams = _NEORACER,
     ):
-        # After mj_step, the sensors describe the state before its
-        # integration. mj_forward brings them up to data.time, so the
-        # encoder starts from the angle the drivetrain has now.
-        mujoco.mj_forward(scene.model, data)
-        self.drive = MujocoDrive(scene, data, car.start_max_speed, car.speed_loop)
-        self.lidar = MujocoLidar(scene, data, car.lidar)
-        self.physics = MujocoPhysics(scene, data, car.encoder)
+        self._car = _Car(scene, data, racecar.start(car, scene, data))
+        self.drive = MujocoDrive(self._car, car.start_max_speed)
+        self.lidar = MujocoLidar(self._car)
+        self.physics = MujocoPhysics(self._car)
         self.controller = MujocoController(held_buttons)
         self.display = MujocoDisplay()
-        self._model = scene.model
-        self._data = data
         self._dt = float(scene.model.opt.timestep)  # s
         self._max_steps = max_steps
         self._update_slow_time = 1.0  # s
@@ -416,7 +294,7 @@ class MujocoRacecar:
 
     def clock(self) -> float:
         """The simulated time (s): what a controller reads as the time."""
-        return float(self._data.time)
+        return float(self._car.data.time)
 
     def set_update_slow_time(self, time: float = 1.0) -> None:
         """Set the time (s) between two update_slow calls."""
@@ -429,7 +307,9 @@ class MujocoRacecar:
         program.start()
         slow_countdown = self._update_slow_time
         step = 0
-        mujoco.mj_step1(self._model, self._data)
+        car = self._car
+        # Whatever start() changed, the step's first half from data as it is.
+        mujoco.mj_step1(car.scene.model, car.data)
         while self._max_steps is None or step < self._max_steps:
             program.update()
             if program.update_slow is not None:
@@ -437,12 +317,5 @@ class MujocoRacecar:
                 if slow_countdown < 0:
                     program.update_slow()
                     slow_countdown = self._update_slow_time
-            mujoco.mj_step2(self._model, self._data)
-            # The first half of the next step: the sensors at the new time,
-            # so the encoder, the LiDAR and the speed loop count the step
-            # just finished.
-            mujoco.mj_step1(self._model, self._data)
-            self.lidar.advance()
-            self.physics.advance()
-            self.drive.advance()
+            car.state = racecar.step(car.scene, car.data, car.state)
             step += 1

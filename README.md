@@ -179,7 +179,7 @@ The model's eight rangefinders, `lidar_000` to `lidar_315`, have the same timing
 
 The spec records what the car's computer commands (`spec.Command`). On the NeoRacer it is a speed in both of the firmware's control modes: over serial from the car's computer, and from the radio in RC mode. Nothing sends the ESC a throttle, so `derive` refuses a NeoRacer spec whose computer commands one. The V2's drive board holds a speed too (`racecar_neo_v2.Drive.command`).
 
-`racecar_core_adapter.py` puts the actuators, the LiDAR, the encoder and the speed loop behind the `racecar_core` API that programs for the real car use. On the NeoRacer, `rc.drive.set_speed_angle(speed, angle)` asks for `speed` times the max speed, 6 m/s at full speed, and the loop holds it. Those programs run in the simulator unchanged:
+`racecar.py` runs the speed loop, the encoder and the LiDAR around each physics step, as the car's firmware runs them whatever its program does: `racecar.start` readies a car at rest, and `racecar.step` runs a physics step with the car's command and counts it on each part. `racecar_core_adapter.py` puts them behind the `racecar_core` API that programs for the real car use. On the NeoRacer, `rc.drive.set_speed_angle(speed, angle)` asks for `speed` times the max speed, 6 m/s at full speed, and the loop holds it. Those programs run in the simulator unchanged:
 
 ```sh
 python examples/run_racecar_core.py my_controller.py
@@ -237,7 +237,7 @@ cpu.close()
 - `src/neoracer_spec/` holds the spec and the pure functions on it, and needs only numpy. Anything computed from the spec that doesn't need MuJoCo belongs here, so that every simulator can use it.
 - `src/neoracer_mujoco/` holds everything that needs MuJoCo:
   - scenes, in `scene.py` and `assets.py`;
-  - sensors, in `sensors.py`, `encoder.py`, `lidar.py` and `truth.py`;
+  - sensors, in `sensors.py`, `encoder.py`, `lidar.py` and `truth.py`, and the firmware's speed loop, in `speed_loop.py`, which `racecar.py` runs around each physics step;
   - batches, in `batch.py`, `batch_warp.py` and `physics.py`;
   - track generation, in `track_generation/`;
   - controllers, in `control/`;
