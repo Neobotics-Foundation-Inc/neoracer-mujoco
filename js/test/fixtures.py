@@ -16,13 +16,14 @@ import mujoco
 
 from neoracer_mujoco import assets, batch, encoder, lidar, sim, speed_loop
 from neoracer_mujoco.control.steering import ControlCommand
-from neoracer_mujoco.racecar_core_adapter import MujocoDrive
+from neoracer_mujoco.racecar_core_adapter import MujocoDrive, MujocoRacecar
 from neoracer_spec.derive import derive
 from neoracer_spec.neoracer import NEORACER
 
 TRACK = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
 DRIVE = ControlCommand(throttle=0.5, steer=0.2)
 DRIVE_SECONDS = 1.0
+RACECAR_SPEED_ANGLE = (0.25, -0.2)
 
 
 def main(out: str) -> None:
@@ -93,6 +94,26 @@ def main(out: str) -> None:
             }
         )
 
+    # A second of set_speed_angle through the adapter, which counts each
+    # step after mj_step1.
+    rc_data = sim.settle(model)
+    rc = MujocoRacecar(scene, rc_data, max_steps=drive_steps)
+    rc.set_start_update(
+        lambda: rc.drive.set_speed_angle(*RACECAR_SPEED_ANGLE), lambda: None
+    )
+    rc.go()
+    racecar = {
+        "speed": RACECAR_SPEED_ANGLE[0],
+        "angle": RACECAR_SPEED_ANGLE[1],
+        "steps": drive_steps,
+        "qpos": rc_data.qpos.tolist(),
+        "encoder_speed": rc.physics.get_encoder_speed(),
+        "throttle": float(rc_data.bind_scalar(car.drive).ctrl[0])
+        / float(model.bind_scalar(car.drive).ctrlrange[1]),
+        "scan": rc.lidar._state.scan.tolist(),
+        "head": rc.lidar._state.head,
+    }
+
     fixtures = {
         "sizes": sizes,
         "timestep": model.opt.timestep,
@@ -113,6 +134,7 @@ def main(out: str) -> None:
         "encoder": {"angles": angles, "speeds": speeds},
         "speed_loop": {"commanded": commanded, "throttles": throttles},
         "commands": commands,
+        "racecar": racecar,
         "params": dataclasses.asdict(derive(NEORACER)),
     }
     with open(out, "w") as f:

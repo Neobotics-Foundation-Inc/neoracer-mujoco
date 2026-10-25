@@ -2,6 +2,7 @@ export * from './generated/shared.js';
 export * from './drive.js';
 export * from './encoder.js';
 export * from './lidar.js';
+export * from './racecar.js';
 export * from './rays.js';
 export * from './scene.js';
 export * from './speedLoop.js';

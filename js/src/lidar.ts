@@ -1,6 +1,7 @@
 /**
  * The spinning LiDAR, as lidar.py models it: slots measured when the head
- * passes them, from the pose of that physics step. Its rays are a
+ * passes them, from the pose of that physics step, which lidarPose reads
+ * from qpos, so it needs no mj_kinematics after mj_step. Its rays are a
  * RayScene's, which finds the distances that lidar.py's mj_multiRay finds.
  * Slot i points i * 360 / slots degrees clockwise from the front and reads
  * the distance (m), or NO_RETURN where the car blocks the rear or nothing
@@ -12,7 +13,7 @@
 import type { MjData } from '@mujoco/mujoco';
 
 import { RayScene } from './rays.js';
-import type { Mujoco, Scene } from './scene.js';
+import { type Car, type Mujoco, type Scene, multiply, normalize, rotation } from './scene.js';
 import { FIELD_EPS, NO_RETURN, SLOT_EPS } from './generated/shared.js';
 import { type LidarParams, NEORACER_PARAMS } from './generated/spec.js';
 
@@ -39,14 +40,27 @@ export interface LidarState {
   readonly rays: RayScene;
 }
 
+/**
+ * The LiDAR site's position and its rotation (world from site, row-major)
+ * at qpos, from the car's free joint and the site's mount on the car, as
+ * mj_kinematics puts them in site_xpos and site_xmat.
+ */
+export function lidarPose(car: Car, qpos: ArrayLike<number>): { pos: number[]; mat: number[] } {
+  const a = car.free;
+  const body = normalize([qpos[a + 3], qpos[a + 4], qpos[a + 5], qpos[a + 6]]);
+  const R = rotation(body), m = car.lidarMount.pos;
+  return {
+    pos: [0, 1, 2].map((r) => qpos[a + r] + R[3 * r] * m[0] + R[3 * r + 1] * m[1] + R[3 * r + 2] * m[2]),
+    mat: rotation(multiply(body, car.lidarMount.quat)),
+  };
+}
+
 /** The distance (m) of each of slots from the LiDAR at the pose of data, or NO_RETURN. */
 function measure(params: LidarParams, scene: Scene, data: MjData, rays: RayScene, slots: readonly number[]): Float64Array {
   const out = new Float64Array(slots.length).fill(NO_RETURN);
   if (!slots.some((slot) => isVisible(params, slot))) return out;
   rays.update(data);
-  const site = scene.car.lidar;
-  const o = data.site_xpos.subarray(3 * site, 3 * site + 3) as Float64Array;
-  const R = data.site_xmat.subarray(9 * site, 9 * site + 9) as Float64Array;
+  const { pos: o, mat: R } = lidarPose(scene.car, data.qpos);
   const d = new Float64Array(3);
   slots.forEach((slot, k) => {
     if (!isVisible(params, slot)) return;
