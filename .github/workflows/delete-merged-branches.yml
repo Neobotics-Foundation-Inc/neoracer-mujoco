@@ -1,0 +1,54 @@
+name: Delete merged branches
+
+# Deletes each branch under bassel/ that is done with: it has a pull request,
+# none of its pull requests is open, and it still points at the head of one of
+# them, so every commit on it is kept by a pull request. Other people's
+# branches are theirs to delete. It runs on each push to main, which is when a
+# pull request merges, and from "Run workflow" in the Actions tab. A deleted
+# branch can be restored from its pull request's page.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # delete the branches
+  pull-requests: read
+
+# One run at a time, so that two runs never delete the same branch.
+concurrency:
+  group: delete-merged-branches
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      # For origin and the job token's credentials, which git push uses.
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Delete the branches under bassel/ whose pull requests are closed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/branches" \
+            --jq '.[] | select(.name | startswith("bassel/")) | "\(.name) \(.commit.sha)"' > "$RUNNER_TEMP/branches.txt"
+          # The loop reads the list on fd 3, so that no command in it can read
+          # the list from stdin. A pull request from a fork is not the branch's,
+          # even under the same name.
+          while read -r branch sha <&3; do
+            verdict=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state all --limit 1000 \
+              --json state,headRefOid,isCrossRepository \
+              --jq "map(select(.isCrossRepository | not))
+                | if length > 0 and all(.state != \"OPEN\") and any(.headRefOid == \"$sha\")
+                  then \"delete\" else \"keep\" end")
+            if [ "$verdict" = delete ]; then
+              # If the branch moved since it was listed, the lease fails the
+              # push, and so the run, and the branch stays.
+              git push -q --force-with-lease="refs/heads/$branch:$sha" origin ":refs/heads/$branch"
+              echo "deleted $branch"
+            else
+              echo "kept $branch"
+            fi
+          done 3< "$RUNNER_TEMP/branches.txt"
