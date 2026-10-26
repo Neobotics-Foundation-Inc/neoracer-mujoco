@@ -3,7 +3,8 @@ name: Release
 # Builds the wheel, checks that the installed wheel can load the car, and
 # attaches the wheel, the car as neoracer.mjz and the JS package (js/) to a
 # GitHub Release. Other repos, such as neoracer-rl, install neoracer-mujoco
-# from that wheel.
+# from that wheel. It then opens a pull request in neoracer-rl that moves its
+# pin to the new wheel.
 #
 # Start a release in one of two ways:
 # - Push a version tag such as v0.2.0. The tag must match the version in pyproject.toml.
@@ -22,6 +23,9 @@ permissions:
 jobs:
   wheel:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
     steps:
       # The meshes in assets/meshes/ are Git LFS objects. The wheel must contain
       # the real files, not the LFS pointers. The job token can write to the repo,
@@ -136,3 +140,44 @@ jobs:
           \`\`\`
           EOF
           gh release create "$TAG" dist/*.whl dist/neoracer.mjz dist/neoracer-mujoco-*.tgz --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --notes-file notes.md --generate-notes
+
+  # neoracer-rl pins the wheel of one release in its pyproject.toml. This job
+  # moves both pins to the new release on a branch of neoracer-rl and opens a
+  # pull request there, so neoracer-rl's own CI runs on the new wheel. It needs
+  # the repository secret NEORACER_RL_TOKEN: a fine-grained token for
+  # neoracer-rl alone, with read and write access to its contents and pull
+  # requests. A pull request opened with the job token would start no CI.
+  # Without the secret the job warns and stops, and the release stands.
+  neoracer-rl:
+    needs: wheel
+    runs-on: ubuntu-latest
+    permissions: {}
+    env:
+      GH_TOKEN: ${{ secrets.NEORACER_RL_TOKEN }}
+      TAG: ${{ needs.wheel.outputs.tag }}
+      VERSION: ${{ needs.wheel.outputs.version }}
+      REPO: Neobotics-Foundation-Inc/neoracer-rl
+    steps:
+      - name: Open the pull request that moves neoracer-rl to this release
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::NEORACER_RL_TOKEN is not set, so no neoracer-rl pull request"
+            exit 0
+          fi
+          gh repo clone "$REPO" rl -- --depth 1
+          cd rl
+          gh auth setup-git
+          pin='releases/download/v[0-9.]+/neoracer_mujoco-[0-9.]+-py3-none-any\.whl'
+          sed -i -E "s#$pin#releases/download/$TAG/neoracer_mujoco-$VERSION-py3-none-any.whl#g" pyproject.toml
+          if git diff --quiet; then
+            echo "neoracer-rl already pins $TAG"
+            exit 0
+          fi
+          branch="bassel/neoracer-mujoco-$VERSION"
+          git switch -c "$branch"
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qam "Move to neoracer-mujoco $VERSION"
+          git push origin "$branch"
+          gh pr create --repo "$REPO" --base main --head "$branch" \
+            --title "Move to neoracer-mujoco $VERSION" \
+            --body "neoracer-mujoco $TAG is out. This moves both pins in pyproject.toml, the package and its jax extra, to its wheel, so CI runs the test suite on it. Changes that the release needs in this repo go on this branch before it merges."
