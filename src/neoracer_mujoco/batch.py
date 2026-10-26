@@ -46,10 +46,9 @@ alike.
 """
 
 import copy
-import functools
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, assert_never
 
 import mujoco
 import numpy as np
@@ -302,8 +301,7 @@ def drive[S, A: Array](
         commanded,
         steer,
         nstep,
-        functools.partial(command, model, car),
-        functools.partial(drive_angle, model, car),
+        car,
     )
 
 
@@ -330,8 +328,7 @@ def drive_cars[S, A: Array](
         commanded,
         steer,
         nstep,
-        functools.partial(command_cars, model, cars),
-        functools.partial(_drive_angles, model, cars),
+        tuple(cars),
     )
 
 
@@ -344,11 +341,10 @@ def _drive[S, A: Array](
     commanded: npt.NDArray[np.float64],
     steer: A,
     nstep: int,
-    ctrl: Callable[[A, A], A],
-    angle: Callable[[A], A],
+    cars: Car | tuple[Car, ...],
 ) -> tuple[S, A, speed_loop.SpeedLoopState]:
-    """drive, with ctrl giving the ctrl rows of a throttle and a steer, and
-    angle the drivetrains' angles in the rows of a qpos."""
+    """drive of one car, with arrays of shape (nbatch,), or drive_cars of a
+    tuple of them, with the cars on the arrays' last axis."""
     if nstep < 1:
         raise ValueError(f"nstep must be at least 1, not {nstep}")
     dt = float(model.opt.timestep)
@@ -358,14 +354,42 @@ def _drive[S, A: Array](
     while left > 0:
         k = min(left, speed_loop.steps_to_tick(loop, dt))
         throttle = xp.asarray(np.broadcast_to(loop.throttle, commanded.shape))
-        state, sensordata = sim.step(state, ctrl(throttle, steer), k)
-        drivetrain = np.asarray(angle(sim.qpos(state)))
+        state, sensordata = sim.step(state, _command(model, cars, throttle, steer), k)
+        drivetrain = _drive_angles(model, cars, sim.qpos(state))
         for _ in range(k):
             loop = speed_loop.step(params, loop, commanded, drivetrain, dt)
         pieces.append(sensordata)
         left -= k
     xs = pieces[0].__array_namespace__()  # the backend's: numpy or jax.numpy
     return state, xs.concatenate(pieces, axis=1), loop
+
+
+def _command[A: Array](
+    model: mujoco.MjModel, cars: Car | tuple[Car, ...], throttle: A, steer: A
+) -> A:
+    """command of one car, or command_cars of a tuple of them."""
+    match cars:
+        case Car():
+            return command(model, cars, throttle, steer)
+        case tuple():
+            return command_cars(model, cars, throttle, steer)
+        case _:
+            assert_never(cars)
+
+
+def _drive_angles[A: Array](
+    model: mujoco.MjModel, cars: Car | tuple[Car, ...], qpos: A
+) -> npt.NDArray[np.float64]:
+    """drive_angle of one car, or of each of a tuple of them on the last
+    axis, on the host."""
+    match cars:
+        case Car():
+            return np.asarray(drive_angle(model, cars, qpos))
+        case tuple():
+            angles = [np.asarray(drive_angle(model, car, qpos)) for car in cars]
+            return np.stack(angles, axis=-1)
+        case _:
+            assert_never(cars)
 
 
 def drive_angle[A: Array](model: mujoco.MjModel, car: Car, qpos: A) -> A:
@@ -389,12 +413,6 @@ def drive_angle[A: Array](model: mujoco.MjModel, car: Car, qpos: A) -> A:
         joint = int(model.wrap_objid[w])
         angle = angle + float(model.wrap_prm[w]) * qpos[..., model.jnt_qposadr[joint]]
     return angle
-
-
-def _drive_angles[A: Array](model: mujoco.MjModel, cars: Sequence[Car], qpos: A) -> A:
-    """drive_angle of each of cars, on the last axis: shape (..., len(cars))."""
-    xp = qpos.__array_namespace__()  # numpy or jax.numpy
-    return xp.stack([drive_angle(model, car, qpos) for car in cars], axis=-1)
 
 
 def read[A: Array](model: mujoco.MjModel, sensordata: A, sensor: mujoco.MjsSensor) -> A:
