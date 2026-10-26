@@ -173,7 +173,7 @@ jobs:
           if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
             echo "$branch is already there"
           else
-            pin='releases/download/v[0-9.]+/neoracer_mujoco-[0-9.]+-py3-none-any\.whl'
+            pin='releases/download/v[^/]+/neoracer_mujoco-[^-]+-py3-none-any\.whl'
             sed -i -E "s#$pin#releases/download/$TAG/neoracer_mujoco-$VERSION-py3-none-any.whl#g" pyproject.toml
             if git diff --quiet; then
               echo "neoracer-rl already pins $TAG"
