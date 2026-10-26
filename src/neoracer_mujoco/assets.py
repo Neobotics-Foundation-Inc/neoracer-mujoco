@@ -1,5 +1,5 @@
 """
-Locating and loading the car and track XMLs, and putting the car on a track.
+Locating and loading the car and track XMLs, and putting cars on a track.
 
 The XMLs and meshes live in assets/ at the repo root. A wheel copies assets/
 into the package as neoracer_mujoco/data (see pyproject.toml). In a source
@@ -18,9 +18,12 @@ import os
 import re
 import shutil
 import zipfile
+from collections.abc import Sequence
+from dataclasses import dataclass
 from importlib import resources
 
 import mujoco
+import numpy as np
 
 from neoracer_spec import derive_v2, mjcf
 from neoracer_spec.derive import derive
@@ -45,7 +48,7 @@ DEFAULT_CAR = os.path.join(ASSET_DIR, "neoracer.xml")
 MJZ_MODEL = "model.xml"
 """The name of the XML in an archive of write_mjz."""
 START_SITE = "start"
-"""The site of a track where compose puts the car."""
+"""The site of a track where attach_car puts a car."""
 
 
 def cars() -> list[str]:
@@ -116,12 +119,11 @@ def compose(
     car: str | os.PathLike[str] | mujoco.MjSpec = DEFAULT_CAR,
     visuals: bool = True,
 ) -> Scene:
-    """Compile the track with the car's root body (contract.CAR_BODY)
-    attached at the track's start: its site START_SITE, facing the site's
-    +X, or the origin, facing +X, if it has none. The site must be on the
-    world body, as the car's free joint must. The car is a car XML's
-    path or a car's MjSpec, such as export.spec(car) for a variant. Neither
-    track nor a car's MjSpec is changed: the car is attached from copies.
+    """Compile the track with the car attached at the track's start
+    (attach_car), the car's elements keeping their names. The car is a car
+    XML's path or a car's MjSpec, such as export.spec(car) for a variant.
+    Neither track nor a car's MjSpec is changed: the car is attached from
+    copies.
 
     Only the car body is attached, so the track keeps its own floor, and
     the track XML never names the car file. The scene takes the car's
@@ -135,16 +137,63 @@ def compose(
 
         compose(mujoco.MjSpec.from_file(os.path.join(TRACK_DIR, "f1_track.xml")))
     """
+    return compose_cars(track, (Entry("", car=car),), visuals)
+
+
+@dataclass(frozen=True)
+class Entry:
+    """A car of a scene of several (compose_cars)."""
+
+    prefix: str
+    """What the names of the car's elements start with in the scene: its
+    motor is prefix + "motor"."""
+    offset: tuple[float, float] = (0.0, 0.0)
+    """Where the car starts (m), from the track's start, in its frame: +X
+    forward, +Y left."""
+    car: str | os.PathLike[str] | mujoco.MjSpec = DEFAULT_CAR
+    """A car XML's path or a car's MjSpec, as compose takes."""
+
+
+def compose_cars(
+    track: mujoco.MjSpec, entries: Sequence[Entry], visuals: bool = True
+) -> Scene:
+    """Compile the track with each entry's car attached (attach_car), in
+    order: scene.cars[k] is the car of entries[k]. Neither track nor a car's
+    MjSpec is changed, and visuals is as for compose. Raise ValueError if an
+    entry's prefix starts another's (scene.compile_scene).
+
+        grid = [Entry("a/"), Entry("b/", offset=(-0.6, 0.0))]
+        scene = compose_cars(track, grid, visuals=False)
+    """
     scene = track.copy()
+    for entry in entries:
+        attach_car(scene, entry.car, entry.prefix, entry.offset, visuals)
+    return compile_scene(scene, [entry.prefix for entry in entries])
+
+
+def attach_car(
+    spec: mujoco.MjSpec,
+    car: str | os.PathLike[str] | mujoco.MjSpec = DEFAULT_CAR,
+    prefix: str = "",
+    offset: tuple[float, float] = (0.0, 0.0),
+    visuals: bool = True,
+) -> None:
+    """Attach the car's root body (contract.CAR_BODY) to spec, with the names
+    of its elements behind prefix, at the track's start: its site
+    START_SITE, facing the site's +X, or the origin, facing +X, if it has
+    none, moved by offset (m) in that frame, +X forward and +Y left. The site
+    must be on the world body, as the car's free joint must. A car's MjSpec
+    is not changed: the car is attached from a copy. spec takes the car's
+    <option>, and visuals is as for compose."""
     car = car.copy() if isinstance(car, mujoco.MjSpec) else from_file(car)
-    scene.option = car.option
-    start = scene.site(START_SITE)
-    if start is not None and start.parent != scene.worldbody:
+    spec.option = car.option
+    start = spec.site(START_SITE)
+    if start is not None and start.parent != spec.worldbody:
         raise ValueError(
             f"the track's {START_SITE} site is on the body {start.parent.name},"
             " not on the world body, where the car's free joint must be"
         )
-    mount = start if start is not None else scene.worldbody.add_frame()
+    mount = start if start is not None else spec.worldbody.add_frame()
     if not visuals:
         delete_visuals(car)
     # The car's root default class is "main", as the track's is. Attached
@@ -152,8 +201,10 @@ def compose(
     # <default> with no class, which the XML parser rejects. A name of its
     # own makes the scene's XML load again.
     car.default.name = "car"
-    mount.attach_body(car.body(contract.CAR_BODY), "", "")
-    return compile_scene(scene)
+    body = mount.attach_body(car.body(contract.CAR_BODY), prefix, "")
+    # attach_body puts the body in a frame at the mount, so its pos is in
+    # the start's frame.
+    body.pos = np.asarray(body.pos) + [*offset, 0.0]
 
 
 def delete_visuals(spec: mujoco.MjSpec) -> None:

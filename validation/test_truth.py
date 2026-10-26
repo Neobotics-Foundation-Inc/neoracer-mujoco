@@ -4,10 +4,12 @@ already has elsewhere, so code can read it from sensordata alone.
 """
 
 import os
+from collections.abc import Callable
 
 import mujoco
 import numpy as np
 import pytest
+from scenes import two_cars
 
 from neoracer_mujoco import Scene, assets, sim, truth
 from neoracer_mujoco.control.steering import ControlCommand
@@ -70,6 +72,51 @@ def test_wall_contact_counts_the_contacts_with_the_walls():
         assert data.bind_scalar(sensor).data[0] == expected
         hits += expected > 0
     assert hits > 0, "the drive never touched a wall"
+
+
+def test_each_car_has_its_own_truth_and_two_cars_count_their_contacts():
+    """A car that drives into the back of another: after every step, each
+    car's truth.pos is the xpos of its own body and its wall_contact counts
+    its own contacts with the walls, and the scene's car_contacts sensor of
+    the two counts the contacts in data.contact between a geom of one car's
+    body tree and a geom of the other's."""
+    scene = two_cars(behind=0.8)
+    model = scene.model
+    data = mujoco.MjData(model)
+    walls = model.bind_scalar(scene.spec.body(WALLS_BODY)).id
+    trees = []
+    for car in scene.cars:
+        root = model.bind_scalar(car.body).id
+        trees.append(lambda b, root=root: model.body_rootid[b] == root)
+    touches = 0
+    for _ in range(600):
+        command = ControlCommand(throttle=0.5, steer=0.0)
+        sim.apply_command(scene.cars[1], data, command)  # the car behind
+        mujoco.mj_step(model, data)
+        for car, tree in zip(scene.cars, trees, strict=True):
+            frame = data.bind_scalar(car.body)
+            assert np.array_equal(data.bind_scalar(car.truth.pos).data, frame.xpos)
+            wall = _contacts(model, data, tree, lambda b: b == walls)
+            assert data.bind_scalar(car.truth.wall_contact).data[0] == wall
+        between = _contacts(model, data, trees[0], trees[1])
+        assert data.bind_scalar(scene.car_contacts[0, 1]).data[0] == between
+        touches += between > 0
+    assert touches > 0, "the cars never touched"
+
+
+def _contacts(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    one: Callable[[int], bool],
+    other: Callable[[int], bool],
+) -> int:
+    """The contacts in data.contact between a geom of a body that one
+    accepts and a geom of a body that other accepts."""
+    count = 0
+    for contact in data.contact[: data.ncon]:
+        b1, b2 = model.geom_bodyid[[contact.geom1, contact.geom2]]
+        count += bool((one(b1) and other(b2)) or (other(b1) and one(b2)))
+    return count
 
 
 def test_a_scene_spec_compiles_again():

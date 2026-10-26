@@ -3,8 +3,8 @@ Step a batch of copies of one scene at once, and read and write the batch
 arrays by spec element.
 
 A batch holds nbatch environments of one scene. Each row has its own
-physics.Physics, so a batch can train on many slightly different cars (see
-physics.py). You choose the backend:
+physics (physics.ScenePhysics), so a batch can train on many slightly
+different cars (see physics.py). You choose the backend:
 
 - CpuBatch, optimized for CPU. It keeps one row of mjSTATE_FULLPHYSICS
   state per environment and steps the rows with mujoco.rollout on a pool of
@@ -35,13 +35,19 @@ stepped the same way. DataBatch steps one MjData so, as a batch of one row,
 and drive takes it as it takes a batch, so a single-car environment that
 owns one MjData steps it as a batch row steps.
 
-A batch array has no bind, so command, read and drive_angle bind the
-element to the model and index the array with its address. They are the
-only code that uses an address. They work on numpy and JAX arrays alike.
+A row of a scene of several cars (assets.compose_cars) holds them all:
+command_cars gives each car its throttle and steer, and drive_cars runs
+each car's speed loop, with the cars on the arrays' last axis.
+
+A batch array has no bind, so command, command_cars, read and drive_angle
+bind the element to the model and index the array with its address. They
+are the only code that uses an address. They work on numpy and JAX arrays
+alike.
 """
 
 import copy
-from collections.abc import Sequence
+import functools
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -54,7 +60,7 @@ from neoracer_spec.derive import SpeedLoopParams
 
 from . import contract, speed_loop
 from .contract import Array
-from .physics import Physics, apply_physics
+from .physics import Physics, ScenePhysics, apply_physics
 from .scene import Car, Scene
 
 type States = npt.NDArray[np.float64]
@@ -90,7 +96,7 @@ class Batch[S, A, M](Stepper[S, A], Protocol):
         self,
         datas: Sequence[mujoco.MjData],
         scenes: Sequence[Scene],
-        physics: Sequence[Physics],
+        physics: Sequence[ScenePhysics],
     ) -> S: ...
 
     def reset(self, state: S, done: M, initial: S) -> S: ...
@@ -102,7 +108,7 @@ class CpuState:
 
     rows: States
     models: tuple[mujoco.MjModel, ...]
-    """One model per row. Rows with the same scene and Physics share one."""
+    """One model per row. Rows with the same scene and physics share one."""
 
 
 class CpuBatch:
@@ -123,7 +129,7 @@ class CpuBatch:
         self,
         datas: Sequence[mujoco.MjData],
         scenes: Sequence[Scene],
-        physics: Sequence[Physics],
+        physics: Sequence[ScenePhysics],
     ) -> CpuState:
         """A state whose row i starts from the physics state of datas[i] and
         steps on scenes[i] with physics[i]. Raise ValueError unless there is
@@ -136,7 +142,7 @@ class CpuBatch:
         rows = np.empty((self.nbatch, mujoco.mj_stateSize(self.model, FULL_PHYSICS)))
         for row, data in zip(rows, datas, strict=True):
             mujoco.mj_getState(self.model, data, row, FULL_PHYSICS)
-        models: dict[tuple[int, Physics], mujoco.MjModel] = {}
+        models: dict[tuple[int, ScenePhysics], mujoco.MjModel] = {}
         for scene, p in zip(scenes, physics, strict=True):
             if (id(scene), p) not in models:
                 model = scene.model
@@ -235,20 +241,27 @@ def command[A: Array](model: mujoco.MjModel, car: Car, throttle: A, steer: A) ->
     voltage limit, the battery), and the steer servo steer (rad, + = left).
     throttle and steer have shape (nbatch,). Raise ValueError if model has
     actuators that are not the car's."""
-    elements = (*car.throttled, car.steer)
-    if model.nu != len(elements):
-        raise ValueError(
-            f"the model has {model.nu} actuators, the car has {len(elements)}"
-        )
+    return command_cars(model, [car], throttle[..., None], steer[..., None])
+
+
+def command_cars[A: Array](
+    model: mujoco.MjModel, cars: Sequence[Car], throttle: A, steer: A
+) -> A:
+    """The ctrl rows (nbatch, nu) that give each of cars its throttle and its
+    steer, as command gives one car: throttle[:, k] and steer[:, k], of
+    shape (nbatch, len(cars)), are cars[k]'s. Raise ValueError if model has
+    actuators that are none of the cars'."""
+    count = sum(len(car.throttled) + 1 for car in cars)
+    if model.nu != count:
+        raise ValueError(f"the model has {model.nu} actuators, the cars have {count}")
     xp = throttle.__array_namespace__()  # numpy or jax.numpy
-    values = [
-        contract.throttle_ctrl(contract.throttle_map(model, actuator), throttle)
-        for actuator in car.throttled
-    ]
-    values.append(steer)
-    column = {
-        int(model.bind_scalar(a).id): v for a, v in zip(elements, values, strict=True)
-    }
+    column = {}
+    for k, car in enumerate(cars):
+        for actuator in car.throttled:
+            tmap = contract.throttle_map(model, actuator)
+            value = contract.throttle_ctrl(tmap, throttle[..., k])
+            column[int(model.bind_scalar(actuator).id)] = value
+        column[int(model.bind_scalar(car.steer).id)] = steer[..., k]
     return xp.stack([column[i] for i in range(model.nu)], axis=-1)
 
 
@@ -278,6 +291,62 @@ def drive[S, A: Array](
 
     Limit: the loop runs on the host in numpy, so on Warp each piece sends
     the throttle to the GPU and brings the drivetrain's angles back."""
+    return _drive(
+        sim,
+        model,
+        params,
+        state,
+        loop,
+        commanded,
+        steer,
+        nstep,
+        functools.partial(command, model, car),
+        functools.partial(drive_angle, model, car),
+    )
+
+
+def drive_cars[S, A: Array](
+    sim: Stepper[S, A],
+    model: mujoco.MjModel,
+    cars: Sequence[Car],
+    params: SpeedLoopParams,
+    state: S,
+    loop: speed_loop.SpeedLoopState,
+    commanded: npt.NDArray[np.float64],
+    steer: A,
+    nstep: int,
+) -> tuple[S, A, speed_loop.SpeedLoopState]:
+    """drive for each of cars, each with a speed loop of params:
+    commanded[:, k] and steer[:, k], of shape (nbatch, len(cars)), are
+    cars[k]'s, and so is each array of the loop's."""
+    return _drive(
+        sim,
+        model,
+        params,
+        state,
+        loop,
+        commanded,
+        steer,
+        nstep,
+        functools.partial(command_cars, model, cars),
+        functools.partial(_drive_angles, model, cars),
+    )
+
+
+def _drive[S, A: Array](
+    sim: Stepper[S, A],
+    model: mujoco.MjModel,
+    params: SpeedLoopParams,
+    state: S,
+    loop: speed_loop.SpeedLoopState,
+    commanded: npt.NDArray[np.float64],
+    steer: A,
+    nstep: int,
+    ctrl: Callable[[A, A], A],
+    angle: Callable[[A], A],
+) -> tuple[S, A, speed_loop.SpeedLoopState]:
+    """drive, with ctrl giving the ctrl rows of a throttle and a steer, and
+    angle the drivetrains' angles in the rows of a qpos."""
     if nstep < 1:
         raise ValueError(f"nstep must be at least 1, not {nstep}")
     dt = float(model.opt.timestep)
@@ -287,10 +356,10 @@ def drive[S, A: Array](
     while left > 0:
         k = min(left, speed_loop.steps_to_tick(loop, dt))
         throttle = xp.asarray(np.broadcast_to(loop.throttle, commanded.shape))
-        state, sensordata = sim.step(state, command(model, car, throttle, steer), k)
-        angle = np.asarray(drive_angle(model, car, sim.qpos(state)))
+        state, sensordata = sim.step(state, ctrl(throttle, steer), k)
+        drivetrain = np.asarray(angle(sim.qpos(state)))
         for _ in range(k):
-            loop = speed_loop.step(params, loop, commanded, angle, dt)
+            loop = speed_loop.step(params, loop, commanded, drivetrain, dt)
         pieces.append(sensordata)
         left -= k
     xs = pieces[0].__array_namespace__()  # the backend's: numpy or jax.numpy
@@ -318,6 +387,12 @@ def drive_angle[A: Array](model: mujoco.MjModel, car: Car, qpos: A) -> A:
         joint = int(model.wrap_objid[w])
         angle = angle + float(model.wrap_prm[w]) * qpos[..., model.jnt_qposadr[joint]]
     return angle
+
+
+def _drive_angles[A: Array](model: mujoco.MjModel, cars: Sequence[Car], qpos: A) -> A:
+    """drive_angle of each of cars, on the last axis: shape (..., len(cars))."""
+    xp = qpos.__array_namespace__()  # numpy or jax.numpy
+    return xp.stack([drive_angle(model, car, qpos) for car in cars], axis=-1)
 
 
 def read[A: Array](model: mujoco.MjModel, sensordata: A, sensor: mujoco.MjsSensor) -> A:

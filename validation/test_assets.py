@@ -13,9 +13,9 @@ import mujoco
 import numpy as np
 import pytest
 from cases import case
-from scenes import assert_car_rests, assert_takes_car_solver_options
+from scenes import assert_car_rests, assert_takes_car_solver_options, two_cars
 
-from neoracer_mujoco import assets, sim
+from neoracer_mujoco import assets, collision, sim
 from neoracer_mujoco.control.steering import ControlCommand
 
 TRACKS = assets.tracks()
@@ -62,6 +62,67 @@ def test_the_car_starts_at_the_tracks_start():
         assets.compose(nested, visuals=False)
 
 
+def test_each_entry_starts_at_its_offset_from_the_start():
+    """compose_cars puts each car where compose puts the car, moved by the
+    entry's offset in the start's frame: forward along the site's +X, left
+    along its +Y."""
+    track = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xml"))
+    yaw = 0.6
+    start = track.site(assets.START_SITE)
+    start.pos = np.array([1.0, -2.0, 0.0])
+    start.quat = np.array([np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)])
+    one = assets.compose(track, visuals=False)
+    alone = one.model.bind_scalar(one.car.body)
+    entries = [assets.Entry("a/", (0.3, -0.2)), assets.Entry("b/", (-0.8, 0.25))]
+    scene = assets.compose_cars(track, entries, visuals=False)
+    forward = np.array([np.cos(yaw), np.sin(yaw)])
+    left = np.array([-np.sin(yaw), np.cos(yaw)])
+    for entry, car in zip(entries, scene.cars, strict=True):
+        with case(entry.prefix):
+            body = scene.model.bind_scalar(car.body)
+            x, y = entry.offset
+            np.testing.assert_allclose(
+                body.pos, [*(alone.pos[:2] + x * forward + y * left), alone.pos[2]]
+            )
+            np.testing.assert_allclose(body.quat, alone.quat, atol=1e-12)
+
+
+def test_a_car_far_from_the_others_drives_as_the_only_car():
+    """The cars of a scene share only its physics step: a car with another
+    car 1.5 m behind it drives, steers and hits the wall as the car of a
+    one-car scene does, to rounding."""
+    track = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xml"))
+    one, two = assets.compose(track, visuals=False), two_cars()
+    alone, data = mujoco.MjData(one.model), mujoco.MjData(two.model)
+    hits = 0
+    for k in range(3000):
+        command = ControlCommand(throttle=0.5, steer=0.3 if k > 700 else 0.0)
+        sim.apply_command(one.car, alone, command)
+        sim.apply_command(two.car, data, command)
+        mujoco.mj_step(one.model, alone)
+        mujoco.mj_step(two.model, data)
+        np.testing.assert_allclose(
+            data.bind_scalar(two.car.joint).qpos,
+            alone.bind_scalar(one.car.joint).qpos,
+            rtol=0,
+            atol=1e-9,
+            err_msg=f"step {k}",
+        )
+        hits += collision.car_touches_wall(alone, one.car)
+    assert hits > 0, "the drive never touched a wall"
+
+
+def test_compose_cars_refuses_a_prefix_that_starts_another():
+    """With a prefix that starts another, the second car's elements would be
+    the first car's too. (MuJoCo refuses two cars with the same prefix: their
+    elements' names repeat.)"""
+    track = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xml"))
+    for prefixes in (("", "b/"), ("a/", "a/b/")):
+        with case(prefixes), pytest.raises(ValueError, match="starts"):
+            entries = [assets.Entry(p, (-1.5 * k, 0.0)) for k, p in enumerate(prefixes)]
+            assets.compose_cars(track, entries, visuals=False)
+
+
 def test_the_wheel_puts_assets_where_assets_py_looks():
     """pyproject.toml copies assets/ into the wheel, and assets.py finds it
     there by name. If one of them changes the name, an installed package
@@ -105,22 +166,29 @@ def test_a_scene_without_visuals_senses_the_same():
 
 
 def test_a_scene_reloads_from_its_xml():
-    """The XML of a scene composed on any track compiles to the same model, up
+    """The XML of a scene composed on any track, or of two cars, compiles to
+    the same model, up
     to the six significant digits that MuJoCo's XML writer keeps. Without
     visuals, the scene names no mesh file that from_xml_string would have to
     find."""
-    for track in TRACKS:
-        scene = assets.compose(mujoco.MjSpec.from_file(track), visuals=False)
+    scenes = [
+        (
+            os.path.basename(track),
+            assets.compose(mujoco.MjSpec.from_file(track), visuals=False),
+        )
+        for track in TRACKS
+    ]
+    for name, scene in [*scenes, ("two cars", two_cars())]:
         reloaded = mujoco.MjModel.from_xml_string(scene.spec.to_xml())
-        for name in dir(scene.model):
-            value = getattr(scene.model, name)
+        for field in dir(scene.model):
+            value = getattr(scene.model, field)
             if isinstance(value, np.ndarray):
                 np.testing.assert_allclose(
-                    getattr(reloaded, name),
+                    getattr(reloaded, field),
                     value,
                     rtol=1e-5,
                     atol=1e-6,
-                    err_msg=f"{os.path.basename(track)}: {name}",
+                    err_msg=f"{name}: {field}",
                 )
 
 

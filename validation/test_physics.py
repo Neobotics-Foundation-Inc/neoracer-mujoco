@@ -12,11 +12,12 @@ import os
 import mujoco
 import numpy as np
 import pytest
+from scenes import two_cars
 
 from neoracer_mujoco import Scene, assets, batch, contract, physics, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
-from neoracer_mujoco.physics import Physics, PhysicsRanges, Range
-from neoracer_mujoco.scene import find_car
+from neoracer_mujoco.physics import Physics, PhysicsRanges, Range, ScenePhysics
+from neoracer_mujoco.scene import Car, compile_scene
 from neoracer_spec import derive, derive_v2
 from neoracer_spec.neoracer import NEORACER
 from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
@@ -36,7 +37,7 @@ def _scene(car: str = assets.DEFAULT_CAR) -> Scene:
     return assets.compose(mujoco.MjSpec.from_file(TRACK), car)
 
 
-def _applied(scene: Scene, p: Physics) -> mujoco.MjModel:
+def _applied(scene: Scene, p: ScenePhysics) -> mujoco.MjModel:
     model = copy.deepcopy(scene.model)
     physics.apply_physics(model, scene, p)
     return model
@@ -82,8 +83,7 @@ def test_apply_physics_equals_compiling_the_changed_car():
             beam = edited.sensor(name)
             beam.interval = np.asarray(beam.interval) / CHANGED.lidar_rate
             beam.delay /= CHANGED.lidar_rate
-        model = edited.compile()  # edited has the truth sensors already
-        compiled = Scene(edited, model, find_car(edited, model))
+        compiled = compile_scene(edited)
         np.testing.assert_array_equal(
             _drive(_applied(scene, CHANGED), scene),
             _drive(compiled.model, compiled),
@@ -117,6 +117,49 @@ def test_the_nominal_physics_changes_no_field():
                 physics.field(scene.model, name),
                 err_msg=f"{car_path}: {name}",
             )
+
+
+def test_each_car_takes_its_own_physics():
+    """In a scene of two cars, a tuple of physics gives each car the
+    parameters that its physics gives every car, and one Physics gives the
+    tuple of it for each car. A tuple without one for each car is refused."""
+    scene = two_cars()
+    mixed = _applied(scene, (CHANGED, Physics()))
+    for car, reference in zip(scene.cars, (_applied(scene, CHANGED), scene.model)):
+        for name, value in _car_fields(mixed, car).items():
+            np.testing.assert_array_equal(
+                value, _car_fields(reference, car)[name], err_msg=name
+            )
+    each = _applied(scene, (CHANGED, CHANGED))
+    for name in physics.FIELDS:
+        np.testing.assert_array_equal(
+            physics.field(each, name),
+            physics.field(_applied(scene, CHANGED), name),
+            err_msg=name,
+        )
+    with pytest.raises(ValueError, match="cars"):
+        _applied(scene, (CHANGED,))
+
+
+def _car_fields(model: mujoco.MjModel, car: Car) -> dict[str, np.ndarray]:
+    """The values in model of every parameter that apply_physics writes for
+    car, and of those that mj_setConst derives for its body and actuators."""
+    body = model.bind_scalar(car.body)
+    out = {
+        "mass": body.mass,
+        "inertia": body.inertia,
+        "subtreemass": body.subtreemass,
+        "invweight0": body.invweight0,
+    }
+    for wheel in car.wheels:
+        out[wheel.name] = model.bind_scalar(wheel).friction
+    for actuator in (*car.throttled, car.steer):
+        bound = model.bind_scalar(actuator)
+        out[actuator.name] = np.concatenate([bound.gainprm, bound.acc0])
+    for beam in sensors.LIDAR_BEAM_ORDER:
+        i = model.bind_scalar(getattr(car.sensors, beam)).id
+        out[beam] = np.array([*model.sensor_interval[i], model.sensor_delay[i]])
+    return {name: np.array(value) for name, value in out.items()}
 
 
 def test_fields_lists_every_field_that_apply_physics_changes():

@@ -103,7 +103,8 @@ def test_records_used_by_neoracer_rl_keep_their_fields():
 
     assert {"throttle", "steer"} <= fields(ControlCommand)
     assert {"steer_rad"} <= fields(ActuatorLimits)
-    assert {"spec", "model", "car"} <= fields(Scene)
+    assert {"spec", "model", "cars"} <= fields(Scene)
+    assert isinstance(Scene.car, property)
     assert {"joint", "drive", "wheels", "sensors", "truth"} <= fields(Car)
     # The observation reads these of car.sensors, and the progress, the crash
     # and the rollover these of car.truth.

@@ -25,7 +25,7 @@ from mujoco import mjx
 
 from . import batch
 from . import physics as physics_module
-from .physics import Physics
+from .physics import ScenePhysics
 from .scene import Scene
 
 WARP_PATHS: Mapping[str, str] = MappingProxyType(
@@ -37,12 +37,12 @@ WARP_PATHS: Mapping[str, str] = MappingProxyType(
 """Where MJX's model for MuJoCo Warp holds each field of physics.FIELDS that its
 Model does not: MuJoCo Warp's own model, _impl, holds the sensors' timing."""
 
-CONTACTS_PER_ENV = 64
-"""The most contacts that one environment holds at once. The car on a track has
-about 10."""
-CONSTRAINTS_PER_ENV = 256
-"""The most constraints that one environment holds at once. The car on a track
-has about 40."""
+CONTACTS_PER_CAR = 64
+"""The most contacts that one car of an environment holds at once. The car on
+a track has about 10."""
+CONSTRAINTS_PER_CAR = 256
+"""The most constraints that one car of an environment holds at once. The car
+on a track has about 40."""
 
 
 @jax.tree_util.register_dataclass
@@ -72,7 +72,7 @@ class WarpBatch:
         self,
         datas: Sequence[mujoco.MjData],
         scenes: Sequence[Scene],
-        physics: Sequence[Physics],
+        physics: Sequence[ScenePhysics],
     ) -> WarpState:
         """A state whose environment i has the physics state of datas[i] and
         steps with physics[i]. Raise ValueError unless there is one of each
@@ -100,11 +100,12 @@ class WarpBatch:
     def _one_env(self, row: dict[str, jax.Array]) -> mjx.Data:
         # Made inside vmap, as MJX requires: Warp keeps one contact and
         # constraint buffer for all environments, not one per environment.
+        ncar = len(self.scene.cars)
         d = mjx.make_data(
             self.model,
             impl="warp",
-            naconmax=self.nbatch * CONTACTS_PER_ENV,
-            njmax=CONSTRAINTS_PER_ENV,
+            naconmax=self.nbatch * ncar * CONTACTS_PER_CAR,
+            njmax=ncar * CONSTRAINTS_PER_CAR,
         )
         return d.replace(**row)
 
