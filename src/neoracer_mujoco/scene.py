@@ -90,7 +90,8 @@ def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel, prefix: str = "") -> Ca
     model was compiled from. Its actuators are the ones whose names are
     behind prefix. Raise ValueError if the car body has no free joint, or an
     actuator, a wheel geom, the LiDAR site or a sensor of contract.py is
-    missing, or an actuator's user numbers are not a throttle map."""
+    missing, or an actuator has no name, or user numbers that are not a
+    throttle map."""
     problems: list[str] = []
     body = _car_body(spec, prefix)
     joints = body.joints
@@ -99,6 +100,10 @@ def find_car(spec: mujoco.MjSpec, model: mujoco.MjModel, prefix: str = "") -> Ca
     required = [prefix + name for name in contract.REQUIRED_ACTUATORS]
     actuators = {name: spec.actuator(name) for name in required}
     problems += [f"actuator {n} is missing" for n, a in actuators.items() if a is None]
+    if any(not a.name for a in spec.actuators):
+        # attach puts no prefix on an element without a name, so no car
+        # would own it.
+        problems.append("an actuator has no name")
     others = [
         a
         for a in spec.actuators

@@ -15,6 +15,7 @@ from scenes import reversed_car, two_cars
 
 from neoracer_mujoco import Scene, assets, contract, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco.scene import compile_scene
 
 
 def _layout(scene: Scene) -> tuple[list[int], int]:
@@ -114,3 +115,17 @@ def _names(value: object) -> list[str]:
             return [n for f in fields(value) for n in _names(getattr(value, f.name))]
         case _:
             raise TypeError(f"{value!r} is no part of a car")
+
+
+def test_an_actuator_without_a_name_is_refused():
+    """attach puts no prefix on an actuator without a name, so in a scene of
+    several cars none would own it: find_car refuses one, even on a car
+    alone."""
+    spec = assets.from_file()
+    spec.add_actuator(
+        target="steer_input",
+        trntype=mujoco.mjtTrn.mjTRN_JOINT,
+        userdata=[1.0, 0.0, 0.0],
+    )
+    with pytest.raises(ValueError, match="no name"):
+        compile_scene(spec)
