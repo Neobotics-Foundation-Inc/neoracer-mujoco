@@ -167,17 +167,27 @@ jobs:
           gh repo clone "$REPO" rl -- --depth 1
           cd rl
           gh auth setup-git
-          pin='releases/download/v[0-9.]+/neoracer_mujoco-[0-9.]+-py3-none-any\.whl'
-          sed -i -E "s#$pin#releases/download/$TAG/neoracer_mujoco-$VERSION-py3-none-any.whl#g" pyproject.toml
-          if git diff --quiet; then
-            echo "neoracer-rl already pins $TAG"
+          # A rerun after a failure finds the branch, and maybe the pull
+          # request, of the first run, and keeps them as they are.
+          branch="bassel/neoracer-mujoco-$VERSION"
+          if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            echo "$branch is already there"
+          else
+            pin='releases/download/v[0-9.]+/neoracer_mujoco-[0-9.]+-py3-none-any\.whl'
+            sed -i -E "s#$pin#releases/download/$TAG/neoracer_mujoco-$VERSION-py3-none-any.whl#g" pyproject.toml
+            if git diff --quiet; then
+              echo "neoracer-rl already pins $TAG"
+              exit 0
+            fi
+            git switch -c "$branch"
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qam "Move to neoracer-mujoco $VERSION"
+            git push origin "$branch"
+          fi
+          if [ "$(gh pr list --repo "$REPO" --head "$branch" --state all --json number --jq length)" != 0 ]; then
+            echo "$branch already has a pull request"
             exit 0
           fi
-          branch="bassel/neoracer-mujoco-$VERSION"
-          git switch -c "$branch"
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -qam "Move to neoracer-mujoco $VERSION"
-          git push origin "$branch"
           gh pr create --repo "$REPO" --base main --head "$branch" \
             --title "Move to neoracer-mujoco $VERSION" \
             --body "neoracer-mujoco $TAG is out. This moves both pins in pyproject.toml, the package and its jax extra, to its wheel, so CI runs the test suite on it. Changes that the release needs in this repo go on this branch before it merges."
