@@ -27,6 +27,7 @@ USED_BY_NEORACER_RL = (
     "neoracer_mujoco.assets.compose",
     "neoracer_mujoco.batch.Batch",
     "neoracer_mujoco.batch.CpuBatch",
+    "neoracer_mujoco.batch.DataBatch",
     "neoracer_mujoco.batch.command",
     "neoracer_mujoco.batch.drive",
     "neoracer_mujoco.batch.drive_angle",
