@@ -1,0 +1,284 @@
+"""
+Reads all named sensors from a compiled NeoRacer model into a SensorReadings struct.
+
+Sensor map (matches neoracer.xml):
+  imu_accel     — 3-axis linear acceleration (m/s²)
+  imu_gyro      — 3-axis angular velocity (rad/s)
+  imu_quat      — orientation quaternion (w, x, y, z)
+  imu_linvel    — 3D linear velocity in world frame (m/s)
+  steer_cmd_pos — virtual steering input angle (rad)
+  fl/fr_steer_pos — actual front wheel steer angles (rad)
+  fl/fr/rl/rr_wheel_vel — wheel angular velocities (rad/s)
+  fl/fr/rl/rr_susp_pos  — suspension travel (m; positive = compressed)
+  lidar_000..315 — rangefinder distances (m; -1 = no hit)
+"""
+
+from dataclasses import dataclass
+from typing import assert_never
+
+import dataclasses
+
+import mujoco
+import numpy as np
+import numpy.typing as npt
+
+# Shadows the wheel geom size in assets/neoracer.xml — keep in sync if the XML changes.
+WHEEL_RADIUS = 0.050  # m, ESTIMATED: consistent with STL bbox and URDF CoM
+
+type Vec1 = npt.NDArray[np.float64]  # shape (1,), a scalar sensor
+type Vec3 = npt.NDArray[np.float64]  # shape (3,)
+type Quat = npt.NDArray[np.float64]  # shape (4,), (w, x, y, z)
+type Vec8 = npt.NDArray[np.float64]  # shape (8,), one value per LiDAR beam
+
+
+type SensorLayout = tuple[tuple[str, slice], ...]  # (name, slice of sensordata)
+
+
+def sensor_layout(model: mujoco.MjModel) -> SensorLayout:
+    """The name and the sensordata slice of each sensor. Get it once per
+    model: a control loop then reads with read_layout, without name lookups."""
+    return tuple(
+        (
+            model.sensor(i).name,
+            slice(model.sensor_adr[i], model.sensor_adr[i] + model.sensor_dim[i]),
+        )
+        for i in range(model.nsensor)
+    )
+
+
+def _raw(layout: SensorLayout, data: mujoco.MjData) -> dict[str, np.ndarray]:
+    return {name: data.sensordata[s].copy() for name, s in layout}
+
+
+def read_raw(model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, np.ndarray]:
+    """Every named sensor as a flat {name: ndarray} dict, the form used by
+    validation."""
+    return _raw(sensor_layout(model), data)
+
+
+@dataclass(frozen=True)
+class SensorReadings:
+    """
+    One named field per sensor in neoracer.xml. Each value is the raw sensordata
+    slice (a numpy array), so scalars come back as length-1 arrays — read [0].
+    """
+
+    # IMU at the chassis centre. The imu site has no rotation relative to the
+    # car body, so the IMU frame is the body frame: +X forward, +Y left, +Z up.
+    # These are MuJoCo's raw values, with no calibration.
+    imu_accel: Vec3  # m/s², body frame; includes gravity: ~(0, 0, +9.81) at rest
+    imu_gyro: Vec3  # rad/s, body frame
+    imu_quat: Quat  # (w,x,y,z) of the IMU frame relative to the world frame
+    imu_linvel: Vec3  # world linear vel (m/s)
+    # steering angles (rad)
+    steer_cmd_pos: Vec1  # virtual command
+    fl_steer_pos: Vec1  # actual front-left
+    fr_steer_pos: Vec1  # actual front-right
+    # wheel angular velocity (rad/s)
+    fl_wheel_vel: Vec1
+    fr_wheel_vel: Vec1
+    rl_wheel_vel: Vec1
+    rr_wheel_vel: Vec1
+    # suspension travel (m; + = compressed)
+    fl_susp_pos: Vec1
+    fr_susp_pos: Vec1
+    rl_susp_pos: Vec1
+    rr_susp_pos: Vec1
+    # 8-beam lidar ring (m; -1 = no hit)
+    lidar_000: Vec1
+    lidar_045: Vec1
+    lidar_090: Vec1
+    lidar_135: Vec1
+    lidar_180: Vec1
+    lidar_225: Vec1
+    lidar_270: Vec1
+    lidar_315: Vec1
+
+
+_READING_SIZES = {"Vec1": 1, "Vec3": 3, "Quat": 4}
+
+
+def read_layout(layout: SensorLayout, data: mujoco.MjData) -> SensorReadings:
+    """Read every named sensor into a SensorReadings struct.
+
+    Sensors the struct has no field for are ignored (the upstream GitHub car
+    adds some, e.g. drive_pos); a field the car has no sensor for reads as
+    zeros (e.g. imu_linvel, which no observation uses)."""
+    raw = _raw(layout, data)
+    values = {}
+    for f in dataclasses.fields(SensorReadings):
+        if f.name in raw:
+            values[f.name] = raw[f.name]
+        else:
+            size = _READING_SIZES.get(getattr(f.type, "__name__", str(f.type)), 1)
+            values[f.name] = np.zeros(size)
+    return SensorReadings(**values)
+
+
+def read(model: mujoco.MjModel, data: mujoco.MjData) -> SensorReadings:
+    """Read every named sensor into a SensorReadings struct. In a control
+    loop, use read_layout with a layout from sensor_layout(model)."""
+    return read_layout(sensor_layout(model), data)
+
+
+@dataclass(frozen=True)
+class WheelSpeeds:
+    """Surface speed of each wheel (m/s, + = forward)."""
+
+    fl: float
+    fr: float
+    rl: float
+    rr: float
+
+
+def wheel_speed_ms(sensors: SensorReadings) -> WheelSpeeds:
+    """Convert each wheel's angular velocity (rad/s) to surface speed (m/s)."""
+    return WheelSpeeds(
+        fl=float(sensors.fl_wheel_vel[0]) * WHEEL_RADIUS,
+        fr=float(sensors.fr_wheel_vel[0]) * WHEEL_RADIUS,
+        rl=float(sensors.rl_wheel_vel[0]) * WHEEL_RADIUS,
+        rr=float(sensors.rr_wheel_vel[0]) * WHEEL_RADIUS,
+    )
+
+
+def motor_encoder_rad_s(sensors: SensorReadings) -> float:
+    """The single motor encoder reading: angular velocity (rad/s, + = forward).
+
+    The real NeoRacer has one drive motor, not one per wheel -- neoracer.xml
+    approximates that with four identically-driven wheel joints, so the
+    mean of the four wheel_vel sensors is the correct single-encoder proxy.
+    Angular velocity only, not ticks/position: the drive joints have no
+    <jointpos> sensor to derive that from. Raw simulator values -- no
+    calibration, filtering, or quantization applied.
+    """
+    wheel_velocities = np.array(
+        [
+            sensors.fl_wheel_vel[0],
+            sensors.fr_wheel_vel[0],
+            sensors.rl_wheel_vel[0],
+            sensors.rr_wheel_vel[0],
+        ]
+    )
+    return float(np.mean(wheel_velocities))
+
+
+def estimated_linear_speed_ms(motor_rad_s: float) -> float:
+    """
+    ESTIMATE of vehicle speed from motor rotation (m/s) — NOT ground truth.
+    motor_rad_s * WHEEL_RADIUS, i.e. it assumes zero wheel slip.
+    Will diverge from the true chassis speed (e.g. SensorReadings.imu_linvel)
+    under wheelspin or lockup, exactly like a real wheel-speed-based
+    speedometer would.
+    """
+    return motor_rad_s * WHEEL_RADIUS
+
+
+# Beam order matches the rangefinder sensors in neoracer.xml, ascending 0deg..315deg.
+LIDAR_BEAM_ORDER = (
+    "lidar_000",
+    "lidar_045",
+    "lidar_090",
+    "lidar_135",
+    "lidar_180",
+    "lidar_225",
+    "lidar_270",
+    "lidar_315",
+)
+
+# Beam groups shared by the LiDAR controllers (track_centering.py,
+# wall_following.py). Each value is an index into LIDAR_BEAM_ORDER and into
+# lidar_ranges().
+LEFT_BEAMS = (1, 2, 3)  # lidar_045, lidar_090, lidar_135
+RIGHT_BEAMS = (7, 6, 5)  # lidar_315, lidar_270, lidar_225
+# Only lidar_000, not a wider cone: lidar_045/lidar_315 are already in
+# LEFT_BEAMS/RIGHT_BEAMS. In the cone, a side wall seen by a diagonal beam
+# would look like a forward obstacle and cut the throttle.
+FRONT_CONE_BEAMS = (0,)  # lidar_000
+LEFT_BEAM = 2  # lidar_090
+RIGHT_BEAM = 6  # lidar_270
+FRONT_LEFT_BEAM = 1  # lidar_045
+REAR_LEFT_BEAM = 3  # lidar_135
+FRONT_RIGHT_BEAM = 7  # lidar_315
+REAR_RIGHT_BEAM = 5  # lidar_225
+
+
+def lidar_ranges(sensors: SensorReadings) -> Vec8:
+    """The 8 lidar_* ranges (m; -1 = no hit) in LIDAR_BEAM_ORDER."""
+    s = sensors
+    return np.array(
+        [
+            s.lidar_000[0],
+            s.lidar_045[0],
+            s.lidar_090[0],
+            s.lidar_135[0],
+            s.lidar_180[0],
+            s.lidar_225[0],
+            s.lidar_270[0],
+            s.lidar_315[0],
+        ]
+    )
+
+
+@dataclass(frozen=True)
+class Hit:
+    distance: float  # m
+
+
+@dataclass(frozen=True)
+class NoHit: ...
+
+
+@dataclass(frozen=True)
+class Corrupt: ...
+
+
+type Beam = Hit | NoHit | Corrupt
+
+
+def parse_beam(value: float) -> Beam:
+    """Classify one rangefinder value (m). MuJoCo gives -1 when no geom is
+    within the cutoff. NaN and Inf are corrupt."""
+    if not np.isfinite(value):
+        return Corrupt()
+    if value < 0:
+        return NoHit()
+    return Hit(value)
+
+
+def beam_distance(beam: Beam, max_range: float) -> float:
+    """Distance (m) for a controller. A beam with no hit or a corrupt value
+    reads as max_range, so that bad data never looks like a close wall."""
+    match beam:
+        case Hit(distance=d):
+            return min(d, max_range)
+        case NoHit() | Corrupt():
+            return max_range
+        case _:
+            assert_never(beam)
+
+
+def is_corrupt(beam: Beam) -> bool:
+    """True for a NaN or Inf value. A controller counts these beams to
+    decide on its fallback command."""
+    match beam:
+        case Corrupt():
+            return True
+        case Hit() | NoHit():
+            return False
+        case _:
+            assert_never(beam)
+
+
+def print_sensors(sensors: SensorReadings) -> None:
+    """Print a one-line summary of the most useful sensor values."""
+    s = sensors
+    print(
+        f"spd={estimated_linear_speed_ms(motor_encoder_rad_s(s)):+5.2f}m/s  "
+        f"steer={s.steer_cmd_pos[0]:+.3f}"
+        f"({s.fl_steer_pos[0]:+.3f}/{s.fr_steer_pos[0]:+.3f})  "
+        f"susp=[{s.fl_susp_pos[0]:+.3f} {s.fr_susp_pos[0]:+.3f} "
+        f"{s.rl_susp_pos[0]:+.3f} {s.rr_susp_pos[0]:+.3f}]m  "
+        f"az={s.imu_accel[2]:+5.1f}  gz={s.imu_gyro[2]:+.3f}  "
+        f"lidar[fwd={s.lidar_000[0]:.2f} L={s.lidar_090[0]:.2f} "
+        f"R={s.lidar_270[0]:.2f}]"
+    )

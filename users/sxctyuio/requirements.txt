@@ -1,0 +1,8 @@
+# On top of the neoracer-mujoco core package (pip install -e . in the repo root)
+mujoco==3.16.0
+gymnasium
+stable-baselines3[extra]
+torch
+scipy               # track generation
+imageio[ffmpeg]     # --record videos
+tensorboard
