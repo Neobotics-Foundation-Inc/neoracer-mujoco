@@ -13,7 +13,6 @@ from .provenance import (
     Alternative,
     Source,
     assumed,
-    calibrated,
     chosen,
     documented,
     estimated,
@@ -266,14 +265,14 @@ NEORACER = Spec(
         ),
         kp=chosen(50.0, "so the servo settles without chatter at the model's step"),
         kd=chosen(1.0, "so the servo settles without chatter at the model's step"),
-        latency=calibrated(
-            0.045,
-            SERVO_FIT,
-            "the steps at rest: their first motion and the end of each swing,"
-            " with the servo at its datasheet rating at 6 V",
-            note="from the command written to the board. A racecar_core"
-            " program's command also waits for the driver's mux, which resends"
-            " it every 0.02 s (mux.yaml), 0.01 s on average, which this leaves out",
+        latency=chosen(
+            0.015,
+            "quicker than the car's, for the Playground (Koneshka, 2026-10-26:"
+            " the steering's latency is way too much). The car's steps at rest"
+            " fit 0.045 s from the command written to the board (the conflict),"
+            " and a racecar_core program's command also waits for the driver's"
+            " mux, which resends it every 0.02 s (mux.yaml), 0.01 s on average",
+            conflicts=(Alternative(0.045, SERVO_FIT),),
         ),
         steps_at_rest=measured(
             ServoSteps(

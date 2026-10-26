@@ -126,8 +126,10 @@ def estimated[T](
     return Sourced(value, Estimated(why), "", conflicts)
 
 
-def chosen[T](value: T, why: str) -> Sourced[T]:
-    return Sourced(value, Chosen(why))
+def chosen[T](
+    value: T, why: str, conflicts: tuple[Alternative[T], ...] = ()
+) -> Sourced[T]:
+    return Sourced(value, Chosen(why), "", conflicts)
 
 
 def walk(spec: object, path: str = "") -> Iterator[tuple[str, Sourced[object]]]:

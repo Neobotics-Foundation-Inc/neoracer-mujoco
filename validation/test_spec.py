@@ -312,13 +312,18 @@ def test_the_steps_at_rest_take_the_cars_times(scene):
     """The model's steering, stepped at rest as the car's was (the driver's
     full lock from the center, to the other lock and back, each held 1 s),
     first moves (2% of the way) and ends each swing (95% of the way) within
-    0.015 s of the car, timed from the command. The car's swing ends where
-    its chassis stops turning, which is near the end of the swing."""
+    0.015 s of the car, timed from the command, but for the delay: chosen
+    quicker than the car's (servo.latency), each time comes that much sooner
+    than the car's, the delay fitted to the steps (its conflict) less the
+    chosen. The car's swing ends where its chassis stops turning, which is near
+    the end of the swing."""
     model = scene.model
     data = sim.settle(model)
     servo = data.bind_scalar(scene.car.steer)
     lock = model.bind_scalar(scene.car.steer).ctrlrange[1]
     steps = CAR.servo.steps_at_rest.value
+    (fitted,) = CAR.servo.latency.conflicts
+    sooner = fitted.value - CAR.servo.latency.value
     for name, target, end in (
         ("center to lock", lock, steps.center_to_lock),
         ("lock to lock", -lock, steps.lock_to_lock),
@@ -336,8 +341,8 @@ def test_the_steps_at_rest_take_the_cars_times(scene):
             if done >= 0.95:
                 last = min(last, t)
         with case(name):
-            assert first == pytest.approx(steps.first_motion, abs=0.015)
-            assert last == pytest.approx(end, abs=0.015)
+            assert first == pytest.approx(steps.first_motion - sooner, abs=0.015)
+            assert last == pytest.approx(end - sooner, abs=0.015)
 
 
 def test_full_lock_turns_the_inner_wheel_to_its_lock():
