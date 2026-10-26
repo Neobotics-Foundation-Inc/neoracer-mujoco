@@ -205,7 +205,7 @@ def test_no_path_keeps_state_and_recovers_toward_closer_option():
     for _ in range(5):
         new_state, result = step(PARAMS, state, *blocked, DT)
         assert isinstance(result, NoPath)
-        assert result.command.throttle == 0.0
+        assert result.command.target == 0.0
         assert new_state == state, "a NoPath tick must not change the state"
 
     reopened = gap_ring_scan(

@@ -45,7 +45,7 @@ from examples.wall_follower_vs.vehicle_space_controller import (
     step,
     turn_radius_m,
 )
-from neoracer_mujoco import collision, sim
+from neoracer_mujoco import collision, racecar, sim
 from neoracer_mujoco.scene import Car, Scene
 
 
@@ -78,11 +78,12 @@ def driver(scene: Scene, lidar: DenseLidarParams, control_hz: float) -> Driver:
 
 @dataclass(frozen=True)
 class Tick:
-    """One control period: the scan, the controller's state and result, the
-    physics steps in which the car touched a wall, and the wall-clock time
-    of the ray cast and of step()."""
+    """One control period: the scan, the car and the controller's state and
+    result after it, the physics steps in which the car touched a wall, and
+    the wall-clock time of the ray cast and of step()."""
 
     scan: Scan
+    racer: racecar.CarState
     state: VsState
     result: Driving | NoPath
     contact_steps: int
@@ -90,23 +91,27 @@ class Tick:
     compute_ms: float
 
 
-def tick(d: Driver, data: mujoco.MjData, state: VsState) -> Tick:
+def tick(
+    d: Driver, data: mujoco.MjData, racer: racecar.CarState, state: VsState
+) -> Tick:
     """Scan, run the controller, and step the physics for one control
-    period with its command. watch_loop.py runs the same tick."""
+    period with its command, whose speed the car's speed loop holds.
+    watch_loop.py runs the same tick."""
     model, car = d.scene.model, d.scene.car
     t0 = time.perf_counter()
     scan = cast_dense_lidar(model, data, d.mount, d.lidar)
     t1 = time.perf_counter()
     state, result = step(d.params, state, *scan, d.dt)
     t2 = time.perf_counter()
-    sim.apply_command(car, data, result.command)
+    racer = racecar.ask(racer, result.command)
     contact_steps = 0
     for _ in range(d.steps):
-        mujoco.mj_step(model, data)
+        racer = racecar.step(d.scene, data, racer)
         if collision.car_touches_wall(data, car):
             contact_steps += 1
     return Tick(
         scan=scan,
+        racer=racer,
         state=state,
         result=result,
         contact_steps=contact_steps,
@@ -345,6 +350,7 @@ def run_trial(
     d = driver(scene, lidar, params.control_hz)
     max_ticks = int(params.max_sim_time_s / d.dt)
 
+    racer = racecar.start(racecar.neoracer_params(), scene, data)
     state = VsState()
     position = _position(goal, data, car)
     progress = 0.0
@@ -367,8 +373,8 @@ def run_trial(
     sim_time_s = 0.0
 
     for i in range(max_ticks):
-        t = tick(d, data, state)
-        state, result = t.state, t.result
+        t = tick(d, data, racer, state)
+        racer, state, result = t.racer, t.state, t.result
         raycast_times_ms.append(t.raycast_ms)
         compute_times_ms.append(t.compute_ms)
         # step() computes the same points. This second call only counts them.
@@ -423,7 +429,7 @@ def run_trial(
                 f"R={turn_radius_m(d.params, result.target_steer_deg):5.2f}m "
                 f"straight_clear={result.straight_clear_m:.2f}m {detail} "
                 f"steer={result.command.steer:+.3f}rad "
-                f"throttle={result.command.throttle:.4f} "
+                f"speed={result.command.target:.3f}m/s "
                 f"{_progress_text(goal, progress)}"
             )
         if verbose and label(result) != prev_label:

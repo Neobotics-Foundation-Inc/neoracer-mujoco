@@ -24,7 +24,7 @@ from examples.wall_follower_vs.vehicle_space_controller import (
     label,
     turn_radius_m,
 )
-from neoracer_mujoco import sim
+from neoracer_mujoco import racecar, sim
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,7 @@ def main() -> None:
     sim.perturb_spawn(model, data, car, np.random.default_rng(args.seed))
 
     d = driver(scene, DenseLidarParams(n_beams=args.n), TRIALS[track].control_hz)
+    racer = racecar.start(racecar.neoracer_params(), scene, data)
     state = VsState()
     print(f"[watch_loop] N={args.n} seed={args.seed}. Close the viewer window to stop.")
 
@@ -65,15 +66,15 @@ def main() -> None:
         last_print_s = 0.0
         while viewer.is_running():
             loop_start = time.time()
-            t = tick(d, data, state)
-            state, result = t.state, t.result
+            t = tick(d, data, racer, state)
+            racer, state, result = t.racer, t.state, t.result
             viewer.sync()
 
             if data.time - last_print_s > params.print_period_s:
                 print(
                     f"t={data.time:6.2f}s target={result.target_steer_deg:+6.2f}deg "
                     f"R={turn_radius_m(d.params, result.target_steer_deg):5.2f}m "
-                    f"throttle={result.command.throttle:.4f} {label(result)}"
+                    f"speed={result.command.target:.3f}m/s {label(result)}"
                 )
                 last_print_s = data.time
 
