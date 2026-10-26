@@ -21,9 +21,18 @@ whole mj_step they read it a step earlier.
     for _ in range(steps):
         car = racecar.step(scene, data, car)
 
+start_cars and step_cars do the same for every car of a scene of several
+(assets.compose_cars), each with its own firmware and sensors, around one
+physics step:
+
+    cars = racecar.start_cars([racecar.neoracer_params()] * 2, scene, data)
+    cars = tuple(racecar.ask(car, c) for car, c in zip(cars, commands))
+    cars = racecar.step_cars(scene, data, cars)
+
 Frame: +X forward, +Y left, +Z up.
 """
 
+from collections.abc import Sequence
 from copy import replace
 from dataclasses import dataclass
 from typing import assert_never
@@ -39,13 +48,15 @@ from neoracer_spec.spec import Spec
 
 from . import encoder, hall_encoder, lidar, sim, speed_loop
 from .control.steering import ControlCommand, SpeedAngle
-from .scene import Scene
+from .scene import Car, Scene
 
 
 @dataclass(frozen=True)
 class CarState:
     """A car between two physics steps. Start it with start()."""
 
+    parts: Car
+    """The car's parts in the scene."""
     drive: SpeedLoop | Throttle
     steer: float
     """The steer servo's command (rad), + = left, which it takes at once."""
@@ -134,11 +145,32 @@ def racecar_neo_v2_params(car: RacecarNeoV2 = RACECAR_NEO_V2) -> CarParams:
 
 
 def start(params: CarParams, scene: Scene, data: mujoco.MjData) -> CarState:
-    """A car at rest at the pose of data, asked for nothing. It runs
-    mj_forward on data first, so that every part starts from the car as it
-    is."""
+    """The scene's car (Scene.car) at rest at the pose of data, asked for
+    nothing. It runs mj_forward on data first, so that every part starts
+    from the car as it is."""
     mujoco.mj_forward(scene.model, data)
-    angle = _drive_angle(scene, data)
+    return _start(params, scene.model, data, scene.car)
+
+
+def start_cars(
+    params: Sequence[CarParams], scene: Scene, data: mujoco.MjData
+) -> tuple[CarState, ...]:
+    """Each car of the scene, scene.cars[k] with params[k], at rest at the
+    pose of data, asked for nothing, as start gives one. Raise ValueError
+    unless there are params for each car."""
+    if len(params) != len(scene.cars):
+        raise ValueError(f"{len(params)} params for {len(scene.cars)} cars")
+    mujoco.mj_forward(scene.model, data)
+    return tuple(
+        _start(p, scene.model, data, parts)
+        for p, parts in zip(params, scene.cars, strict=True)
+    )
+
+
+def _start(
+    params: CarParams, model: mujoco.MjModel, data: mujoco.MjData, parts: Car
+) -> CarState:
+    angle = _drive_angle(data, parts)
     drive: SpeedLoop | Throttle
     if params.speed_loop is None:
         drive = Throttle(0.0)
@@ -153,8 +185,8 @@ def start(params: CarParams, scene: Scene, data: mujoco.MjData) -> CarState:
             measure = Hall(params.encoder, hall_encoder.start(params.encoder, angle))
         case _:
             assert_never(params.encoder)
-    scan = lidar.start(params.lidar, scene.model, data, scene.car)
-    return CarState(drive, 0.0, measure, Lidar(params.lidar, scan))
+    scan = lidar.start(params.lidar, model, data, parts)
+    return CarState(parts, drive, 0.0, measure, Lidar(params.lidar, scan))
 
 
 def ask(car: CarState, command: SpeedAngle) -> CarState:
@@ -171,7 +203,7 @@ def ask(car: CarState, command: SpeedAngle) -> CarState:
             assert_never(car.drive)
 
 
-def apply(scene: Scene, data: mujoco.MjData, car: CarState) -> None:
+def apply(data: mujoco.MjData, car: CarState) -> None:
     """Write car's command to data.ctrl: its speed loop's throttle, or its
     program's, and its steer."""
     match car.drive:
@@ -182,20 +214,44 @@ def apply(scene: Scene, data: mujoco.MjData, car: CarState) -> None:
         case _:
             assert_never(car.drive)
     command = ControlCommand(throttle=throttle, steer=car.steer)
-    sim.apply_command(scene.car, data, command)
+    sim.apply_command(car.parts, data, command)
 
 
 def step(scene: Scene, data: mujoco.MjData, car: CarState) -> CarState:
     """Step data one physics step with car's command, from where start(),
     step() or mj_step1 left it, to after mj_step1 of the next step, and
     return the car after the encoder, the LiDAR and the speed loop count
-    the step. data.ctrl is left with the returned car's command."""
+    the step. data.ctrl is left with the returned car's command. The
+    scene's other cars, if it has any, hold their ctrl: step_cars runs
+    theirs too."""
+    (after,) = step_cars(scene, data, [car])
+    return after
+
+
+def step_cars(
+    scene: Scene, data: mujoco.MjData, cars: Sequence[CarState]
+) -> tuple[CarState, ...]:
+    """Step data one physics step with each of cars' commands, and return
+    the cars after each one's encoder, LiDAR and speed loop count the step,
+    as step does for one."""
     model = scene.model
     dt = float(model.opt.timestep)
-    apply(scene, data, car)
+    for car in cars:
+        apply(data, car)
     mujoco.mj_step2(model, data)
     mujoco.mj_step1(model, data)
-    angle = _drive_angle(scene, data)
+    after = tuple(_count(model, data, car, dt) for car in cars)
+    for car in after:
+        apply(data, car)
+    return after
+
+
+def _count(
+    model: mujoco.MjModel, data: mujoco.MjData, car: CarState, dt: float
+) -> CarState:
+    """car after its encoder, its LiDAR and its speed loop count the step
+    that left data where it is."""
+    angle = _drive_angle(data, car.parts)
     drive: SpeedLoop | Throttle
     match car.drive:
         case SpeedLoop(params, loop, target):
@@ -214,12 +270,10 @@ def step(scene: Scene, data: mujoco.MjData, car: CarState) -> CarState:
         case _:
             assert_never(car.encoder)
     p = car.lidar.params
-    scan = lidar.sweep(p, model, data, scene.car, car.lidar.state, dt)
-    after = CarState(drive, car.steer, measure, Lidar(p, scan))
-    apply(scene, data, after)
-    return after
+    scan = lidar.sweep(p, model, data, car.parts, car.lidar.state, dt)
+    return CarState(car.parts, drive, car.steer, measure, Lidar(p, scan))
 
 
-def _drive_angle(scene: Scene, data: mujoco.MjData) -> float:
-    """The drivetrain's angle (rad) that the drive_pos sensor reads."""
-    return float(data.bind_scalar(scene.car.sensors.drive_pos).data[0])
+def _drive_angle(data: mujoco.MjData, parts: Car) -> float:
+    """The drivetrain's angle (rad) that the car's drive_pos sensor reads."""
+    return float(data.bind_scalar(parts.sensors.drive_pos).data[0])

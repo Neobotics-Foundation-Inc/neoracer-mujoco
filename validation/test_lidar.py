@@ -12,6 +12,7 @@ import os
 import mujoco
 import numpy as np
 import pytest
+from cases import case
 
 from neoracer_mujoco import Scene, assets, lidar, sensors, sim
 from neoracer_spec.derive import derive
@@ -152,3 +153,30 @@ def test_the_scan_plane_tilts_with_the_car(corridor):
     tilted = lidar.start(LIDAR, model, data, car).scan[0]
     assert tilted == pytest.approx(site_z / math.sin(pitch), rel=1e-3)
     assert tilted < level
+
+
+def test_a_car_sees_the_car_ahead_of_it():
+    """In a scene of two cars, the front beam of the car behind reads the
+    back of the car ahead, 0.2 m farther when that car starts 0.2 m farther,
+    with or without visuals, and its rangefinder and the spinning LiDAR read
+    the same. Alone, the car sees the wall beyond."""
+    track = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xml"))
+
+    def front(entries: list[assets.Entry], visuals: bool) -> float:
+        scene = assets.compose_cars(track, entries, visuals=visuals)
+        data = sim.settle(scene.model)
+        mujoco.mj_forward(scene.model, data)
+        beam = sensors.read(scene.car.sensors, data).lidar_000
+        cast = lidar.cast(LIDAR, scene.model, data, scene.car, np.array([0]))
+        assert cast[0] == pytest.approx(beam, abs=1e-6)
+        return beam
+
+    alone = front([assets.Entry("a/")], visuals=False)
+    for visuals in (True, False):
+        with case(f"visuals={visuals}"):
+            near, far = (
+                front([assets.Entry("a/"), assets.Entry("b/", (ahead, 0.0))], visuals)
+                for ahead in (1.0, 1.2)
+            )
+            assert far - near == pytest.approx(0.2, abs=1e-4)
+            assert far < 1.2 < alone

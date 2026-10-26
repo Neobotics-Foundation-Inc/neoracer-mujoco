@@ -138,25 +138,27 @@ class CarSensors:
     (contract.lidar_field). The car blocks them, so they read NO_RETURN."""
 
 
-def find_sensors(spec: mujoco.MjSpec, model: mujoco.MjModel) -> CarSensors:
-    """Find the sensor of each SensorReadings field in spec, which model was
-    compiled from, and the LiDAR beams that the car blocks. Raise ValueError
-    if a field has no sensor of that name and size, or the LiDAR site is
-    missing."""
+def find_sensors(
+    spec: mujoco.MjSpec, model: mujoco.MjModel, prefix: str = ""
+) -> CarSensors:
+    """Find the sensor of each SensorReadings field of the car whose names are
+    behind prefix in spec, which model was compiled from, and the LiDAR
+    beams that the car blocks. Raise ValueError if a field has no sensor of
+    that name and size, or the LiDAR site is missing."""
     found: dict[str, mujoco.MjsSensor] = {}
     problems: list[str] = []
-    lidar = spec.site(contract.LIDAR_SITE)
+    lidar = spec.site(prefix + contract.LIDAR_SITE)
     if lidar is None:
-        problems.append(f"the {contract.LIDAR_SITE} site is missing")
+        problems.append(f"the {prefix + contract.LIDAR_SITE} site is missing")
     for f in fields(SensorReadings):
-        sensor = spec.sensor(f.name)
+        sensor = spec.sensor(prefix + f.name)
         size = VECTOR_SIZE.get(f.name, 1)
         if sensor is None:
-            problems.append(f"{f.name} is missing")
+            problems.append(f"{prefix + f.name} is missing")
             continue
         dim = int(model.bind_scalar(sensor).dim[0])
         if dim != size:
-            problems.append(f"{f.name} has {dim} values, not {size}")
+            problems.append(f"{prefix + f.name} has {dim} values, not {size}")
         else:
             found[f.name] = sensor
     if problems or lidar is None:

@@ -16,6 +16,8 @@ Actuators:
   steer_servo = steering target angle (rad), + = left
 A car may have more actuators, which the throttle drives with the motor, as
 motor_engage on the RACECAR Neo V2. throttle_map gives each one's ctrl.
+Every actuator has a name, which tells a car's own apart in a scene of
+several (scene.find_car).
 Wheels:
   fl/fr/rl/rr_wheel = the geom of each wheel that touches the ground, a
                       cylinder of the car's wheel radius (wheel_radius)

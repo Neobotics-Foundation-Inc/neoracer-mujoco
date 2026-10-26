@@ -84,7 +84,7 @@ class MujocoDrive:
         self._car = car
         self._start_max_speed = start_max_speed
         self._max_speed = start_max_speed  # share of the full speed
-        self._limits = contract.actuator_limits(car.scene.model, car.scene.car)
+        self._limits = contract.actuator_limits(car.scene.model, car.state.parts)
 
     def set_speed_angle(self, speed: float, angle: float) -> None:
         speed = _clamp(speed, -1.0, 1.0)
@@ -102,7 +102,7 @@ class MujocoDrive:
         # Negate: in racecar_core + angle = right; for steer_servo + = left.
         steer = -angle * self._limits.steer_rad
         self._car.state = replace(state, drive=drive, steer=steer)
-        racecar.apply(self._car.scene, self._car.data, self._car.state)
+        racecar.apply(self._car.data, self._car.state)
 
     def stop(self) -> None:
         self.set_speed_angle(0.0, 0.0)

@@ -4,15 +4,18 @@ MjSpec, so the order of the actuators and sensors in the car XML does not
 change what a command writes or what a read returns.
 """
 
-from dataclasses import fields
+import os
+from dataclasses import fields, is_dataclass
 
 import mujoco
 import numpy as np
 import pytest
-from scenes import reversed_car
+from cases import case
+from scenes import reversed_car, two_cars
 
 from neoracer_mujoco import Scene, assets, contract, sensors, sim
 from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco.scene import compile_scene
 
 
 def _layout(scene: Scene) -> tuple[list[int], int]:
@@ -75,3 +78,54 @@ def test_a_wheel_sets_the_friction_of_its_contacts():
                 assert contact.friction[0] == pytest.approx(0.2 + 0.1 * i)
                 touching.add(i)
     assert touching == {0, 1, 2, 3}
+
+
+def test_each_car_of_a_scene_has_its_own_parts():
+    """Each Car of a scene of two holds the parts of the car of a one-car
+    scene, each named behind the car's prefix if it has a name, so no part
+    is both cars'."""
+    track = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
+    one = assets.compose(mujoco.MjSpec.from_file(track), visuals=False)
+    two = two_cars()
+    for prefix, car in zip(("a/", "b/"), two.cars, strict=True):
+        with case(prefix):
+            expected = [prefix + n if n else n for n in _names(one.car)]
+            assert _names(car) == expected
+            assert car.sensors.blocked == one.car.sensors.blocked
+
+
+def _names(value: object) -> list[str]:
+    """The name of each spec element in value, a Car or a part of one, in
+    the order of its fields."""
+    match value:
+        case (
+            mujoco.MjsBody()
+            | mujoco.MjsJoint()
+            | mujoco.MjsActuator()
+            | mujoco.MjsGeom()
+            | mujoco.MjsSite()
+            | mujoco.MjsSensor()
+        ):
+            return [value.name]
+        case tuple():
+            return [name for v in value for name in _names(v)]
+        case frozenset():  # sensors.blocked, the names of beams
+            return []
+        case _ if is_dataclass(value):
+            return [n for f in fields(value) for n in _names(getattr(value, f.name))]
+        case _:
+            raise TypeError(f"{value!r} is no part of a car")
+
+
+def test_an_actuator_without_a_name_is_refused():
+    """attach puts no prefix on an actuator without a name, so in a scene of
+    several cars none would own it: find_car refuses one, even on a car
+    alone."""
+    spec = assets.from_file()
+    spec.add_actuator(
+        target="steer_input",
+        trntype=mujoco.mjtTrn.mjTRN_JOINT,
+        userdata=[1.0, 0.0, 0.0],
+    )
+    with pytest.raises(ValueError, match="no name"):
+        compile_scene(spec)

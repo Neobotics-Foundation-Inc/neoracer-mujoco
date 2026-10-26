@@ -68,7 +68,7 @@ A `racecar_core` program runs on the V2 with its own LiDAR and encoder: `python 
 
 ## A scene
 
-MuJoCo compiles an `MjSpec`, the editable model, into an `MjModel`, the arrays it simulates. A `Scene` keeps both, along with the car's parts:
+MuJoCo compiles an `MjSpec`, the editable model, into an `MjModel`, the arrays it simulates. A `Scene` keeps both, along with the parts of its cars:
 
 ```python
 @dataclass(frozen=True)
@@ -77,8 +77,14 @@ class Scene:
     """What was compiled."""
     model: mujoco.MjModel
     """The compiled model."""
-    car: Car
-    """The car's parts, as elements of spec."""
+    cars: tuple[Car, *tuple[Car, ...]]
+    """Each car's parts, as elements of spec."""
+    car_contacts: Mapping[tuple[int, int], mujoco.MjsSensor]
+    """How many contacts each two cars have."""
+
+    @property
+    def car(self) -> Car:
+        """The first car: the scene's car when it has one."""
 ```
 
 `Car` holds the car's body, free joint, actuators, wheel geoms, LiDAR site and sensors, each as an element of `spec`. To read or write one, bind it to the model or to an `MjData` instead of looking up an index:
@@ -203,6 +209,35 @@ scene = assets.compose(to_spec(track), export.spec(heavy))
 ```
 
 It is still a `Scene` with a `Car`, so all the code above works on it. `export.write(heavy, folder)` writes its XML, its meshes and an `.mjz` archive, for use outside Python.
+
+## Several cars on one track
+
+`assets.compose_cars` puts several cars on one track. Each `Entry` gives a car, the prefix of the names of its elements, and where it starts, in meters from the track's start, forward and to the left:
+
+```python
+from neoracer_mujoco.assets import Entry, compose_cars
+
+grid = [Entry("a/"), Entry("b/", offset=(-0.6, 0.25)), Entry("c/", offset=(-1.2, 0.0))]
+scene = compose_cars(to_spec(track), grid)
+scene.cars  # a Car for each entry, in order: the motor of the second is "b/motor"
+```
+
+Each `Car` holds its own parts, so every function that takes a `Car`, as `sim.apply_command`, `lidar.sweep` or `collision.car_touches_wall` do, works on any car of the scene. The cars meet only in the physics: each car's LiDAR sees the others, and they collide. Each car has its own truth sensors, and `scene.car_contacts[i, j]` counts the contacts between `scene.cars[i]` and `scene.cars[j]`. A tuple of `Physics`, one for each car, gives each car its own parameters.
+
+`racecar.start_cars` and `racecar.step_cars` run each car's firmware around one physics step:
+
+```python
+from neoracer_mujoco import racecar
+from neoracer_mujoco.control import SpeedAngle
+
+data = sim.settle(scene.model)
+cars = racecar.start_cars([racecar.neoracer_params()] * 3, scene, data)
+cars = [racecar.ask(car, SpeedAngle(target=1.0, steer=0.0)) for car in cars]
+for _ in range(1000):
+    cars = racecar.step_cars(scene, data, cars)
+```
+
+In a batch, a row holds every car of the scene. `batch.command_cars` and `batch.drive_cars` take the cars' commands with the cars on the last axis, shape `(nbatch, len(scene.cars))`.
 
 ## Many cars at once
 
