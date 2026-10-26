@@ -31,7 +31,9 @@ own scene.
 step holds ctrl for nstep physics steps and returns the sensor values after
 each one. Each call starts the constraint solver cold (qacc_warmstart = 0),
 as mujoco.rollout does, so a CPU row is the same, bit for bit, as one MjData
-stepped the same way.
+stepped the same way. DataBatch steps one MjData so, as a batch of one row,
+and drive takes it as it takes a batch, so a single-car environment that
+owns one MjData steps it as a batch row steps.
 
 A batch array has no bind, so command, read and drive_angle bind the
 element to the model and index the array with its address. They are the
@@ -67,9 +69,20 @@ type Done = npt.NDArray[np.bool_]
 FULL_PHYSICS = mujoco.mjtState.mjSTATE_FULLPHYSICS
 
 
-class Batch[S, A, M](Protocol):
-    """A batch of nbatch copies of one scene. S is the batch state, A the
-    array type of ctrl and sensordata, M the array type of the done mask."""
+class Stepper[S, A](Protocol):
+    """Rows that step, as drive steps them. S is the state, A the array type
+    of ctrl and sensordata."""
+
+    def step(self, state: S, ctrl: A, nstep: int) -> tuple[S, A]: ...
+
+    def qpos(self, state: S) -> A:
+        """The joint positions (nbatch, nq) of every row of state."""
+        ...
+
+
+class Batch[S, A, M](Stepper[S, A], Protocol):
+    """A batch of nbatch copies of one scene. M is the array type of the
+    done mask."""
 
     nbatch: int
 
@@ -80,13 +93,7 @@ class Batch[S, A, M](Protocol):
         physics: Sequence[Physics],
     ) -> S: ...
 
-    def step(self, state: S, ctrl: A, nstep: int) -> tuple[S, A]: ...
-
     def reset(self, state: S, done: M, initial: S) -> S: ...
-
-    def qpos(self, state: S) -> A:
-        """The joint positions (nbatch, nq) of every row of state."""
-        ...
 
 
 @dataclass(frozen=True)
@@ -173,6 +180,34 @@ class CpuBatch:
         self._pool.close()
 
 
+class DataBatch:
+    """One MjData as a batch of one row, stepped as CpuBatch steps a row. Its
+    state is the MjData, which step advances in place."""
+
+    def __init__(self, model: mujoco.MjModel) -> None:
+        self.model = model
+
+    def step(
+        self, state: mujoco.MjData, ctrl: Rows, nstep: int
+    ) -> tuple[mujoco.MjData, SensorData]:
+        """Hold ctrl (1, nu) for nstep >= 1 steps of mj_step from a cold
+        solver, as mujoco.rollout steps a row. Return state and the sensordata
+        after each step (1, nstep, nsensordata)."""
+        if nstep < 1:
+            raise ValueError(f"nstep must be at least 1, not {nstep}")
+        state.qacc_warmstart[:] = 0
+        state.ctrl[:] = ctrl[0]
+        sensordata = np.empty((1, nstep, self.model.nsensordata))
+        for k in range(nstep):
+            mujoco.mj_step(self.model, state)
+            sensordata[0, k] = state.sensordata
+        return state, sensordata
+
+    def qpos(self, state: mujoco.MjData) -> Rows:
+        """The joint positions of state as one row (1, nq)."""
+        return state.qpos[None]
+
+
 def check_same_sizes(model: mujoco.MjModel, other: mujoco.MjModel) -> None:
     """Raise ValueError unless other has the size signature of model, the
     hash of its sizes that mujoco.rollout needs to be the same for the
@@ -217,8 +252,8 @@ def command[A: Array](model: mujoco.MjModel, car: Car, throttle: A, steer: A) ->
     return xp.stack([column[i] for i in range(model.nu)], axis=-1)
 
 
-def drive[S, A: Array, M](
-    sim: Batch[S, A, M],
+def drive[S, A: Array](
+    sim: Stepper[S, A],
     model: mujoco.MjModel,
     car: Car,
     params: SpeedLoopParams,
