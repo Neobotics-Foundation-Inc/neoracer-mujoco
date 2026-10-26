@@ -184,7 +184,8 @@ jobs:
               commit -qam "Move to neoracer-mujoco $VERSION"
             git push origin "$branch"
           fi
-          if [ "$(gh pr list --repo "$REPO" --head "$branch" --state all --json number --jq length)" != 0 ]; then
+          prs=$(gh pr list --repo "$REPO" --head "$branch" --state all --json number --jq length)
+          if [ "$prs" != 0 ]; then
             echo "$branch already has a pull request"
             exit 0
           fi
