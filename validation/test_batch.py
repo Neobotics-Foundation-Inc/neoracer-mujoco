@@ -321,7 +321,7 @@ def test_command_rejects_a_model_with_other_actuators():
 def test_command_cars_gives_each_car_what_command_gives_the_only_car():
     """command_cars writes each car's actuators what command writes those of
     the car of a one-car scene, whatever the order of the cars, and refuses
-    a model with a car it was not given."""
+    a model with a car it was not given, as when one car is given twice."""
     one, two = _loop_scene(), two_cars()
     rng = np.random.default_rng(3)
     throttle, steer = rng.uniform(-1.0, 1.0, (2, NBATCH, 2))
@@ -344,6 +344,8 @@ def test_command_cars_gives_each_car_what_command_gives_the_only_car():
     np.testing.assert_array_equal(swapped, ctrl)
     with pytest.raises(ValueError, match="actuators"):
         batch.command_cars(two.model, two.cars[:1], throttle[:, :1], steer[:, :1])
+    with pytest.raises(ValueError, match="actuators"):
+        batch.command_cars(two.model, [two.car, two.car], throttle, steer)
 
 
 def test_drive_cars_runs_each_cars_speed_loop():

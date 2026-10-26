@@ -249,8 +249,8 @@ def command_cars[A: Array](
 ) -> A:
     """The ctrl rows (nbatch, nu) that give each of cars its throttle and its
     steer, as command gives one car: throttle[:, k] and steer[:, k], of
-    shape (nbatch, len(cars)), are cars[k]'s. Raise ValueError if model has
-    actuators that are none of the cars'."""
+    shape (nbatch, len(cars)), are cars[k]'s. Raise ValueError unless each of
+    model's actuators is one car's."""
     count = sum(len(car.throttled) + 1 for car in cars)
     if model.nu != count:
         raise ValueError(f"the model has {model.nu} actuators, the cars have {count}")
@@ -262,6 +262,8 @@ def command_cars[A: Array](
             value = contract.throttle_ctrl(tmap, throttle[..., k])
             column[int(model.bind_scalar(actuator).id)] = value
         column[int(model.bind_scalar(car.steer).id)] = steer[..., k]
+    if len(column) != model.nu:
+        raise ValueError(f"the cars share actuators: {len(column)} of {model.nu}")
     return xp.stack([column[i] for i in range(model.nu)], axis=-1)
 
 
