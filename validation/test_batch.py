@@ -1,6 +1,7 @@
 """
-Laws for batch.py: a batch row is one environment stepped on its own, and
-command and read address the batch arrays by spec element, whatever the
+Laws for batch.py: a batch row is one environment stepped on its own, as a
+DataBatch steps it, and command and read address the batch arrays by spec
+element, whatever the
 order of the actuators and the sensors in the car XML. The RACECAR Neo V2's
 actuators act on a command 0.06 s late, longer than a call of NSTEP steps,
 so its rows carry their command history from call to call.
@@ -68,23 +69,17 @@ def _batch_run(scene: Scene, nthread: int) -> np.ndarray:
 def _stepped(
     scene: Scene, row_physics: Physics, start: mujoco.MjData, commands: np.ndarray
 ) -> np.ndarray:
-    """The sensordata of one MjData that starts from start and steps on scene
-    with row_physics, NSTEP steps for each (throttle, steer) of commands,
-    starting the solver cold at each: (len(commands), NSTEP, nsensordata)."""
+    """The sensordata of a DataBatch whose MjData starts from start and steps
+    on scene with row_physics, NSTEP steps for each (throttle, steer) of
+    commands: (len(commands), NSTEP, nsensordata)."""
     model = copy.deepcopy(scene.model)
     physics.apply_physics(model, scene, row_physics)
-    data = copy.deepcopy(start)
+    one, data = batch.DataBatch(model), copy.deepcopy(start)
     out = []
     for throttle, steer in commands:
-        data.qacc_warmstart[:] = 0
-        sim.apply_command(
-            scene.car, data, ControlCommand(throttle=throttle, steer=steer)
-        )
-        steps = []
-        for _ in range(NSTEP):
-            mujoco.mj_step(model, data)
-            steps.append(data.sensordata.copy())
-        out.append(steps)
+        ctrl = batch.command(model, scene.car, np.array([throttle]), np.array([steer]))
+        data, sensordata = one.step(data, ctrl, NSTEP)
+        out.append(sensordata[0])
     return np.array(out)
 
 
@@ -113,9 +108,9 @@ def _tracks(seeds: Sequence[int]) -> list[Scene]:
 
 
 def test_a_row_is_one_data_stepped_on_its_scene_with_its_physics():
-    """Row i of a CpuBatch equals, bit for bit, one MjData that starts from
-    datas[i], starts the solver cold at each call, and steps on scenes[i]
-    with physics[i] and its own commands. Rows 0 to 2 get the same commands:
+    """Row i of a CpuBatch equals, bit for bit, a DataBatch: one MjData that
+    starts from datas[i], starts the solver cold at each call, and steps on
+    scenes[i] with physics[i] and its own commands. Rows 0 to 2 get the same commands:
     rows 0 and 1 differ only in the track, rows 0 and 2 only in the physics,
     and both differences show. Row 3 is row 0 with its own start and its own
     commands, so a batch that gave every row row 0's data or commands fails.
@@ -149,7 +144,7 @@ def test_a_row_is_one_data_stepped_on_its_scene_with_its_physics():
 
 
 def test_a_v2_row_keeps_its_command_history_across_calls_and_resets():
-    """On the V2 a row equals, bit for bit, one MjData stepped with its
+    """On the V2 a row equals, bit for bit, a DataBatch stepped with its
     physics and its commands, which change at every call and take every
     sign, so a batch that lost the command history between calls fails. A
     row reset halfway starts over, history and all, as a fresh MjData does."""
@@ -242,8 +237,9 @@ def test_drive_runs_every_rows_speed_loop_as_one_car_runs_its_own():
     angle at the step's end, which drive_pos reads once mj_forward refreshes
     it) holding its own commanded speed and steer: the throttle changes at
     the loop's ticks, and the solver starts cold at each tick and each call,
-    where the batch's pieces start. The two rows ask for speeds of opposite
-    signs, so a batch that ran one loop for both fails."""
+    where the batch's pieces start. drive on a DataBatch of each row alone
+    gives the same. The two rows ask for speeds of opposite signs, so a
+    batch that ran one loop for both fails."""
     scene = _loop_scene()
     model, car = scene.model, scene.car
     params = derive(NEORACER).speed_loop
@@ -284,6 +280,25 @@ def test_drive_runs_every_rows_speed_loop_as_one_car_runs_its_own():
         np.testing.assert_array_equal(
             got[:, i].reshape(CALLS * NSTEP, -1), np.array(expected), err_msg=f"row {i}"
         )
+        one, alone = batch.DataBatch(model), copy.deepcopy(start)
+        row_loop = speed_loop.start(params, np.full(1, angle))
+        single = []
+        for _ in range(CALLS):
+            alone, sensordata, row_loop = batch.drive(
+                one,
+                model,
+                car,
+                params,
+                alone,
+                row_loop,
+                commanded[i : i + 1],
+                steer[i : i + 1],
+                NSTEP,
+            )
+            single.append(sensordata[0])
+        np.testing.assert_array_equal(
+            np.concatenate(single), np.array(expected), err_msg=f"row {i} alone"
+        )
     throttle = np.asarray(loop.throttle)
     assert throttle[0] > 0.0 > throttle[1]
 
@@ -305,16 +320,18 @@ def test_command_rejects_a_model_with_other_actuators():
 
 def test_step_rejects_zero_steps():
     """mujoco.rollout reads nstep=0 as "not given" and steps once, so step
-    asks for at least one step."""
+    asks for at least one step, on a CpuBatch and on a DataBatch."""
     scene = assets.load()
     sim_batch = batch.CpuBatch(scene, 2, nthread=0)
     state = sim_batch.initial(
         [mujoco.MjData(scene.model)] * 2, [scene] * 2, NOMINAL * 2
     )
     ctrl = batch.command(scene.model, scene.car, np.zeros(2), np.zeros(2))
-    with pytest.raises(ValueError, match="nstep"):
+    with case("cpu"), pytest.raises(ValueError, match="nstep"):
         sim_batch.step(state, ctrl, 0)
     sim_batch.close()
+    with case("data"), pytest.raises(ValueError, match="nstep"):
+        batch.DataBatch(scene.model).step(mujoco.MjData(scene.model), ctrl[:1], 0)
 
 
 def test_a_batch_refuses_a_scene_of_another_size():
