@@ -17,8 +17,10 @@ Each control tick, step() does these operations:
 5. It groups adjacent usable candidates into regions and scores each region.
 6. It keeps the region that it tracks unless a new region has a much higher
    score. It then limits the rate of change of the target steering angle.
-7. It sets the throttle from the safe arc length of the target path and from
-   the steering angle. The steer command is the target steering angle.
+7. It sets the speed from the safe arc length of the target path and from
+   the steering angle. The steer command is the target steering angle. The
+   car's speed loop holds the speed, as a program on the car asks it to
+   (racecar.ask).
 
 The controller converts the scan to points once and then does a geometric
 test for each candidate. A wall to the side of the car is far from the
@@ -36,7 +38,7 @@ import numpy.typing as npt
 from scipy.spatial import KDTree
 
 from neoracer_mujoco import contract
-from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco.control import SpeedAngle
 from neoracer_mujoco.scene import Scene
 
 type FloatArray = npt.NDArray[np.float64]
@@ -127,13 +129,13 @@ class VsParams:
     region_switch_margin: float = 1.15
     """A new region must have a score this many times the score of the tracked
     region before the controller changes to it."""
-    max_throttle: float = 0.16
-    """The largest throttle, in [0, 1]."""
-    steer_throttle_cut: float = 0.6
-    """The fraction of throttle removed at full steer."""
-    min_throttle: float = 0.08
-    """The minimum throttle while the target path is usable, so the car has
-    enough torque to complete a sharp turn."""
+    max_speed: float = 0.56
+    """The largest speed (m/s)."""
+    steer_speed_cut: float = 0.6
+    """The fraction of the speed removed at full steer."""
+    min_speed: float = 0.28
+    """The least speed (m/s) while the target path is usable, so the car
+    keeps moving through a sharp turn."""
     path_window_candidates: int = 2
     """The candidates on each side of the target that target_path_clearance()
     reads."""
@@ -141,7 +143,7 @@ class VsParams:
     def __post_init__(self) -> None:
         # arc_table() divides by n_candidates - 1. extract_regions() divides
         # by a sum of safe arc lengths that are each at least
-        # clearance_radius_m. The throttle must stay in [0, max_throttle].
+        # clearance_radius_m. The speed must stay in [0, max_speed].
         # An odd count puts one candidate at 0 deg, the straight path.
         if self.n_candidates < 3 or self.n_candidates % 2 == 0:
             raise ValueError(
@@ -160,13 +162,13 @@ class VsParams:
                 "arc_sample_ds_m must be in (0, clearance_radius_m / 2], got "
                 f"{self.arc_sample_ds_m}"
             )
-        if not 0 <= self.steer_throttle_cut <= 1:
+        if not 0 <= self.steer_speed_cut <= 1:
             raise ValueError(
-                f"steer_throttle_cut must be in [0, 1], got {self.steer_throttle_cut}"
+                f"steer_speed_cut must be in [0, 1], got {self.steer_speed_cut}"
             )
-        if not 0 <= self.min_throttle <= self.max_throttle:
+        if not 0 <= self.min_speed <= self.max_speed:
             raise ValueError(
-                f"min_throttle must be in [0, max_throttle], got {self.min_throttle}"
+                f"min_speed must be in [0, max_speed], got {self.min_speed}"
             )
         if self.path_window_candidates < 1:
             raise ValueError(
@@ -513,7 +515,7 @@ class VsState:
 class Driving:
     """At least one region exists. The car drives toward the selected region."""
 
-    command: ControlCommand
+    command: SpeedAngle
     target_steer_deg: float
     """The slew-limited target steering angle."""
     region: Region
@@ -526,10 +528,10 @@ class Driving:
 
 @dataclass(frozen=True)
 class NoPath:
-    """No candidate is usable. The throttle is 0 and the steering stays at the
+    """No candidate is usable. The speed is 0 and the steering stays at the
     last target."""
 
-    command: ControlCommand
+    command: SpeedAngle
     target_steer_deg: float
     """The target of the last tick."""
     straight_clear_m: float
@@ -539,18 +541,18 @@ class NoPath:
 type VsResult = Driving | NoPath
 
 
-def _throttle(params: VsParams, path_clear_m: float, target_deg: float) -> float:
-    """Throttle, in [0, 1]. It decreases when the target path is short
-    and when the steering angle is large. If the target path is usable, the
-    throttle is at least min_throttle."""
+def _speed(params: VsParams, path_clear_m: float, target_deg: float) -> float:
+    """Speed (m/s), in [0, max_speed]. It decreases when the target path is
+    short and when the steering angle is large. If the target path is usable,
+    the speed is at least min_speed."""
     steer_max_deg = math.degrees(params.car.steer_max_rad)
     clear_frac = min(1.0, path_clear_m / params.planning_horizon_m)
     steer_frac = min(1.0, abs(target_deg) / steer_max_deg)
-    scale = clear_frac * (1.0 - params.steer_throttle_cut * steer_frac)
-    throttle = params.max_throttle * scale
+    scale = clear_frac * (1.0 - params.steer_speed_cut * steer_frac)
+    speed = params.max_speed * scale
     if path_clear_m >= params.clearance_radius_m:
-        return max(throttle, params.min_throttle)
-    return throttle
+        return max(speed, params.min_speed)
+    return speed
 
 
 def _steer_rad(params: VsParams, target_deg: float) -> float:
@@ -582,7 +584,7 @@ def step(
     if not regions:
         held = state.target_steer_deg
         return state, NoPath(
-            command=ControlCommand(throttle=0.0, steer=_steer_rad(params, held)),
+            command=SpeedAngle(target=0.0, steer=_steer_rad(params, held)),
             target_steer_deg=held,
             straight_clear_m=straight_clear_m,
         )
@@ -615,8 +617,8 @@ def step(
         tracked=TrackedRegion(score=chosen_score, center_deg=chosen.center_deg),
     )
     return new_state, Driving(
-        command=ControlCommand(
-            throttle=_throttle(params, path_clear_m, target_deg),
+        command=SpeedAngle(
+            target=_speed(params, path_clear_m, target_deg),
             steer=_steer_rad(params, target_deg),
         ),
         target_steer_deg=target_deg,

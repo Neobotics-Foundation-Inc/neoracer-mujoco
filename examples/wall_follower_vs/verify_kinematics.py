@@ -1,9 +1,9 @@
 """
 Compare the minimum turn radius of the bicycle model with the turn radius of
 the simulated car. The script reads the wheelbase and the steering limit from
-assets/neoracer.xml. It then drives the car at a low constant throttle and
-full steering lock, and fits a circle to the path of the car. Run it from the
-repository root:
+assets/neoracer.xml. It then asks the car for a low constant speed, which
+its speed loop holds, at full steering lock, and fits a circle to the path
+of the car. Run it from the repository root:
 
     python -m examples.wall_follower_vs.verify_kinematics
 
@@ -13,18 +13,17 @@ Frame: +X forward, +Y left, +Z up.
 import math
 from dataclasses import dataclass
 
-import mujoco
 import numpy as np
 
 from examples.wall_follower_vs.vehicle_space_controller import car_geometry
-from neoracer_mujoco import assets, sim
-from neoracer_mujoco.control.steering import ControlCommand
+from neoracer_mujoco import assets, racecar, sim
+from neoracer_mujoco.control import SpeedAngle
 
 
 @dataclass(frozen=True)
 class DriveParams:
-    throttle: float = 0.16
-    """The constant throttle, in [-1, 1]."""
+    speed: float = 0.56
+    """The constant speed (m/s)."""
     duration_s: float = 12.0
     """The sim time of the drive."""
     sample_period_s: float = 0.04
@@ -43,17 +42,14 @@ def main() -> None:
     )
 
     data = sim.settle(model)
-    sim.apply_command(
-        scene.car,
-        data,
-        ControlCommand(throttle=params.throttle, steer=car.steer_max_rad),
-    )
+    racer = racecar.start(racecar.neoracer_params(), scene, data)
+    racer = racecar.ask(racer, SpeedAngle(params.speed, car.steer_max_rad))
     timestep = float(model.opt.timestep)
     n_steps = round(params.duration_s / timestep)
     sample_every = round(params.sample_period_s / timestep)
     xy = []
     for i in range(n_steps):
-        mujoco.mj_step(model, data)
+        racer = racecar.step(scene, data, racer)
         if i % sample_every == 0:
             xy.append(data.bind_scalar(scene.car.body).xpos[:2].copy())
 
