@@ -150,6 +150,9 @@ class Entry:
     offset: tuple[float, float] = (0.0, 0.0)
     """Where the car starts (m), from the track's start, in its frame: +X
     forward, +Y left."""
+    heading: float = 0.0
+    """Which way the car faces (rad), turned about +Z from the start's +X,
+    + to the left."""
     car: str | os.PathLike[str] | mujoco.MjSpec = DEFAULT_CAR
     """A car XML's path or a car's MjSpec, as compose takes."""
 
@@ -162,12 +165,12 @@ def compose_cars(
     MjSpec is changed, and visuals is as for compose. Raise ValueError if an
     entry's prefix starts another's (scene.compile_scene).
 
-        grid = [Entry("a/"), Entry("b/", offset=(-0.6, 0.0))]
+        grid = [Entry("a/"), Entry("b/", offset=(-0.6, 0.0), heading=0.1)]
         scene = compose_cars(track, grid, visuals=False)
     """
     scene = track.copy()
     for entry in entries:
-        attach_car(scene, entry.car, entry.prefix, entry.offset, visuals)
+        attach_car(scene, entry.car, entry.prefix, entry.offset, entry.heading, visuals)
     return compile_scene(scene, [entry.prefix for entry in entries])
 
 
@@ -176,15 +179,17 @@ def attach_car(
     car: str | os.PathLike[str] | mujoco.MjSpec = DEFAULT_CAR,
     prefix: str = "",
     offset: tuple[float, float] = (0.0, 0.0),
+    heading: float = 0.0,
     visuals: bool = True,
 ) -> None:
     """Attach the car's root body (contract.CAR_BODY) to spec, with the names
     of its elements behind prefix, at the track's start: its site
     START_SITE, facing the site's +X, or the origin, facing +X, if it has
-    none, moved by offset (m) in that frame, +X forward and +Y left. The site
-    must be on the world body, as the car's free joint must. A car's MjSpec
-    is not changed: the car is attached from a copy. spec takes the car's
-    <option>, and visuals is as for compose."""
+    none, moved by offset (m) in that frame, +X forward and +Y left, and
+    turned by heading (rad) about +Z, + to the left. The site must be on the
+    world body, as the car's free joint must. A car's MjSpec is not changed:
+    the car is attached from a copy. spec takes the car's <option>, and
+    visuals is as for compose."""
     car = car.copy() if isinstance(car, mujoco.MjSpec) else from_file(car)
     spec.option = car.option
     start = spec.site(START_SITE)
@@ -202,9 +207,13 @@ def attach_car(
     # own makes the scene's XML load again.
     car.default.name = "car"
     body = mount.attach_body(car.body(contract.CAR_BODY), prefix, "")
-    # attach_body puts the body in a frame at the mount, so its pos is in
-    # the start's frame.
+    # attach_body puts the body in a frame at the mount, so its pos and quat
+    # are in the start's frame.
     body.pos = np.asarray(body.pos) + [*offset, 0.0]
+    turn = np.array([np.cos(heading / 2), 0.0, 0.0, np.sin(heading / 2)])
+    quat = np.empty(4)
+    mujoco.mju_mulQuat(quat, turn, np.asarray(body.quat, dtype=np.float64))
+    body.quat = quat
 
 
 def delete_visuals(spec: mujoco.MjSpec) -> None:

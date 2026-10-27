@@ -212,7 +212,7 @@ It is still a `Scene` with a `Car`, so all the code above works on it. `export.w
 
 ## Several cars on one track
 
-`assets.compose_cars` puts several cars on one track. Each `Entry` gives a car, the prefix of the names of its elements, and where it starts, in meters from the track's start, forward and to the left:
+`assets.compose_cars` puts several cars on one track. Each `Entry` gives a car, the prefix of the names of its elements, where it starts, in meters from the track's start, forward and to the left, and which way it faces, in radians turned left from the start's heading:
 
 ```python
 from neoracer_mujoco.assets import Entry, compose_cars
@@ -220,6 +220,17 @@ from neoracer_mujoco.assets import Entry, compose_cars
 grid = [Entry("a/"), Entry("b/", offset=(-0.6, 0.25)), Entry("c/", offset=(-1.2, 0.0))]
 scene = compose_cars(to_spec(track), grid)
 scene.cars  # a Car for each entry, in order: the motor of the second is "b/motor"
+```
+
+On a generated track, `pose_along` gives the offset and the heading of a car that stands some meters along the centerline and across it, facing along the track, so a grid follows a bend behind the start. `sim.spawn_clears_walls` checks that no move of `sim.perturb_spawn` within a `SpawnRange`, before the car resettles, can put a car of a scene against a wall:
+
+```python
+from neoracer_mujoco.track_generation import pose_along
+
+slots = {"a/": (0.0, 0.25), "b/": (0.0, -0.25), "c/": (-1.2, 0.25)}  # m along, across
+grid = [Entry(prefix, *pose_along(track, *slot)) for prefix, slot in slots.items()]
+scene = compose_cars(to_spec(track), grid)
+sim.spawn_clears_walls(scene, sim.SpawnRange(lateral=0.02, yaw=0.1))
 ```
 
 Each `Car` holds its own parts, so every function that takes a `Car`, as `sim.apply_command`, `lidar.sweep` or `collision.car_touches_wall` do, works on any car of the scene. The cars meet only in the physics: each car's LiDAR sees the others, and they collide. Each car has its own truth sensors, and `scene.car_contacts[i, j]` counts the contacts between `scene.cars[i]` and `scene.cars[j]`. A tuple of `Physics`, one for each car, gives each car its own parameters.
