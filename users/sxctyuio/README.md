@@ -83,17 +83,15 @@ races a run on the tracks of the seeds N on from its own.
 
 **Racing.** One policy drives every car (`Each` agents): each car is an env
 of the VecEnv. 2-4 cars start on a grid at the track's start, in rows of two,
-`--grid-lane` apart across the track and `--grid-row` between rows. A race
-ends for every car when a car crashes, rolls over, gets stuck, collides with
-another car or finishes `--laps` laps; the cars whose episode it did not end
-are truncated, so PPO bootstraps their value, and the race starts over. Every
-1024 steps each race draws a new spawn, track and physics.
-
-A grid's rows run straight back from the start, along its heading, so on a
-generated track that bends or narrows near its start some cars start in a
-wall, and their race ends as a crash on its first step. With the default
-grid, that is 23-71% of the races of 4 cars from difficulty 0 to 3, and
-23-35% of the races of 2 cars at difficulty 2 and 3; none on the loop.
+`--grid-lane-m` apart across the track and `--grid-row-m` between rows, laid
+along the track, so a back row follows a bend. A pool of generated tracks
+leaves out a track where a spawn could put a car against a wall, so a race's
+pool holds other tracks than one car's with the same seeds: at difficulty 2
+and 3, about half of them. A race ends for every car when a car crashes,
+rolls over, gets stuck, collides with another car or finishes `--laps` laps;
+the cars whose episode it did not end are truncated, so PPO bootstraps their
+value, and the race starts over. Every 1024 steps each race draws a new
+spawn, track and physics.
 
 ## What changed from the earlier implementation
 
