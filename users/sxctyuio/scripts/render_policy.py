@@ -9,9 +9,13 @@ trained in (the run's setup.json), with the policy's mean action.
 --headless runs the first episode of each of --races races and prints how
 each car's ended, its laps, and the race's time. Otherwise one race runs
 until --seconds pass, in a viewer, or into a video with --record.
+
+--track-shift N races a run of generated tracks on the tracks of the seeds
+N on from its own, so that it can be scored on tracks it never saw.
 """
 
 import argparse
+import dataclasses
 import os
 import sys
 import time
@@ -33,9 +37,13 @@ from racing.vec_env import RaceVecEnv, make
 FULL_PHYSICS = mujoco.mjtState.mjSTATE_FULLPHYSICS
 
 
-def load(run: Path, races: int, seed: int, nthread: int) -> tuple[PPO, VecEnv, RaceVecEnv]:
-    """The run's policy, its env as the policy sees it, and the races under it."""
-    setup = Setup.load(run / "setup.json")
+def load(
+    run: Path, races: int, seed: int, nthread: int, shift: int
+) -> tuple[PPO, VecEnv, RaceVecEnv]:
+    """The run's policy, its env as the policy sees it, and the races under it,
+    on the generated tracks shift seeds on from the run's."""
+    trained = Setup.load(run / "setup.json")
+    setup = dataclasses.replace(trained, first_seed=trained.first_seed + shift)
     venv = VecNormalize.load(str(run / "vecnormalize.pkl"), make(setup, races, seed, nthread))
     venv.training, venv.norm_reward = False, False
     inner = venv.unwrapped
@@ -49,8 +57,8 @@ def control_period(inner: RaceVecEnv) -> float:
     return substeps_per_action(inner.race.config.env, model) * float(model.opt.timestep)
 
 
-def score(run: Path, races: int, seed: int, nthread: int) -> None:
-    model, venv, inner = load(run, races, seed, nthread)
+def score(run: Path, races: int, seed: int, nthread: int, shift: int) -> None:
+    model, venv, inner = load(run, races, seed, nthread, shift)
     cars = venv.num_envs // races
     dt = control_period(inner)
     obs, steps, ended = venv.reset(), 0, {}
@@ -68,8 +76,8 @@ def score(run: Path, races: int, seed: int, nthread: int) -> None:
     print(f"  outcomes {dict(Counter(o for o, _, _ in ended.values()))}")
 
 
-def show(run: Path, seed: int, seconds: float, record: Path | None) -> None:
-    model, venv, inner = load(run, 1, seed, 1)
+def show(run: Path, seed: int, shift: int, seconds: float, record: Path | None) -> None:
+    model, venv, inner = load(run, 1, seed, 1, shift)
     dt = control_period(inner)
     scene = inner.race.scene
     data = mujoco.MjData(scene.model)
@@ -115,14 +123,15 @@ def main() -> None:
     parser.add_argument("--headless", action="store_true", help="score, no window")
     parser.add_argument("--races", type=int, default=20)
     parser.add_argument("--seed", type=int, default=10_000)
+    parser.add_argument("--track-shift", type=int, default=0, help="generated tracks' seed shift")
     parser.add_argument("--nthread", type=int, default=os.cpu_count() or 1)
     parser.add_argument("--seconds", type=float, default=60.0)
     parser.add_argument("--record", type=Path, help="write the race to this video")
     args = parser.parse_args()
     if args.headless:
-        score(args.run, args.races, args.seed, args.nthread)
+        score(args.run, args.races, args.seed, args.nthread, args.track_shift)
     else:
-        show(args.run, args.seed, args.seconds, args.record)
+        show(args.run, args.seed, args.track_shift, args.seconds, args.record)
 
 
 if __name__ == "__main__":

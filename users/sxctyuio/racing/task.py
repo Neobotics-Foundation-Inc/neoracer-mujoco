@@ -22,13 +22,14 @@ crash: the car touched another car.
 Reward (RaceReward): neoracer-rl's ProgressReward, less time_penalty every
 step, plus overtake_reward for each car that the car passed in the step and
 less as much for each car that passed it, and at a collision, less
-collision_penalty for the car behind and victim_share of it for the car
-ahead.
+collision_penalty for the car behind on the track, whatever the laps, and
+victim_share of it for the car ahead.
 """
 
 from dataclasses import dataclass
 
 import numpy as np
+from neoracer_mujoco.track_generation import shortest_loop_distance
 from neoracer_rl.envs.task import (
     CarObservation,
     Ends,
@@ -99,7 +100,9 @@ class RaceReward:
             passed = (before > 0) & (rival.ahead <= 0)
             lost = (before <= 0) & (rival.ahead > 0)
             reward = reward + self.overtake_reward * (passed.astype(float) - lost)
-            share = np.where(rival.ahead > 0, 1.0, self.victim_share)
+            # The car ahead on the track, which a car a lap down can be.
+            near = shortest_loop_distance(rival.ahead, 2.0 * np.pi)
+            share = np.where(near > 0, 1.0, self.victim_share)
             hit = ends["collision"] & rival.contact
             reward = reward - np.where(hit, self.collision_penalty * share, 0.0)
         return reward

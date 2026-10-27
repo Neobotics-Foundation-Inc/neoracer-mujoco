@@ -50,6 +50,8 @@ class Setup:
     """Of the generated tracks, from 0 to 3."""
     pool: int = 16
     """The generated tracks that the races are drawn from."""
+    first_seed: int = 0
+    """The first seed of the pool's tracks."""
     laps: int = 1
     grid_lane_m: float = 0.55
     grid_row_m: float = 1.2
@@ -91,7 +93,7 @@ def race_config(setup: Setup) -> RaceConfig:
         case "loop":
             tracks: LoopCorridor | GeneratedTracks = LoopCorridor()
         case "procedural":
-            tracks = GeneratedTracks(setup.difficulty, setup.pool)
+            tracks = GeneratedTracks(setup.difficulty, setup.pool, setup.first_seed)
         case _:
             assert_never(setup.track)
     progress = ProgressReward(

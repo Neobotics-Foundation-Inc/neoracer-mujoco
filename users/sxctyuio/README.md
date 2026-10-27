@@ -41,6 +41,7 @@ python3 scripts/train_ppo.py --track procedural --difficulty 2 --sim2real --hist
 python3 scripts/train_ppo.py --cars 2 --sim2real --out runs/race
 
 python3 scripts/render_policy.py runs/race --headless --races 100   # how each race ended
+python3 scripts/render_policy.py runs/proc --headless --track-shift 1000  # on unseen tracks
 mjpython scripts/render_policy.py runs/race                          # watch (mjpython on macOS)
 python3 scripts/render_policy.py runs/race --record race.mp4
 ```
@@ -76,8 +77,9 @@ step, sensor noise, LiDAR dropout and action noise. The ranges are first
 guesses.
 
 **Procedural tracks.** `--track procedural` trains on a pool of `--pool`
-generated tracks of `--difficulty`, and each race draws its track at each
-spawn.
+generated tracks of `--difficulty`, from seed `--first-seed` on, and each
+race draws its track at each spawn. `render_policy.py --track-shift N`
+races a run on the tracks of the seeds N on from its own.
 
 **Racing.** One policy drives every car (`Each` agents): each car is an env
 of the VecEnv. 2-4 cars start on a grid at the track's start, in rows of two,
