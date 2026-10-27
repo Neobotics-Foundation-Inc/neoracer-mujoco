@@ -224,6 +224,30 @@ def _max_deviation(points: Points, start: int, end: int) -> float:
     return float(np.abs(across).max() / length)
 
 
+def pose_along(
+    track: Track, along: float, across: float
+) -> tuple[tuple[float, float], float]:
+    """Where a car stands (m) and which way it faces (rad), in the frame of
+    to_mjcf, as an assets.Entry's offset and heading: along m along the
+    centerline from sample 0, + forward and around the loop, and across m to
+    its left, facing along the loop."""
+    distance = along % track.total_length
+
+    def at(values: npt.NDArray[np.float64]) -> float:
+        return float(
+            np.interp(distance, track.distance_along, values, period=track.total_length)
+        )
+
+    center = np.array([at(track.center[:, 0]), at(track.center[:, 1])])
+    tangent = np.array([at(track.tangent[:, 0]), at(track.tangent[:, 1])])
+    tangent /= np.linalg.norm(tangent)
+    left = np.array([-tangent[1], tangent[0]])
+    x, y = to_start_frame(track, (center + across * left)[None])[0]
+    start = track.tangent[0]
+    turn = np.arctan2(start[0] * tangent[1] - start[1] * tangent[0], start @ tangent)
+    return (float(x), float(y)), float(turn)
+
+
 def lap_distance(track: Track, xy: npt.ArrayLike) -> npt.NDArray[np.float64]:
     """The distance (m) along the centerline, from the start, of the sample
     nearest to each point of xy (..., 2) in the frame of to_mjcf, where the

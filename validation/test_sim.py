@@ -70,3 +70,72 @@ def test_a_spawn_moves_the_car_square_to_its_heading_and_turns_it():
             assert math.remainder(
                 _heading(data, scene.car) - heading - yaw, 2 * math.pi
             ) == pytest.approx(0.0, abs=1e-6)  # the turn is about the car's own Z
+
+
+def test_a_spawn_moves_no_point_of_the_car_farther_than_its_reach():
+    """Every point within a colliding geom's bounding sphere moves by at
+    most spawn_reach, in the plane, whichever way the start faces; and some
+    point moves by more than half of it, so the bound is not loose."""
+    spawn = sim.SpawnRange(lateral=0.1, yaw=0.3, resettle=0.0)
+    angles = np.linspace(0, 2 * math.pi, 8, endpoint=False)
+    directions = np.stack([np.cos(angles), np.sin(angles), np.zeros(8)], axis=1)
+    for turn in (0.0, 120.0):  # degrees, the start's heading
+        with case(turn):
+            track = mujoco.MjSpec.from_file(LOOP)
+            half = math.radians(turn) / 2
+            track.site(assets.START_SITE).quat = np.array(
+                [math.cos(half), 0.0, 0.0, math.sin(half)]
+            )
+            scene = assets.compose(track, visuals=False)
+            model, car = scene.model, scene.car
+            reach = sim.spawn_reach(model, car, spawn)
+            root = model.bind_scalar(car.body).id
+            geoms = np.flatnonzero(
+                (model.body_rootid[model.geom_bodyid] == root)
+                & ((model.geom_contype != 0) | (model.geom_conaffinity != 0))
+            )
+            farthest = 0.0
+            for seed in range(40):
+                data = sim.settle(model)
+                before = (data.xpos[root].copy(), data.xmat[root].reshape(3, 3).copy())
+                points = np.concatenate(
+                    [
+                        data.geom_xpos[g] + model.geom_rbound[g] * directions
+                        for g in geoms
+                    ]
+                )
+                local = (points - before[0]) @ before[1]
+                sim.perturb_spawn(model, data, car, np.random.default_rng(seed), spawn)
+                moved = local @ data.xmat[root].reshape(3, 3).T + data.xpos[root]
+                gaps = np.linalg.norm((moved - points)[:, :2], axis=1)
+                farthest = max(farthest, float(gaps.max()))
+            assert farthest <= reach + 1e-9
+            assert farthest > reach / 2
+
+
+def test_no_move_of_a_clear_spawn_touches_a_wall_or_another_car():
+    """Where spawn_is_clear holds, no move of perturb_spawn puts a car in
+    touch with a wall or with another car; a car near a wall, or near
+    another car, is not clear."""
+    spawn = sim.SpawnRange(lateral=0.2, yaw=0.3, resettle=0.0)
+    track = mujoco.MjSpec.from_file(LOOP)
+    scene = assets.compose_cars(
+        track, [assets.Entry("a/"), assets.Entry("b/", (-1.5, 0.0))], visuals=False
+    )
+    assert sim.spawn_is_clear(scene, spawn)
+    for seed in range(40):
+        data = mujoco.MjData(scene.model)
+        mujoco.mj_forward(scene.model, data)
+        rng = np.random.default_rng(seed)
+        for car in scene.cars:
+            sim.perturb_spawn(scene.model, data, car, rng, spawn)
+        with case(seed):
+            for car in scene.cars:
+                assert data.bind_scalar(car.truth.wall_contact).data[0] == 0
+            for sensor in scene.car_contacts.values():
+                assert data.bind_scalar(sensor).data[0] == 0
+    for near in ((-1.5, 0.3), (-0.6, 0.0)):  # a wall beside b/, a/ just ahead of it
+        with case(near):
+            entries = [assets.Entry("a/"), assets.Entry("b/", near)]
+            scene = assets.compose_cars(track, entries, visuals=False)
+            assert not sim.spawn_is_clear(scene, spawn)

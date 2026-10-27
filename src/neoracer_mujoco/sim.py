@@ -1,12 +1,13 @@
 """
 Step and probe helpers for the NeoRacer model: step the physics with a fixed
 control, write a control command, settle the car and move it off its start
-at random, and two physics probes (car_mass, car_upright_cos) that the
-conformance tests use.
+at random, check that no such move can make cars touch, and two physics
+probes (car_mass, car_upright_cos) that the conformance tests use.
 
 Frame: +X forward, +Y left, +Z up.
 """
 
+import copy
 import math
 from dataclasses import dataclass
 
@@ -15,7 +16,7 @@ import numpy as np
 
 from . import contract
 from .control.steering import ControlCommand
-from .scene import Car
+from .scene import Car, Scene
 
 SETTLE_TIME = 1.0
 """The time (s) of zero ctrl that lets the car reach static equilibrium."""
@@ -106,6 +107,45 @@ def perturb_spawn(
     mujoco.mj_forward(model, data)
     for _ in range(steps_in(spawn.resettle, model.opt.timestep)):
         mujoco.mj_step(model, data)
+
+
+def spawn_reach(model: mujoco.MjModel, car: Car, spawn: SpawnRange) -> float:
+    """How far (m) perturb_spawn can move a point of the car's colliding
+    geoms: spawn.lateral sideways, plus the chord of a turn of spawn.yaw
+    about the car's origin at the farthest such a point is from it, with the
+    car where the model puts it."""
+    data = mujoco.MjData(model)
+    mujoco.mj_kinematics(model, data)
+    root = model.bind_scalar(car.body).id
+    geoms = np.flatnonzero(
+        (model.body_rootid[model.geom_bodyid] == root)
+        & ((model.geom_contype != 0) | (model.geom_conaffinity != 0))
+    )
+    centers = np.linalg.norm(data.geom_xpos[geoms, :2] - data.xpos[root, :2], axis=1)
+    far = float((centers + model.geom_rbound[geoms]).max())
+    return spawn.lateral + 2.0 * far * math.sin(spawn.yaw / 2)
+
+
+def spawn_is_clear(scene: Scene, spawn: SpawnRange) -> bool:
+    """Whether no move of perturb_spawn within spawn can put a car of the
+    scene, where its model puts it, in touch with a wall or with another
+    car: every car is farther than the cars' largest spawn_reach from every
+    wall, and than twice it from every other car."""
+    model = copy.deepcopy(scene.model)
+    reach = max(spawn_reach(model, car, spawn) for car in scene.cars)
+    roots = [model.bind_scalar(car.body).id for car in scene.cars]
+    theirs = np.isin(model.body_rootid[model.geom_bodyid], roots)
+    # MuJoCo makes a contact of two geoms nearer than the sum of their
+    # margins, which the contact sensors count: reach for a car and a wall,
+    # whose margin is 0, and twice it for two cars. Its midphase skips the
+    # geoms of two bodies whose boxes do not overlap, whatever their margins.
+    model.geom_margin[theirs] = reach
+    model.opt.disableflags |= mujoco.mjtDisableBit.mjDSBL_MIDPHASE
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    walls = [car.truth.wall_contact for car in scene.cars]
+    touches = [*walls, *scene.car_contacts.values()]
+    return all(data.bind_scalar(sensor).data[0] == 0 for sensor in touches)
 
 
 def car_mass(model: mujoco.MjModel, car: Car) -> float:

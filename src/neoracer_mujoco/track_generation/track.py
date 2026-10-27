@@ -5,6 +5,7 @@ it and re-check, or throw it away and redraw. Pure NumPy/SciPy -- no MuJoCo, no
 simulator assumptions. mjcf.py turns the result into scenery.
 """
 
+from copy import replace
 from dataclasses import dataclass
 
 import numpy as np
@@ -118,3 +119,23 @@ def left_edge(track: Track) -> Points:
 def right_edge(track: Track) -> Points:
     """Points on the right-hand boundary of the corridor."""
     return track.center - track.half_width[:, None] * track.left_normal
+
+
+def restart(track: Track, sample: int) -> Track:
+    """The same loop, started at sample: its samples renumbered so that
+    sample is sample 0, and distance_along measured from there."""
+    k = sample % len(track.center)
+
+    def roll(values: Points) -> Points:
+        return np.roll(values, -k, axis=0)
+
+    return replace(
+        track,
+        center=roll(track.center),
+        tangent=roll(track.tangent),
+        left_normal=roll(track.left_normal),
+        curvature=roll(track.curvature),
+        half_width=roll(track.half_width),
+        distance_along=(roll(track.distance_along) - track.distance_along[k])
+        % track.total_length,
+    )

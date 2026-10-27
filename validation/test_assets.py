@@ -64,8 +64,8 @@ def test_the_car_starts_at_the_tracks_start():
 
 def test_each_entry_starts_at_its_offset_from_the_start():
     """compose_cars puts each car where compose puts the car, moved by the
-    entry's offset in the start's frame: forward along the site's +X, left
-    along its +Y."""
+    entry's offset in the start's frame, forward along the site's +X and
+    left along its +Y, and turned left by its heading about +Z."""
     track = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xml"))
     yaw = 0.6
     start = track.site(assets.START_SITE)
@@ -73,7 +73,11 @@ def test_each_entry_starts_at_its_offset_from_the_start():
     start.quat = np.array([np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)])
     one = assets.compose(track, visuals=False)
     alone = one.model.bind_scalar(one.car.body)
-    entries = [assets.Entry("a/", (0.3, -0.2)), assets.Entry("b/", (-0.8, 0.25))]
+    entries = [
+        assets.Entry("a/", (0.3, -0.2)),
+        assets.Entry("b/", (-0.8, 0.25), heading=0.4),
+        assets.Entry("c/", (-1.6, 0.0), heading=-2.5),
+    ]
     scene = assets.compose_cars(track, entries, visuals=False)
     forward = np.array([np.cos(yaw), np.sin(yaw)])
     left = np.array([-np.sin(yaw), np.cos(yaw)])
@@ -84,7 +88,12 @@ def test_each_entry_starts_at_its_offset_from_the_start():
             np.testing.assert_allclose(
                 body.pos, [*(alone.pos[:2] + x * forward + y * left), alone.pos[2]]
             )
-            np.testing.assert_allclose(body.quat, alone.quat, atol=1e-12)
+            half = entry.heading / 2
+            turned = np.empty(4)
+            mujoco.mju_mulQuat(
+                turned, np.array([np.cos(half), 0.0, 0.0, np.sin(half)]), alone.quat
+            )
+            np.testing.assert_allclose(body.quat, turned, atol=1e-12)
 
 
 def test_a_car_far_from_the_others_drives_as_the_only_car():
