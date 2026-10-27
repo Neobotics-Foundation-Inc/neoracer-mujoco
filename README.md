@@ -237,7 +237,7 @@ for _ in range(1000):
     cars = racecar.step_cars(scene, data, cars)
 ```
 
-In a batch, a row holds every car of the scene. `batch.command_cars` and `batch.drive_cars` take the cars' commands with the cars on the last axis, shape `(nbatch, len(scene.cars))`.
+In a batch, a row holds every car of the scene. `batch.command_cars` and `batch.drive_cars` take the cars' commands with the cars on the last axis, shape `(nbatch, len(scene.cars))`. A controller of `neoracer_mujoco.control`, such as `track_centering`, drives a car of a batch row from `batch.readings(model, car, sensordata[i, -1])`, that car's `SensorReadings` in the row, as it drives the car of one `MjData` from `sensors.read`.
 
 ## Many cars at once
 

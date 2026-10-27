@@ -39,15 +39,19 @@ A row of a scene of several cars (assets.compose_cars) holds them all:
 command_cars gives each car its throttle and steer, and drive_cars runs
 each car's speed loop, with the cars on the arrays' last axis.
 
-A batch array has no bind, so command, command_cars, read and drive_angle
-bind the element to the model and index the array with its address. They
-are the only code that uses an address. They work on numpy and JAX arrays
-alike.
+A controller of neoracer_mujoco.control drives a car of a batch row from
+batch.readings, the car's SensorReadings in a row of the batch's sensordata,
+as it drives a car of one MjData from sensors.read.
+
+A batch array has no bind, so command, command_cars, read, readings and
+drive_angle bind the element to the model and index the array with its
+address. They are the only code that uses an address. command, read and
+drive_angle work on numpy and JAX arrays alike.
 """
 
 import copy
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Any, Protocol, assert_never
 
 import mujoco
@@ -57,10 +61,11 @@ from mujoco import rollout
 
 from neoracer_spec.derive import SpeedLoopParams
 
-from . import contract, speed_loop
+from . import contract, sensors, speed_loop
 from .contract import Array
 from .physics import Physics, ScenePhysics, apply_physics
 from .scene import Car, Scene
+from .sensors import SensorReadings
 
 type States = npt.NDArray[np.float64]
 """Shape (nbatch, nstate), each row an mjSTATE_FULLPHYSICS state."""
@@ -413,6 +418,20 @@ def drive_angle[A: Array](model: mujoco.MjModel, car: Car, qpos: A) -> A:
         joint = int(model.wrap_objid[w])
         angle = angle + float(model.wrap_prm[w]) * qpos[..., model.jnt_qposadr[joint]]
     return angle
+
+
+def readings(
+    model: mujoco.MjModel, car: Car, sensordata: npt.NDArray[np.float64]
+) -> SensorReadings:
+    """The SensorReadings of car in one row of sensordata, shape
+    (nsensordata,), as sensors.read gives them from an MjData that holds the
+    row: what a controller of neoracer_mujoco.control reads to drive a car of
+    a batch row."""
+    values = {
+        f.name: read(model, sensordata, getattr(car.sensors, f.name))
+        for f in fields(SensorReadings)
+    }
+    return sensors.from_values(car.sensors, values)
 
 
 def read[A: Array](model: mujoco.MjModel, sensordata: A, sensor: mujoco.MjsSensor) -> A:
