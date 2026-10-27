@@ -143,3 +143,11 @@ def test_no_move_of_a_spawn_that_clears_the_walls_touches_a_wall():
             entries = [assets.Entry("a/"), assets.Entry("b/", (-1.5, across))]
             scene = assets.compose_cars(track, entries, visuals=False)
             assert not sim.spawn_clears_walls(scene, spawn)
+    # With margins on its geoms wider than its gap to the wall, the car
+    # touches the wall in MuJoCo's eyes before any move.
+    scene = assets.compose(track, visuals=False)
+    model = scene.model
+    root = model.bind_scalar(scene.car.body).id
+    model.geom_margin[model.body_rootid[model.geom_bodyid] == root] = 0.6
+    still = sim.SpawnRange(lateral=0.0, yaw=0.0, resettle=0.0)
+    assert not sim.spawn_clears_walls(scene, still)

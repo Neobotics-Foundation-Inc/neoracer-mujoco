@@ -130,16 +130,16 @@ def spawn_reach(model: mujoco.MjModel, car: Car, spawn: SpawnRange) -> float:
 def spawn_clears_walls(scene: Scene, spawn: SpawnRange) -> bool:
     """Whether no move of perturb_spawn within spawn, before it resettles,
     can put a car of the scene, where its model puts it, against a wall:
-    every car is farther than its spawn_reach from every wall. The resettle
-    after the move only lets the car's suspension settle."""
+    every car is farther than its spawn_reach from every wall, beyond the
+    margins of the geoms. The resettle after the move only lets the car's
+    suspension settle."""
     model = copy.deepcopy(scene.model)
     for car in scene.cars:
         root = model.bind_scalar(car.body).id
         mine = model.body_rootid[model.geom_bodyid] == root
-        model.geom_margin[mine] = spawn_reach(model, car, spawn)
+        model.geom_margin[mine] += spawn_reach(model, car, spawn)
     # MuJoCo makes a contact of two geoms nearer than the sum of their
-    # margins, which the wall sensors count, and a wall's margin is 0. Its
-    # midphase skips the geoms of two bodies whose boxes do not overlap,
+    # margins, which the wall sensors count. Its midphase skips the geoms of two bodies whose boxes do not overlap,
     # whatever their margins.
     model.opt.disableflags |= mujoco.mjtDisableBit.mjDSBL_MIDPHASE
     data = mujoco.MjData(model)
