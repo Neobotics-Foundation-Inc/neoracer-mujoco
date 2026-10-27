@@ -109,6 +109,8 @@ def show(run: Path, seed: int, shift: int, seconds: float, record: Path | None) 
             if viewer is not None:
                 viewer.close()
             viewer, shown = mujoco.viewer.launch_passive(model_row, data), model_row
+        if not viewer.is_running():
+            break
         viewer.sync()
         time.sleep(max(0.0, dt - (time.perf_counter() - start)))
     if record is not None:
