@@ -222,7 +222,7 @@ scene = compose_cars(to_spec(track), grid)
 scene.cars  # a Car for each entry, in order: the motor of the second is "b/motor"
 ```
 
-On a generated track, `pose_along` gives the offset and the heading of a car that stands some meters along the centerline and across it, facing along the track, so a grid follows a bend behind the start. `sim.spawn_clears_walls` checks that no move of `sim.perturb_spawn` within a `SpawnRange` can put a car of a scene against a wall:
+On a generated track, `pose_along` gives the offset and the heading of a car that stands some meters along the centerline and across it, facing along the track, so a grid follows a bend behind the start. `sim.spawn_clears_walls` checks that no move of `sim.perturb_spawn` within a `SpawnRange`, before the car resettles, can put a car of a scene against a wall:
 
 ```python
 from neoracer_mujoco.track_generation import pose_along

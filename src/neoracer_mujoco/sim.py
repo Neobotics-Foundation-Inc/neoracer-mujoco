@@ -110,10 +110,10 @@ def perturb_spawn(
 
 
 def spawn_reach(model: mujoco.MjModel, car: Car, spawn: SpawnRange) -> float:
-    """How far (m) perturb_spawn can move a point of the car's colliding
-    geoms: spawn.lateral sideways, plus the chord of a turn of spawn.yaw
-    about the car's origin at the farthest such a point is from it, with the
-    car where the model puts it."""
+    """How far (m) the move of perturb_spawn, before it resettles, can carry
+    a point of the car's colliding geoms: spawn.lateral sideways, plus the
+    chord of a turn of spawn.yaw about the car's origin at the farthest such
+    a point is from it, with the car where the model puts it."""
     data = mujoco.MjData(model)
     mujoco.mj_kinematics(model, data)
     root = model.bind_scalar(car.body).id
@@ -128,9 +128,10 @@ def spawn_reach(model: mujoco.MjModel, car: Car, spawn: SpawnRange) -> float:
 
 
 def spawn_clears_walls(scene: Scene, spawn: SpawnRange) -> bool:
-    """Whether no move of perturb_spawn within spawn can put a car of the
-    scene, where its model puts it, against a wall: every car is farther
-    than its spawn_reach from every wall."""
+    """Whether no move of perturb_spawn within spawn, before it resettles,
+    can put a car of the scene, where its model puts it, against a wall:
+    every car is farther than its spawn_reach from every wall. The resettle
+    after the move only lets the car's suspension settle."""
     model = copy.deepcopy(scene.model)
     for car in scene.cars:
         root = model.bind_scalar(car.body).id
