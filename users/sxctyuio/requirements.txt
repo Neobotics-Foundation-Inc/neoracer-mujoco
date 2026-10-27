@@ -1,8 +1,5 @@
-# On top of the neoracer-mujoco core package (pip install -e . in the repo root)
-mujoco==3.16.0
-gymnasium
+# neoracer-rl's race env, which brings the neoracer-mujoco wheel it pins.
+neoracer-rl @ git+https://github.com/Neobotics-Foundation-Inc/neoracer-rl@53747f9e5686bf8d99d381e71e20d760983465fd
 stable-baselines3[extra]
 torch
-scipy               # track generation
 imageio[ffmpeg]     # --record videos
-tensorboard
