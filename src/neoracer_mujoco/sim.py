@@ -1,8 +1,8 @@
 """
 Step and probe helpers for the NeoRacer model: step the physics with a fixed
 control, write a control command, settle the car and move it off its start
-at random, check that no such move can make cars touch, and two physics
-probes (car_mass, car_upright_cos) that the conformance tests use.
+at random, check that no such move can put a car against a wall, and two
+physics probes (car_mass, car_upright_cos) that the conformance tests use.
 
 Frame: +X forward, +Y left, +Z up.
 """
@@ -126,26 +126,25 @@ def spawn_reach(model: mujoco.MjModel, car: Car, spawn: SpawnRange) -> float:
     return spawn.lateral + 2.0 * far * math.sin(spawn.yaw / 2)
 
 
-def spawn_is_clear(scene: Scene, spawn: SpawnRange) -> bool:
+def spawn_clears_walls(scene: Scene, spawn: SpawnRange) -> bool:
     """Whether no move of perturb_spawn within spawn can put a car of the
-    scene, where its model puts it, in touch with a wall or with another
-    car: every car is farther than the cars' largest spawn_reach from every
-    wall, and than twice it from every other car."""
+    scene, where its model puts it, against a wall: every car is farther
+    than its spawn_reach from every wall."""
     model = copy.deepcopy(scene.model)
-    reach = max(spawn_reach(model, car, spawn) for car in scene.cars)
-    roots = [model.bind_scalar(car.body).id for car in scene.cars]
-    theirs = np.isin(model.body_rootid[model.geom_bodyid], roots)
+    for car in scene.cars:
+        root = model.bind_scalar(car.body).id
+        mine = model.body_rootid[model.geom_bodyid] == root
+        model.geom_margin[mine] = spawn_reach(model, car, spawn)
     # MuJoCo makes a contact of two geoms nearer than the sum of their
-    # margins, which the contact sensors count: reach for a car and a wall,
-    # whose margin is 0, and twice it for two cars. Its midphase skips the
-    # geoms of two bodies whose boxes do not overlap, whatever their margins.
-    model.geom_margin[theirs] = reach
+    # margins, which the wall sensors count, and a wall's margin is 0. Its
+    # midphase skips the geoms of two bodies whose boxes do not overlap,
+    # whatever their margins.
     model.opt.disableflags |= mujoco.mjtDisableBit.mjDSBL_MIDPHASE
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
-    walls = [car.truth.wall_contact for car in scene.cars]
-    touches = [*walls, *scene.car_contacts.values()]
-    return all(data.bind_scalar(sensor).data[0] == 0 for sensor in touches)
+    return all(
+        data.bind_scalar(car.truth.wall_contact).data[0] == 0 for car in scene.cars
+    )
 
 
 def car_mass(model: mujoco.MjModel, car: Car) -> float:

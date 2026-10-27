@@ -29,7 +29,6 @@ from neoracer_mujoco.track_generation import (
     generate_track,
     left_edge,
     pose_along,
-    restart,
     right_edge,
     settings_for_difficulty,
     shortest_loop_distance,
@@ -336,35 +335,6 @@ def test_lap_distance_finds_the_sample_across_the_corridor():
                 lap_distance(track, xy),
                 track.distance_along[samples],
                 err_msg=f"difficulty {difficulty}, side {side}",
-            )
-
-
-def test_a_restarted_track_is_the_same_loop_from_another_sample():
-    """Restarting at a sample makes it sample 0 and measures distance_along
-    from it; restarting at j and then at k is restarting at j + k. A point
-    of the corridor is as far along the restarted loop, in the restarted
-    frame, as it was along the loop less the new start's distance."""
-    track = _track(2, 3)
-    n = len(track.center)
-    for j, k in ((0, 0), (37, 0), (5, n - 5), (n - 3, 11), (200, 300)):
-        with case((j, k)):
-            once = restart(track, j)
-            np.testing.assert_array_equal(once.center[0], track.center[j % n])
-            assert once.distance_along[0] == 0.0
-            np.testing.assert_allclose(
-                np.diff(once.distance_along), track.total_length / n, rtol=1e-9
-            )
-            twice = restart(once, k)
-            np.testing.assert_allclose(
-                twice.center, restart(track, j + k).center, rtol=0, atol=0
-            )
-            samples = np.arange(0, n, 9)
-            moved = track.center + 0.5 * track.half_width[:, None] * track.left_normal
-            np.testing.assert_allclose(
-                lap_distance(once, to_start_frame(once, moved[samples])),
-                (track.distance_along[samples] - track.distance_along[j % n])
-                % track.total_length,
-                atol=1e-9,
             )
 
 

@@ -21,7 +21,6 @@ from .track import (
     Track,
     generate_track,
     left_edge,
-    restart,
     right_edge,
 )
 
@@ -36,7 +35,6 @@ __all__ = [
     "lap_distance",
     "left_edge",
     "pose_along",
-    "restart",
     "right_edge",
     "settings_for_difficulty",
     "shortest_loop_distance",

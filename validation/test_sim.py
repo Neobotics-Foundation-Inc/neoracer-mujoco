@@ -113,16 +113,15 @@ def test_a_spawn_moves_no_point_of_the_car_farther_than_its_reach():
             assert farthest > reach / 2
 
 
-def test_no_move_of_a_clear_spawn_touches_a_wall_or_another_car():
-    """Where spawn_is_clear holds, no move of perturb_spawn puts a car in
-    touch with a wall or with another car; a car near a wall, or near
-    another car, is not clear."""
+def test_no_move_of_a_spawn_that_clears_the_walls_touches_a_wall():
+    """Where spawn_clears_walls holds, no move of perturb_spawn puts a car
+    against a wall, and a car near a wall does not clear it."""
     spawn = sim.SpawnRange(lateral=0.2, yaw=0.3, resettle=0.0)
     track = mujoco.MjSpec.from_file(LOOP)
     scene = assets.compose_cars(
         track, [assets.Entry("a/"), assets.Entry("b/", (-1.5, 0.0))], visuals=False
     )
-    assert sim.spawn_is_clear(scene, spawn)
+    assert sim.spawn_clears_walls(scene, spawn)
     for seed in range(40):
         data = mujoco.MjData(scene.model)
         mujoco.mj_forward(scene.model, data)
@@ -132,10 +131,8 @@ def test_no_move_of_a_clear_spawn_touches_a_wall_or_another_car():
         with case(seed):
             for car in scene.cars:
                 assert data.bind_scalar(car.truth.wall_contact).data[0] == 0
-            for sensor in scene.car_contacts.values():
-                assert data.bind_scalar(sensor).data[0] == 0
-    for near in ((-1.5, 0.3), (-0.6, 0.0)):  # a wall beside b/, a/ just ahead of it
-        with case(near):
-            entries = [assets.Entry("a/"), assets.Entry("b/", near)]
+    for across in (0.3, -0.3):  # b/ beside the inner wall, then the outer
+        with case(across):
+            entries = [assets.Entry("a/"), assets.Entry("b/", (-1.5, across))]
             scene = assets.compose_cars(track, entries, visuals=False)
-            assert not sim.spawn_is_clear(scene, spawn)
+            assert not sim.spawn_clears_walls(scene, spawn)
