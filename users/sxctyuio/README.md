@@ -107,7 +107,7 @@ lines with its scripts, and 5,100 more in changed_files/. This one is about
 - The car behind is at fault in a collision, rather than the car with the
   higher speed toward the other.
 - Not ported yet, each a function of a `Step` or a VecEnv wrapper: opposite
-  starts (they need a heading for a car's entry in `assets.Entry`), the corner
+  starts (they need a heading for a racer in neoracer-rl), the corner
   bonus, the near-miss and wall-clearance costs, the smoothness cost and its
   time-penalty ramp, `--init-from`, track banks, and the older car models.
 
