@@ -89,6 +89,12 @@ another car or finishes `--laps` laps; the cars whose episode it did not end
 are truncated, so PPO bootstraps their value, and the race starts over. Every
 1024 steps each race draws a new spawn, track and physics.
 
+A grid's rows run straight back from the start, along its heading, so on a
+generated track that bends or narrows near its start some cars start in a
+wall, and their race ends as a crash on its first step. With the default
+grid, that is 23-71% of the races of 4 cars from difficulty 0 to 3, and
+23-35% of the races of 2 cars at difficulty 2 and 3; none on the loop.
+
 ## What changed from the earlier implementation
 
 The earlier implementation kept its own copies of the env, the sensors, the

@@ -98,8 +98,10 @@ def show(run: Path, seed: int, shift: int, seconds: float, record: Path | None) 
         mujoco.mj_setState(model_row, data, sim.rows[0], FULL_PHYSICS)
         mujoco.mj_forward(model_row, data)
         if record is not None:
-            if renderer is None:
-                renderer = mujoco.Renderer(model_row, 480, 640)
+            if renderer is None or shown is not model_row:
+                if renderer is not None:
+                    renderer.close()
+                renderer, shown = mujoco.Renderer(model_row, 480, 640), model_row
             renderer.update_scene(data, camera, rays_hidden)
             frames.append(renderer.render())
             continue
