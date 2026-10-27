@@ -3,6 +3,7 @@ Laws for sim's settle and perturb_spawn: the car at rest, and moved off its
 start at random.
 """
 
+import itertools
 import math
 import os
 
@@ -74,13 +75,19 @@ def test_a_spawn_moves_the_car_square_to_its_heading_and_turns_it():
 
 def test_a_spawn_moves_no_point_of_the_car_farther_than_its_reach():
     """Every point within a colliding geom's bounding sphere moves by at
-    most spawn_reach, in the plane, whichever way the start faces; and some
-    point moves by more than half of it, so the bound is not loose."""
-    spawn = sim.SpawnRange(lateral=0.1, yaw=0.3, resettle=0.0)
+    most spawn_reach, in the plane, whichever way the start faces, and for a
+    yaw bound past half a turn too; and some point moves by more than half
+    of it, so the bound is not loose."""
+    spawns = (
+        sim.SpawnRange(lateral=0.1, yaw=0.3, resettle=0.0),
+        sim.SpawnRange(lateral=0.0, yaw=6.0, resettle=0.0),
+    )
     angles = np.linspace(0, 2 * math.pi, 8, endpoint=False)
     directions = np.stack([np.cos(angles), np.sin(angles), np.zeros(8)], axis=1)
-    for turn in (0.0, 120.0):  # degrees, the start's heading
-        with case(turn):
+    for turn, spawn in itertools.product(
+        (0.0, 120.0), spawns
+    ):  # turn: the start's, degrees
+        with case((turn, spawn)):
             track = mujoco.MjSpec.from_file(LOOP)
             half = math.radians(turn) / 2
             track.site(assets.START_SITE).quat = np.array(

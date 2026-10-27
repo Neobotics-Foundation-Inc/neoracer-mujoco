@@ -123,7 +123,8 @@ def spawn_reach(model: mujoco.MjModel, car: Car, spawn: SpawnRange) -> float:
     )
     centers = np.linalg.norm(data.geom_xpos[geoms, :2] - data.xpos[root, :2], axis=1)
     far = float((centers + model.geom_rbound[geoms]).max())
-    return spawn.lateral + 2.0 * far * math.sin(spawn.yaw / 2)
+    # A turn moves a point farthest at half a turn, whatever the bound past it.
+    return spawn.lateral + 2.0 * far * math.sin(min(spawn.yaw, math.pi) / 2)
 
 
 def spawn_clears_walls(scene: Scene, spawn: SpawnRange) -> bool:
