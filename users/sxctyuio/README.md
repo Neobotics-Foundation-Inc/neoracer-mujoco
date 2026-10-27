@@ -1,148 +1,112 @@
 # NeoRacer reinforcement learning
 
 PPO driving policies for the NeoRacer, trained in MuJoCo with sim-to-real in
-mind: a single car on the loop track, a single car on procedurally generated
-tracks it has never seen, and 2-4 car racing with one shared policy.
+mind: a single car on the loop track, a single car on generated tracks it has
+never seen, and 2-4 car racing with one shared policy.
 
-Everything here is a self-contained package, `neoracer_rl`, plus two scripts.
-It uses the core `neoracer_mujoco` modules (`assets`, `collision`, `contract`,
-`sim`) unmodified.
+The simulator is neoracer-rl's race env, `NeoRacerRace`, on the current
+neoracer-mujoco car: the cars, their sensors, the firmware's speed loop, the
+physics randomization, the generated tracks and the per-car progress all come
+from there. What is this project's is the task, the policy's side of
+sim-to-real, and the training:
 
-## Results (GitHub car, sim-to-real randomization on)
-
-| Policy | Test | Randomized cars | Clean cars |
-|---|---|---|---|
-| Racing, 2 cars, opposite starts | 100 races | 0 crashes (~600 car-laps), best lap 7.5 s | 0 crashes, 7.0 s |
-| Procedural tracks, difficulty 1-2 | 100 never-seen tracks | 96/100 laps | 99/100 laps |
-| Single car, loop | 50 laps | 50/50, 9.5 s from a standing start | |
-
-Every number above is from `scripts/render_policy.py --headless` with a fixed
-`--seed`, so the same tracks and cars for every model compared. How these were
-reached, including what did not work, is in [RESULTS.md](RESULTS.md).
+```
+racing/
+  task.py        the observation, the ends and the reward, as functions of a Step
+  setup.py       a run's settings (Setup) and the RaceConfig they make: the grid, the physics ranges
+  vec_env.py     NeoRacerRace as a Stable-Baselines3 VecEnv, one env per car
+  sim2real.py    sensor noise and biases, LiDAR dropout, action noise, trim and delay
+  history.py     memory: the last N observations and actions in the observation
+scripts/
+  train_ppo.py      PPO training (Stable-Baselines3); a flag for each field of Setup
+  render_policy.py  score (--headless), watch or record a trained run
+RESULTS.md       every evaluation of the earlier implementation, in order
+```
 
 ## Setup
 
-Built and tested against an older version of this repository (Python 3.14,
-MuJoCo 3.16.0), whose core modules this package uses. Current `main` requires
-Python 3.15 and has a different `contract.py`, so it may need small changes
-there.
+Python 3.14. neoracer-rl brings the neoracer-mujoco wheel it pins, so the
+repository's own package need not be installed:
 
 ```bash
-pip install -e .                                  # the core package, from the repo root
 pip install -r users/sxctyuio/requirements.txt
-```
-
-The default car is the GitHub car (upstream `assets/neoracer.xml`), expected
-under its own name so the older car keeps its file:
-
-```bash
-git show origin/main:assets/neoracer.xml > assets/neoracer_github.xml
 ```
 
 ## Quick start
 
 ```bash
 cd users/sxctyuio
-# train (one run uses every core; --smoke for a one-minute check)
 python3 scripts/train_ppo.py --sim2real --out runs/loop
-python3 scripts/train_ppo.py --track procedural --difficulty 1-2 --sim2real --history 6 --out runs/proc
-python3 scripts/train_ppo.py --cars 2 --start opposite --sim2real --out runs/race
+python3 scripts/train_ppo.py --track procedural --difficulty 2 --sim2real --history 6 --out runs/proc
+python3 scripts/train_ppo.py --cars 2 --sim2real --out runs/race
 
-# test: results only, no window
-python3 scripts/render_policy.py runs/proc/final --headless --seed 3 --episodes 100 | grep -c lap_complete
-
-# watch (macOS: mjpython for a window) or record
-mjpython scripts/render_policy.py runs/race/final
-python3 scripts/render_policy.py runs/race/final --record race.mp4
+python3 scripts/render_policy.py runs/race --headless --races 100   # how each race ended
+mjpython scripts/render_policy.py runs/race                          # watch (mjpython on macOS)
+python3 scripts/render_policy.py runs/race --record race.mp4
 ```
 
-`render_policy.py` reads the run folder's `env.json` / `race.json`, so it
-replays every run on the car, grip, track type, memory and race format it
-trained with. `--init-from DIR` warm-starts a run from another model, also
-across observation sizes (see Training).
-
-The settings behind the results table:
-
-```bash
-python3 scripts/train_ppo.py --cars 2 --start opposite --sim2real --wall-penalty 50 --stuck-penalty 50 --rollover-penalty 50 --wall-clearance-weight 0 --timesteps 10000000 --init-from <previous> --out runs/race_gh
-python3 scripts/train_ppo.py --track procedural --difficulty 1-2 --sim2real --history 6 --wall-penalty 20 --stuck-penalty 20 --rollover-penalty 20 --time-penalty 0.005 --corner-weight 0.2 --wall-clearance-weight 0 --timesteps 10000000 --init-from <previous> --out runs/proc_gh
-```
-
-## Files
-
-```
-neoracer_rl/
-  envs/
-    neoracer_env.py      single car on loop_corridor (Gymnasium env)
-    procedural_env.py    single car on generated tracks; LiDAR corner sensing; track pool / bank
-    multi_racer_env.py   2-4 car racing, one shared policy (SB3 VecEnv, one slot per car)
-    sim2real.py          randomization, sensor noise, action delay; heading-free observation
-    physics.py           port of upstream physics.py domain randomization to this car
-    car_model.py         what differs between the GitHub car and the older car
-    drive_model.py       action -> actuators; rear-blind LiDAR; floor grip; wall clearance
-    history.py           memory: last N observations and actions in the observation
-  sensors.py             core sensors.py, tolerant of the GitHub car's extra sensors
-  track_generation/      upstream procedural track generator (Python 3.14 port: no frozendict)
-scripts/
-  train_ppo.py           PPO training (Stable-Baselines3); every option is a flag, see --help
-  render_policy.py       watch, record or test (--headless) a trained run
-RESULTS.md               every evaluation, in order, with what each experiment changed
-changed_files/           the same work as in-place repository changes, at repository paths;
-                         CHANGES.md lists each added and modified file
-```
+A run saves its `Setup` as `setup.json` beside the policy, so
+`render_policy.py` replays it on the car, track, race and memory it trained
+with.
 
 ## How it works
 
-**Car.** The GitHub car by default: the RS-545 DC motor and SPT5435 servo
-modeled natively, 3.0 kg, 42.5 mm wheels, a 1/360 s physics step. The throttle
-action is ESC voltage (+-11.1 V) and steering is the servo's target angle.
-Full throttle settles at about 3.5 m/s on flat ground. On top of the car:
+**Car.** neoracer-mujoco's NeoRacer, whose program asks its firmware's speed
+loop for a speed. Its LiDAR sees the other cars, whose outline is their
+collision mesh, and it collides with them.
 
-- Floor grip 0.8 on every surface (typical rubber on an indoor floor; the
-  repository's 1.5 is untested). `--grip` sets a measured value.
-- LiDAR blind straight back, matching the driver's 45-315 deg scan window.
-- `--vehicle realistic` / `legacy` select the older car, with or without this
-  project's approximate drive model.
+**Observation** (`task.HeadingFree`): the 8 LiDAR ranges, the IMU's
+acceleration and turn rate, gravity in the body frame in place of the
+world-frame quaternion, so that a policy cannot steer by its heading, the
+steering angle and the encoder's speed: 19 values. A race adds the car's
+place, 0 when it leads and 1 when it is last (20). `--history N` appends the
+last N observations and actions.
 
-**Observation.** 8 LiDAR ranges, IMU accelerometer and gyro, steering
-position, wheel speed, and orientation: 20 values, or 19 with sim-to-real,
-which replaces the world-frame quaternion with gravity in the body frame so a
-policy cannot steer by absolute heading. Racing adds the car's place (21/20).
-`--history N` appends the last N observations and actions.
+**Reward** (`task.RaceReward`): progress around the track, the one-time lap
+bonus and the crash, stuck and rollover penalties, a per-step time penalty,
+`--overtake-reward` for each car passed (less as much for each pass suffered),
+and at a car-to-car collision `--collision-penalty` for the car behind and
+`--victim-share` of it for the car ahead.
 
-**Reward.** Progress around the track (per meter of centerline on generated
-tracks), a corner bonus for tight lines, a per-step time penalty, and
-penalties for wall contact, rollover, getting stuck and hitting walls.
-Options: `--wall-clearance-weight` (cost for running within 8 cm of a wall),
-`--smoothness-weight` (cost for changing the commands step to step),
-`--time-penalty-end` (ramps the speed incentive up during training).
+**Sim-to-real.** `--sim2real` draws each car's physics at each spawn from
+`setup.GENTLE`: wheel friction, chassis mass, motor torque and steering
+stiffness. `sim2real.py` adds, per episode and car, a steering trim, IMU
+biases, a wheel-speed scale error and 0-1 steps of action delay, and per
+step, sensor noise, LiDAR dropout and action noise. The ranges are first
+guesses.
 
-**Sim-to-real.** Per episode (per car in races): the upstream randomization of
-wheel friction, chassis mass, motor torque and steering stiffness, plus
-steering trim and 0-1 steps of action delay; per step, sensor noise, LiDAR
-dropout and action noise. Ranges are in `physics.GENTLE_RANGES` and
-`sim2real.Sim2RealConfig`; upstream ships no recommended ranges.
+**Procedural tracks.** `--track procedural` trains on a pool of `--pool`
+generated tracks of `--difficulty`, and each race draws its track at each
+spawn.
 
-**Procedural tracks.** Each worker keeps a pool of generated tracks and swaps
-one out every 20 episodes, about 1000 distinct tracks over a 10M-step run
-(`--track-bank N` trains on a saved, pre-generated set instead). Tests use a
-fresh track every episode. The corner bonus is computed from LiDAR alone: the
-circle through each side's three wall-facing beams gives that wall's
-curvature (turn direction right in 98% of corners, closeness correlates 0.86
-with the true apex distance over 3000 poses).
+**Racing.** One policy drives every car (`Each` agents): each car is an env
+of the VecEnv. 2-4 cars start on a grid at the track's start, in rows of two,
+`--grid-lane` apart across the track and `--grid-row` between rows. A race
+ends for every car when a car crashes, rolls over, gets stuck, collides with
+another car or finishes `--laps` laps; the cars whose episode it did not end
+are truncated, so PPO bootstraps their value, and the race starts over. Every
+1024 steps each race draws a new spawn, track and physics.
 
-**Racing.** One policy drives every car. `--start grid` (2-4 cars side by
-side) or `--start opposite` (2 cars half a lap apart, RoboRacer format).
-Winning is by time over the same distance. A car that crashes alone respawns
-at the start while the race goes on; a car-to-car crash costs the car at
-fault more than the car it hit, and does not end the race. Each car tracks
-its place from its own LiDAR (a rival seen front -> side -> rear is a pass).
+## What changed from the earlier implementation
 
-**Training.** Stable-Baselines3 PPO with observation and reward normalization,
-linear learning-rate decay and a KL limit. `--init-from` copies a policy,
-its value function and both normalizers; when the new observation is longer
-(memory, place), the extra inputs start at zero weight, so the warm-started
-policy first drives exactly like its source.
+The earlier implementation kept its own copies of the env, the sensors, the
+physics randomization, the track generator and the car models: about 5,000
+lines with its scripts, and 5,100 more in changed_files/. This one is about
+700 lines on neoracer-rl, and some rules differ:
+
+- A car that crashes ends the race for every car, instead of respawning while
+  the race goes on.
+- The place is the true place, from neoracer-rl's `Step.rivals`, not the place
+  that a car counts from its own LiDAR beams.
+- The car behind is at fault in a collision, rather than the car with the
+  higher speed toward the other.
+- Not ported yet, each a function of a `Step` or a VecEnv wrapper: opposite
+  starts (they need a heading for a car's entry in `assets.Entry`), the corner
+  bonus, the near-miss and wall-clearance costs, the smoothness cost and its
+  time-penalty ramp, `--init-from`, track banks, and the older car models.
+
+The numbers in RESULTS.md came from the earlier implementation, on the earlier
+car, so they need to be measured again here.
 
 ## Open questions for the real car
 
@@ -151,6 +115,6 @@ policy first drives exactly like its source.
   the real car is much faster, the motor model is too weak. Measure it on a
   straight (`/odom`).
 - **Floor grip.** Pull the car sideways with a spring scale: force / weight.
-  Training covers 0.6-1.0.
+  Training covers a quarter either side of the model's.
 - **Control delay.** Bag `/drive` and `/imu`, time a steering step. Training
   covers 0-1 control steps (0-33 ms).
