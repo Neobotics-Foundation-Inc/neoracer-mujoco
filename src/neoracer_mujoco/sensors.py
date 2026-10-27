@@ -181,16 +181,29 @@ def beam_in_field(name: str, field: float) -> bool:
 def read(sensors: CarSensors, data: mujoco.MjData) -> SensorReadings:
     """Read every named sensor of data. A LiDAR beam that the car blocks
     reads NO_RETURN."""
+    values = {
+        f.name: data.bind_scalar(getattr(sensors, f.name)).data
+        for f in fields(SensorReadings)
+    }
+    return from_values(sensors, values)
+
+
+def from_values(
+    sensors: CarSensors, values: Mapping[str, npt.NDArray[np.float64]]
+) -> SensorReadings:
+    """The SensorReadings of values, the values of the sensor of each
+    SensorReadings field by the field's name, as read gives them: a LiDAR
+    beam that the car blocks reads NO_RETURN."""
 
     def value(name: str) -> float | npt.NDArray[np.float64]:
         if name in sensors.blocked:
             return NO_RETURN
-        values = data.bind_scalar(getattr(sensors, name)).data
-        return values.copy() if name in VECTOR_SIZE else float(values[0])
+        v = values[name]
+        return np.array(v, dtype=np.float64) if name in VECTOR_SIZE else float(v[0])
 
     # Each field's value has the field's type, which no checker can see here.
-    values: dict[str, Any] = {f.name: value(f.name) for f in fields(SensorReadings)}
-    return SensorReadings(**values)
+    readings: dict[str, Any] = {f.name: value(f.name) for f in fields(SensorReadings)}
+    return SensorReadings(**readings)
 
 
 def motor_encoder_rad_s(sensors: SensorReadings) -> float:
