@@ -31,8 +31,6 @@ Frame: +X forward, +Y left, +Z up.
 """
 
 import itertools
-import os
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -186,12 +184,18 @@ _LFS_POINTER = b"version https://git-lfs.github.com/spec/v1"
 
 def _lfs_pointer(message: str) -> str | None:
     """The first file that message, an error of MuJoCo's compiler, quotes
-    and that is a Git LFS pointer, or None."""
-    for path in re.findall(r"'([^']+)'", message):
-        if os.path.isfile(path):
-            with open(path, "rb") as f:
-                if f.read(len(_LFS_POINTER)) == _LFS_POINTER:
-                    return path
+    and that is a Git LFS pointer, or None. A path can hold an apostrophe,
+    so every span between two quotes on a line is a candidate."""
+    for line in message.splitlines():
+        quotes = [i for i, c in enumerate(line) if c == "'"]
+        for start, end in itertools.combinations(quotes, 2):
+            path = line[start + 1 : end]
+            try:
+                with open(path, "rb") as f:
+                    if f.read(len(_LFS_POINTER)) == _LFS_POINTER:
+                        return path
+            except OSError:
+                continue
     return None
 
 

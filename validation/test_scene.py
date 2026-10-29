@@ -133,8 +133,9 @@ def test_an_actuator_without_a_name_is_refused():
 
 def test_a_mesh_that_is_a_git_lfs_pointer_is_named_as_one(tmp_path):
     """A clone made without Git LFS has pointers in place of the meshes. A
-    scene with one fails with an error that names the file and says to pull
-    it; a mesh broken another way keeps MuJoCo's own error."""
+    scene with one fails with an error that names the file, though its path
+    holds an apostrophe, and says to pull it; a mesh broken another way
+    keeps MuJoCo's own error."""
     pointer = (
         "version https://git-lfs.github.com/spec/v1\n"
         "oid sha256:cab05147aa867a6966441673c125a8fe5b1ecf6673d45cd25dc33b6184f65faf\n"
@@ -142,7 +143,8 @@ def test_a_mesh_that_is_a_git_lfs_pointer_is_named_as_one(tmp_path):
     )
     for text, named in [(pointer, True), ("solid part\nendsolid part\n", False)]:
         with case(text):
-            path = tmp_path / "part.STL"
+            path = tmp_path / "O'Brien" / "part.STL"
+            path.parent.mkdir(exist_ok=True)
             path.write_text(text)
             spec = assets.from_file()
             spec.add_mesh(name="part", file=str(path))
