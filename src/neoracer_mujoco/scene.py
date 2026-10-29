@@ -31,6 +31,8 @@ Frame: +X forward, +Y left, +Z up.
 """
 
 import itertools
+import os
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -149,7 +151,8 @@ def compile_scene(spec: mujoco.MjSpec, prefixes: Sequence[str] = ("",)) -> Scene
     (truth.add_sensors) and compile it into a Scene of those cars. Raise
     ValueError if there is no prefix, or a prefix starts another, which would
     make the other car's elements this one's too, or a car is not a NeoRacer
-    car (see find_car)."""
+    car (see find_car), or a file that it reads is a Git LFS pointer, as the
+    meshes are in a clone made without Git LFS."""
     if not prefixes:
         raise ValueError("a scene needs a car")
     for p, q in itertools.permutations(prefixes, 2):
@@ -158,7 +161,16 @@ def compile_scene(spec: mujoco.MjSpec, prefixes: Sequence[str] = ("",)) -> Scene
     for prefix in prefixes:
         _car_body(spec, prefix)
     truth.add_sensors(spec, prefixes)
-    model = spec.compile()
+    try:
+        model = spec.compile()
+    except ValueError as error:
+        pointer = _lfs_pointer(str(error))
+        if pointer is None:
+            raise
+        raise ValueError(
+            f"{pointer} is a Git LFS pointer, not the file: install Git LFS "
+            "(https://git-lfs.com) and run git lfs pull"
+        ) from error
     first, *rest = (find_car(spec, model, p) for p in prefixes)
     return Scene(
         spec=spec,
@@ -166,6 +178,21 @@ def compile_scene(spec: mujoco.MjSpec, prefixes: Sequence[str] = ("",)) -> Scene
         cars=(first, *rest),
         car_contacts=truth.find_car_contacts(spec, prefixes),
     )
+
+
+_LFS_POINTER = b"version https://git-lfs.github.com/spec/v1"
+"""How a Git LFS pointer file starts."""
+
+
+def _lfs_pointer(message: str) -> str | None:
+    """The first file that message, an error of MuJoCo's compiler, quotes
+    and that is a Git LFS pointer, or None."""
+    for path in re.findall(r"'([^']+)'", message):
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                if f.read(len(_LFS_POINTER)) == _LFS_POINTER:
+                    return path
+    return None
 
 
 def _car_body(spec: mujoco.MjSpec, prefix: str) -> mujoco.MjsBody:
