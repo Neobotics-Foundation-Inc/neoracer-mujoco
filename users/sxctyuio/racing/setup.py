@@ -61,6 +61,8 @@ class Setup:
     history: int = 0
     """The past observations and actions in the observation (history.py)."""
     time_penalty: float = 0.0
+    corner_weight: float = 0.2
+    """Extra progress reward, as a share, at the inside of a corner (task.lidar_corner)."""
     overtake_reward: float = 1.0
     collision_penalty: float = 10.0
     victim_share: float = 0.2
@@ -108,6 +110,7 @@ def race_config(setup: Setup) -> RaceConfig:
         setup.overtake_reward,
         setup.collision_penalty,
         setup.victim_share,
+        setup.corner_weight,
     )
     env = NeoRacerEnvConfig(
         tracks=tracks,
