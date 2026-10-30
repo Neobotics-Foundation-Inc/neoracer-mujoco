@@ -7,6 +7,16 @@ name = "neoracer-mujoco"
 version = "0.28.0"
 description = "MuJoCo simulation baseline + reusable toolbox for the NeoRacer, a 1/12-scale autonomous racing car."
 readme = "README.md"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+keywords = ["mujoco", "robotics", "simulation", "autonomous racing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
 requires-python = ">=3.14"
 dependencies = [
     # One exact version: MuJoCo's WebAssembly build of the same version gives
@@ -33,6 +43,11 @@ jax = ["jax>=0.7", "mujoco-mjx==3.16.0", "warp-lang>=1.10", "mujoco-warp==3.16.0
 # Optional: only needed for the pygame driving demo (examples/pygame_drive/).
 # pygame-ce, not pygame: pygame has no wheels for Python 3.14.
 demo = ["pygame-ce>=2.5.8"]
+
+[project.urls]
+Repository = "https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco"
+Issues = "https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/issues"
+Changelog = "https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/releases"
 
 [tool.pytest.ini_options]
 # A bare `pytest` runs only the test suite. users/ holds experiments that are
