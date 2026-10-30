@@ -1,0 +1,5 @@
+# neoracer-rl's race env, which brings the neoracer-mujoco wheel it pins.
+neoracer-rl @ git+https://github.com/Neobotics-Foundation-Inc/neoracer-rl@53747f9e5686bf8d99d381e71e20d760983465fd
+stable-baselines3[extra]
+torch
+imageio[ffmpeg]     # --record videos
