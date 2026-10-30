@@ -17,4 +17,8 @@ Python with numpy, no MuJoCo, so any program can read the car.
 
 Each step is a pure function from one type to the next. A variant of the
 car is a variant of its parts: tree.at(NEORACER, lambda car: car.motor).set(...).
+
+The package also runs on the browser's Python 3.12, which evaluates
+annotations when it defines them, so a module whose types name types below
+them starts with `from __future__ import annotations`.
 """

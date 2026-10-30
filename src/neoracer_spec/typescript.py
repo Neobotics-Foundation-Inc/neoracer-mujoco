@@ -14,8 +14,11 @@ that the TypeScript compiler checks against them.
 
 A dataclass that is one of a union of dataclasses, as Measured is of
 Status, gets a field `kind`, its name, so that TypeScript tells them apart.
-Field names stay as in Python. The JS package's spec.ts is what module()
-writes; neoracer_mujoco.javascript writes it when the package is built.
+Field names stay as in Python, and the docstring of each dataclass, field,
+constant and type alias becomes the TSDoc comment of what it is written as,
+so that editors show it in TypeScript too. The JS package's spec.ts is what
+module() writes; neoracer_mujoco.javascript writes it when the package is
+built.
 """
 
 import ast
