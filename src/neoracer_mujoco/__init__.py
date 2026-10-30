@@ -13,9 +13,9 @@ Common entry points::
     mujoco.mj_step(scene.model, data)  # your own step loop, see examples/
     readings = read(scene.car.sensors, data)  # typed SensorReadings
 
-A Scene keeps the MjSpec next to the compiled MjModel, and scene.car holds
-the parts of the car as spec elements, to bind to the model or the data
-(see scene.py).
+A Scene keeps the MjSpec next to the compiled MjModel, and scene.cars holds
+the parts of each car as spec elements, to bind to the model or the data
+(see scene.py). scene.car is the first car, the only one of a scene of one.
 
 The `contract` module is the one source of truth for the requirements of a
 NeoRacer car XML, such as its actuator names and mass band; the fields of

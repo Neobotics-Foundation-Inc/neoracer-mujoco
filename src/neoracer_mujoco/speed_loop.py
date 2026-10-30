@@ -61,7 +61,11 @@ def restart(
     state: SpeedLoopState, rows: npt.NDArray[np.bool_], angle: Value
 ) -> SpeedLoopState:
     """state with the loops of rows, a mask, started over at rest, their
-    drivetrains at angle (rad). The firmware's ticks go on as they were."""
+    drivetrains at angle (rad). The firmware's ticks go on as they were.
+    rows masks the leading axes of the loop's arrays, so on the loops of
+    batch.drive_cars, of shape (nbatch, ncars), a mask of rows (nbatch,)
+    starts every car of each row it marks over."""
+    rows = np.reshape(rows, rows.shape + (1,) * (np.ndim(state.integral) - rows.ndim))
     m = state.measure
     return SpeedLoopState(
         encoder.EncoderState(

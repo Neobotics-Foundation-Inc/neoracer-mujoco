@@ -18,8 +18,13 @@ derives from the masses, so the model is the same, bit for bit, as one
 compiled with the new values. FIELDS names every MjModel field that it can
 change, which the batches use to give each row its own physics.
 
-batch.py takes one Physics per row. A batch on the CPU keeps one MjModel for
-each different Physics, so build its scene with visuals=False: the model is
+In a scene of several cars, one Physics changes every car the same way, and
+a tuple of them gives each car its own (ScenePhysics):
+
+    apply_physics(model, scene, tuple(sample(ranges, rng) for _ in scene.cars))
+
+batch.py takes one ScenePhysics per row. A batch on the CPU keeps one MjModel for
+each different ScenePhysics, so build its scene with visuals=False: the model is
 1.6 MB instead of 35 MB.
 """
 
@@ -34,12 +39,12 @@ import numpy as np
 import numpy.typing as npt
 
 from . import sensors
-from .scene import Scene
+from .scene import Car, Scene
 
 
 @dataclass(frozen=True)
 class Physics:
-    """Factors on the car's parameters, relative to the compiled car."""
+    """Factors on a car's parameters, relative to the compiled car."""
 
     wheel_friction: float = 1.0
     """The factor on the sliding friction of each wheel geom, and so of each
@@ -103,10 +108,30 @@ def sample(ranges: PhysicsRanges, rng: np.random.Generator) -> Physics:
     )
 
 
-def apply_physics(model: mujoco.MjModel, scene: Scene, physics: Physics) -> None:
-    """Write into model, a copy of scene.model, the parameters of
-    scene.model times the factors of physics, then run mj_setConst."""
-    nominal, car = scene.model, scene.car
+type ScenePhysics = Physics | tuple[Physics, ...]
+"""The physics of a scene's cars: one Physics for every car, or one for each
+car, in the order of Scene.cars."""
+
+
+def apply_physics(model: mujoco.MjModel, scene: Scene, physics: ScenePhysics) -> None:
+    """Write into model, a copy of scene.model, the parameters of each car of
+    scene.model times the factors of its physics, then run mj_setConst.
+    Raise ValueError if physics is a tuple without one Physics for each
+    car."""
+    if isinstance(physics, Physics):
+        physics = (physics,) * len(scene.cars)
+    if len(physics) != len(scene.cars):
+        raise ValueError(f"{len(physics)} physics for {len(scene.cars)} cars")
+    for car, p in zip(scene.cars, physics, strict=True):
+        _apply_car(model, scene.model, car, p)
+    mujoco.mj_setConst(model, mujoco.MjData(model))
+
+
+def _apply_car(
+    model: mujoco.MjModel, nominal: mujoco.MjModel, car: Car, physics: Physics
+) -> None:
+    """Write into model the parameters of car in nominal times the factors of
+    physics."""
     for wheel in car.wheels:
         friction = nominal.bind_scalar(wheel).friction[0]
         model.bind_scalar(wheel).friction[0] = friction * physics.wheel_friction
@@ -133,7 +158,6 @@ def apply_physics(model: mujoco.MjModel, scene: Scene, physics: Physics) -> None
         i = nominal.bind_scalar(getattr(car.sensors, name)).id
         model.sensor_interval[i] = nominal.sensor_interval[i] / physics.lidar_rate
         model.sensor_delay[i] = nominal.sensor_delay[i] / physics.lidar_rate
-    mujoco.mj_setConst(model, mujoco.MjData(model))
 
 
 FIELDS = (
@@ -164,12 +188,12 @@ def field(model: mujoco.MjModel, name: str) -> npt.NDArray[np.float64]:
 
 
 def field_rows(
-    scene: Scene, physics: Sequence[Physics]
+    scene: Scene, physics: Sequence[ScenePhysics]
 ) -> dict[str, npt.NDArray[np.float64]]:
     """For each name in FIELDS, the value of that field in a model with
     physics[i] applied, stacked over i: shape (len(physics), *field shape)."""
     scratch = copy.deepcopy(scene.model)
-    distinct: dict[Physics, dict[str, npt.NDArray[np.float64]]] = {}
+    distinct: dict[ScenePhysics, dict[str, npt.NDArray[np.float64]]] = {}
     for p in physics:
         if p not in distinct:
             apply_physics(scratch, scene, p)

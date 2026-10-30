@@ -8,6 +8,7 @@ clearance and the geom count. Other modules depend on these conventions.
 
 import functools
 import itertools
+import math
 from copy import replace
 from typing import assert_never
 
@@ -27,8 +28,10 @@ from neoracer_mujoco.track_generation import (
     WallParams,
     generate_track,
     left_edge,
+    pose_along,
     right_edge,
     settings_for_difficulty,
+    shortest_loop_distance,
     to_mjcf,
     to_spec,
 )
@@ -333,3 +336,28 @@ def test_lap_distance_finds_the_sample_across_the_corridor():
                 track.distance_along[samples],
                 err_msg=f"difficulty {difficulty}, side {side}",
             )
+
+
+def test_a_pose_along_the_track_is_on_the_centerline_facing_forward():
+    """pose_along puts a car at its distance along the loop, across the
+    centerline by its offset, facing along the loop: at 0 and 0, the
+    start, facing +X."""
+    track = _track(5, 2)
+    assert pose_along(track, 0.0, 0.0) == ((0.0, 0.0), 0.0)
+    spacing = track.total_length / len(track.center)
+    turning = float(np.abs(track.curvature).max())
+    center = to_start_frame(track, track.center)
+    for along, across in ((1.0, 0.0), (-1.3, 0.2), (track.total_length + 0.7, -0.25)):
+        with case((along, across)):
+            (x, y), heading = pose_along(track, along, across)
+            off = lap_distance(track, [x, y]) - along
+            assert abs(shortest_loop_distance(off, track.total_length)) <= spacing
+            nearest = int(np.argmin(np.linalg.norm(center - [x, y], axis=1)))
+            assert np.linalg.norm(center[nearest] - [x, y]) == pytest.approx(
+                abs(across), abs=spacing
+            )
+            ahead = track.center[nearest] + track.tangent[nearest]
+            gap = to_start_frame(track, ahead) - center[nearest]
+            assert math.remainder(
+                heading - math.atan2(gap[1], gap[0]), 2 * math.pi
+            ) == pytest.approx(0.0, abs=turning * spacing)

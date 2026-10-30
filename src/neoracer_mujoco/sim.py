@@ -1,12 +1,13 @@
 """
 Step and probe helpers for the NeoRacer model: step the physics with a fixed
 control, write a control command, settle the car and move it off its start
-at random, and two physics probes (car_mass, car_upright_cos) that the
-conformance tests use.
+at random, check that no such move can put a car against a wall, and two
+physics probes (car_mass, car_upright_cos) that the conformance tests use.
 
 Frame: +X forward, +Y left, +Z up.
 """
 
+import copy
 import math
 from dataclasses import dataclass
 
@@ -15,7 +16,7 @@ import numpy as np
 
 from . import contract
 from .control.steering import ControlCommand
-from .scene import Car
+from .scene import Car, Scene
 
 SETTLE_TIME = 1.0
 """The time (s) of zero ctrl that lets the car reach static equilibrium."""
@@ -106,6 +107,46 @@ def perturb_spawn(
     mujoco.mj_forward(model, data)
     for _ in range(steps_in(spawn.resettle, model.opt.timestep)):
         mujoco.mj_step(model, data)
+
+
+def spawn_reach(model: mujoco.MjModel, car: Car, spawn: SpawnRange) -> float:
+    """How far (m) the move of perturb_spawn, before it resettles, can carry
+    a point of the car's colliding geoms: spawn.lateral sideways, plus the
+    chord of a turn of spawn.yaw about the car's origin at the farthest such
+    a point is from it, with the car where the model puts it."""
+    data = mujoco.MjData(model)
+    mujoco.mj_kinematics(model, data)
+    root = model.bind_scalar(car.body).id
+    geoms = np.flatnonzero(
+        (model.body_rootid[model.geom_bodyid] == root)
+        & ((model.geom_contype != 0) | (model.geom_conaffinity != 0))
+    )
+    centers = np.linalg.norm(data.geom_xpos[geoms, :2] - data.xpos[root, :2], axis=1)
+    far = float((centers + model.geom_rbound[geoms]).max())
+    # A turn moves a point farthest at half a turn, whatever the bound past it.
+    return spawn.lateral + 2.0 * far * math.sin(min(spawn.yaw, math.pi) / 2)
+
+
+def spawn_clears_walls(scene: Scene, spawn: SpawnRange) -> bool:
+    """Whether no move of perturb_spawn within spawn, before it resettles,
+    can put a car of the scene, where its model puts it, against a wall:
+    every car is farther than its spawn_reach from every wall, beyond the
+    margins of the geoms. The resettle after the move only lets the car's
+    suspension settle."""
+    model = copy.deepcopy(scene.model)
+    for car in scene.cars:
+        root = model.bind_scalar(car.body).id
+        mine = model.body_rootid[model.geom_bodyid] == root
+        model.geom_margin[mine] += spawn_reach(model, car, spawn)
+    # MuJoCo makes a contact of two geoms nearer than the sum of their
+    # margins, which the wall sensors count. Its midphase skips the geoms of two bodies whose boxes do not overlap,
+    # whatever their margins.
+    model.opt.disableflags |= mujoco.mjtDisableBit.mjDSBL_MIDPHASE
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    return all(
+        data.bind_scalar(car.truth.wall_contact).data[0] == 0 for car in scene.cars
+    )
 
 
 def car_mass(model: mujoco.MjModel, car: Car) -> float:
