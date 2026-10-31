@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+runs/
+track_banks/
+*.mp4
+*.txt.tmp
+CLAUDE.md
+/.claude
