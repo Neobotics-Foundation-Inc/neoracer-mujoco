@@ -65,6 +65,9 @@ last N observations and actions.
 
 **Reward** (`task.RaceReward`): progress around the track, the one-time lap
 bonus and the crash, stuck and rollover penalties, a per-step time penalty,
+and, from `task.CornerBonus` on top, `--corner-weight` of extra progress
+reward at the inside of a corner, which `task.lidar_corner` measures from the
+LiDAR alone,
 `--overtake-reward` for each car passed (less as much for each pass suffered),
 and at a car-to-car collision `--collision-penalty` for the car behind and
 `--victim-share` of it for the car ahead.
@@ -107,8 +110,8 @@ lines with its scripts, and 5,100 more in changed_files/. This one is about
 - The car behind is at fault in a collision, rather than the car with the
   higher speed toward the other.
 - Not ported yet, each a function of a `Step` or a VecEnv wrapper: opposite
-  starts (they need a heading for a racer in neoracer-rl), the corner
-  bonus, the near-miss and wall-clearance costs, the smoothness cost and its
+  starts (they need a heading for a racer in neoracer-rl), the near-miss
+  and wall-clearance costs, the smoothness cost and its
   time-penalty ramp, `--init-from`, track banks, and the older car models.
 
 The numbers in RESULTS.md came from the earlier implementation, on the earlier
