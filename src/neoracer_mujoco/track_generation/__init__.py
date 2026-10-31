@@ -13,7 +13,7 @@ into scenery.
 """
 
 from .config import Difficulty, TrackSettings, settings_for_difficulty
-from .mjcf import WallParams, lap_distance, to_mjcf, to_spec
+from .mjcf import WallParams, lap_distance, pose_along, to_mjcf, to_spec
 from .shape import shortest_loop_distance
 from .track import (
     Generated,
@@ -34,6 +34,7 @@ __all__ = [
     "generate_track",
     "lap_distance",
     "left_edge",
+    "pose_along",
     "right_edge",
     "settings_for_difficulty",
     "shortest_loop_distance",

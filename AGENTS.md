@@ -91,11 +91,10 @@ A parser checks a value and returns a type that keeps the result.
   The edges are files, the MuJoCo model, the command line and raw sensor arrays.
 - A parser returns the typed value or raises an error with a clear message.
   `def parse_side(text: str) -> Side`, not `def check_side(text: str) -> None`.
-- Keep the `MjSpec` next to the compiled model (`scene.Scene`), and refer to each part of the model by its spec element (`scene.Car`).
-  Read and write a part by binding it where you use it: `data.bind_scalar(car.steer).ctrl = steer`, `data.bind_scalar(car.joint).qpos`.
+- Keep the `MjSpec` next to the compiled model, and refer to each part of the model by its spec element.
+  Read and write a part by binding it where you use it, with `bind_scalar` (scene.py says why): `data.bind_scalar(car.steer).ctrl = steer`.
   Do not keep ids or indices, call `mj_name2id` or `model.body(name)`, or compute addresses (`jnt_qposadr`, `sensor_adr`).
-  A batch array (`batch.py`) has no bind: read and write it with `batch.read` and `batch.command`, the only code that uses an address.
-  Call `bind_scalar`, not `bind`: it is what `bind` runs for one element, and the generated type stubs get `bind` wrong.
+  Where an array has no bind, one module computes the addresses, and the rest of the code calls it.
 - After the edge, the code trusts the type. Do not check the same property again.
 - Some invariants have no Python type, for example "a positive float".
   Check such an invariant once, where the value is made (`__post_init__` of its params).
@@ -170,7 +169,7 @@ def reward(term: RewardTerm, step: StepInfo) -> float:
 ## 6. Pure core, effects at the edge
 
 - Physics steps, the viewer, files, time and random numbers are effects.
-  Keep them in thin outer functions: `examples/`, `sim.py`, the environment's `step`.
+  Keep them in thin outer functions, such as the scripts in `examples/` and `sim.py`.
 - Controllers, signal computation, reward and termination are pure functions of their inputs.
 - State that lives from one step to the next is an explicit value:
 
@@ -233,18 +232,16 @@ class Stamped[T]:
 
 - Keep one source of truth for each value, name and interface, and copy it nowhere.
   `contract.py` is the example: code, examples and tests all read it.
-  A file that a program writes from the source, such as the JS package's TypeScript, is written where it is needed and is not checked in.
+  A file that a program writes from the source is written where it is needed and is not checked in.
   A test that two copies agree means that one of them should be written from the other.
-  The exception is a value that two tools each read from their own file, such as MuJoCo's version, which pip reads from `pyproject.toml` and npm from `js/package.json`; then a test holds them equal.
+  The exception is a value that two tools each read from their own file; then a test holds them equal.
 - Put imports at the top of the file.
   Import a module by its name (`from . import sensors`, not `as _sensors`).
 - Order a module from the top down. It starts with what it is for: its main type, or the functions that callers use.
   What they use follows, in the order they use it.
   Python 3.14 evaluates annotations lazily, so a type can name types defined below it.
-  `neoracer_spec` also runs on the browser's Python 3.12, so a module there whose types name types below them
-  starts with `from __future__ import annotations`.
+  A package that also runs on an older Python says so in its docstring.
 - Put a constant just above its first use, unless it is part of the module's interface, like the names in `contract.py`.
-  A car's sources go just above the car's values.
 - Load package files with `importlib.resources`, not with paths built from `__file__`.
 - Put a test in `validation/test_<module>.py`, never in the module that it tests.
 
@@ -288,7 +285,7 @@ class Stamped[T]:
 - Use the name of the real part: "motor encoder", not "wheel encoder", if the car has a motor encoder.
 - A name says what a thing does. A function that does not use `async` is not called `async`.
 - Document a module, class, function, field, constant or type alias with a docstring, not a comment.
-  Editors show a docstring where the name is used, and the TypeScript generator copies a spec field's docstring into `spec.ts`.
+  Editors show a docstring where the name is used, and a generator can copy it into the code that it writes.
   The docstring of a field, a constant or a type alias is the string on the line after it.
   In TypeScript, the docstring is a JSDoc comment, `/** ... */`.
 - A docstring describes the contract (inputs, outputs, units) in as few lines as it can.

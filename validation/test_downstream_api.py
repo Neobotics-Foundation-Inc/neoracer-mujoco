@@ -11,31 +11,44 @@ import importlib
 
 import pytest
 
+from neoracer_mujoco.assets import Entry
 from neoracer_mujoco.contract import ActuatorLimits
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.physics import PhysicsRanges
 from neoracer_mujoco.scene import Car, Scene
 from neoracer_mujoco.sensors import CarSensors
 from neoracer_mujoco.sim import SpawnRange
+from neoracer_mujoco.track_generation import Track
 from neoracer_mujoco.truth import TruthSensors
 from neoracer_spec.racecar_neo_v2 import Drive
 
 USED_BY_NEORACER_RL = (
     "neoracer_mujoco.assets.ASSET_DIR",
     "neoracer_mujoco.assets.DEFAULT_CAR",
+    "neoracer_mujoco.assets.Entry",
     "neoracer_mujoco.assets.TRACK_DIR",
     "neoracer_mujoco.assets.compose",
+    "neoracer_mujoco.assets.compose_cars",
     "neoracer_mujoco.batch.Batch",
     "neoracer_mujoco.batch.CpuBatch",
     "neoracer_mujoco.batch.DataBatch",
     "neoracer_mujoco.batch.command",
+    "neoracer_mujoco.batch.command_cars",
     "neoracer_mujoco.batch.drive",
     "neoracer_mujoco.batch.drive_angle",
+    "neoracer_mujoco.batch.drive_cars",
     "neoracer_mujoco.batch.read",
+    "neoracer_mujoco.batch.readings",
     "neoracer_mujoco.collision.car_touches_wall",
     "neoracer_mujoco.contract.actuator_limits",
     "neoracer_mujoco.contract.wheel_radius",
+    "neoracer_mujoco.control.PDState",
+    "neoracer_mujoco.control.SpeedAngle",
     "neoracer_mujoco.control.steering.ControlCommand",
+    "neoracer_mujoco.control.track_centering.TrackCenteringConfig",
+    "neoracer_mujoco.control.track_centering.step",
+    "neoracer_mujoco.control.wall_following.WallFollowingConfig",
+    "neoracer_mujoco.control.wall_following.step",
     "neoracer_mujoco.export.car_xml",
     "neoracer_mujoco.physics.Physics",
     "neoracer_mujoco.physics.PhysicsRanges",
@@ -54,6 +67,7 @@ USED_BY_NEORACER_RL = (
     "neoracer_mujoco.sim.car_upright_cos",
     "neoracer_mujoco.sim.perturb_spawn",
     "neoracer_mujoco.sim.settle",
+    "neoracer_mujoco.sim.spawn_clears_walls",
     "neoracer_mujoco.sim.steps_in",
     "neoracer_mujoco.speed_loop.SpeedLoopState",
     "neoracer_mujoco.speed_loop.restart",
@@ -67,6 +81,7 @@ USED_BY_NEORACER_RL = (
     "neoracer_mujoco.track_generation.generate_track",
     "neoracer_mujoco.track_generation.lap_distance",
     "neoracer_mujoco.track_generation.mjcf.to_start_frame",
+    "neoracer_mujoco.track_generation.pose_along",
     "neoracer_mujoco.track_generation.settings_for_difficulty",
     "neoracer_mujoco.track_generation.shortest_loop_distance",
     "neoracer_mujoco.track_generation.to_spec",
@@ -103,7 +118,8 @@ def test_records_used_by_neoracer_rl_keep_their_fields():
 
     assert {"throttle", "steer"} <= fields(ControlCommand)
     assert {"steer_rad"} <= fields(ActuatorLimits)
-    assert {"spec", "model", "car"} <= fields(Scene)
+    assert {"spec", "model", "cars"} <= fields(Scene)
+    assert isinstance(Scene.car, property)
     assert {"joint", "drive", "wheels", "sensors", "truth"} <= fields(Car)
     # The observation reads these of car.sensors, and the progress, the crash
     # and the rollover these of car.truth.
@@ -121,3 +137,5 @@ def test_records_used_by_neoracer_rl_keep_their_fields():
         "lidar_rate",
     } <= fields(PhysicsRanges)
     assert {"steady_speed"} <= fields(Drive)
+    assert {"prefix", "offset", "heading", "car"} <= fields(Entry)
+    assert {"half_width", "curvature", "total_length"} <= fields(Track)

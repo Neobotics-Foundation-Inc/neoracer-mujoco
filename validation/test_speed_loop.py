@@ -175,6 +175,24 @@ def test_rows_that_start_over_start_at_rest_and_keep_the_ticks():
         assert all(after[name][k] == before[name][k] for name in ROW_VALUES)
 
 
+def test_a_row_that_starts_over_starts_every_car_of_it_over():
+    """On a loop of two cars a row, as batch.drive_cars runs it, restart with
+    a mask of rows starts over every car of those rows, as the mask of each
+    car of those rows does."""
+    angles = _turning(10.0, 0.51)
+    loop = speed_loop.start(PARAMS, np.full((3, 2), angles[0]))
+    commanded = np.array([[1.0, -0.5], [2.0, 0.5], [-1.0, 1.5]])
+    for a in angles[1:]:
+        loop = speed_loop.step(PARAMS, loop, commanded, np.full((3, 2), a), DT)
+    rows = np.array([False, True, False])
+    angle = np.full((3, 2), 7.0)
+    by_row = _rows(speed_loop.restart(loop, rows, angle))
+    by_car = _rows(speed_loop.restart(loop, np.repeat(rows[:, None], 2, 1), angle))
+    for name in ROW_VALUES:
+        np.testing.assert_array_equal(by_row[name], by_car[name], err_msg=name)
+    assert by_row["angle"][1].tolist() == [7.0, 7.0]
+
+
 def test_the_feed_forward_rounds_and_holds_within_its_range():
     """The feed-forward is deadband plus feed_forward per m/s, rounded to a
     microsecond, toward the commanded speed, and held within [deadband,

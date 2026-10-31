@@ -138,25 +138,27 @@ class CarSensors:
     (contract.lidar_field). The car blocks them, so they read NO_RETURN."""
 
 
-def find_sensors(spec: mujoco.MjSpec, model: mujoco.MjModel) -> CarSensors:
-    """Find the sensor of each SensorReadings field in spec, which model was
-    compiled from, and the LiDAR beams that the car blocks. Raise ValueError
-    if a field has no sensor of that name and size, or the LiDAR site is
-    missing."""
+def find_sensors(
+    spec: mujoco.MjSpec, model: mujoco.MjModel, prefix: str = ""
+) -> CarSensors:
+    """Find the sensor of each SensorReadings field of the car whose names are
+    behind prefix in spec, which model was compiled from, and the LiDAR
+    beams that the car blocks. Raise ValueError if a field has no sensor of
+    that name and size, or the LiDAR site is missing."""
     found: dict[str, mujoco.MjsSensor] = {}
     problems: list[str] = []
-    lidar = spec.site(contract.LIDAR_SITE)
+    lidar = spec.site(prefix + contract.LIDAR_SITE)
     if lidar is None:
-        problems.append(f"the {contract.LIDAR_SITE} site is missing")
+        problems.append(f"the {prefix + contract.LIDAR_SITE} site is missing")
     for f in fields(SensorReadings):
-        sensor = spec.sensor(f.name)
+        sensor = spec.sensor(prefix + f.name)
         size = VECTOR_SIZE.get(f.name, 1)
         if sensor is None:
-            problems.append(f"{f.name} is missing")
+            problems.append(f"{prefix + f.name} is missing")
             continue
         dim = int(model.bind_scalar(sensor).dim[0])
         if dim != size:
-            problems.append(f"{f.name} has {dim} values, not {size}")
+            problems.append(f"{prefix + f.name} has {dim} values, not {size}")
         else:
             found[f.name] = sensor
     if problems or lidar is None:
@@ -179,16 +181,29 @@ def beam_in_field(name: str, field: float) -> bool:
 def read(sensors: CarSensors, data: mujoco.MjData) -> SensorReadings:
     """Read every named sensor of data. A LiDAR beam that the car blocks
     reads NO_RETURN."""
+    values = {
+        f.name: data.bind_scalar(getattr(sensors, f.name)).data
+        for f in fields(SensorReadings)
+    }
+    return from_values(sensors, values)
+
+
+def from_values(
+    sensors: CarSensors, values: Mapping[str, npt.NDArray[np.float64]]
+) -> SensorReadings:
+    """The SensorReadings of values, the values of the sensor of each
+    SensorReadings field by the field's name, as read gives them: a LiDAR
+    beam that the car blocks reads NO_RETURN."""
 
     def value(name: str) -> float | npt.NDArray[np.float64]:
         if name in sensors.blocked:
             return NO_RETURN
-        values = data.bind_scalar(getattr(sensors, name)).data
-        return values.copy() if name in VECTOR_SIZE else float(values[0])
+        v = values[name]
+        return np.array(v, dtype=np.float64) if name in VECTOR_SIZE else float(v[0])
 
     # Each field's value has the field's type, which no checker can see here.
-    values: dict[str, Any] = {f.name: value(f.name) for f in fields(SensorReadings)}
-    return SensorReadings(**values)
+    readings: dict[str, Any] = {f.name: value(f.name) for f in fields(SensorReadings)}
+    return SensorReadings(**readings)
 
 
 def motor_encoder_rad_s(sensors: SensorReadings) -> float:

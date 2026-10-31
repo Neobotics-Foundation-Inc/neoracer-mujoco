@@ -19,6 +19,16 @@ def corridor_scene() -> Scene:
     )
 
 
+def two_cars(behind: float = 1.5) -> Scene:
+    """Two default cars without visuals on assets/tracks/loop_corridor.xml:
+    "a/" at the start, and "b/" behind it by behind (m)."""
+    return assets.compose_cars(
+        mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xml")),
+        [assets.Entry("a/"), assets.Entry("b/", (-behind, 0.0))],
+        visuals=False,
+    )
+
+
 def reversed_car(path: str = assets.DEFAULT_CAR) -> Scene:
     """The car of the XML at path, the default car's by default, with its
     actuators and its sensors in reverse order."""
