@@ -22,7 +22,7 @@ dependencies = [
     # One exact version: MuJoCo's WebAssembly build of the same version gives
     # the same physics, and its models (.mjb) load only in the version that
     # wrote them.
-    "mujoco==3.16.0",
+    "mujoco==4.0.0",
     "numpy>=1.26.4",
     # CubicSpline (track centerline) and KDTree (self-touch check) in
     # track_generation/.
@@ -33,13 +33,13 @@ dependencies = [
 dev = [
     "pygame-ce>=2.5.8",
     "pytest>=7.4",
-    "ruff==0.17.1",
-    "ty==0.0.87",
+    "ruff==0.17.4",
+    "ty==0.0.98",
     "pybind11-stubgen==3.0.0",
 ]
 # Optional: the Warp backend of batch.py (batch_warp.py), MJX on MuJoCo Warp.
 # It runs on a CUDA GPU; install jax[cuda12] or jax[cuda13] for the GPU.
-jax = ["jax>=0.7", "mujoco-mjx==3.16.0", "warp-lang>=1.10", "mujoco-warp==3.16.0"]
+jax = ["jax>=0.7", "mujoco-mjx==4.0.0", "warp-lang>=1.10", "mujoco-warp==4.0.0"]
 # Optional: only needed for the pygame driving demo (examples/pygame_drive/).
 # pygame-ce, not pygame: pygame has no wheels for Python 3.14.
 demo = ["pygame-ce>=2.5.8"]

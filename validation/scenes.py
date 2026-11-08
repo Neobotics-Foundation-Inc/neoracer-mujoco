@@ -62,6 +62,19 @@ def assert_takes_car_solver_options(
         assert getattr(composed.opt, name) == getattr(car.opt, name), name
 
 
+def assert_same_model(actual: mujoco.MjModel, expected: mujoco.MjModel) -> None:
+    """Check that actual is expected, every array equal, but for the paths
+    of the files that each was compiled from: MuJoCo keeps each asset's path
+    as it read it, so a model compiled from another folder or an archive
+    differs in paths, where each asset's path starts in it (*_pathadr), and
+    their sizes alone."""
+    for name in dir(expected):
+        value = getattr(expected, name)
+        path = name in ("paths", "_sizes") or name.endswith("_pathadr")
+        if isinstance(value, np.ndarray) and not path:
+            np.testing.assert_array_equal(getattr(actual, name), value, err_msg=name)
+
+
 def assert_car_rests(scene: Scene) -> None:
     """Check that the car settles on the floor of the scene with zero
     control: it does not fall through and it does not move."""

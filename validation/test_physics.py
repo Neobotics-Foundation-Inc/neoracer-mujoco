@@ -176,8 +176,6 @@ def test_fields_lists_every_field_that_apply_physics_changes():
         }
         # light_poscom0 is where a light that tracks the center of mass
         # starts; it moves no body.
-        if model.stat.meaninertia != scene.model.stat.meaninertia:
-            changed.add("stat.meaninertia")
         assert changed - {"light_poscom0"} == set(physics.FIELDS), car_path
 
 

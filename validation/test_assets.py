@@ -13,7 +13,12 @@ import mujoco
 import numpy as np
 import pytest
 from cases import case
-from scenes import assert_car_rests, assert_takes_car_solver_options, two_cars
+from scenes import (
+    assert_car_rests,
+    assert_same_model,
+    assert_takes_car_solver_options,
+    two_cars,
+)
 
 from neoracer_mujoco import assets, collision, sim
 from neoracer_mujoco.control.steering import ControlCommand
@@ -250,14 +255,9 @@ def test_an_mjz_compiles_to_the_model_of_its_xml(tmp_path):
         assets.write_mjz(path, first)
         assets.write_mjz(path, second)
         assert first.read_bytes() == second.read_bytes(), name
-        expected = assets.from_file(path).compile()
-        packed = mujoco.MjSpec.from_zip(str(first)).compile()
-        for field in dir(expected):
-            value = getattr(expected, field)
-            if isinstance(value, np.ndarray):
-                np.testing.assert_array_equal(
-                    getattr(packed, field), value, err_msg=f"{name}: {field}"
-                )
+        with case(name):
+            packed = mujoco.MjSpec.from_zip(str(first)).compile()
+            assert_same_model(packed, assets.from_file(path).compile())
 
 
 def test_an_xml_outside_assets_loads_as_mujoco_reads_it(tmp_path, monkeypatch):
