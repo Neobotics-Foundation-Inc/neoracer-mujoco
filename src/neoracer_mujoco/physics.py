@@ -32,7 +32,6 @@ import copy
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, fields
-from typing import Any
 
 import mujoco
 import numpy as np
@@ -173,18 +172,14 @@ FIELDS = (
     "dof_M0",
     "tendon_invweight0",
     "actuator_acc0",
-    "stat.meaninertia",  # scales the solver's tolerance
 )
 """The MjModel fields that apply_physics writes, and those that mj_setConst
-derives from them. A dot names a field of a field."""
+derives from them."""
 
 
 def field(model: mujoco.MjModel, name: str) -> npt.NDArray[np.float64]:
     """The value of the field of model that name in FIELDS names."""
-    value: Any = model
-    for part in name.split("."):
-        value = getattr(value, part)
-    return np.asarray(value)
+    return np.asarray(getattr(model, name))
 
 
 def field_rows(

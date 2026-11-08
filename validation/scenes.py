@@ -62,6 +62,33 @@ def assert_takes_car_solver_options(
         assert getattr(composed.opt, name) == getattr(car.opt, name), name
 
 
+def assert_same_model(actual: mujoco.MjModel, expected: mujoco.MjModel) -> None:
+    """Check that actual is expected, every field equal, those of opt, stat
+    and vis too, but for the paths of the files that each was compiled from:
+    MuJoCo keeps each asset's path as it read it, so a model compiled from
+    another folder or an archive differs in paths, their length (npaths),
+    where each asset's path starts in them (*_pathadr) and the size of the
+    model's memory (nbuffer) alone."""
+    _assert_same(actual, expected, "model")
+
+
+def _assert_same(actual: object, expected: object, where: str) -> None:
+    """Check that the public fields of actual, a struct of MuJoCo's, are
+    those of expected, the struct-valued ones field by field."""
+    for name in dir(expected):
+        value = getattr(expected, name)
+        skip = name in ("paths", "npaths", "nbuffer") or name.endswith("_pathadr")
+        if name.startswith("_") or skip or callable(value):
+            continue
+        here = f"{where}.{name}"
+        if isinstance(value, np.ndarray):
+            np.testing.assert_array_equal(getattr(actual, name), value, err_msg=here)
+        elif isinstance(value, (bool, int, float, bytes)):
+            assert getattr(actual, name) == value, here
+        else:
+            _assert_same(getattr(actual, name), value, here)
+
+
 def assert_car_rests(scene: Scene) -> None:
     """Check that the car settles on the floor of the scene with zero
     control: it does not fall through and it does not move."""

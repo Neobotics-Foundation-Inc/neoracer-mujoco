@@ -267,7 +267,7 @@ NEORACER = Spec(
         kp=chosen(50.0, "so the servo settles without chatter at the model's step"),
         kd=chosen(1.0, "so the servo settles without chatter at the model's step"),
         latency=calibrated(
-            0.045,
+            0.052,
             SERVO_FIT,
             "the steps at rest: their first motion and the end of each swing,"
             " with the servo at its datasheet rating at 6 V",

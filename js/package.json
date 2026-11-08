@@ -18,7 +18,7 @@
     "prepack": "npm run build"
   },
   "peerDependencies": {
-    "@mujoco/mujoco": "3.16.0"
+    "@mujoco/mujoco": "4.0.0"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

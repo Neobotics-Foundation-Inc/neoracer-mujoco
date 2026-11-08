@@ -13,7 +13,12 @@ import mujoco
 import numpy as np
 import pytest
 from cases import case
-from scenes import assert_car_rests, assert_takes_car_solver_options, two_cars
+from scenes import (
+    assert_car_rests,
+    assert_same_model,
+    assert_takes_car_solver_options,
+    two_cars,
+)
 
 from neoracer_mujoco import assets, collision, sim
 from neoracer_mujoco.control.steering import ControlCommand
@@ -99,11 +104,14 @@ def test_each_entry_starts_at_its_offset_from_the_start():
 def test_a_car_far_from_the_others_drives_as_the_only_car():
     """The cars of a scene share only its physics step: a car with another
     car 1.5 m behind it drives, steers and hits the wall as the car of a
-    one-car scene does, to rounding."""
+    one-car scene does, to rounding, until 0.5 s after the hit. Grinding
+    along the wall for longer, a car can grow a difference of rounding to
+    micrometers, alone as well as beside another car."""
     track = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xml"))
     one, two = assets.compose(track, visuals=False), two_cars()
     alone, data = mujoco.MjData(one.model), mujoco.MjData(two.model)
-    hits = 0
+    after = round(0.5 / one.model.opt.timestep)
+    hit = None
     for k in range(3000):
         command = ControlCommand(throttle=0.5, steer=0.3 if k > 700 else 0.0)
         sim.apply_command(one.car, alone, command)
@@ -117,8 +125,11 @@ def test_a_car_far_from_the_others_drives_as_the_only_car():
             atol=1e-9,
             err_msg=f"step {k}",
         )
-        hits += collision.car_touches_wall(alone, one.car)
-    assert hits > 0, "the drive never touched a wall"
+        if hit is None and collision.car_touches_wall(alone, one.car):
+            hit = k
+        if hit is not None and k - hit == after:
+            break
+    assert hit is not None, "the drive never touched a wall"
 
 
 def test_compose_cars_refuses_a_prefix_that_starts_another():
@@ -250,14 +261,9 @@ def test_an_mjz_compiles_to_the_model_of_its_xml(tmp_path):
         assets.write_mjz(path, first)
         assets.write_mjz(path, second)
         assert first.read_bytes() == second.read_bytes(), name
-        expected = assets.from_file(path).compile()
-        packed = mujoco.MjSpec.from_zip(str(first)).compile()
-        for field in dir(expected):
-            value = getattr(expected, field)
-            if isinstance(value, np.ndarray):
-                np.testing.assert_array_equal(
-                    getattr(packed, field), value, err_msg=f"{name}: {field}"
-                )
+        with case(name):
+            packed = mujoco.MjSpec.from_zip(str(first)).compile()
+            assert_same_model(packed, assets.from_file(path).compile())
 
 
 def test_an_xml_outside_assets_loads_as_mujoco_reads_it(tmp_path, monkeypatch):
