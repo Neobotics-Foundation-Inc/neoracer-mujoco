@@ -57,11 +57,8 @@ class LidarMount:
 
 
 def lidar_mount(scene: Scene) -> LidarMount:
-    """Find the lidar_mount site and the car body once."""
-    site = scene.spec.site("lidar_mount")
-    if site is None:
-        raise ValueError("the scene has no lidar_mount site")
-    return LidarMount(site=site, body=scene.car.body)
+    """The car's lidar_mount site and body."""
+    return LidarMount(site=scene.car.lidar, body=scene.car.body)
 
 
 def cast_dense_lidar(

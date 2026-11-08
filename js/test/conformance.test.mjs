@@ -11,6 +11,7 @@ import loadMujoco from '@mujoco/mujoco';
 
 import {
   CAR_BODY,
+  CAR_PREFIX,
   CAR_XML,
   DRIVE_POS_SENSOR,
   ENCODER,
@@ -59,7 +60,7 @@ test('the composed scene has the parts and the step of the Python one', () => {
   assert.equal(model.opt.timestep, fixtures.timestep);
 });
 
-test("the contract's names are parts of the composed car", () => {
+test("the contract's names, behind CAR_PREFIX, are parts of the composed car", () => {
   const O = mj.mjtObj;
   const parts = [
     [O.mjOBJ_BODY, CAR_BODY],
@@ -69,7 +70,9 @@ test("the contract's names are parts of the composed car", () => {
     [O.mjOBJ_SENSOR, IMU_GYRO_SENSOR],
     ...WHEEL_GEOMS.map((name) => [O.mjOBJ_GEOM, name]),
   ];
-  for (const [type, name] of parts) assert.ok(mj.mj_name2id(model, type.value, name) >= 0, name);
+  for (const [type, name] of parts) {
+    assert.ok(mj.mj_name2id(model, type.value, CAR_PREFIX + name) >= 0, name);
+  }
 });
 
 test('the car settles where it settles in Python', () => {
@@ -99,7 +102,8 @@ test('driveAngle reads drive_pos at the end of a step, where mj_step leaves the 
   const data = settle(mj, model);
   applyCommand(scene, data, { throttle: 0.5, steer: 0 });
   for (let i = 0; i < 10; i++) mj.mj_step(model, data);
-  const sensor = model.sensor_adr[mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR.value, DRIVE_POS_SENSOR)];
+  const id = mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR.value, CAR_PREFIX + DRIVE_POS_SENSOR);
+  const sensor = model.sensor_adr[id];
   const start = data.sensordata[sensor];
   const end = driveAngle(car, data.qpos);
   mj.mj_forward(model, data);
@@ -230,7 +234,7 @@ test("the car stands at the track's start, facing its +X, or at the origin facin
 
 test('cars attached behind prefixes share one scene, and findCar finds each by its prefix', () => {
   const shared = mj.parseXMLString(trackXml);
-  const prefixes = ['', 'car1_'];
+  const prefixes = [CAR_PREFIX, 'car1/'];
   for (const prefix of prefixes) attachCar(mj, shared, mj.parseXMLString(CAR_XML), prefix);
   const both = mj.mj_compile(shared);
   assert.ok(both, mj.mjs_getError(shared));
@@ -245,7 +249,7 @@ test('cars attached behind prefixes share one scene, and findCar finds each by i
     assert.equal(cars[k].lidar, mj.mj_name2id(both, O.mjOBJ_SITE.value, prefix + LIDAR_SITE), prefix);
   });
   for (const part of Object.keys(car)) assert.notEqual(cars[0][part], cars[1][part], part);
-  // The first car, behind no prefix, is compose's car.
+  // The first car, behind CAR_PREFIX, is compose's car.
   assert.deepEqual(cars[0], car);
 });
 

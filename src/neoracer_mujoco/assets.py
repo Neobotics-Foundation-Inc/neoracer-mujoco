@@ -49,6 +49,9 @@ MJZ_MODEL = "model.xml"
 """The name of the XML in an archive of write_mjz."""
 START_SITE = "start"
 """The site of a track where attach_car puts a car."""
+CAR_PREFIX = "car/"
+"""What the names of the car that compose attaches start with: its motor is
+"car/motor"."""
 
 
 def cars() -> list[str]:
@@ -120,8 +123,8 @@ def compose(
     visuals: bool = True,
 ) -> Scene:
     """Compile the track with the car attached at the track's start
-    (attach_car), the car's elements keeping their names. The car is a car
-    XML's path or a car's MjSpec, such as export.spec(car) for a variant.
+    (attach_car), the names of its elements behind CAR_PREFIX. The car is a
+    car XML's path or a car's MjSpec, such as export.spec(car) for a variant.
     Neither track nor a car's MjSpec is changed: the car is attached from
     copies.
 
@@ -137,7 +140,7 @@ def compose(
 
         compose(mujoco.MjSpec.from_file(os.path.join(TRACK_DIR, "f1_track.xml")))
     """
-    return compose_cars(track, (Entry("", car=car),), visuals)
+    return compose_cars(track, (Entry(CAR_PREFIX, car=car),), visuals)
 
 
 @dataclass(frozen=True)
@@ -177,7 +180,7 @@ def compose_cars(
 def attach_car(
     spec: mujoco.MjSpec,
     car: str | os.PathLike[str] | mujoco.MjSpec = DEFAULT_CAR,
-    prefix: str = "",
+    prefix: str = CAR_PREFIX,
     offset: tuple[float, float] = (0.0, 0.0),
     heading: float = 0.0,
     visuals: bool = True,

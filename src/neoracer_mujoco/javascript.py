@@ -30,6 +30,7 @@ SHARED: Mapping[str, ModuleType] = MappingProxyType(
     {
         "CAR_BODY": contract,
         "START_SITE": assets,
+        "CAR_PREFIX": assets,
         "DRIVE_ACTUATOR": contract,
         "STEER_ACTUATOR": contract,
         "LIDAR_SITE": contract,

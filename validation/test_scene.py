@@ -81,15 +81,19 @@ def test_a_wheel_sets_the_friction_of_its_contacts():
 
 
 def test_each_car_of_a_scene_has_its_own_parts():
-    """Each Car of a scene of two holds the parts of the car of a one-car
-    scene, each named behind the car's prefix if it has a name, so no part
-    is both cars'."""
+    """The parts of the car of a one-car scene that have names are named
+    behind CAR_PREFIX. Each Car of a scene of two holds the same parts
+    behind its own prefix, so no part is both cars'."""
     track = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
     one = assets.compose(mujoco.MjSpec.from_file(track), visuals=False)
+    names = _names(one.car)
+    assert all(n.startswith(assets.CAR_PREFIX) for n in names if n)
     two = two_cars()
     for prefix, car in zip(("a/", "b/"), two.cars, strict=True):
         with case(prefix):
-            expected = [prefix + n if n else n for n in _names(one.car)]
+            expected = [
+                prefix + n.removeprefix(assets.CAR_PREFIX) if n else n for n in names
+            ]
             assert _names(car) == expected
             assert car.sensors.blocked == one.car.sensors.blocked
 
