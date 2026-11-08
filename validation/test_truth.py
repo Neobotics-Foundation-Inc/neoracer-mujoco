@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from scenes import two_cars
 
-from neoracer_mujoco import Scene, assets, sim, truth
+from neoracer_mujoco import Scene, assets, contract, sim, truth
 from neoracer_mujoco.control.steering import ControlCommand
 from neoracer_mujoco.scene import compile_scene
 from neoracer_mujoco.truth import WALLS_BODY
@@ -142,7 +142,7 @@ def test_a_sensor_with_a_truth_name_but_another_definition_is_rejected():
             name=truth.ZAXIS,
             type=mujoco.mjtSensor.mjSENS_FRAMEZAXIS,
             objtype=mujoco.mjtObj.mjOBJ_XBODY,
-            objname="car",
+            objname=contract.CAR_BODY,
         )
         for field, setting in other.items():
             setattr(sensor, field, setting)

@@ -86,11 +86,11 @@ def test_a_template_that_holds_a_number_of_the_spec_is_refused():
                     mjcf.apply(held, edits)
 
     # The writer knows the attribute however the XML spells it.
-    car = mjcf.Edit(mjcf.named("body", "car"), "pos", "0 0 2")
+    chassis = mjcf.Edit(mjcf.named("body", "chassis"), "pos", "0 0 2")
     for spelling in ('pos="0 0 1"', "pos='0 0 1'", 'pos = "0 0 1"'):
-        xml = f'<mujoco><body name="car" {spelling}/></mujoco>'
+        xml = f'<mujoco><body name="chassis" {spelling}/></mujoco>'
         with pytest.raises(ValueError, match="which the spec gives"):
-            mjcf.apply(xml, [car])
+            mjcf.apply(xml, [chassis])
 
 
 def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
@@ -195,7 +195,7 @@ def test_the_v2_model_has_the_cars_mass_center_of_mass_and_inertia():
     model = assets.load(V2_XML).model
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)  # at qpos0: the springs neither up nor down
-    car = model.body("car").id
+    car = model.body(contract.CAR_BODY).id
     bodies = [b for b in range(model.nbody) if b == car or model.body_rootid[b] == car]
     mass = sum(model.body_mass[b] for b in bodies)
     com = sum(model.body_mass[b] * data.xipos[b] for b in bodies) / mass

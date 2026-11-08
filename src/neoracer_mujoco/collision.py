@@ -4,8 +4,9 @@ driving demo can recover without a manual reset key.
 
 A wall is a geom of the body named "walls" (truth.WALLS_BODY). The track
 XMLs in assets/tracks/ put their walls there; the floor and drivable ramps
-are elsewhere. The car is the body tree of its root body ("car", the free
-joint body in neoracer.xml), so the chassis and the wheels are both the car.
+are elsewhere. The car is the body tree of its root body
+(contract.CAR_BODY, the body with the free joint), so the wheels are part
+of the car too.
 The truth sensor car.truth.wall_contact counts the contacts between the two.
 
     if car_touches_wall(data, scene.car):
