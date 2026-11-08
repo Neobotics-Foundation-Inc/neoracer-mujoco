@@ -74,11 +74,8 @@ def car_geometry(scene: Scene) -> CarGeometry:
     At full lock this R is 0.68 m. verify_kinematics.py measures about
     0.76 m on the simulated car, probably because the tires slip.
     """
-    front = scene.spec.body("fl_wheel_body")
-    rear = scene.spec.body("rl_wheel_body")
-    lidar = scene.spec.site("lidar_mount")
-    if front is None or rear is None or lidar is None:
-        raise ValueError("the scene has no fl_wheel_body, rl_wheel_body or lidar_mount")
+    fl, _, rl, _ = scene.car.wheels
+    front, rear, lidar = fl.parent, rl.parent, scene.car.lidar
     model = scene.model
     # The site is on the car body, so its pos is in the car frame.
     lidar_x, lidar_y, _ = model.bind_scalar(lidar).pos

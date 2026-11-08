@@ -80,10 +80,10 @@ def test_apply_physics_equals_compiling_the_changed_car():
         servo = edited.actuator(car.steer.name)
         servo.gainprm[4] *= CHANGED.steer_stiffness  # the position loop's kp
         for name in sensors.LIDAR_BEAM_ORDER:
-            beam = edited.sensor(name)
+            beam = edited.sensor(getattr(car.sensors, name).name)
             beam.interval = np.asarray(beam.interval) / CHANGED.lidar_rate
             beam.delay /= CHANGED.lidar_rate
-        compiled = compile_scene(edited)
+        compiled = compile_scene(edited, [assets.CAR_PREFIX])
         np.testing.assert_array_equal(
             _drive(_applied(scene, CHANGED), scene),
             _drive(compiled.model, compiled),

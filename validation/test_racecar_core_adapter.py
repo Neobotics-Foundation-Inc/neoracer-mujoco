@@ -135,7 +135,7 @@ def test_a_scan_is_clockwise_from_the_front_in_cm(corridor):
         (270, "lidar_090"),
     ]:
         i = bearing * len(scan) // 360
-        meters = data.bind_scalar(corridor.spec.sensor(beam)).data[0]
+        meters = data.bind_scalar(getattr(corridor.car.sensors, beam)).data[0]
         assert meters > 0.0, beam
         assert scan[i] == pytest.approx(100.0 * meters, rel=1e-6), beam
 

@@ -118,8 +118,10 @@ def test_a_beam_reads_the_range_when_the_head_passed_it_in_the_last_turn():
         scene = assets.compose(mujoco.MjSpec.from_file(loop), car, visuals=False)
         model = scene.model
         dt = model.opt.timestep
-        timed = [scene.spec.sensor(f"lidar_{b:03d}") for b in bearings]
-        instant = [scene.spec.sensor(f"instant_{b:03d}") for b in bearings]
+        timed = [getattr(scene.car.sensors, f"lidar_{b:03d}") for b in bearings]
+        instant = [
+            scene.spec.sensor(f"{assets.CAR_PREFIX}instant_{b:03d}") for b in bearings
+        ]
         data = sim.settle(model)
         times, readings, truths = [], [], []
         for _ in range(540):

@@ -638,7 +638,7 @@ def test_the_warp_batch_follows_the_cpu_batch_on_the_v2(warp_v2):
     cpu_initial = cpu.initial(datas, [scene] * 2, params)
     warp_initial = warp_batch.initial(datas, [scene] * 2, params)
     cpu_state, warp_state = cpu_initial, warp_initial
-    beams = [scene.spec.sensor(f"lidar_{b:03d}") for b in range(0, 360, 45)]
+    beams = [getattr(scene.car.sensors, f"lidar_{b:03d}") for b in range(0, 360, 45)]
     done = np.array([True, False])
     for k, c in enumerate(_commands(3, nbatch=2)):
         if k == CALLS // 2:

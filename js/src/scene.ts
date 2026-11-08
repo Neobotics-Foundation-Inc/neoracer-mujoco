@@ -9,6 +9,7 @@ import type { MainModule, MjData, MjModel, MjSpec, MjsElement, mjtObj } from '@m
 
 import {
   CAR_BODY,
+  CAR_PREFIX,
   DRIVE_ACTUATOR,
   DRIVE_POS_SENSOR,
   LIDAR_SITE,
@@ -76,9 +77,9 @@ export function deleteVisuals(mj: Mujoco, spec: MjSpec): void {
 }
 
 /**
- * Compile the track's MJCF with the car attached (attachCar), as
- * assets.compose does without visuals. The track keeps its own floor.
- * carXml defaults to assets/neoracer.xml.
+ * Compile the track's MJCF with the car attached (attachCar), the names of
+ * its elements behind CAR_PREFIX, as assets.compose does without visuals.
+ * The track keeps its own floor. carXml defaults to assets/neoracer.xml.
  */
 export function compose(mj: Mujoco, trackXml: string, carXml: string = CAR_XML): Scene {
   const spec = mj.parseXMLString(trackXml);
@@ -97,7 +98,7 @@ export function compose(mj: Mujoco, trackXml: string, carXml: string = CAR_XML):
  * loses the meshes that only show it (deleteVisuals). Several cars share a
  * scene, each behind a prefix of its own; findCar finds each one's parts.
  */
-export function attachCar(mj: Mujoco, spec: MjSpec, car: MjSpec, prefix = ''): void {
+export function attachCar(mj: Mujoco, spec: MjSpec, car: MjSpec, prefix = CAR_PREFIX): void {
   spec.option = car.option;
   deleteVisuals(mj, car);
   // The car's root default class is "main", as the track's is: a name of
@@ -115,7 +116,7 @@ export function attachCar(mj: Mujoco, spec: MjSpec, car: MjSpec, prefix = ''): v
 }
 
 /** The parts of the car whose names are behind prefix in model, which was compiled from spec. */
-export function findCar(mj: Mujoco, spec: MjSpec, model: MjModel, prefix = ''): Car {
+export function findCar(mj: Mujoco, spec: MjSpec, model: MjModel, prefix = CAR_PREFIX): Car {
   const O = mj.mjtObj;
   const id = (type: mjtObj, name: string) => mj.mjs_getId(find(mj, spec, type, prefix + name));
   const body = id(O.mjOBJ_BODY, CAR_BODY);

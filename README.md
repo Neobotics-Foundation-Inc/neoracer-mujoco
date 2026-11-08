@@ -124,7 +124,7 @@ track = mujoco.MjSpec.from_file(os.path.join(assets.TRACK_DIR, "loop_corridor.xm
 scene = assets.compose(track)
 ```
 
-The scene has the same kind of `Car`, so the loop above drives the car on the track without changes. `apply_command` only needs `scene.car`, and `read` only `scene.car.sensors`.
+The scene has the same kind of `Car`, so the loop above drives the car on the track without changes. `apply_command` only needs `scene.car`, and `read` only `scene.car.sensors`. In the scene, the names of the car's elements start with `assets.CAR_PREFIX`: its motor is `car/motor`, and `scene.car` holds the elements themselves.
 
 Besides the four tracks in `assets/tracks/`, `track_generation` makes new ones from a seed. A closed random walk shapes them, so they have S-bends and hairpins. Difficulty runs from 0, wide and gentle, to 3, narrow and tight. `generate_track` works on geometry alone. It returns a `Track`, the centerline and the width along it, or `NoValidTrack` if no candidate passed its checks. `to_spec` turns a `Track` into an `MjSpec`:
 

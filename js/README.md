@@ -39,7 +39,7 @@ For several cars in one scene, attach each behind a prefix of its own, compile o
 import { CAR_XML, attachCar, findCar } from 'neoracer-mujoco';
 
 const spec = mj.parseXMLString(trackXml);
-const prefixes = ['', 'car1_', 'car2_'];
+const prefixes = ['car0/', 'car1/', 'car2/'];
 for (const prefix of prefixes) attachCar(mj, spec, mj.parseXMLString(CAR_XML), prefix);
 const model = mj.mj_compile(spec);
 const cars = prefixes.map((prefix) => findCar(mj, spec, model, prefix));
