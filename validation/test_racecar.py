@@ -4,7 +4,6 @@ its own sensors, and the cars share only the physics step.
 """
 
 import os
-from dataclasses import replace
 
 import mujoco
 import numpy as np
@@ -31,7 +30,7 @@ def test_each_car_drives_as_it_drives_alone():
     cars = [racecar.ask(car, ask) for car, ask in zip(started, ASKS, strict=True)]
     alone = []
     for entry, ask in zip(entries, ASKS, strict=True):
-        one = assets.compose_cars(track, [replace(entry, prefix="")], visuals=False)
+        one = assets.compose_cars(track, [entry], visuals=False)
         one_data = sim.settle(one.model)
         alone.append(
             (one, one_data, racecar.ask(racecar.start(PARAMS, one, one_data), ask))
