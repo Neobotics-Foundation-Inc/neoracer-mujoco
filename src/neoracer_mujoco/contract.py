@@ -34,7 +34,7 @@ import mujoco
 if TYPE_CHECKING:  # scene.py imports this module
     from .scene import Car
 
-CAR_BODY = "car"
+CAR_BODY = "chassis"
 """The car's root body, with the free joint."""
 
 DRIVE_ACTUATOR = "motor"

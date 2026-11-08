@@ -20,7 +20,7 @@
     0.30 m tall, matching ramp_course.xml's wall convention.
 
     Ground plane: neoracer.xml's own floor geom lives on its worldbody as a
-    sibling of the "car" body, so MjSpec.attach_body(car.body("car")) — the
+    sibling of the "chassis" body, so MjSpec.attach_body(car.body("chassis")) — the
     same composition pattern ramp_course.xml/manual_drive.py use — does NOT
     pull it into the composed scene (attach_body grafts only the named body's
     subtree). This track therefore carries its own floor below, matching

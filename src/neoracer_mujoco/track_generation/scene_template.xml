@@ -41,7 +41,7 @@
     </default>
 
     <worldbody>
-        <!-- Attaching grafts only neoracer.xml's "car" body, not its floor, so
+        <!-- Attaching grafts only neoracer.xml's "chassis" body, not its floor, so
              the scene needs its own. A wheel's contact takes the wheel's
              friction (its priority), so this friction acts on the car's
              other geoms. -->

@@ -43,7 +43,7 @@ class Edit:
     """An attribute that the spec gives, on the one element that path finds."""
 
     path: str
-    """An ElementTree path from the root, such as named("body", "car")."""
+    """An ElementTree path from the root, such as named("body", "chassis")."""
     attribute: str
     value: str
 
@@ -103,7 +103,7 @@ CORNERS: Mapping[str, tuple[int, int, int]] = MappingProxyType(
 
 def inertial(i: parts.Inertial) -> list[Edit]:
     return put(
-        named("body", "car") + "/inertial",
+        named("body", "chassis") + "/inertial",
         mass=number(i.mass),
         diaginertia=numbers(*i.diaginertia),
         pos=numbers(*i.pos),
@@ -245,7 +245,7 @@ def model(p: parts.Model) -> list[Edit]:
     """The edits of the parts that both cars' models have."""
     return [
         *solver(SOLVER),
-        *put(named("body", "car"), pos=numbers(0, 0, p.spawn_height)),
+        *put(named("body", "chassis"), pos=numbers(0, 0, p.spawn_height)),
         *inertial(p.inertial),
         *[e for s in p.shapes for e in collision_shape(s)],
         *put(named("site", "imu"), pos=numbers(*p.imu_position)),

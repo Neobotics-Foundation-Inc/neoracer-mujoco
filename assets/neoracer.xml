@@ -107,7 +107,7 @@
         (neoracer_spec.derive.ModelParams). The wheelbase, the track and the
         radius are the car's (neoracer_spec.neoracer).
         -->
-        <body name="car">
+        <body name="chassis">
             <freejoint/>
             <light name="top_light" pos="0 0 2" mode="trackcom" diffuse=".4 .4 .4"/>
 

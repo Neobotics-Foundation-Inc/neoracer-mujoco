@@ -113,7 +113,7 @@
 
         <!-- Car body. It spawns just above its resting height, the axles at
              the tire radius (neoracer_spec.derive_v2.ModelParams). -->
-        <body name="car">
+        <body name="chassis">
             <freejoint/>
             <light name="top_light" pos="0 0 2" mode="trackcom" diffuse=".4 .4 .4"/>
 
