@@ -2,7 +2,10 @@
 
 Runs of the real cars that `neoracer_mujoco.fit` fits the specs' values to, a folder per car and a folder per run.
 
-`racecar_neo_v2/` holds the two full-lock circles of the calibration reference car, from calibration_reference_car_2026-10 (2026-10-05): the car drives straight at a speed command of 0.25, then takes a full-lock steering command, to the right in one run and to the left in the other.
+`racecar_neo_v2/` holds runs of the calibration reference car, from calibration_reference_car_2026-10 (2026-10-05):
+
+- ten straight runs (`dyn_straight025`, `05` and `10`): from rest, a speed command of 0.25, 0.5 or 1 for 3 s (2.5 s at 1), then command 0;
+- two full-lock circles (`dyn_circle_right` and `_left`): the car drives straight at a speed command of 0.25, then takes a full-lock steering command.
 
 A run is three tables. Their times are in seconds from the first speed command, and each table begins one second before it and ends 2.5 s after the last command.
 
