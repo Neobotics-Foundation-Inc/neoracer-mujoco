@@ -6,7 +6,7 @@ Follow every rule here. If a task conflicts with a rule, say so in the pull requ
 ## Before you push
 
 - Run `ruff check .`, `ruff format --check .`, `ty check` and `python -m pytest validation`. All four must pass.
-- If `ty check` cannot see mujoco, make the stubs: `pybind11-stubgen mujoco mujoco.viewer mujoco.batch -o typings`.
+- If `ty check` cannot see mujoco, make the stubs: `pybind11-stubgen mujoco mujoco.viewer mujoco.batch mujoco.minimize -o typings`.
 - Put a new test in `validation/test_<module>.py`, never in the module that it tests.
 - Keep the tests green after each commit. If a change alters behavior, change its test in the same commit.
 - Never skip, delete or loosen a test to make it pass. If a test fails, find the cause.

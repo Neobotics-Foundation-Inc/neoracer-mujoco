@@ -28,7 +28,7 @@ import numpy as np
 from neoracer_spec import derive_v2, mjcf
 from neoracer_spec.derive import derive
 from neoracer_spec.neoracer import NEORACER
-from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2
+from neoracer_spec.racecar_neo_v2 import RACECAR_NEO_V2, RacecarNeoV2
 from neoracer_spec.spec import Spec
 
 from . import contract
@@ -44,6 +44,10 @@ _checkout = os.path.normpath(os.path.join(str(_package), "..", "..", "assets"))
 repo/src/neoracer_mujoco."""
 ASSET_DIR = str(_packaged) if _packaged.is_dir() else _checkout
 TRACK_DIR = os.path.join(ASSET_DIR, "tracks")
+RUN_DIR = os.path.join(ASSET_DIR, "runs")
+"""The recorded runs of the real cars that fit.py fits the specs' values
+to, a folder per car."""
+V2_CAR = os.path.join(ASSET_DIR, "racecar_neo_v2.xml")
 DEFAULT_CAR = os.path.join(ASSET_DIR, "neoracer.xml")
 MJZ_MODEL = "model.xml"
 """The name of the XML in an archive of write_mjz."""
@@ -96,8 +100,7 @@ def _completed(path: str | os.PathLike[str]) -> str | None:
         case "neoracer.xml":
             return neoracer_xml(NEORACER)
         case "racecar_neo_v2.xml":
-            p = derive_v2.model(RACECAR_NEO_V2)
-            return mjcf.racecar_neo_v2_xml(p, _read(path))
+            return racecar_neo_v2_xml(RACECAR_NEO_V2)
         case _:
             return None
 
@@ -105,6 +108,12 @@ def _completed(path: str | os.PathLike[str]) -> str | None:
 def neoracer_xml(car: Spec) -> str:
     """The MJCF of a NeoRacer: assets/neoracer.xml with the numbers of car."""
     return mjcf.car_xml(derive(car).model, _read(DEFAULT_CAR))
+
+
+def racecar_neo_v2_xml(car: RacecarNeoV2) -> str:
+    """The MJCF of a RACECAR Neo V2: assets/racecar_neo_v2.xml with the
+    numbers of car."""
+    return mjcf.racecar_neo_v2_xml(derive_v2.model(car), _read(V2_CAR))
 
 
 def _read(path: str | os.PathLike[str]) -> str:

@@ -415,6 +415,12 @@ FIT = Source(
     " car's runs, 2026-10-20; validation/test_racecar_neo_v2.py holds the model"
     " to the runs",
 )
+STEERING_LATENCY_FIT = Source(
+    "steering latency fit",
+    "neoracer_mujoco.fit.racecar_neo_v2_steering_latency on the reference"
+    " car's full-lock circles, assets/runs/racecar_neo_v2;"
+    " validation/test_fit.py holds the spec to the fit",
+)
 PAYLOAD_CAD = Source(
     "payload CAD",
     "the payload's CAD model, cad/racecar_neo_v2/racecar-neo-v2-body.step,"
@@ -643,7 +649,9 @@ RACECAR_NEO_V2 = RacecarNeoV2(
         servo_kd=chosen(1.0, "the NeoRacer's: it settles without chatter"),
         servo_supply=chosen(5.0, "the loop's voltage clamp; kp is per this supply"),
         latency=calibrated(
-            0.086, FIT, "the full-lock circles' yaw rate after the steering command"
+            0.093,
+            STEERING_LATENCY_FIT,
+            "the gyro's yaw rate through the turn-in of the full-lock circles",
         ),
         armature=chosen(
             0.002, "the NeoRacer's: it stops the steering ringing at the model's step"
