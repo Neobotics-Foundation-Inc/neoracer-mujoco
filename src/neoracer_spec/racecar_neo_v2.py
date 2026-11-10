@@ -421,6 +421,12 @@ STEERING_LATENCY_FIT = Source(
     " car's full-lock circles, assets/runs/racecar_neo_v2;"
     " validation/test_fit.py holds the spec to the fit",
 )
+DRIVE_FIT = Source(
+    "drive fit",
+    "neoracer_mujoco.fit.racecar_neo_v2_drive on the reference car's straight"
+    " runs, assets/runs/racecar_neo_v2; validation/test_fit.py holds the spec"
+    " to the fit",
+)
 PAYLOAD_CAD = Source(
     "payload CAD",
     "the payload's CAD model, cad/racecar_neo_v2/racecar-neo-v2-body.step,"
@@ -707,13 +713,16 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             " of 0.05 s. The drag brake alone, 1.52 m/s², fits about as well",
         ),
         gain=calibrated(
-            18.0, FIT, "the straight runs: the rise to 90% of the steady speed"
+            18.8,
+            DRIVE_FIT,
+            "the straight runs: when the speed reaches 50% and 90% of the steady speed",
         ),
         latency=calibrated(
-            0.06,
-            FIT,
-            "the straight runs' speed after a command",
-            note="a fit to the stops alone gives 0.05 s, to the starts alone 0.095",
+            0.107,
+            DRIVE_FIT,
+            "the straight runs: when the speed reaches 50% and 90% of the steady speed",
+            note="the car is slower to start than to stop: after command 0 its"
+            " speed begins to fall about 0.03 s on",
         ),
         start_max_speed=assumed(
             0.25,
