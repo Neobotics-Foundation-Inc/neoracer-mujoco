@@ -110,11 +110,12 @@ def straight_run(car: RacecarNeoV2, command: float) -> fit.Run:
     drivetrain = scene.spec.tendon("drivetrain")
     radius = derive_v2.wheel_radius(car)
     held = sim.steps_in(2.0, STEP)
-    speeds = [0.0]
+    speeds = []
     for steps, throttle in ((held, command), (sim.steps_in(0.5, STEP), 0.0)):
         sim.apply_command(scene.car, data, ControlCommand(throttle, 0.0))
         for _ in range(steps):
             mujoco.mj_step(model, data)
+            # A step leaves the drivetrain's velocity as it was at its start.
             speeds.append(data.bind_scalar(drivetrain).velocity[0] * radius)
     t = np.arange(-0.5, len(speeds) * STEP, 0.02)
     speed = np.interp(t, np.arange(len(speeds)) * STEP, speeds)

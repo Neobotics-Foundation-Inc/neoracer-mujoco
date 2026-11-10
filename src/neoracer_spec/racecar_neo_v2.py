@@ -718,7 +718,7 @@ RACECAR_NEO_V2 = RacecarNeoV2(
             "the straight runs: when the speed reaches 50% and 90% of the steady speed",
         ),
         latency=calibrated(
-            0.105,
+            0.107,
             DRIVE_FIT,
             "the straight runs: when the speed reaches 50% and 90% of the steady speed",
             note="the car is slower to start than to stop: after command 0 its"

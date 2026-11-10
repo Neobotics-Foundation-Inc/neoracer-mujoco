@@ -414,9 +414,10 @@ def _speed_responses(
         sim.settle(model, data)
         command = ControlCommand(throttle=throttle, steer=0.0)
         sim.apply_command(scene.car, data, command)
-        speeds = [0.0]
-        for _ in range(sim.steps_in(seconds, dt)):
+        speeds = []
+        for _ in range(sim.steps_in(seconds, dt) + 1):
             mujoco.mj_step(model, data)
+            # A step leaves the drivetrain's velocity as it was at its start.
             speeds.append(data.bind_scalar(drivetrain).velocity[0] * radius)
         driven[throttle] = (np.arange(len(speeds)) * dt, np.array(speeds))
     responses = [driven[step.command] for step in steps]
