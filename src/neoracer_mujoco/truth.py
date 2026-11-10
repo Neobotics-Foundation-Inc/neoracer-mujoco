@@ -5,7 +5,7 @@ The real car has no such sensors, so neoracer.xml does not have them.
 compile_scene adds them to every scene.
 
 They are sensors so that a step can read everything it needs from
-data.sensordata. mujoco.rollout and MuJoCo Warp (MJX with impl="warp") return
+data.sensordata. mujoco.batch and MuJoCo Warp (MJX with impl="warp") return
 sensordata for every step of a batch, so code that reads these sensors works
 on one MjData and on a batch. (MJX with impl="jax" cannot run these scenes:
 it has no collision between the cylinder wheels and the box walls.) Read

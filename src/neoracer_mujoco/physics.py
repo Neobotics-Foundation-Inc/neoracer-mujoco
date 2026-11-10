@@ -23,9 +23,10 @@ a tuple of them gives each car its own (ScenePhysics):
 
     apply_physics(model, scene, tuple(sample(ranges, rng) for _ in scene.cars))
 
-batch.py takes one ScenePhysics per row. A batch on the CPU keeps one MjModel for
-each different ScenePhysics, so build its scene with visuals=False: the model is
-1.6 MB instead of 35 MB.
+batch.py takes one ScenePhysics per row, and holds it as each row's values of
+FIELDS. A batch on the CPU whose rows are on several scenes keeps one MjModel
+for each different scene and ScenePhysics, so build such scenes with
+visuals=False: the model is 1.6 MB instead of 35 MB.
 """
 
 import copy

@@ -236,22 +236,38 @@ def test_readings_of_a_row_are_what_sensors_read_gives():
 
 def test_reset_gives_the_done_rows_the_state_and_physics_of_initial():
     """A done row starts over with the state and the physics of initial; the
-    other rows keep the state and the physics they had."""
-    scene = assets.load()
+    other rows keep the state and the physics they had, also when initial's
+    rows are on another track, which takes them off the batch's model."""
+    tracks = _tracks([1, 2])
+    scene = tracks[0]
     sim_batch = batch.CpuBatch(scene, 4, nthread=0)
     datas = [sim.settle(scene.model)] * 4
     slippery = [Physics(wheel_friction=0.2)] * 4
     start = sim_batch.initial(datas, [scene] * 4, slippery)
     ctrl = batch.command(scene.model, scene.car, np.full(4, 0.3), np.zeros(4))
     state, _ = sim_batch.step(start, ctrl, NSTEP)
-    initial = sim_batch.initial(datas, [scene] * 4, NOMINAL * 4)
     done = np.array([True, False, False, True])
-    reset = sim_batch.reset(state, done, initial)
-    assert np.array_equal(reset.rows[done], initial.rows[done])
-    assert np.array_equal(reset.rows[~done], state.rows[~done])
-    for i, row_done in enumerate(done):
-        assert reset.models[i] is (initial if row_done else state).models[i], i
+    for track in tracks:
+        with case(track is scene):
+            initial = sim_batch.initial(datas, [track] * 4, NOMINAL * 4)
+            reset = sim_batch.reset(state, done, initial)
+            assert np.array_equal(reset.rows[done], initial.rows[done])
+            assert np.array_equal(reset.rows[~done], state.rows[~done])
+            for i, row_done in enumerate(done):
+                had = initial if row_done else state
+                for name in physics.FIELDS:
+                    np.testing.assert_array_equal(
+                        _field(reset, name, i), _field(had, name, i), err_msg=name
+                    )
     sim_batch.close()
+
+
+def _field(state: batch.CpuState, name: str, row: int) -> np.ndarray:
+    """The value of the model field name (physics.FIELDS) that row of state
+    steps with."""
+    if state.models is None:
+        return state.fields[name][row]
+    return physics.field(state.models[row], name)
 
 
 def test_drive_runs_every_rows_speed_loop_as_one_car_runs_its_own():
@@ -426,8 +442,8 @@ def test_drive_cars_runs_each_cars_speed_loop():
 
 
 def test_step_rejects_zero_steps():
-    """mujoco.rollout reads nstep=0 as "not given" and steps once, so step
-    asks for at least one step, on a CpuBatch and on a DataBatch."""
+    """Zero steps leave no sensordata after a last step, so step asks for at
+    least one step, on a CpuBatch and on a DataBatch."""
     scene = assets.load()
     sim_batch = batch.CpuBatch(scene, 2, nthread=0)
     state = sim_batch.initial(
