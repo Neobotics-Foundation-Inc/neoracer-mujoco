@@ -207,6 +207,10 @@ class CpuBatch:
 
     def reset(self, state: CpuState, done: Done, initial: CpuState) -> CpuState:
         """state with the rows where done replaced by the rows of initial."""
+        if not done.any():
+            return state
+        if done.all():
+            return initial
         rows = np.where(done[:, None], initial.rows, state.rows)
         if state.models is None and initial.models is None:
             fields = {
@@ -216,22 +220,28 @@ class CpuBatch:
                 for name, v in state.fields.items()
             }
             return CpuState(rows, fields, None)
-        models = zip(self._models(state), self._models(initial), done, strict=True)
-        return CpuState(rows, {}, tuple(i if d else s for s, i, d in models))
+        made: dict[bytes, mujoco.MjModel] = {}
+        models = tuple(
+            self._model(initial if d else state, i, made) for i, d in enumerate(done)
+        )
+        return CpuState(rows, {}, models)
 
-    def _models(self, state: CpuState) -> tuple[mujoco.MjModel, ...]:
-        """The model of each row of state: for a row of the batch's scene, its
-        model with the row's fields, which is the model that apply_physics
-        gives it."""
+    def _model(
+        self, state: CpuState, row: int, made: dict[bytes, mujoco.MjModel]
+    ) -> mujoco.MjModel:
+        """The model that row of state steps on. A row of the batch's scene
+        gets the scene's model with the row's fields, the model that
+        apply_physics gives it, which made keeps for the rows with the same
+        fields."""
         if state.models is not None:
-            return state.models
-        models = []
-        for i in range(self.nbatch):
+            return state.models[row]
+        key = b"".join(values[row].tobytes() for values in state.fields.values())
+        if key not in made:
             model = copy.deepcopy(self.model)
             for name, values in state.fields.items():
-                field(model, name)[...] = values[i]
-            models.append(model)
-        return tuple(models)
+                field(model, name)[...] = values[row]
+            made[key] = model
+        return made[key]
 
     def close(self) -> None:
         self._batches.clear()

@@ -259,6 +259,9 @@ def test_reset_gives_the_done_rows_the_state_and_physics_of_initial():
                     np.testing.assert_array_equal(
                         _field(reset, name, i), _field(had, name, i), err_msg=name
                     )
+                if had.models is not None:
+                    assert reset.models is not None
+                    assert reset.models[i] is had.models[i], i
     sim_batch.close()
 
 
