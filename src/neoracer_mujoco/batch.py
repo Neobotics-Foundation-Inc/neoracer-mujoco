@@ -6,8 +6,8 @@ A batch holds nbatch environments of one scene. Each row has its own
 physics (physics.ScenePhysics), so a batch can train on many slightly
 different cars (see physics.py). You choose the backend:
 
-- CpuBatch, optimized for CPU. It keeps one row of mjSTATE_FULLPHYSICS
-  state per environment and steps the rows with mujoco.rollout on a pool of
+- CpuBatch, optimized for CPU. It keeps one row of mjSTATE_INTEGRATION
+  state per environment and steps the rows with mujoco.batch on a pool of
   threads. The threads run in C, so the batch uses every core on any Python
   build.
 - batch_warp.WarpBatch, optimized for GPU. It keeps a batched mjx.Data and
@@ -30,8 +30,7 @@ own scene.
 
 step holds ctrl for nstep physics steps and returns the sensor values after
 each one. Each call starts the constraint solver cold (qacc_warmstart = 0),
-as mujoco.rollout does, so a CPU row is the same, bit for bit, as one MjData
-stepped the same way. DataBatch steps one MjData so, as a batch of one row,
+and a CPU row is the same, bit for bit, as one MjData stepped the same way. DataBatch steps one MjData so, as a batch of one row,
 and drive takes it as it takes a batch, so a single-car environment that
 owns one MjData steps it as a batch row steps.
 
@@ -50,25 +49,25 @@ drive_angle work on numpy and JAX arrays alike.
 """
 
 import copy
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
 from typing import Any, Protocol, assert_never
 
 import mujoco
 import numpy as np
 import numpy.typing as npt
-from mujoco import rollout
+from mujoco import batch as mjbatch
 
 from neoracer_spec.derive import SpeedLoopParams
 
 from . import contract, sensors, speed_loop
 from .contract import Array
-from .physics import Physics, ScenePhysics, apply_physics
+from .physics import Physics, ScenePhysics, apply_physics, field, field_rows
 from .scene import Car, Scene
 from .sensors import SensorReadings
 
 type States = npt.NDArray[np.float64]
-"""Shape (nbatch, nstate), each row an mjSTATE_FULLPHYSICS state."""
+"""Shape (nbatch, nstate), each row an mjSTATE_INTEGRATION state."""
 type Rows = npt.NDArray[np.float64]
 """Shape (nbatch, n)."""
 type SensorData = npt.NDArray[np.float64]
@@ -76,7 +75,7 @@ type SensorData = npt.NDArray[np.float64]
 type Done = npt.NDArray[np.bool_]
 """Shape (nbatch,)."""
 
-FULL_PHYSICS = mujoco.mjtState.mjSTATE_FULLPHYSICS
+INTEGRATION = mujoco.mjtState.mjSTATE_INTEGRATION
 
 
 class Stepper[S, A](Protocol):
@@ -108,26 +107,35 @@ class Batch[S, A, M](Stepper[S, A], Protocol):
 
 @dataclass(frozen=True)
 class CpuState:
-    """The state of a CpuBatch: row i steps from rows[i] with models[i]."""
+    """The state of a CpuBatch: row i steps from rows[i]. Rows of the batch's
+    scene step on its model with the model fields fields[name][i]
+    (physics.FIELDS) in place of the scene's, and models is None; rows of
+    other scenes step on models[i], and fields is empty."""
 
     rows: States
-    models: tuple[mujoco.MjModel, ...]
-    """One model per row. Rows with the same scene and physics share one."""
+    fields: Mapping[str, Rows]
+    models: tuple[mujoco.MjModel, ...] | None
+    """One model per row, or None. Rows with the same scene and physics share
+    one."""
 
 
 class CpuBatch:
     """nbatch rows of scene, or of scenes with the same sizes, such as
     generated tracks with a fixed number of wall boxes, stepped by
-    mujoco.rollout on nthread threads. Call close() to stop the threads."""
+    mujoco.batch on nthread threads, the caller's among them. Rows of the
+    batch's scene keep one model, and their physics as rows of the fields it
+    changes, as WarpBatch does; a row of another scene keeps a model of its
+    own, as no rows of model fields can hold another track. close() lets the
+    threads go."""
 
     def __init__(self, scene: Scene, nbatch: int, nthread: int) -> None:
         self.scene = scene
         self.model = scene.model
         self.nbatch = nbatch
-        self._pool = rollout.Rollout(nthread=nthread)
-        # rollout steps each row on the MjData of the thread that runs it.
-        # The models of all rows have the same sizes, so any of them fits.
-        self._datas = [mujoco.MjData(scene.model) for _ in range(max(nthread, 1))]
+        self._nthread = max(nthread, 1)
+        # A mujoco.batch.Batch takes either rows of model fields or models of
+        # its own, not both, so each kind of row gets a batch of its own.
+        self._batches: dict[bool, mjbatch.Batch] = {}
 
     def initial(
         self,
@@ -135,17 +143,19 @@ class CpuBatch:
         scenes: Sequence[Scene],
         physics: Sequence[ScenePhysics],
     ) -> CpuState:
-        """A state whose row i starts from the physics state of datas[i] and
-        steps on scenes[i] with physics[i]. Raise ValueError unless there is
-        one of each per row and every scene has the sizes of the batch's."""
+        """A state whose row i starts from the integration state of datas[i]
+        and steps on scenes[i] with physics[i]. Raise ValueError unless there
+        is one of each per row and every scene has the sizes of the batch's."""
         check_one_per_row(datas, self.nbatch, "MjData")
         check_one_per_row(scenes, self.nbatch, "Scene")
         check_one_per_row(physics, self.nbatch, "Physics")
         for scene in scenes:
             check_same_sizes(self.model, scene.model)
-        rows = np.empty((self.nbatch, mujoco.mj_stateSize(self.model, FULL_PHYSICS)))
+        rows = np.empty((self.nbatch, mujoco.mj_stateSize(self.model, INTEGRATION)))
         for row, data in zip(rows, datas, strict=True):
-            mujoco.mj_getState(self.model, data, row, FULL_PHYSICS)
+            mujoco.mj_getState(self.model, data, row, INTEGRATION)
+        if all(scene is self.scene for scene in scenes):
+            return CpuState(rows, field_rows(self.scene, physics), None)
         models: dict[tuple[int, ScenePhysics], mujoco.MjModel] = {}
         for scene, p in zip(scenes, physics, strict=True):
             if (id(scene), p) not in models:
@@ -156,6 +166,7 @@ class CpuBatch:
                 models[id(scene), p] = model
         return CpuState(
             rows,
+            {},
             tuple(models[id(s), p] for s, p in zip(scenes, physics, strict=True)),
         )
 
@@ -165,13 +176,29 @@ class CpuBatch:
         """Hold ctrl (nbatch, nu) for nstep >= 1 steps. Return the state after
         the last step and the sensordata after each step."""
         if nstep < 1:
-            # rollout reads nstep=0 as "not given" and steps once.
             raise ValueError(f"nstep must be at least 1, not {nstep}")
-        states, sensordata = self._pool.rollout(
-            list(state.models), self._datas, state.rows, ctrl[:, None, :], nstep=nstep
-        )
-        # A copy, so the states of the other steps can be freed.
-        return CpuState(states[:, -1].copy(), state.models), sensordata
+        rows = self._batch(state.models is None)
+        if state.models is None:
+            for name, values in state.fields.items():
+                rows.expand(name)[:] = values
+        else:
+            rows.set_models(state.models)
+        rows.state[:] = state.rows
+        # Start the solver cold, as WarpBatch and DataBatch do.
+        rows.qacc_warmstart = 0.0
+        sensordata = rows.rollout(
+            nstep, control=ctrl[:, None, :], record=("sensordata",)
+        )["sensordata"]
+        return CpuState(rows.state.copy(), state.fields, state.models), sensordata
+
+    def _batch(self, shared: bool) -> mjbatch.Batch:
+        """The batch of the rows that step on the batch's model with rows of
+        model fields if shared, else of the rows on models of their own."""
+        if shared not in self._batches:
+            self._batches[shared] = mjbatch.Batch(
+                self.model, self.nbatch, nthread=self._nthread
+            )
+        return self._batches[shared]
 
     def qpos(self, state: CpuState) -> Rows:
         """The joint positions (nbatch, nq) of every row of state."""
@@ -180,14 +207,44 @@ class CpuBatch:
 
     def reset(self, state: CpuState, done: Done, initial: CpuState) -> CpuState:
         """state with the rows where done replaced by the rows of initial."""
-        models = zip(state.models, initial.models, done, strict=True)
-        return CpuState(
-            np.where(done[:, None], initial.rows, state.rows),
-            tuple(i if d else s for s, i, d in models),
+        if not done.any():
+            return state
+        if done.all():
+            return initial
+        rows = np.where(done[:, None], initial.rows, state.rows)
+        if state.models is None and initial.models is None:
+            fields = {
+                name: np.where(
+                    done.reshape(-1, *[1] * (v.ndim - 1)), initial.fields[name], v
+                )
+                for name, v in state.fields.items()
+            }
+            return CpuState(rows, fields, None)
+        made: dict[bytes, mujoco.MjModel] = {}
+        models = tuple(
+            self._model(initial if d else state, i, made) for i, d in enumerate(done)
         )
+        return CpuState(rows, {}, models)
+
+    def _model(
+        self, state: CpuState, row: int, made: dict[bytes, mujoco.MjModel]
+    ) -> mujoco.MjModel:
+        """The model that row of state steps on. A row of the batch's scene
+        gets the scene's model with the row's fields, the model that
+        apply_physics gives it, which made keeps for the rows with the same
+        fields."""
+        if state.models is not None:
+            return state.models[row]
+        key = b"".join(values[row].tobytes() for values in state.fields.values())
+        if key not in made:
+            model = copy.deepcopy(self.model)
+            for name, values in state.fields.items():
+                field(model, name)[...] = values[row]
+            made[key] = model
+        return made[key]
 
     def close(self) -> None:
-        self._pool.close()
+        self._batches.clear()
 
 
 class DataBatch:
@@ -201,8 +258,8 @@ class DataBatch:
         self, state: mujoco.MjData, ctrl: Rows, nstep: int
     ) -> tuple[mujoco.MjData, SensorData]:
         """Hold ctrl (1, nu) for nstep >= 1 steps of mj_step from a cold
-        solver, as mujoco.rollout steps a row. Return state and the sensordata
-        after each step (1, nstep, nsensordata)."""
+        solver, as CpuBatch steps a row. Return state and the sensordata after
+        each step (1, nstep, nsensordata)."""
         if nstep < 1:
             raise ValueError(f"nstep must be at least 1, not {nstep}")
         state.qacc_warmstart[:] = 0
@@ -220,8 +277,8 @@ class DataBatch:
 
 def check_same_sizes(model: mujoco.MjModel, other: mujoco.MjModel) -> None:
     """Raise ValueError unless other has the size signature of model, the
-    hash of its sizes that mujoco.rollout needs to be the same for the
-    models of one batch. Names may differ."""
+    hash of its sizes, which the models of one batch share. Names may
+    differ."""
     if other.signature != model.signature:
         raise ValueError(
             "the scenes of a batch need the same sizes, as the same number of "
@@ -401,7 +458,7 @@ def drive_angle[A: Array](model: mujoco.MjModel, car: Car, qpos: A) -> A:
     """The drivetrain's angle (rad) in each row of qpos (..., nq): the length
     of the fixed tendon that the car's drive_pos sensor reads, summed as
     MuJoCo sums it, so it is drive_pos's reading at that qpos. After mj_step,
-    and after each step of a rollout, the sensors still hold the state at the
+    and after each step of a batch, the sensors still hold the state at the
     step's start; this reads it at the step's end. Raise ValueError if
     drive_pos reads anything else."""
     sensor = model.bind_scalar(car.sensors.drive_pos)

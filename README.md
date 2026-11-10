@@ -179,7 +179,7 @@ for _ in range(round(1 / dt)):  # 1 s
 state.scan  # the last full turn: a distance (m) a slot, clockwise from the front
 ```
 
-The model's eight rangefinders, `lidar_000` to `lidar_315`, have the same timing in MuJoCo's own sensors, so `mj_step`, `mujoco.rollout` and the Warp batch see it with no loop of their own. Each beam samples the range once a turn, when the head passes it (its `interval`), and shows the sample when the turn ends (its `delay`), as the scan of the last complete turn does. So a beam reads a range up to two turns old. `mjcf.beam_timing` derives both settings from the spec's scan rate. A beam that the car blocks reads -1, no return, as the real scan does: the NeoRacer's LiDAR sees only its field (`Lidar.field_degrees`), so its beam straight back never returns. The LiDAR site's user number holds the field, and `contract.lidar_field` reads it. `sensors.read` gives the blocked beams -1, but the rangefinders themselves still measure, so code that reads `sensordata` arrays, as a batch does, sets the beams in `scene.car.sensors.blocked` to -1 itself.
+The model's eight rangefinders, `lidar_000` to `lidar_315`, have the same timing in MuJoCo's own sensors, so `mj_step`, `mujoco.batch` and the Warp batch see it with no loop of their own. Each beam samples the range once a turn, when the head passes it (its `interval`), and shows the sample when the turn ends (its `delay`), as the scan of the last complete turn does. So a beam reads a range up to two turns old. `mjcf.beam_timing` derives both settings from the spec's scan rate. A beam that the car blocks reads -1, no return, as the real scan does: the NeoRacer's LiDAR sees only its field (`Lidar.field_degrees`), so its beam straight back never returns. The LiDAR site's user number holds the field, and `contract.lidar_field` reads it. `sensors.read` gives the blocked beams -1, but the rangefinders themselves still measure, so code that reads `sensordata` arrays, as a batch does, sets the beams in `scene.car.sensors.blocked` to -1 itself.
 
 `encoder.py` models the speed that the firmware reports from the motor encoder in the same way. `speed_loop.py` models how the firmware holds the speed that a program asks for: every 20 ms it measures the speed as the encoder does, with a filter of its own, and sets the ESC's pulse from a feed-forward on the commanded speed and a PID on the error, with the firmware's gains, limits and rounding (`spec.SpeedController`). The throttle is that pulse's share of the ESC's full pulse.
 
@@ -253,7 +253,7 @@ In a batch, a row holds every car of the scene. `batch.command_cars` and `batch.
 ## Many cars at once
 
 To train a policy you usually want many cars at once:
-- `batch.CpuBatch` steps copies of a scene on every core, with `mujoco.rollout`.
+- `batch.CpuBatch` steps copies of a scene on every core, with `mujoco.batch`. Copies of one scene share its model and keep only their physics apart, so even copies with visuals take little memory.
 - `batch_warp.WarpBatch` steps them on a CUDA GPU, with MuJoCo Warp. It needs `neoracer-mujoco[jax]` and `jax[cuda12]`.
 
 Both take the same `Scene` and spec elements, and return arrays with one row per car:

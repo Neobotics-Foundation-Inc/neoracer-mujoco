@@ -123,7 +123,7 @@ class WarpBatch:
                 d = mjx.step(model, d)
                 return d, d.sensordata
 
-            # Start the solver cold, as mujoco.rollout does on the CPU.
+            # Start the solver cold, as CpuBatch does on the CPU.
             d = d.replace(ctrl=c, qacc_warmstart=jnp.zeros_like(d.qacc_warmstart))
             return jax.lax.scan(substep, d, None, length=nstep)
 
