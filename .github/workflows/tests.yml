@@ -45,7 +45,7 @@ jobs:
       - name: Generate mujoco stubs
         run: >-
           nix develop --command
-          pybind11-stubgen mujoco mujoco.viewer mujoco.batch -o typings --exit-code
+          pybind11-stubgen mujoco mujoco.viewer mujoco.batch mujoco.minimize -o typings --exit-code
           --ignore-invalid-expressions '^(mujoco::python::.*|std::byte)$'
           --ignore-unresolved-names '^(ArrayLike|NoneType|_abc\._abc_data|mjs[A-Za-z]+_)$'
 

@@ -55,7 +55,7 @@ Changelog = "https://github.com/Neobotics-Foundation-Inc/neoracer-mujoco/release
 testpaths = ["validation"]
 
 [tool.ty.environment]
-# typings/ holds mujoco stubs from `pybind11-stubgen mujoco mujoco.viewer mujoco.batch -o typings`.
+# typings/ holds mujoco stubs from `pybind11-stubgen mujoco mujoco.viewer mujoco.batch mujoco.minimize -o typings`.
 # The examples directories are on sys.path at runtime for the scripts and tests
 # that import from them.
 extra-paths = ["typings", "examples"]
