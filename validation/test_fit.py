@@ -125,15 +125,16 @@ def straight_run(car: RacecarNeoV2, command: float) -> fit.Run:
 
 def test_the_fit_recovers_a_models_drive():
     """Fitted to straight runs of a model with a known speed controller,
-    the fit returns its gain within 3% and its latency to a physics step.
-    The model's delay is whole steps, rounded up."""
+    forward and in reverse, the fit returns its gain within 3% and its
+    latency to a physics step. The model's delay is whole steps, rounded
+    up."""
     gain, latency = 12.0, 0.04
     d = V2.drive
     drive = replace(
         d, gain=replace(d.gain, value=gain), latency=replace(d.latency, value=latency)
     )
     car = replace(V2, drive=drive)
-    runs = [straight_run(car, command) for command in (0.25, 1.0)]
+    runs = [straight_run(car, command) for command in (0.25, 1.0, -0.5)]
     fitted = fit.racecar_neo_v2_drive(V2, runs)
     assert fitted.gain == pytest.approx(gain, rel=0.03)
     assert latency - 1e-3 < fitted.latency < latency + STEP + 1e-3

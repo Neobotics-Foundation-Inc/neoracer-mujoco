@@ -371,11 +371,12 @@ def _rise_times(
     t: np.ndarray, speed: np.ndarray, step: SpeedStep, params: DriveFitParams
 ) -> np.ndarray:
     """The times from the start at which a speed sampled at t first reaches
-    each of params.rise's shares of its steady speed."""
+    each of params.rise's shares of its steady speed, forward or in
+    reverse as the step's command is."""
     half = params.smooth // 2
     padded = np.pad(speed, half, mode="edge")
     windows = np.lib.stride_tricks.sliding_window_view(padded, 2 * half + 1)
-    smooth = np.median(windows, axis=-1)
+    smooth = np.median(windows, axis=-1) * np.sign(step.command)
     held = (t > step.seconds - params.steady) & (t <= step.seconds)
     steady = smooth[held].mean()
     times = []
