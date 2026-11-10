@@ -132,6 +132,19 @@ def test_a_car_far_from_the_others_drives_as_the_only_car():
     assert hit is not None, "the drive never touched a wall"
 
 
+def test_cars_of_one_xml_share_its_meshes():
+    """A scene of three cars of one XML, with their visuals, holds the meshes
+    and the mesh data of a scene of one."""
+    for car in assets.cars():
+        with case(os.path.basename(car)):
+            track = os.path.join(assets.TRACK_DIR, "loop_corridor.xml")
+            one = assets.compose(mujoco.MjSpec.from_file(track), car)
+            grid = [assets.Entry(f"c{k}/", (-0.6 * k, 0.0), car=car) for k in range(3)]
+            three = assets.compose_cars(mujoco.MjSpec.from_file(track), grid)
+            assert three.model.nmesh == one.model.nmesh
+            assert three.model.nmeshvert == one.model.nmeshvert
+
+
 def test_compose_cars_refuses_a_prefix_that_starts_another():
     """With a prefix that starts another, the second car's elements would be
     the first car's too. (MuJoCo refuses two cars with the same prefix: their

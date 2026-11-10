@@ -164,9 +164,10 @@ def compose_cars(
     track: mujoco.MjSpec, entries: Sequence[Entry], visuals: bool = True
 ) -> Scene:
     """Compile the track with each entry's car attached (attach_car), in
-    order: scene.cars[k] is the car of entries[k]. Neither track nor a car's
-    MjSpec is changed, and visuals is as for compose. Raise ValueError if an
-    entry's prefix starts another's (scene.compile_scene).
+    order: scene.cars[k] is the car of entries[k]. Cars of one XML share its
+    meshes, so the scene holds each mesh once (MjSpec.dedup_assets). Neither
+    track nor a car's MjSpec is changed, and visuals is as for compose. Raise
+    ValueError if an entry's prefix starts another's (scene.compile_scene).
 
         grid = [Entry("a/"), Entry("b/", offset=(-0.6, 0.0), heading=0.1)]
         scene = compose_cars(track, grid, visuals=False)
@@ -174,6 +175,7 @@ def compose_cars(
     scene = track.copy()
     for entry in entries:
         attach_car(scene, entry.car, entry.prefix, entry.offset, entry.heading, visuals)
+    scene.dedup_assets()
     return compile_scene(scene, [entry.prefix for entry in entries])
 
 
