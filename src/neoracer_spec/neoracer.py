@@ -87,7 +87,17 @@ DRIVER_THROTTLE = Source("driver", "neoracer_ros2_driver, config/throttle.yaml")
 DRIVER_TWIST = Source("driver", "neoracer_ros2_driver, config/twist_bridge.yaml")
 DRIVER_CAMERA = Source("driver", "neoracer_ros2_driver, config/camera.yaml")
 DRIVER_LIDAR = Source("driver", "neoracer_ros2_driver, launch/lidar.launch.py")
-RS545_TABLE = Source("datasheet", "slypro.net's RS-545 table: the RS-545SH-4075")
+MOTOR_MANUAL = Source(
+    "manual",
+    "OSRBOT OSR-M545ED product manual v1.0 (2026-06), the car's motor, received"
+    " 2026-11-11: at 12 V, 11,000 rpm within 8% and 0.8 A with no load, 207 mN·m"
+    " and 21 A at stall",
+)
+REWOUND_RS545 = Source(
+    "assumed",
+    "before the manual: slypro.net's RS-545SH-4075 (9,300 rpm, 79.3 mN·m at 12 V)"
+    " rewound to the docs' 11,000 rpm (spec.rewound)",
+)
 RS545SH = Source("datasheet", "the RS-545SH at 12 V: 24,000 rpm, 214 mN·m")
 SERVO_DATASHEET = Source(
     "datasheet",
@@ -112,9 +122,6 @@ SERVO_FIT = Source(
     "fitted in the MuJoCo model, assets/neoracer.xml, to the steps at rest;"
     " validation/test_spec.py holds the model to them",
 )
-
-_RS545SH_4075 = DcMotorRating(voltage=12.0, stall_torque=0.0793, free_speed_rpm=9_300.0)
-"""The RS-545 winding nearest to the docs' free speed."""
 
 _COM_HEIGHT = 0.0189
 """The height of the chassis' center of mass above the axles (m). The IMU is
@@ -202,17 +209,23 @@ NEORACER = Spec(
         )
     ),
     motor=DriveMotor(
-        rating=assumed(
-            rewound(_RS545SH_4075, free_speed_rpm=11_000.0),
-            DOCS_DRIVETRAIN,
-            "the docs give about 11,000 rpm with no load but no voltage and no"
-            " torque; taken at 12 V, the RS-545 range's rated voltage, and the"
-            " nearest RS-545 winding rewound to it (spec.rewound). The firmware's"
-            " speed loop reaches 7.35 m/s at full pulse and limits at 6 m/s, both"
-            " beyond this motor's 4.3 m/s free speed. The website claims up to 25"
-            " km/h (6.9 m/s), which needs about 16,500 rpm at the motor through"
-            " the 10.55 reduction and the 42.5 mm tire radius, and 6 m/s needs 14,200",
-            conflicts=(Alternative(DcMotorRating(12.0, 0.214, 24_000.0), RS545SH),),
+        rating=documented(
+            DcMotorRating(voltage=12.0, stall_torque=0.207, free_speed_rpm=11_000.0),
+            MOTOR_MANUAL,
+            note="the docs' 11,000 rpm with no load agrees. The firmware's speed"
+            " loop reaches 7.35 m/s at full pulse and limits at 6 m/s, both beyond"
+            " this motor's 4.3 m/s free speed. The website claims up to 25 km/h"
+            " (6.9 m/s), which needs about 16,500 rpm at the motor through the"
+            " 10.55 reduction and the 42.5 mm tire radius, and 6 m/s needs 14,200",
+            conflicts=(
+                Alternative(
+                    rewound(
+                        DcMotorRating(12.0, 0.0793, 9_300.0), free_speed_rpm=11_000.0
+                    ),
+                    REWOUND_RS545,
+                ),
+                Alternative(DcMotorRating(12.0, 0.214, 24_000.0), RS545SH),
+            ),
         ),
         gear_ratio=documented(
             10.55,
@@ -348,8 +361,10 @@ NEORACER = Spec(
         pulses_per_turn=documented(
             1024,
             FIRMWARE_KCONFIG,
-            note="OSCORE_ENCODER_PPR; the docs: a Hall-effect encoder on the motor"
-            " shaft, A, B and Z, of 1 to 4096 pulses",
+            note="OSCORE_ENCODER_PPR; the motor's manual (MOTOR_MANUAL) agrees: an"
+            " incremental magnetic encoder of 1024 lines a turn, A and B at 5 V, with"
+            " no Z. The docs: a Hall-effect encoder on the motor shaft, A, B and Z,"
+            " of 1 to 4096 pulses",
         ),
         max_speed_rpm=documented(20_000.0, DOCS_ENCODERS),
         report_period=documented(
