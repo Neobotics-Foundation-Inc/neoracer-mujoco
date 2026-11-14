@@ -158,6 +158,7 @@ def model(spec: RacecarNeoV2) -> ModelParams:
             wheels=parts.Wheels(
                 half_wheelbase=precise(c.wheelbase.value / 2),
                 half_track=precise(c.track.value / 2),
+                drop=0.0,
                 radius=precise(wheel_radius(spec)),
                 half_width=precise(w.width.value / 2),
                 mass=precise(w.mass.value),

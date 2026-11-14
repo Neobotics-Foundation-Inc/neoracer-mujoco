@@ -102,9 +102,10 @@
         <!--
         Car body. The geometry is the production car's, measured from its CAD
         model (the playground's neoracer-race.glb, 2026). The body frame is at
-        the middle of the wheelbase, on the axle line. The car spawns just
-        above its resting height, the axles at the tire radius
-        (neoracer_spec.derive.ModelParams). The wheelbase, the track and the
+        the middle of the wheelbase, at the axle line of the CAD model; the
+        car's axles sit below it (derive.axle_drop), as its body rides higher
+        on its springs. The car spawns just above its resting height, the
+        axles at the tire radius (neoracer_spec.derive.ModelParams). The wheelbase, the track and the
         radius are the car's (neoracer_spec.neoracer).
         -->
         <body name="chassis">
@@ -116,7 +117,7 @@
             input body, and its inertia the CAD-derived URDF's scaled to that
             mass (neoracer_spec.derive.chassis_mass, chassis_inertia); nobody has
             measured it. The CoM is above the middle of the wheelbase, at the
-            URDF's height above the axles. This explicit <inertial> overrides
+            URDF's height above the body frame's origin. This explicit <inertial> overrides
             geom-derived inertia, so the box's mass is ignored.
             -->
             <inertial/>
@@ -181,9 +182,9 @@
               3. fl_drive (hinge Y)  : wheel spin, driven by motor actuator
             All three must stay on the SAME body (see <default class="susp">).
 
-            Position: half the wheelbase forward and half the track left, on the
-            axle line. Its mass is the spec's wheel mass; its inertia is left to
-            MuJoCo's cylinder geom.
+            Position: half the wheelbase forward and half the track left,
+            derive.axle_drop below the body frame's origin. Its mass is the
+            spec's wheel mass; its inertia is left to MuJoCo's cylinder geom.
             -->
             <body name="fl_wheel_body">
                 <joint name="fl_susp"  class="susp"/>

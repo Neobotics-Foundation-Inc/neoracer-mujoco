@@ -33,6 +33,7 @@ from .spec import (
     MotorEncoder,
     Prism,
     Resolution,
+    RestingHeights,
     ServoRating,
     ServoSteps,
     Spec,
@@ -49,6 +50,11 @@ CAD = Source(
     "CAD",
     "the production car's CAD model: the Playground's neoracer-race.glb,"
     " measured by its tools/measure-car.mjs",
+)
+TAPE = Source(
+    "tape",
+    "measured on the car with a tape, on a flat floor with the wheels straight,"
+    " 2026-11-12",
 )
 URDF = Source(
     "URDF",
@@ -124,8 +130,8 @@ SERVO_FIT = Source(
 )
 
 _COM_HEIGHT = 0.0189
-"""The height of the chassis' center of mass above the axles (m). The IMU is
-assumed there."""
+"""The height of the chassis' center of mass above the chassis' origin (m).
+The IMU is assumed there."""
 
 NEORACER = Spec(
     chassis=Chassis(
@@ -139,6 +145,14 @@ NEORACER = Spec(
             ),
         ),
         track=measured(0.224, CAD),
+        resting_heights=measured(
+            RestingHeights(tub_underside=0.028, lidar_top=0.214),
+            TAPE,
+            note="the body rides higher on its springs than the CAD model has it:"
+            " with the axles at the chassis' origin and 42.5 mm tires, the outline"
+            " puts the two 19.5 and 203.5 mm above the floor. The tape does not"
+            " give the car's pitch",
+        ),
         mass=documented(
             3.0,
             SPEC,

@@ -248,7 +248,7 @@ def model(spec: Spec) -> ModelParams:
     k, d, ref = precise(s.stiffness.value), precise(s.damping.value), spring_ref(spec)
     return ModelParams(
         common=parts.Model(
-            spawn_height=parts.spawn_height(w.radius.value),
+            spawn_height=parts.spawn_height(w.radius.value, axle_drop(spec)),
             inertial=parts.Inertial(
                 mass=precise(chassis_mass(spec)),
                 pos=(0.0, 0.0, precise(c.com_height.value)),
@@ -274,6 +274,7 @@ def model(spec: Spec) -> ModelParams:
             wheels=parts.Wheels(
                 half_wheelbase=precise(c.wheelbase.value / 2),
                 half_track=precise(c.track.value / 2),
+                drop=precise(axle_drop(spec)),
                 radius=precise(w.radius.value),
                 half_width=precise(w.width.value / 2),
                 mass=precise(w.mass.value),
@@ -378,6 +379,23 @@ def chassis_inertia(spec: Spec) -> Vec3:
     ref = spec.chassis.inertia.value
     k = chassis_mass(spec) / ref.mass
     return (ref.inertia[0] * k, ref.inertia[1] * k, ref.inertia[2] * k)
+
+
+def axle_drop(spec: Spec) -> float:
+    """How far the wheels' axles sit below the chassis' origin (m) with the
+    car at rest: what lifts the outline's bottom and its top, with the tires
+    on the floor, to the chassis' resting heights. The two readings ask for
+    different lifts by the tape's error and the car's pitch; this is their
+    mean. The outline, the center of mass and the sensors are in the
+    chassis' frame, so they all ride this much higher."""
+    c = spec.chassis
+    heights, outline = c.resting_heights.value, c.outline.value
+    floor = -spec.wheel.radius.value
+    lifts = (
+        heights.tub_underside - (outline.bottom - floor),
+        heights.lidar_top - (outline.top - floor),
+    )
+    return precise(sum(lifts) / len(lifts))
 
 
 def spring_ref(spec: Spec) -> float:

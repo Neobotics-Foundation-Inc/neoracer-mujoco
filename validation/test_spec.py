@@ -422,6 +422,23 @@ def test_the_springs_hold_the_sprung_weight_at_rest():
             assert held == pytest.approx(sprung * parts.G, rel=1e-5)
 
 
+def test_the_car_rests_at_the_heights_the_tape_gave(scene):
+    """At rest the bottom of the chassis' outline and its top, the tub's
+    underside and the top of the LiDAR, are within 2 mm of the heights
+    measured on the car, and the axles are the tire's radius above the floor,
+    less the tire's sink, under 1 mm. The two readings differ from the
+    outline by 2 mm, which the mean of their lifts splits."""
+    c = NEORACER.chassis
+    heights, outline = c.resting_heights.value, c.outline.value
+    data = sim.settle(scene.model)
+    origin = data.bind_scalar(scene.car.body).xpos[2]
+    assert origin + outline.bottom == pytest.approx(heights.tub_underside, abs=0.002)
+    assert origin + outline.top == pytest.approx(heights.lidar_top, abs=0.002)
+    radius = NEORACER.wheel.radius.value
+    for wheel in scene.car.wheels:
+        assert radius - 0.001 < data.bind_scalar(wheel).xpos[2] <= radius
+
+
 def test_the_car_weighs_its_mass(scene):
     car = scene.model.bind_scalar(scene.car.body)
     assert car.subtreemass[0] == pytest.approx(CAR.chassis.mass.value)
