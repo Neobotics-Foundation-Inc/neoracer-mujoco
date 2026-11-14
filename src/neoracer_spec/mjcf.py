@@ -184,7 +184,7 @@ def wheels(w: parts.Wheels) -> list[Edit]:
     ]
     for corner, (sx, sy, axle) in CORNERS.items():
         x, y = sx * w.half_wheelbase, sy * w.half_track
-        edits += put(named("body", f"{corner}_wheel_body"), pos=numbers(x, y, 0))
+        edits += put(named("body", f"{corner}_wheel_body"), pos=numbers(x, y, -w.drop))
         edits += put(
             named("geom", f"{corner}_wheel"),
             mass=number(w.mass),

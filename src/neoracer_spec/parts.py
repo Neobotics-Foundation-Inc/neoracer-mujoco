@@ -8,7 +8,7 @@ Numbers that a model holds are kept to its precision, 6 significant digits
 (precise), so the code and the XML hold the same floats.
 
 Frame: the car body's: +X forward, +Y left, +Z up, its origin at the middle
-of the wheelbase, on the axle line. Quantities are in SI units unless a name
+of the wheelbase, on the axle line or Wheels.drop above it. Quantities are in SI units unless a name
 says otherwise.
 """
 
@@ -113,6 +113,8 @@ class Wheels:
 
     half_wheelbase: float
     half_track: float
+    drop: float
+    """How far the axles sit below the body frame's origin."""
     radius: float
     """The tire's radius."""
     half_width: float
@@ -268,10 +270,11 @@ def delay(latency: float) -> Delay:
     return Delay(precise(latency), math.ceil(latency / SOLVER.timestep) + 2)
 
 
-def spawn_height(wheel_radius: float) -> float:
+def spawn_height(wheel_radius: float, axle_drop: float = 0.0) -> float:
     """Where the car body spawns (m above the floor): 1 mm above its
-    resting height, the axles at the tire radius."""
-    return precise(wheel_radius + 0.001)
+    resting height, the axles at the tire radius and axle_drop below the
+    body frame's origin."""
+    return precise(wheel_radius + axle_drop + 0.001)
 
 
 def precise(x: float) -> float:

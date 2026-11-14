@@ -8,7 +8,8 @@ otherwise. No field has a default: a car states every value, with its
 source. derive.py computes the simulators' parameters from a Spec.
 
 Frame: +X forward, +Y left, +Z up. A position is in the car's body frame:
-its origin at the middle of the wheelbase, on the axle line.
+its origin at the middle of the wheelbase, derive.axle_drop above the axle
+line.
 """
 
 from __future__ import annotations
@@ -68,13 +69,25 @@ class Chassis:
     """The distance between the left and right wheels' centers."""
     mass: Sourced[float]
     """The whole car's mass, wheels included."""
+    resting_heights: Sourced[RestingHeights]
+    """How high the body sits with the car at rest on its wheels. It puts the
+    axles below the chassis' origin (derive.axle_drop)."""
     com_height: Sourced[float]
-    """The height of the chassis' center of mass above the axles."""
+    """The height of the chassis' center of mass above the chassis' origin."""
     inertia: Sourced[InertiaReference]
     """Scaled to the chassis' mass."""
     outline: Sourced[Prism]
     """The body, without the wheels: what it collides with, and what the
     other cars' LiDARs see of it."""
+
+
+@dataclass(frozen=True)
+class RestingHeights:
+    """Heights above a flat floor of two points of the body, the car at rest
+    on its wheels: the bottom and the top of the chassis' outline."""
+
+    tub_underside: float
+    lidar_top: float
 
 
 @dataclass(frozen=True)
